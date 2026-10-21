@@ -1,5 +1,7 @@
 # Chisel CAD
 
+**Live demo: https://mikepkes.github.io/CAD/**
+
 A **local-first, browser-based parametric CAD** app. It runs entirely in the
 browser (static, GitHub-Pages-servable) and is built so the geometry is
 **math-exact and CNC/3D-print ready**, not just a pretty picture. The long-term
