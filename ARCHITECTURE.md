@@ -59,9 +59,23 @@ adapters (planned)
  Evaluations (DoF, conflicts, redundancies)  ──►  UI hints / agent feedback
 ```
 
-Undo/redo snapshots the document around each command (documents are small JSON;
-snapshots share structure). Editing an earlier parameter is itself a command and
-triggers a full recompute — that is the parametric behavior.
+### Timeline vs. undo (they are different things)
+
+- The **timeline** is `doc.operations` — the ordered recipe that *defines* the
+  model. `build.rebuild` replays the active prefix (`operations[0..rollbackIndex)`)
+  to derive geometry. You can edit it anywhere: append, **edit an earlier
+  operation's params**, suppress, delete, or move the rollback bar — and the
+  replay propagates the change downstream. This is Fusion's feature tree.
+- **Undo/redo** is a *separate* stack of whole-document snapshots taken around
+  each edit. Editing an early operation is itself one undoable transaction:
+  undo restores the prior document (the old op params *and* the downstream
+  result). So "modify an early sketch, see it propagate" and "undo that" are
+  both first-class, and they never get conflated.
+
+Replay stays stable because each operation **permanently owns the ids it
+created** (`op.createdIds`, reused verbatim on every replay); only genuinely new
+allocations advance `doc.nextId`. That is what keeps later operations'
+references valid when an earlier one is edited.
 
 ## Constraint solving & diagnosis
 

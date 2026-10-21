@@ -1,53 +1,57 @@
-// CadSession ties the pieces together: it owns the document, dispatches
-// commands through the registry, recomputes (solves) after each, keeps an
-// undo/redo timeline, and enforces the incremental over-constraint guard.
+// CadSession owns the document and mediates every change.
 //
-// Because constraints are added one command at a time, when a command tips a
-// sketch into conflict we know *that* command's constraint is the culprit — so
-// we can reject it (optionally) and hand back exactly which constraints clash,
-// which is what lets a user or an agent self-correct.
+// Two distinct concepts, deliberately kept separate:
+//
+//  • The TIMELINE (doc.operations) is the parametric recipe. It can be edited
+//    anywhere — append, edit an earlier op's params, suppress, delete, or move
+//    the rollback bar — and `rebuild` replays it so changes propagate
+//    downstream. This is Fusion's feature tree.
+//
+//  • UNDO/REDO is a separate stack of whole-document snapshots taken around
+//    each edit. Editing an early operation is itself one undoable transaction:
+//    undo restores the prior document (old op params AND the downstream result).
+//
+// After every transition we recompute (solve) and run the incremental
+// over-constraint guard, which can reject a change and name the clashing
+// constraints.
 
-import { CadDocument, allocId } from "../document";
+import { CadDocument } from "../document";
 import { ConstraintSolver } from "../solver/model";
 import { Evaluations, recompute } from "../recompute";
+import { rebuild } from "../build";
 import { CommandRegistry } from "./registry";
-import { CommandContext, CommandRecord } from "./types";
+import { CommandApplyInfo, OperationRecord } from "./types";
 import { validate } from "./validate";
 
 export interface DispatchOptions {
-  /** Revert the command if it introduces a new conflict in the touched sketch. */
   rejectOnConflict?: boolean;
 }
 
 export interface DispatchResult {
   ok: boolean;
-  record?: CommandRecord;
+  opId?: string;
   createdIds: string[];
   evaluations: Evaluations;
-  /** Present when the command failed validation or was rejected. */
   error?: string;
-  /** Constraint ids that conflict (when over-constrained). */
   conflicting?: string[];
   message?: string;
 }
 
-interface TimelineEntry {
-  record: CommandRecord;
+interface Snapshot {
+  label: string;
   docBefore: CadDocument;
   evalsBefore: Evaluations;
   docAfter: CadDocument;
   evalsAfter: Evaluations;
 }
 
-function clone<T>(v: T): T {
-  return structuredClone(v);
-}
+const clone = <T>(v: T): T => structuredClone(v);
 
 export class CadSession {
   doc: CadDocument;
   evaluations: Evaluations = {};
-  private undoStack: TimelineEntry[] = [];
-  private redoStack: TimelineEntry[] = [];
+  private undoStack: Snapshot[] = [];
+  private redoStack: Snapshot[] = [];
 
   constructor(
     initialDoc: CadDocument,
@@ -57,8 +61,12 @@ export class CadSession {
     this.doc = initialDoc;
   }
 
-  get timeline(): CommandRecord[] {
-    return this.undoStack.map((e) => e.record);
+  // ---- timeline (the recipe) ----
+  get timeline(): OperationRecord[] {
+    return this.doc.operations;
+  }
+  get rollbackIndex(): number {
+    return this.doc.rollbackIndex;
   }
   canUndo(): boolean {
     return this.undoStack.length > 0;
@@ -67,90 +75,93 @@ export class CadSession {
     return this.redoStack.length > 0;
   }
 
-  /** Recompute the current document (e.g. after loading). */
   async recompute(): Promise<Evaluations> {
+    rebuild(this.doc, this.registry);
     this.evaluations = await recompute(this.doc, this.solver);
     return this.evaluations;
   }
 
+  /** Append a new operation to the timeline (at the rollback bar) and run it. */
   async dispatch(
     type: string,
     params: Record<string, unknown>,
     opts: DispatchOptions = {}
   ): Promise<DispatchResult> {
     const def = this.registry.get(type);
-    if (!def) {
-      return { ok: false, createdIds: [], evaluations: this.evaluations, error: `Unknown command "${type}"` };
-    }
-
+    if (!def) return this.fail(`Unknown command "${type}"`);
     const errors = validate(def.paramsSchema, params);
-    if (errors.length) {
-      return {
-        ok: false,
-        createdIds: [],
-        evaluations: this.evaluations,
-        error: `Invalid params for "${type}": ${errors.join("; ")}`,
-      };
-    }
+    if (errors.length) return this.fail(`Invalid params for "${type}": ${errors.join("; ")}`);
 
-    const docBefore = this.doc;
+    const before = this.doc;
     const evalsBefore = this.evaluations;
+    const draft = clone(before);
 
-    const draft = clone(docBefore);
-    const ctx: CommandContext = { alloc: (prefix) => allocId(draft, prefix) };
-
-    let info;
-    try {
-      info = def.apply(draft, params, ctx) || {};
-    } catch (err) {
-      return {
-        ok: false,
-        createdIds: [],
-        evaluations: this.evaluations,
-        error: `Command "${type}" failed: ${(err as Error).message}`,
-      };
-    }
-
-    // Commit tentatively and recompute.
-    this.doc = draft;
-    this.evaluations = await recompute(draft, this.solver);
-
-    // Over-constraint guard.
-    const reject = opts.rejectOnConflict ?? def.constrains ?? false;
-    const affected = info.affectedSketchId;
-    const conflictInfo = this.newConflict(affected, evalsBefore);
-    if (reject && conflictInfo.isNew) {
-      // revert
-      this.doc = docBefore;
-      this.evaluations = evalsBefore;
-      return {
-        ok: false,
-        createdIds: [],
-        evaluations: this.evaluations,
-        error: `Command "${type}" would over-constrain sketch ${conflictInfo.sketchId}`,
-        conflicting: conflictInfo.conflicting,
-        message: `Rejected: conflicts with ${conflictInfo.conflicting.join(", ") || "existing constraints"}`,
-      };
-    }
-
-    const record: CommandRecord = { type, params, at: Date.now(), label: def.title };
-    this.undoStack.push({
-      record,
-      docBefore,
-      evalsBefore,
-      docAfter: this.doc,
-      evalsAfter: this.evaluations,
-    });
-    this.redoStack = [];
-
-    return {
-      ok: true,
-      record,
-      createdIds: info.createdIds ?? [],
-      evaluations: this.evaluations,
-      conflicting: conflictInfo.conflicting.length ? conflictInfo.conflicting : undefined,
-      message: info.message,
+    const opId = `op${draft.nextId++}`;
+    const op: OperationRecord = {
+      opId,
+      type,
+      params,
+      createdIds: [],
+      label: def.title,
+      at: Date.now(),
     };
+    draft.operations.splice(draft.rollbackIndex, 0, op);
+    draft.rollbackIndex++;
+
+    return this.finish(before, evalsBefore, draft, op, def.constrains ?? false, opts);
+  }
+
+  /** Edit an existing operation's params; downstream operations re-run. */
+  async editOperation(
+    opId: string,
+    newParams: Record<string, unknown>,
+    opts: DispatchOptions = {}
+  ): Promise<DispatchResult> {
+    const before = this.doc;
+    const evalsBefore = this.evaluations;
+    const draft = clone(before);
+    const op = draft.operations.find((o) => o.opId === opId);
+    if (!op) return this.fail(`No operation "${opId}"`);
+    const def = this.registry.get(op.type);
+    if (!def) return this.fail(`Unknown command "${op.type}"`);
+    const errors = validate(def.paramsSchema, newParams);
+    if (errors.length) return this.fail(`Invalid params: ${errors.join("; ")}`);
+
+    op.params = newParams;
+    // Keep op.createdIds so ids (and downstream references) stay stable.
+    return this.finish(before, evalsBefore, draft, op, def.constrains ?? false, opts);
+  }
+
+  /** Suppress or unsuppress an operation (skipped during replay when suppressed). */
+  async setSuppressed(opId: string, suppressed: boolean): Promise<DispatchResult> {
+    const before = this.doc;
+    const evalsBefore = this.evaluations;
+    const draft = clone(before);
+    const op = draft.operations.find((o) => o.opId === opId);
+    if (!op) return this.fail(`No operation "${opId}"`);
+    op.suppressed = suppressed;
+    return this.finish(before, evalsBefore, draft, undefined, false, {});
+  }
+
+  /** Delete an operation. Downstream operations that referenced it will error. */
+  async deleteOperation(opId: string): Promise<DispatchResult> {
+    const before = this.doc;
+    const evalsBefore = this.evaluations;
+    const draft = clone(before);
+    const idx = draft.operations.findIndex((o) => o.opId === opId);
+    if (idx < 0) return this.fail(`No operation "${opId}"`);
+    draft.operations.splice(idx, 1);
+    if (draft.rollbackIndex > idx) draft.rollbackIndex--;
+    return this.finish(before, evalsBefore, draft, undefined, false, {});
+  }
+
+  /** Move the rollback bar: operations at index >= `index` become inactive. */
+  async moveRollback(index: number): Promise<DispatchResult> {
+    const before = this.doc;
+    const evalsBefore = this.evaluations;
+    const draft = clone(before);
+    draft.rollbackIndex = Math.max(0, Math.min(index, draft.operations.length));
+    return this.finish(before, evalsBefore, draft, undefined, false, {});
   }
 
   undo(): boolean {
@@ -175,17 +186,81 @@ export class CadSession {
     return this.registry.toMcpTools();
   }
 
-  /** Did a (new) conflict appear, relative to the prior evaluation? */
+  // ---- internals ----
+
+  private fail(error: string): DispatchResult {
+    return { ok: false, createdIds: [], evaluations: this.evaluations, error };
+  }
+
+  private async finish(
+    before: CadDocument,
+    evalsBefore: Evaluations,
+    draft: CadDocument,
+    newOp: OperationRecord | undefined,
+    constrains: boolean,
+    opts: DispatchOptions
+  ): Promise<DispatchResult> {
+    const { infos } = rebuild(draft, this.registry);
+
+    // A brand-new op that fails on its first run is a hard failure (no commit).
+    if (newOp && newOp.error && newOp.createdIds.length === 0 && before.operations.length < draft.operations.length) {
+      return { ok: false, createdIds: [], evaluations: this.evaluations, error: newOp.error };
+    }
+
+    const evalsAfter = await recompute(draft, this.solver);
+
+    const info: CommandApplyInfo = (newOp && infos[newOp.opId]) || {};
+    const affected = info.affectedSketchId;
+    const conflict = this.newConflict(evalsAfter, evalsBefore, affected);
+
+    const reject = opts.rejectOnConflict ?? constrains;
+    if (reject && conflict.isNew) {
+      // discard draft; this.doc stays `before`
+      return {
+        ok: false,
+        createdIds: [],
+        evaluations: this.evaluations,
+        error: `Change would over-constrain sketch ${conflict.sketchId}`,
+        conflicting: conflict.conflicting,
+        message: `Rejected: conflicts with ${conflict.conflicting.join(", ") || "existing constraints"}`,
+      };
+    }
+
+    // commit
+    this.doc = draft;
+    this.evaluations = evalsAfter;
+    this.undoStack.push({
+      label: newOp?.label ?? "Edit",
+      docBefore: before,
+      evalsBefore,
+      docAfter: draft,
+      evalsAfter,
+    });
+    this.redoStack = [];
+
+    // Expose the command's *semantic* created ids (e.g. [line, start, end]),
+    // not the raw allocation order held in op.createdIds (for replay).
+    return {
+      ok: true,
+      opId: newOp?.opId,
+      createdIds: info.createdIds ?? newOp?.createdIds ?? [],
+      evaluations: evalsAfter,
+      conflicting: conflict.conflicting.length ? conflict.conflicting : undefined,
+      message: info.message ?? newOp?.error,
+    };
+  }
+
   private newConflict(
-    affectedSketchId: string | undefined,
-    before: Evaluations
+    after: Evaluations,
+    before: Evaluations,
+    affectedSketchId: string | undefined
   ): { isNew: boolean; sketchId: string; conflicting: string[] } {
-    const sketchIds = affectedSketchId ? [affectedSketchId] : Object.keys(this.evaluations);
-    for (const sid of sketchIds) {
-      const after = this.evaluations[sid];
-      if (after?.diagnosis.hasConflict) {
+    const ids = affectedSketchId ? [affectedSketchId] : Object.keys(after);
+    for (const sid of ids) {
+      const a = after[sid];
+      if (a?.diagnosis.hasConflict) {
         const wasConflicting = before[sid]?.diagnosis.hasConflict ?? false;
-        return { isNew: !wasConflicting, sketchId: sid, conflicting: after.diagnosis.conflicting };
+        return { isNew: !wasConflicting, sketchId: sid, conflicting: a.diagnosis.conflicting };
       }
     }
     return { isNew: false, sketchId: "", conflicting: [] };

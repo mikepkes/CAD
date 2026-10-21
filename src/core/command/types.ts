@@ -57,10 +57,26 @@ export interface CommandDef<P = Record<string, unknown>> {
   apply(draft: CadDocument, params: P, ctx: CommandContext): CommandApplyInfo | void;
 }
 
-/** A recorded, replayable history entry. */
-export interface CommandRecord {
+/**
+ * A node in the parametric timeline (the "recipe"). The document IS an ordered
+ * list of these; the current geometry is derived by replaying them. Each
+ * operation permanently owns the ids it created (`createdIds`), so editing an
+ * earlier operation and replaying keeps later operations' references valid —
+ * this is what makes "edit an early sketch, propagate downstream" work.
+ */
+export interface OperationRecord {
+  /** Stable id of this timeline node. */
+  opId: string;
+  /** Command type to replay. */
   type: string;
   params: Record<string, unknown>;
-  at: number;
+  /** Ids this operation allocated, in order — reused verbatim on every replay. */
+  createdIds: string[];
+  /** Suppressed operations are skipped during replay (like Fusion's suppress). */
+  suppressed?: boolean;
+  /** Set if the operation failed to replay (e.g. a dangling reference). */
+  error?: string;
+  /** Short label for the timeline UI. */
   label: string;
+  at: number;
 }

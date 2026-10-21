@@ -5,6 +5,7 @@
 
 import { LinearUnit } from "./units";
 import { Sketch } from "../sketch/types";
+import { OperationRecord } from "./command/types";
 
 export interface Parameter {
   id: string;
@@ -28,12 +29,27 @@ export interface CadDocument {
   schema: 1;
   id: string;
   units: LinearUnit;
-  /** Monotonic id counter — part of the doc so ids are stable across undo/redo. */
+  /** Monotonic id counter — never decreases, so ids are globally unique. */
   nextId: number;
+
+  // ---- canonical design intent (the recipe) ----
+  /** The parametric timeline: replaying operations[0..rollbackIndex) builds the model. */
+  operations: OperationRecord[];
+  /** Operations at index >= rollbackIndex are rolled back (inactive). */
+  rollbackIndex: number;
+
+  // ---- derived state (a cache, always reproducible from `operations`) ----
   parameters: Parameter[];
   rootComponentId: string;
   components: Record<string, Component>;
   sketches: Record<string, Sketch>;
+}
+
+/** A fresh, empty root component map (used when rebuilding derived state). */
+export function freshComponents(rootId: string): Record<string, Component> {
+  return {
+    [rootId]: { id: rootId, name: "Root Component", parentId: null, children: [], sketches: [] },
+  };
 }
 
 export function createDocument(id = "doc1"): CadDocument {
@@ -43,11 +59,11 @@ export function createDocument(id = "doc1"): CadDocument {
     id,
     units: "mm",
     nextId: 1,
+    operations: [],
+    rollbackIndex: 0,
     parameters: [],
     rootComponentId: rootId,
-    components: {
-      [rootId]: { id: rootId, name: "Root Component", parentId: null, children: [], sketches: [] },
-    },
+    components: freshComponents(rootId),
     sketches: {},
   };
 }
