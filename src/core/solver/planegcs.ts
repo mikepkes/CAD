@@ -39,8 +39,17 @@ export class PlaneGCSSolver implements ConstraintSolver {
     if (!this.readyPromise) {
       this.readyPromise = (async () => {
         const mod = await import("@salusoft89/planegcs");
-        this.wrapper = await mod.make_gcs_wrapper(this.opts.wasmUrl);
-        // Silence the solver's internal debug logging.
+        // Initialise the module ourselves so we can silence emscripten's
+        // stdout/stderr — essential when the core drives an MCP stdio server,
+        // whose stdout is the protocol channel.
+        const options: Record<string, unknown> = {
+          print: () => {},
+          printErr: () => {},
+        };
+        if (this.opts.wasmUrl) options.locateFile = () => this.opts.wasmUrl;
+        const module = await mod.init_planegcs_module(options as never);
+        const gcs = new module.GcsSystem();
+        this.wrapper = new mod.GcsWrapper(gcs, module);
         try {
           (this.wrapper as unknown as { debug_mode: number }).debug_mode = 0;
         } catch {
