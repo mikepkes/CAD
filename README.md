@@ -70,10 +70,22 @@ src/ui           React shell (dispatches commands, never mutates the model)
 mcp/             MCP server exposing the core to agents
 ```
 
+## 3D, export & persistence
+
+- **Extrude** a sketch profile into a solid on the OpenCASCADE kernel (holes via
+  boolean cut), with a **parametric distance**. Export **STL** (3D print) and
+  **STEP** (CAD/CNC) from the toolbar or over MCP.
+- **Modify tools**: mirror, linear pattern, and construction (reference)
+  geometry — all command-based, so they're parametric and undoable.
+- **Save / Open** `.chisel.json` and **autosave** to the browser, so a reload
+  restores your work. Files store just the operation recipe and rebuild on load.
+
 ## Roadmap
 
-- [ ] Milestone 2: profiles → OpenCASCADE extrude/revolve to solids
-- [ ] Features timeline UI polish, fillet/chamfer, booleans
+- [x] Milestone 1: parametric 2D sketching (PlaneGCS)
+- [x] Milestone 2: extrude profiles → OpenCASCADE solids + STL/STEP export
+- [x] Persistence (save/open/autosave); mirror / pattern / construction geometry
+- [ ] Revolve/loft, fillet/chamfer, boolean features between bodies
 - [ ] Sketches on faces & construction planes; assemblies/joints
-- [ ] Document persistence (save/load) and Tauri desktop packaging
+- [ ] In-viewport dimension editing; trim/offset; Tauri desktop packaging
 ```

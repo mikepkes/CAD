@@ -33,10 +33,11 @@ function classify(sk: Sketch, selection: string[]): Sel {
 
 const fmt = (n: number) => String(Math.round(n * 1000) / 1000);
 
-export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]; dimensions: Op[] } {
+export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]; dimensions: Op[]; modify: Op[] } {
   const s = classify(sk, selection);
   const geometric: Op[] = [];
   const dimensions: Op[] = [];
+  const modify: Op[] = [];
   const sid = sk.id;
   const pt = (id: string) => sk.entities[id] as SketchPoint;
   const dirOf = (l: SketchLine) => ({ x: pt(l.p2).x - pt(l.p1).x, y: pt(l.p2).y - pt(l.p1).y });
@@ -110,5 +111,46 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
     dim("angle", "Angle", "∠", "Angle between lines", { type: "angle", l1: l1.id, l2: l2.id, expression: fmt(ang) });
   }
 
-  return { geometric, dimensions };
+  // ---- modify ----
+  const sel = selection.filter((id) => sk.entities[id] && id !== sk.originPointId);
+  if (sel.length >= 1) {
+    // Mirror: use the last selected line as the axis, mirror the rest.
+    const lineIds = sel.filter((id) => sk.entities[id].kind === "line");
+    if (lineIds.length >= 1) {
+      const axis = lineIds[lineIds.length - 1];
+      const ents = sel.filter((id) => id !== axis);
+      if (ents.length >= 1) {
+        modify.push({
+          id: "mirror", label: "Mirror", glyph: "⧉", hint: "Mirror selection across the (last selected) line",
+          command: { type: "sketch.mirror", params: { sketch: sid, entities: ents, line: axis } },
+        });
+      }
+    }
+    // Linear pattern: spacing from the selection's x-extent.
+    const xs = sel.flatMap((id) => pointXs(sk, id));
+    const width = xs.length ? Math.max(...xs) - Math.min(...xs) : 20;
+    const dx = Math.max(15, Math.round(width * 1.3));
+    modify.push({
+      id: "pattern", label: "Pattern ×3", glyph: "▦", hint: "Linear pattern (edit count/spacing in the timeline)",
+      command: { type: "sketch.linearPattern", params: { sketch: sid, entities: sel, dx, dy: 0, count: 3 } },
+    });
+    // Construction toggle.
+    const anyReal = sel.some((id) => !(sk.entities[id] as { construction?: boolean }).construction);
+    modify.push({
+      id: "construction", label: anyReal ? "To Construction" : "To Normal", glyph: "┄", hint: "Toggle construction (reference) geometry",
+      command: { type: "sketch.setConstruction", params: { sketch: sid, ids: sel, construction: anyReal } },
+    });
+  }
+
+  return { geometric, dimensions, modify };
+}
+
+function pointXs(sk: Sketch, id: string): number[] {
+  const e = sk.entities[id];
+  if (!e) return [];
+  if (e.kind === "point") return [e.x];
+  if (e.kind === "line") return [(sk.entities[e.p1] as SketchPoint).x, (sk.entities[e.p2] as SketchPoint).x];
+  if (e.kind === "circle") { const c = sk.entities[e.center] as SketchPoint; return [c.x - e.r, c.x + e.r]; }
+  if (e.kind === "arc") { const c = sk.entities[e.center] as SketchPoint; return [c.x - e.r, c.x + e.r]; }
+  return [];
 }

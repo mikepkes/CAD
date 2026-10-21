@@ -369,10 +369,12 @@ export class SceneManager {
           this.worldPt(plane, a.x, a.y),
           this.worldPt(plane, b.x, b.y),
         ]);
-        const mat = new THREE.LineBasicMaterial({
-          color: this.colorFor(l.id, data, COLORS.geometry, l.construction),
-        });
+        const color = this.colorFor(l.id, data, COLORS.geometry, l.construction);
+        const mat = l.construction
+          ? new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.6 })
+          : new THREE.LineBasicMaterial({ color });
         const line = new THREE.Line(geo, mat);
+        if (l.construction) line.computeLineDistances();
         line.userData = { id: l.id, kind: "line" };
         this.sketchGroup.add(line);
       } else if (e.kind === "circle") {

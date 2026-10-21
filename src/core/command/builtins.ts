@@ -449,6 +449,137 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
 
+  // ---- modify (mirror / pattern / construction) ----
+  {
+    type: "sketch.mirror",
+    title: "Mirror",
+    summary: "Mirror entities across a line to create reflected copies.",
+    description:
+      "Creates mirrored copies of `entities` (points/lines/circles/arcs) reflected across the infinite line through `line`'s endpoints. Returns the created ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "entities", "line"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        entities: { type: "array", items: { type: "string" } },
+        line: { type: "string", description: "A line entity used as the mirror axis." },
+      },
+    },
+    apply(draft, p: { sketch: string; entities: string[]; line: string }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const axis = sk.entities[p.line];
+      if (!axis || axis.kind !== "line") throw new Error("mirror axis must be a line");
+      const A = sk.entities[axis.p1] as SketchPoint;
+      const B = sk.entities[axis.p2] as SketchPoint;
+      const dx = B.x - A.x, dy = B.y - A.y;
+      const len2 = dx * dx + dy * dy || 1;
+      const reflect = (x: number, y: number): [number, number] => {
+        const t = ((x - A.x) * dx + (y - A.y) * dy) / len2;
+        const fx = A.x + t * dx, fy = A.y + t * dy;
+        return [2 * fx - x, 2 * fy - y];
+      };
+      const map = new Map<string, string>();
+      const mp = (id: string): string => {
+        if (map.has(id)) return map.get(id)!;
+        const o = sk.entities[id] as SketchPoint;
+        const [rx, ry] = reflect(o.x, o.y);
+        const nid = ctx.alloc("pt");
+        sk.entities[nid] = { id: nid, kind: "point", x: rx, y: ry, construction: o.construction };
+        map.set(id, nid);
+        return nid;
+      };
+      const created: string[] = [];
+      for (const eid of p.entities) {
+        const e = sk.entities[eid];
+        if (!e) continue;
+        if (e.kind === "point") created.push(mp(eid));
+        else if (e.kind === "line") {
+          const nid = ctx.alloc("ln");
+          sk.entities[nid] = { id: nid, kind: "line", p1: mp(e.p1), p2: mp(e.p2), construction: e.construction };
+          created.push(nid);
+        } else if (e.kind === "circle") {
+          const nid = ctx.alloc("ci");
+          sk.entities[nid] = { id: nid, kind: "circle", center: mp(e.center), r: e.r, construction: e.construction };
+          created.push(nid);
+        } else if (e.kind === "arc") {
+          const nid = ctx.alloc("ar");
+          // reflection reverses orientation: swap endpoints and flip sweep
+          sk.entities[nid] = { id: nid, kind: "arc", center: mp(e.center), p1: mp(e.p2), p2: mp(e.p1), r: e.r, ccw: !e.ccw, construction: e.construction };
+          created.push(nid);
+        }
+      }
+      return { createdIds: created, affectedSketchId: sk.id, message: `Mirrored ${created.length} entit${created.length === 1 ? "y" : "ies"}` };
+    },
+  },
+  {
+    type: "sketch.linearPattern",
+    title: "Linear pattern",
+    summary: "Repeat entities along a direction.",
+    description:
+      "Creates `count`-1 copies of `entities`, each offset by (dx, dy) * i. count includes the original. Returns the created ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "entities", "dx", "dy", "count"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        entities: { type: "array", items: { type: "string" } },
+        dx: { type: "number" },
+        dy: { type: "number" },
+        count: { type: "integer", minimum: 2 },
+      },
+    },
+    apply(draft, p: { sketch: string; entities: string[]; dx: number; dy: number; count: number }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const created: string[] = [];
+      for (let i = 1; i < p.count; i++) {
+        const map = new Map<string, string>();
+        const off = (id: string): string => {
+          if (map.has(id)) return map.get(id)!;
+          const o = sk.entities[id] as SketchPoint;
+          const nid = ctx.alloc("pt");
+          sk.entities[nid] = { id: nid, kind: "point", x: o.x + p.dx * i, y: o.y + p.dy * i, construction: o.construction };
+          map.set(id, nid);
+          return nid;
+        };
+        for (const eid of p.entities) {
+          const e = sk.entities[eid];
+          if (!e) continue;
+          if (e.kind === "point") created.push(off(eid));
+          else if (e.kind === "line") { const nid = ctx.alloc("ln"); sk.entities[nid] = { id: nid, kind: "line", p1: off(e.p1), p2: off(e.p2), construction: e.construction }; created.push(nid); }
+          else if (e.kind === "circle") { const nid = ctx.alloc("ci"); sk.entities[nid] = { id: nid, kind: "circle", center: off(e.center), r: e.r, construction: e.construction }; created.push(nid); }
+          else if (e.kind === "arc") { const nid = ctx.alloc("ar"); sk.entities[nid] = { id: nid, kind: "arc", center: off(e.center), p1: off(e.p1), p2: off(e.p2), r: e.r, ccw: e.ccw, construction: e.construction }; created.push(nid); }
+        }
+      }
+      return { createdIds: created, affectedSketchId: sk.id, message: `Patterned ×${p.count}` };
+    },
+  },
+  {
+    type: "sketch.setConstruction",
+    title: "Toggle construction",
+    summary: "Mark entities as construction (reference) geometry, or back to real.",
+    description: "Sets the construction flag on entities. Construction geometry is dashed and excluded from extrude profiles (useful for mirror axes and references).",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "ids", "construction"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+        construction: { type: "boolean" },
+      },
+    },
+    apply(draft, p: { sketch: string; ids: string[]; construction: boolean }) {
+      const sk = sketchOf(draft, p.sketch);
+      for (const id of p.ids) {
+        const e = sk.entities[id];
+        if (e && id !== sk.originPointId) (e as { construction?: boolean }).construction = p.construction;
+      }
+      return { affectedSketchId: sk.id };
+    },
+  },
+
   {
     type: "sketch.deleteEntities",
     title: "Delete entities",

@@ -212,6 +212,12 @@ body {
 .chip.dim .chip-glyph {
   color: var(--accent-2);
 }
+.chip.mod:hover {
+  border-color: var(--warn);
+}
+.chip.mod .chip-glyph {
+  color: var(--warn);
+}
 .cb-hint {
   color: var(--text-dim);
   font-size: 12.5px;

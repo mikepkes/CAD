@@ -10,8 +10,8 @@ export function ConstraintBar() {
 
   if (mode !== "sketch" || !sk) return null;
 
-  const { geometric, dimensions } = availableOps(sk, selection);
-  const nothing = geometric.length === 0 && dimensions.length === 0;
+  const { geometric, dimensions, modify } = availableOps(sk, selection);
+  const nothing = geometric.length === 0 && dimensions.length === 0 && modify.length === 0;
 
   const apply = async (op: Op) => {
     await dispatch(op.command.type, op.command.params, { rejectOnConflict: true });
@@ -40,8 +40,19 @@ export function ConstraintBar() {
           </button>
         ))}
       </div>
+      {modify.length > 0 && (
+        <div className="cb-section">
+          <span className="cb-title">Modify</span>
+          {modify.map((op) => (
+            <button key={op.id} className="chip mod" title={op.hint} onClick={() => apply(op)}>
+              <span className="chip-glyph">{op.glyph}</span>
+              {op.label}
+            </button>
+          ))}
+        </div>
+      )}
       {nothing && (
-        <div className="cb-hint">Select geometry (points, lines, circles) to apply constraints &amp; dimensions.</div>
+        <div className="cb-hint">Select geometry (points, lines, circles) to apply constraints, dimensions &amp; modify tools.</div>
       )}
     </div>
   );
