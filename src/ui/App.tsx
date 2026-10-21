@@ -28,8 +28,13 @@ function Toast() {
 
 export function App() {
   const mode = useStore((s) => s.mode);
+  const initApp = useStore((s) => s.initApp);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+
+  useEffect(() => {
+    void initApp();
+  }, [initApp]);
 
   return (
     <div className="app">

@@ -1,5 +1,27 @@
+import { useRef } from "react";
 import { Tool, useStore } from "../model/store";
 import { PLANES } from "../geometry/plane";
+
+function FileMenu() {
+  const newDocument = useStore((s) => s.newDocument);
+  const saveToFile = useStore((s) => s.saveToFile);
+  const openFile = useStore((s) => s.openFile);
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="file-menu">
+      <button className="btn ghost" title="New document" onClick={() => { if (confirm("Start a new document? Unsaved work is autosaved in this browser only.")) newDocument(); }}>New</button>
+      <button className="btn ghost" title="Open a .chisel.json file" onClick={() => inputRef.current?.click()}>Open</button>
+      <button className="btn ghost" title="Save to a .chisel.json file" onClick={saveToFile}>Save</button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".json,application/json"
+        style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = ""; }}
+      />
+    </div>
+  );
+}
 
 const TOOLS: { id: Tool; label: string; key: string; glyph: string }[] = [
   { id: "select", label: "Select", key: "S", glyph: "⤢" },
@@ -35,6 +57,7 @@ export function Toolbar() {
       <div className="brand">
         <span className="logo">◆</span> Chisel<span className="brand-dim">CAD</span>
       </div>
+      <FileMenu />
 
       {mode === "sketch" ? (
         <>

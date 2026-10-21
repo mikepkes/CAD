@@ -12,6 +12,11 @@ import { solveDrag } from "../core/drag";
 import { Sketch } from "../sketch/types";
 import { initKernel } from "../core/occ/kernel";
 import { evaluateFeatures, exportFeatureBlob, SolidEval } from "../core/features";
+import { CadDocument } from "../core/document";
+import { serializeDocument, deserializeDocument } from "../core/persistence";
+
+const AUTOSAVE_KEY = "chisel.autosave.v1";
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point";
 export type AppMode = "model" | "sketch";
@@ -107,6 +112,13 @@ export interface AppState {
   editFeatureDistance: (featureId: string, expr: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step") => Promise<void>;
+
+  // persistence
+  initApp: () => Promise<void>;
+  newDocument: () => Promise<void>;
+  loadDocument: (doc: CadDocument) => Promise<void>;
+  saveToFile: () => void;
+  openFile: (file: File) => Promise<void>;
 }
 
 function toastFor(r: DispatchResult): Toast | null {
@@ -118,8 +130,20 @@ function toastFor(r: DispatchResult): Toast | null {
 export const useStore = create<AppState>((set, get) => {
   const bump = (extra: Partial<AppState> = {}) => set((s) => ({ rev: s.rev + 1, ...extra }));
 
+  const scheduleAutosave = () => {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(AUTOSAVE_KEY, serializeDocument(get().session.doc));
+      } catch {
+        /* storage unavailable (private mode, quota) — non-fatal */
+      }
+    }, 500);
+  };
+
   const afterMutate = () => {
     if (Object.keys(get().session.doc.features).length) void get().rebuildSolids();
+    scheduleAutosave();
   };
 
   const runDispatch = async (type: string, params: Record<string, unknown>, opts?: { rejectOnConflict?: boolean }) => {
@@ -308,6 +332,66 @@ export const useStore = create<AppState>((set, get) => {
       a.download = `model.${format === "step" ? "step" : "stl"}`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
+    },
+
+    initApp: async () => {
+      let saved: string | null = null;
+      try {
+        saved = localStorage.getItem(AUTOSAVE_KEY);
+      } catch {
+        /* ignore */
+      }
+      if (saved) {
+        try {
+          await get().loadDocument(deserializeDocument(saved));
+        } catch {
+          /* corrupt autosave — start fresh */
+        }
+      }
+    },
+    loadDocument: async (doc) => {
+      const s = new CadSession(doc, registry, solver);
+      set({
+        session: s,
+        mode: "model",
+        activeSketchId: null,
+        tool: "select",
+        selection: [],
+        hover: null,
+        transient: null,
+        dragging: null,
+        solids: {},
+        toast: null,
+      });
+      await s.recompute();
+      bump();
+      if (Object.keys(s.doc.features).length) await get().rebuildSolids();
+    },
+    newDocument: async () => {
+      await get().loadDocument(createDocument());
+      try {
+        localStorage.removeItem(AUTOSAVE_KEY);
+      } catch {
+        /* ignore */
+      }
+    },
+    saveToFile: () => {
+      const blob = new Blob([serializeDocument(get().session.doc)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "model.chisel.json";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    },
+    openFile: async (file) => {
+      try {
+        const text = await file.text();
+        await get().loadDocument(deserializeDocument(text));
+        bump({ toast: { kind: "info", text: `Opened ${file.name}` } });
+      } catch (e) {
+        bump({ toast: { kind: "error", text: `Open failed: ${(e as Error).message}` } });
+      }
     },
   };
 });

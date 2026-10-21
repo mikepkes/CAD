@@ -140,6 +140,24 @@ body {
   color: var(--text-dim);
   cursor: pointer;
 }
+.file-menu {
+  display: flex;
+  gap: 2px;
+  margin-right: 6px;
+  padding-right: 8px;
+  border-right: 1px solid var(--line);
+}
+.btn.ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 6px 9px;
+  color: var(--text-dim);
+}
+.btn.ghost:hover {
+  color: var(--text);
+  border-color: var(--line);
+  background: var(--panel-2);
+}
 
 /* ---------- Constraint bar ---------- */
 .constraint-bar {
