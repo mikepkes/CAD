@@ -1,48 +1,44 @@
 # Chisel CAD
 
-A browser-based parametric 3D CAD application. The long-term goal is a
-Fusion 360–style modeler with components, 3D sketches, and solid modeling on an
-**OpenCASCADE** geometry kernel. This first milestone focuses on getting **2D
-constraint sketching** excellent.
+A **local-first, browser-based parametric CAD** app. It runs entirely in the
+browser (static, GitHub-Pages-servable) and is built so the geometry is
+**math-exact and CNC/3D-print ready**, not just a pretty picture. The long-term
+goal is a Fusion 360–style modeler with components and 3D solids on an
+**OpenCASCADE** kernel; this milestone makes **2D constraint sketching**
+excellent and lays the command/history/solver foundation everything else builds
+on.
 
-## Status — Milestone 1: 2D sketching
+## What works today
 
-Working today:
+- **3D viewport** (three.js, Z-up) with the three origin planes, grid, axes,
+  orbit/pan/zoom (mouse + touch). The renderer is an *adapter* — the core is
+  renderer-agnostic.
+- **Sketch on any origin plane**; draw with line / rectangle / circle / arc /
+  point, with snapping, rubber-band preview, and automatic horizontal/vertical.
+- **Geometric + dimensional constraints**, every dimension a **parametric
+  expression** over named parameters (`width`, `width/2`, `rad(30)`).
+- **PlaneGCS** (FreeCAD's constraint solver, via WebAssembly) solves the sketch
+  and reports **degrees of freedom**, a **fully-constrained** state, and on
+  over-constraint **which constraints conflict** — surfaced as a toast and
+  inline highlight.
+- **Command-driven, with a parametric timeline separate from undo/redo.** Edit
+  an earlier operation and it propagates downstream (Fusion-style), and that
+  edit is undoable. Drag a point for live preview; release commits one step.
+- **MCP server** (`npm run mcp`) exposes every command to an LLM/agent — see
+  [`mcp/README.md`](mcp/README.md).
 
-- **3D viewport** (three.js, Z-up) with the three origin planes (XY / XZ / YZ),
-  grid, world axes, and orbit / pan / zoom. Works with mouse and touch.
-- **Sketch on any origin plane** — pick a plane and the camera faces it.
-- **Drawing tools**: line (chained), rectangle, circle, arc, point, with live
-  rubber-band preview, point/grid snapping, and automatic horizontal/vertical
-  inference.
-- **Geometric constraints**: coincident, horizontal, vertical, parallel,
-  perpendicular, equal, tangent, concentric, point-on-line, point-on-circle,
-  symmetric, fix.
-- **Dimensional constraints**: distance, horizontal/vertical distance,
-  point-to-line distance, radius, diameter, angle.
-- **Parametric dimensions** — every dimension is an expression that can
-  reference named **parameters** (e.g. `width`, `width/2`, `rad(30)`). Edit a
-  parameter and the model re-solves.
-- **Constraint solver** — a native Levenberg–Marquardt solver (`src/solver`)
-  with live dragging, degrees-of-freedom analysis, a **fully-constrained**
-  indicator, and over-constrained detection.
-- **Browser / parameters / inspector** panels, Fusion-style.
-
-### Why a custom 2D solver (and where OpenCASCADE fits)
-
-OpenCASCADE (OCCT) is a B-rep **3D** kernel — it does not ship a 2D geometric
-*constraint* solver, which is what makes sketching feel parametric. So the 2D
-constraint engine here is written in pure TypeScript (portable, fast, no WASM
-load cost on phone/iPad). OCCT (via `opencascade.js`) will be brought in for the
-**3D** milestone (extrude / revolve / fillet / boolean on the solved profiles).
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the design, the timeline-vs-undo
+distinction, and the precision stance (float64 + relative tolerances + robust
+predicates — what production kernels do).
 
 ## Getting started
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # type-check + production build
+npm run dev          # http://localhost:5173
+npm run build        # type-check (browser + mcp) + production build
 npm run typecheck
+npm run mcp          # build + run the MCP server over stdio
 ```
 
 ### Controls
@@ -52,32 +48,32 @@ npm run typecheck
 | Orbit | Right-drag (sketch) / Left-drag (model) | Two-finger |
 | Pan | Middle-drag | Two-finger |
 | Zoom | Wheel | Pinch |
-| Draw / select | Left-click | One-finger |
-| Tool shortcuts | `L` line · `R` rect · `C` circle · `A` arc · `P` point · `S` select · `Esc` cancel | — |
+| Draw / select / drag | Left-click / drag | One-finger |
+| Tools | `L` line · `R` rect · `C` circle · `A` arc · `P` point · `S` select | — |
+| Undo / redo | `Ctrl/Cmd+Z` / `Ctrl/Cmd+Shift+Z` | — |
 
 Select geometry, then apply constraints/dimensions from the context bar.
 
-## Architecture
+## Project layout
 
 ```
-src/
-  math/        vectors, safe expression evaluator (parameters)
-  solver/      generic Levenberg–Marquardt constraint solver
-  sketch/      sketch data model + constraint→residual compiler (engine.ts)
-  geometry/    origin work-plane definitions (2D↔3D mapping)
-  model/       zustand store, parameters, selection→operations
-  viewport/    three.js scene, sketch rendering, pointer interactions
-  ui/          React components (toolbar, panels, viewport host)
+src/core/        pure, serializable, renderer-agnostic
+  units          canonical mm + scale-aware tolerances
+  document       the design intent (parameters, sketches, constraints) + timeline
+  command        registry (→ MCP tools), validator, undo/redo + timeline session
+  solver         neutral ConstraintSolver interface + PlaneGCS adapter + compile
+  build/recompute replay the timeline, then solve
+src/sketch       sketch data model
+src/math         vectors, safe expression evaluator
+src/viewport     three.js scene + pointer interactions (the renderer adapter)
+src/ui           React shell (dispatches commands, never mutates the model)
+mcp/             MCP server exposing the core to agents
 ```
-
-The solver and sketch engine are free of three.js and React, so they are
-unit-testable and reusable (e.g. for 3D assembly mates later).
 
 ## Roadmap
 
 - [ ] Milestone 2: profiles → OpenCASCADE extrude/revolve to solids
-- [ ] Features timeline, fillet/chamfer, boolean ops
-- [ ] Sketches on arbitrary faces & construction planes
-- [ ] Assemblies / joints across components
-- [ ] Persistence (document save/load) and Tauri desktop packaging
+- [ ] Features timeline UI polish, fillet/chamfer, booleans
+- [ ] Sketches on faces & construction planes; assemblies/joints
+- [ ] Document persistence (save/load) and Tauri desktop packaging
 ```

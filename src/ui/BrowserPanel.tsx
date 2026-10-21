@@ -1,63 +1,49 @@
 import { useStore } from "../model/store";
 
 export function BrowserPanel() {
-  const components = useStore((s) => s.components);
-  const rootId = useStore((s) => s.rootComponentId);
-  const sketches = useStore((s) => s.sketches);
-  const activeComponentId = useStore((s) => s.activeComponentId);
+  const session = useStore((s) => s.session);
+  useStore((s) => s.rev); // re-render on changes
   const activeSketchId = useStore((s) => s.activeSketchId);
   const mode = useStore((s) => s.mode);
-
-  const addComponent = useStore((s) => s.addComponent);
-  const setActiveComponent = useStore((s) => s.setActiveComponent);
   const editSketch = useStore((s) => s.editSketch);
   const finishSketch = useStore((s) => s.finishSketch);
 
-  const renderComponent = (id: string, depth: number) => {
-    const c = components[id];
-    if (!c) return null;
-    return (
-      <div key={id}>
-        <div
-          className={`tree-row ${activeComponentId === id ? "active" : ""}`}
-          style={{ paddingLeft: 8 + depth * 14 }}
-          onClick={() => setActiveComponent(id)}
-        >
-          <span className="tree-icon">▣</span>
-          <span className="tree-label">{c.name}</span>
-          {activeComponentId === id && <span className="badge">active</span>}
-        </div>
-        {c.sketches.map((sid) => {
-          const sk = sketches[sid];
-          if (!sk) return null;
-          const editing = mode === "sketch" && activeSketchId === sid;
-          return (
-            <div
-              key={sid}
-              className={`tree-row sketch ${editing ? "active" : ""}`}
-              style={{ paddingLeft: 8 + (depth + 1) * 14 }}
-              onClick={() => (editing ? finishSketch() : editSketch(sid))}
-            >
-              <span className="tree-icon">✎</span>
-              <span className="tree-label">{sk.name}</span>
-              <span className={`dof-dot ${sk.status.fullyConstrained ? "ok" : sk.status.conflicting ? "bad" : "warn"}`} />
-            </div>
-          );
-        })}
-        {c.children.map((ch) => renderComponent(ch, depth + 1))}
-      </div>
-    );
-  };
+  const doc = session.doc;
+  const root = doc.components[doc.rootComponentId];
 
   return (
     <div className="panel browser">
       <div className="panel-head">
         <span>Browser</span>
-        <button className="icon-btn" title="New component" onClick={() => addComponent()}>
-          ＋
-        </button>
       </div>
-      <div className="tree">{renderComponent(rootId, 0)}</div>
+      <div className="tree">
+        <div className="tree-row active" style={{ paddingLeft: 8 }}>
+          <span className="tree-icon">▣</span>
+          <span className="tree-label">{root?.name ?? "Root Component"}</span>
+        </div>
+        {(root?.sketches ?? []).map((sid) => {
+          const sk = doc.sketches[sid];
+          if (!sk) return null;
+          const editing = mode === "sketch" && activeSketchId === sid;
+          const st = sk.status;
+          return (
+            <div
+              key={sid}
+              className={`tree-row sketch ${editing ? "active" : ""}`}
+              style={{ paddingLeft: 22 }}
+              onClick={() => (editing ? finishSketch() : editSketch(sid))}
+              title={st.message}
+            >
+              <span className="tree-icon">✎</span>
+              <span className="tree-label">
+                {sk.name} <span className="muted-inline">· {sk.planeId}</span>
+              </span>
+              <span className={`dof-dot ${st.fullyConstrained ? "ok" : st.conflicting ? "bad" : "warn"}`} />
+            </div>
+          );
+        })}
+        {(root?.sketches ?? []).length === 0 && <div className="muted">No sketches yet.</div>}
+      </div>
     </div>
   );
 }

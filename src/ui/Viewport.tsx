@@ -4,7 +4,7 @@ import { Interactions } from "../viewport/interactions";
 import { AppState, useStore } from "../model/store";
 
 function buildView(s: AppState): ViewData {
-  const sketch = s.activeSketchId ? s.sketches[s.activeSketchId] ?? null : null;
+  const sketch = s.renderSketch();
   return {
     mode: s.mode,
     planeId: sketch ? sketch.planeId : null,
@@ -38,7 +38,7 @@ export function Viewport() {
         prevMode = s.mode;
       }
       if (s.mode === "sketch" && s.activeSketchId && s.activeSketchId !== prevSketch) {
-        const sk = s.sketches[s.activeSketchId];
+        const sk = s.session.doc.sketches[s.activeSketchId];
         if (sk) scene.focusPlane(sk.planeId);
       }
       prevSketch = s.activeSketchId;

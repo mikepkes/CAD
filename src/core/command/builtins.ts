@@ -271,6 +271,68 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
 
+  {
+    type: "sketch.addArc",
+    title: "Add arc",
+    summary: "Add a circular arc by center, start and end points.",
+    description:
+      "Creates an arc. center/start/end may be new {x,y} points or {ref}. The radius is taken from center→start. `ccw` sets sweep direction (default true). Returns [arcId, centerId, startId, endId].",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "center", "start", "end"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        center: POINT_REF_SCHEMA,
+        start: POINT_REF_SCHEMA,
+        end: POINT_REF_SCHEMA,
+        ccw: { type: "boolean" },
+      },
+    },
+    apply(draft, p: { sketch: string; center: PointRef; start: PointRef; end: PointRef; ccw?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const c = resolvePoint(sk, p.center, ctx);
+      const s = resolvePoint(sk, p.start, ctx);
+      const e = resolvePoint(sk, p.end, ctx);
+      const cp = sk.entities[c] as SketchPoint;
+      const sp = sk.entities[s] as SketchPoint;
+      const r = Math.hypot(sp.x - cp.x, sp.y - cp.y);
+      const id = ctx.alloc("ar");
+      sk.entities[id] = { id, kind: "arc", center: c, p1: s, p2: e, r, ccw: p.ccw ?? true };
+      return { createdIds: [id, c, s, e], affectedSketchId: sk.id };
+    },
+  },
+  {
+    type: "sketch.moveGeometry",
+    title: "Move geometry",
+    summary: "Set seed coordinates for points (used to persist a drag).",
+    description:
+      "Overrides the seed position of one or more points. Replayed after the points are created, so it repositions under-constrained geometry; fully-constrained points are unaffected (the solver overrides). This is how a drag is committed as a single undoable step.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "seeds"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        seeds: {
+          type: "object",
+          description: "Map of pointId -> {x, y}.",
+        },
+      },
+    },
+    apply(draft, p: { sketch: string; seeds: Record<string, { x: number; y: number }> }) {
+      const sk = sketchOf(draft, p.sketch);
+      for (const [pid, pos] of Object.entries(p.seeds)) {
+        const e = sk.entities[pid];
+        if (e && e.kind === "point" && !(e as SketchPoint).fixed) {
+          (e as SketchPoint).x = pos.x;
+          (e as SketchPoint).y = pos.y;
+        }
+      }
+      return { affectedSketchId: sk.id, message: `Moved ${Object.keys(p.seeds).length} point(s)` };
+    },
+  },
+
   // ---- constraints & dimensions ----
   {
     type: "sketch.addConstraint",

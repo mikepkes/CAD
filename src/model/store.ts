@@ -1,455 +1,254 @@
 import { create } from "zustand";
-import { uid } from "../util/id";
-import {
-  Constraint,
-  DimensionConstraint,
-  DimensionType,
-  GeometricConstraint,
-  NewGeometricConstraint,
-  Sketch,
-  SketchArc,
-  SketchCircle,
-  SketchEntity,
-  SketchLine,
-  SketchPoint,
-} from "../sketch/types";
-import { solveSketch, SolveDrag } from "../sketch/engine";
-import { Parameter, resolveParameters } from "./parameters";
-import { planeById } from "../geometry/plane";
+import planegcsWasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
 
-export type Tool =
-  | "select"
-  | "line"
-  | "rectangle"
-  | "circle"
-  | "arc"
-  | "point";
+import { CadSession, DispatchResult } from "../core/command/session";
+import { createDefaultRegistry } from "../core/command/builtins";
+import { createDocument } from "../core/document";
+import { PlaneGCSSolver } from "../core/solver/planegcs";
+import { Evaluations } from "../core/recompute";
+import { resolveParameters } from "./parameters";
+import { solveDrag } from "../core/drag";
+import { Sketch } from "../sketch/types";
 
+export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point";
 export type AppMode = "model" | "sketch";
+export type GeoRef = { x: number; y: number } | { ref: string };
 
-export interface Component {
-  id: string;
-  name: string;
-  parentId: string | null;
-  children: string[];
-  sketches: string[];
+export interface Toast {
+  kind: "error" | "info";
+  text: string;
 }
 
-export interface AppState {
-  // document
-  components: Record<string, Component>;
-  rootComponentId: string;
-  activeComponentId: string;
-  sketches: Record<string, Sketch>;
-  parameters: Parameter[];
-  paramScope: Record<string, number>;
+const registry = createDefaultRegistry();
+const solver = new PlaneGCSSolver({ wasmUrl: planegcsWasmUrl });
+const session = new CadSession(createDocument(), registry, solver);
 
-  // ui
+export interface AppState {
+  session: CadSession;
+  rev: number;
+  ready: boolean;
+
   mode: AppMode;
   activeSketchId: string | null;
   tool: Tool;
-  selection: string[]; // entity ids
+  selection: string[];
   hover: string | null;
   showPlanes: boolean;
   showGrid: boolean;
 
-  // derived / status
+  dragging: { pointId: string } | null;
+  transient: Record<string, { x: number; y: number }> | null;
+
+  toast: Toast | null;
   lastMessage: string;
 
-  // ---- actions ----
+  // generic command dispatch (used by the constraint/dimension bar)
+  dispatch: (type: string, params: Record<string, unknown>, opts?: { rejectOnConflict?: boolean }) => Promise<DispatchResult>;
+
+  // ui
   setTool: (t: Tool) => void;
-  setHover: (id: string | null) => void;
   select: (ids: string[], additive?: boolean) => void;
   toggleSelect: (id: string) => void;
   clearSelection: () => void;
+  setHover: (id: string | null) => void;
+  toggleShowPlanes: () => void;
+  toggleShowGrid: () => void;
+  dismissToast: () => void;
 
-  startSketch: (planeId: string) => void;
+  // sketch lifecycle
+  startSketch: (plane: string) => Promise<void>;
   finishSketch: () => void;
   editSketch: (id: string) => void;
 
-  // entity creation (returns new ids)
-  createPoint: (sketchId: string, u: number, v: number, opts?: Partial<SketchPoint>) => string;
-  createLine: (sketchId: string, p1: string, p2: string, construction?: boolean) => string;
-  createCircle: (sketchId: string, center: string, r: number) => string;
-  createArc: (sketchId: string, center: string, p1: string, p2: string, ccw: boolean) => string;
-  deleteEntities: (ids: string[]) => void;
+  // drawing tools (return created ids for chaining)
+  placePoint: (x: number, y: number) => Promise<DispatchResult>;
+  placeLine: (start: GeoRef, end: GeoRef) => Promise<DispatchResult>;
+  placeRectangle: (corner: { x: number; y: number }, opposite: { x: number; y: number }) => Promise<DispatchResult>;
+  placeCircle: (center: GeoRef, radius: number) => Promise<DispatchResult>;
+  placeArc: (center: GeoRef, start: GeoRef, end: GeoRef, ccw: boolean) => Promise<DispatchResult>;
+  deleteSelected: () => Promise<void>;
 
-  addGeometric: (c: NewGeometricConstraint) => void;
-  addDimension: (d: Omit<DimensionConstraint, "id" | "value">, value: number) => void;
-  updateDimension: (id: string, expr: string) => void;
-  deleteConstraint: (id: string) => void;
+  // drag
+  beginDrag: (pointId: string) => void;
+  dragTo: (x: number, y: number) => Promise<void>;
+  endDrag: () => Promise<void>;
+  renderSketch: () => Sketch | null;
 
   // parameters
-  addParameter: (name?: string, expr?: string) => void;
-  updateParameter: (id: string, patch: Partial<Parameter>) => void;
-  deleteParameter: (id: string) => void;
+  addParameter: (name?: string, expr?: string) => Promise<void>;
+  setParameterExpr: (name: string, expr: string) => Promise<void>;
+  renameParameter: (name: string, newName: string) => Promise<void>;
+  deleteParameter: (name: string) => Promise<void>;
 
-  // components
-  addComponent: (name?: string) => void;
-  setActiveComponent: (id: string) => void;
-  renameComponent: (id: string, name: string) => void;
+  // constraints/dimensions by id (mapped to their creating operation)
+  editDimension: (constraintId: string, expr: string) => Promise<void>;
+  deleteConstraintById: (constraintId: string) => Promise<void>;
 
-  // solve
-  recomputeParams: () => void;
-  solveActive: (drag?: SolveDrag) => void;
-  toggleShowPlanes: () => void;
-  toggleShowGrid: () => void;
+  // timeline / history
+  undo: () => void;
+  redo: () => void;
+  editOperation: (opId: string, params: Record<string, unknown>) => Promise<void>;
+  suppressOperation: (opId: string, suppressed: boolean) => Promise<void>;
+  deleteOperation: (opId: string) => Promise<void>;
+  moveRollback: (index: number) => Promise<void>;
 }
 
-function newSketch(planeId: string, name: string): Sketch {
-  const id = uid("sk");
-  const originId = `${id}:origin`;
-  const origin: SketchPoint = {
-    id: originId,
-    kind: "point",
-    x: 0,
-    y: 0,
-    fixed: true,
+function toastFor(r: DispatchResult): Toast | null {
+  if (r.ok) return null;
+  const extra = r.conflicting && r.conflicting.length ? ` — conflicts: ${r.conflicting.join(", ")}` : "";
+  return { kind: "error", text: (r.error ?? "Rejected") + extra };
+}
+
+export const useStore = create<AppState>((set, get) => {
+  const bump = (extra: Partial<AppState> = {}) => set((s) => ({ rev: s.rev + 1, ...extra }));
+
+  const runDispatch = async (type: string, params: Record<string, unknown>, opts?: { rejectOnConflict?: boolean }) => {
+    const r = await get().session.dispatch(type, params, opts);
+    bump({ ready: true, toast: toastFor(r), lastMessage: r.ok ? r.message ?? "" : r.error ?? "" });
+    return r;
   };
+
+  const activeId = () => get().activeSketchId;
+  const scope = () => resolveParameters(get().session.doc.parameters).scope;
+
   return {
-    id,
-    name,
-    planeId,
-    originPointId: originId,
-    entities: { [originId]: origin },
-    constraints: {},
-    status: { dof: 0, fullyConstrained: false, converged: true, conflicting: false },
-  };
-}
+    session,
+    rev: 0,
+    ready: false,
+    mode: "model",
+    activeSketchId: null,
+    tool: "select",
+    selection: [],
+    hover: null,
+    showPlanes: true,
+    showGrid: true,
+    dragging: null,
+    transient: null,
+    toast: null,
+    lastMessage: "Pick an origin plane to start a sketch.",
 
-const rootId = uid("cmp");
+    dispatch: (type, params, opts) => runDispatch(type, params, opts),
 
-export const useStore = create<AppState>((set, get) => ({
-  components: {
-    [rootId]: { id: rootId, name: "Root Component", parentId: null, children: [], sketches: [] },
-  },
-  rootComponentId: rootId,
-  activeComponentId: rootId,
-  sketches: {},
-  parameters: [
-    { id: uid("p"), name: "width", expr: "60", value: 60 },
-    { id: uid("p"), name: "height", expr: "40", value: 40 },
-  ],
-  paramScope: { width: 60, height: 40 },
+    setTool: (t) => set({ tool: t }),
+    select: (ids, additive) => set((s) => ({ selection: additive ? [...new Set([...s.selection, ...ids])] : ids })),
+    toggleSelect: (id) =>
+      set((s) => ({ selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id] })),
+    clearSelection: () => set({ selection: [] }),
+    setHover: (id) => set({ hover: id }),
+    toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
+    toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+    dismissToast: () => set({ toast: null }),
 
-  mode: "model",
-  activeSketchId: null,
-  tool: "select",
-  selection: [],
-  hover: null,
-  showPlanes: true,
-  showGrid: true,
-  lastMessage: "Ready. Pick an origin plane to start a sketch.",
+    startSketch: async (plane) => {
+      const r = await runDispatch("sketch.create", { plane });
+      if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], lastMessage: `Sketching on ${plane}.` });
+    },
+    finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null }),
+    editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [] }),
 
-  setTool: (t) => set({ tool: t }),
-  setHover: (id) => set({ hover: id }),
-  select: (ids, additive) =>
-    set((s) => ({ selection: additive ? [...new Set([...s.selection, ...ids])] : ids })),
-  toggleSelect: (id) =>
-    set((s) => ({
-      selection: s.selection.includes(id)
-        ? s.selection.filter((x) => x !== id)
-        : [...s.selection, id],
-    })),
-  clearSelection: () => set({ selection: [] }),
+    placePoint: (x, y) => runDispatch("sketch.addPoint", { sketch: activeId(), x, y }),
+    placeLine: (start, end) => runDispatch("sketch.addLine", { sketch: activeId(), start, end }),
+    placeRectangle: (corner, opposite) => runDispatch("sketch.addRectangle", { sketch: activeId(), corner, opposite }),
+    placeCircle: (center, radius) => runDispatch("sketch.addCircle", { sketch: activeId(), center, radius }),
+    placeArc: (center, start, end, ccw) => runDispatch("sketch.addArc", { sketch: activeId(), center, start, end, ccw }),
+    deleteSelected: async () => {
+      const s = get();
+      if (!s.activeSketchId || s.selection.length === 0) return;
+      await runDispatch("sketch.deleteEntities", { sketch: s.activeSketchId, ids: s.selection });
+      set({ selection: [] });
+    },
 
-  startSketch: (planeId) => {
-    const plane = planeById(planeId);
-    const count = Object.keys(get().sketches).length + 1;
-    const sketch = newSketch(planeId, `Sketch ${count}`);
-    set((s) => {
-      const comp = s.components[s.activeComponentId];
-      return {
-        sketches: { ...s.sketches, [sketch.id]: sketch },
-        components: {
-          ...s.components,
-          [comp.id]: { ...comp, sketches: [...comp.sketches, sketch.id] },
-        },
-        activeSketchId: sketch.id,
-        mode: "sketch",
-        tool: "line",
-        selection: [],
-        lastMessage: `Sketching on ${plane.name}.`,
-      };
-    });
-  },
-
-  finishSketch: () =>
-    set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null }),
-
-  editSketch: (id) =>
-    set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [] }),
-
-  createPoint: (sketchId, u, v, opts) => {
-    const id = uid("pt");
-    set((s) => {
-      const sk = s.sketches[sketchId];
-      if (!sk) return {};
-      const point: SketchPoint = { id, kind: "point", x: u, y: v, ...opts };
-      return {
-        sketches: {
-          ...s.sketches,
-          [sketchId]: { ...sk, entities: { ...sk.entities, [id]: point } },
-        },
-      };
-    });
-    return id;
-  },
-
-  createLine: (sketchId, p1, p2, construction) => {
-    const id = uid("ln");
-    set((s) => {
-      const sk = s.sketches[sketchId];
-      if (!sk) return {};
-      const line: SketchLine = { id, kind: "line", p1, p2, construction };
-      return {
-        sketches: {
-          ...s.sketches,
-          [sketchId]: { ...sk, entities: { ...sk.entities, [id]: line } },
-        },
-      };
-    });
-    return id;
-  },
-
-  createCircle: (sketchId, center, r) => {
-    const id = uid("ci");
-    set((s) => {
-      const sk = s.sketches[sketchId];
-      if (!sk) return {};
-      const circle: SketchCircle = { id, kind: "circle", center, r };
-      return {
-        sketches: {
-          ...s.sketches,
-          [sketchId]: { ...sk, entities: { ...sk.entities, [id]: circle } },
-        },
-      };
-    });
-    return id;
-  },
-
-  createArc: (sketchId, center, p1, p2, ccw) => {
-    const id = uid("ar");
-    set((s) => {
-      const sk = s.sketches[sketchId];
-      if (!sk) return {};
-      const c = sk.entities[center] as SketchPoint;
-      const a = sk.entities[p1] as SketchPoint;
-      const r = Math.hypot(a.x - c.x, a.y - c.y);
-      const arc: SketchArc = { id, kind: "arc", center, p1, p2, r, ccw };
-      return {
-        sketches: {
-          ...s.sketches,
-          [sketchId]: { ...sk, entities: { ...sk.entities, [id]: arc } },
-        },
-      };
-    });
-    return id;
-  },
-
-  deleteEntities: (ids) => {
-    const sketchId = get().activeSketchId;
-    if (!sketchId) return;
-    set((s) => {
-      const sk = s.sketches[sketchId];
-      if (!sk) return {};
-      const remove = new Set(ids);
-      // also remove points that are defining points of removed curves? keep simple:
-      const entities: Record<string, SketchEntity> = {};
-      for (const [eid, e] of Object.entries(sk.entities)) {
-        if (remove.has(eid)) continue;
-        if (eid === sk.originPointId) {
-          entities[eid] = e;
-          continue;
+    beginDrag: (pointId) => set({ dragging: { pointId } }),
+    dragTo: async (x, y) => {
+      const s = get();
+      if (!s.dragging || !s.activeSketchId) return;
+      const sk = s.session.doc.sketches[s.activeSketchId];
+      if (!sk) return;
+      const res = await solveDrag(sk, scope(), solver, s.dragging.pointId, x, y);
+      bump({ transient: res.points });
+    },
+    endDrag: async () => {
+      const s = get();
+      const trans = s.transient;
+      const sid = s.activeSketchId;
+      set({ dragging: null, transient: null });
+      if (!trans || !sid) return;
+      const sk = s.session.doc.sketches[sid];
+      const seeds: Record<string, { x: number; y: number }> = {};
+      for (const [id, pos] of Object.entries(trans)) {
+        const e = sk.entities[id];
+        if (e && e.kind === "point" && !e.fixed && Math.hypot(pos.x - e.x, pos.y - e.y) > 1e-6) {
+          seeds[id] = { x: pos.x, y: pos.y };
         }
-        entities[eid] = e;
       }
-      // drop constraints referencing removed entities
-      const constraints: Record<string, Constraint> = {};
-      for (const [cid, c] of Object.entries(sk.constraints)) {
-        const refs = constraintRefs(c);
-        if (refs.some((r) => remove.has(r))) continue;
-        constraints[cid] = c;
+      if (Object.keys(seeds).length > 0) await runDispatch("sketch.moveGeometry", { sketch: sid, seeds });
+    },
+    renderSketch: () => {
+      const s = get();
+      if (!s.activeSketchId) return null;
+      const sk = s.session.doc.sketches[s.activeSketchId];
+      if (!sk) return null;
+      if (!s.transient) return sk;
+      const entities = { ...sk.entities };
+      for (const [id, pos] of Object.entries(s.transient)) {
+        const e = entities[id];
+        if (e && e.kind === "point") entities[id] = { ...e, x: pos.x, y: pos.y };
       }
-      return {
-        sketches: { ...s.sketches, [sketchId]: { ...sk, entities, constraints } },
-        selection: s.selection.filter((x) => !remove.has(x)),
-      };
-    });
-    get().solveActive();
-  },
+      return { ...sk, entities };
+    },
 
-  addGeometric: (c) => {
-    const sketchId = get().activeSketchId;
-    if (!sketchId) return;
-    const id = uid("c");
-    set((s) => {
-      const sk = s.sketches[sketchId];
-      if (!sk) return {};
-      const constraint = { ...c, id } as GeometricConstraint;
-      return {
-        sketches: {
-          ...s.sketches,
-          [sketchId]: { ...sk, constraints: { ...sk.constraints, [id]: constraint } },
-        },
-      };
-    });
-    get().solveActive();
-  },
+    addParameter: async (name, expr) => {
+      // choose a unique default name
+      let base = name || "d";
+      const names = new Set(get().session.doc.parameters.map((p) => p.name));
+      let n = base, i = 1;
+      while (names.has(n)) n = `${base}${i++}`;
+      await runDispatch("parameter.add", { name: n, expression: expr ?? "10" });
+    },
+    setParameterExpr: async (name, expr) => {
+      const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
+      if (op) await get().editOperation(op.opId, { name, expression: expr });
+      else await runDispatch("parameter.set", { name, expression: expr });
+    },
+    renameParameter: async (name, newName) => {
+      const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
+      if (op) await get().editOperation(op.opId, { name: newName, expression: String(op.params.expression) });
+    },
+    deleteParameter: async (name) => {
+      const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
+      if (op) await get().deleteOperation(op.opId);
+      else await runDispatch("parameter.delete", { name });
+    },
 
-  addDimension: (d, value) => {
-    const sketchId = get().activeSketchId;
-    if (!sketchId) return;
-    const id = uid("d");
-    set((s) => {
-      const sk = s.sketches[sketchId];
-      if (!sk) return {};
-      const dim: DimensionConstraint = { ...d, id, value } as DimensionConstraint;
-      return {
-        sketches: {
-          ...s.sketches,
-          [sketchId]: { ...sk, constraints: { ...sk.constraints, [id]: dim } },
-        },
-      };
-    });
-    get().solveActive();
-  },
+    editDimension: async (cid, expr) => {
+      const op = get().session.timeline.find((o) => o.type === "sketch.addDimension" && o.createdIds.includes(cid));
+      if (op) await get().editOperation(op.opId, { ...op.params, expression: expr });
+    },
+    deleteConstraintById: async (cid) => {
+      const op = get().session.timeline.find(
+        (o) => (o.type === "sketch.addDimension" || o.type === "sketch.addConstraint") && o.createdIds.includes(cid)
+      );
+      if (op) await get().deleteOperation(op.opId);
+    },
 
-  updateDimension: (id, expr) => {
-    const sketchId = get().activeSketchId;
-    if (!sketchId) return;
-    set((s) => {
-      const sk = s.sketches[sketchId];
-      if (!sk) return {};
-      const c = sk.constraints[id] as DimensionConstraint;
-      if (!c) return {};
-      return {
-        sketches: {
-          ...s.sketches,
-          [sketchId]: { ...sk, constraints: { ...sk.constraints, [id]: { ...c, expr } } },
-        },
-      };
-    });
-    get().solveActive();
-  },
+    undo: () => { get().session.undo(); bump(); },
+    redo: () => { get().session.redo(); bump(); },
+    editOperation: async (opId, params) => {
+      const r = await get().session.editOperation(opId, params);
+      bump({ toast: toastFor(r), lastMessage: r.ok ? r.message ?? "" : r.error ?? "" });
+    },
+    suppressOperation: async (opId, suppressed) => { await get().session.setSuppressed(opId, suppressed); bump(); },
+    deleteOperation: async (opId) => { await get().session.deleteOperation(opId); bump(); },
+    moveRollback: async (index) => { await get().session.moveRollback(index); bump(); },
+  };
+});
 
-  deleteConstraint: (id) => {
-    const sketchId = get().activeSketchId;
-    if (!sketchId) return;
-    set((s) => {
-      const sk = s.sketches[sketchId];
-      if (!sk) return {};
-      const { [id]: _, ...rest } = sk.constraints;
-      void _;
-      return {
-        sketches: { ...s.sketches, [sketchId]: { ...sk, constraints: rest } },
-        selection: s.selection.filter((x) => x !== id),
-      };
-    });
-    get().solveActive();
-  },
+// Selectors
+export const activeSketch = (s: AppState): Sketch | null =>
+  s.activeSketchId ? s.session.doc.sketches[s.activeSketchId] ?? null : null;
+export const activeEvaluations = (s: AppState): Evaluations => s.session.evaluations;
 
-  addParameter: (name, expr) => {
-    set((s) => {
-      let base = name || "param";
-      let n = base;
-      let i = 1;
-      const names = new Set(s.parameters.map((p) => p.name));
-      while (names.has(n)) {
-        n = `${base}${i++}`;
-      }
-      const p: Parameter = { id: uid("p"), name: n, expr: expr ?? "0", value: 0 };
-      return { parameters: [...s.parameters, p] };
-    });
-    get().recomputeParams();
-  },
-
-  updateParameter: (id, patch) => {
-    set((s) => ({
-      parameters: s.parameters.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-    }));
-    get().recomputeParams();
-  },
-
-  deleteParameter: (id) => {
-    set((s) => ({ parameters: s.parameters.filter((p) => p.id !== id) }));
-    get().recomputeParams();
-  },
-
-  addComponent: (name) => {
-    const id = uid("cmp");
-    set((s) => {
-      const root = s.components[s.rootComponentId];
-      const comp: Component = {
-        id,
-        name: name || `Component ${Object.keys(s.components).length}`,
-        parentId: s.rootComponentId,
-        children: [],
-        sketches: [],
-      };
-      return {
-        components: {
-          ...s.components,
-          [id]: comp,
-          [root.id]: { ...root, children: [...root.children, id] },
-        },
-        activeComponentId: id,
-      };
-    });
-  },
-
-  setActiveComponent: (id) => set({ activeComponentId: id }),
-  renameComponent: (id, name) =>
-    set((s) => ({ components: { ...s.components, [id]: { ...s.components[id], name } } })),
-
-  recomputeParams: () => {
-    const { scope, resolved } = resolveParameters(get().parameters);
-    set({ parameters: resolved, paramScope: scope });
-    get().solveActive();
-  },
-
-  solveActive: (drag) => {
-    const { activeSketchId, sketches, paramScope } = get();
-    if (!activeSketchId) return;
-    const sk = sketches[activeSketchId];
-    if (!sk) return;
-    const result = solveSketch(sk, paramScope, drag);
-    // update dimension stored values
-    const constraints = { ...sk.constraints };
-    for (const [cid, v] of Object.entries(result.dimensions)) {
-      const c = constraints[cid] as DimensionConstraint;
-      if (c) constraints[cid] = { ...c, value: v };
-    }
-    set((s) => ({
-      sketches: {
-        ...s.sketches,
-        [activeSketchId]: { ...sk, entities: result.entities, constraints, status: result.status },
-      },
-      lastMessage: result.status.message ?? s.lastMessage,
-    }));
-  },
-
-  toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
-  toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
-}));
-
-// Expose the store in dev for debugging / automated UI verification.
+// dev handle
 if (typeof window !== "undefined" && import.meta.env?.DEV) {
   (window as any).__chisel = useStore;
 }
-
-export function constraintRefs(c: Constraint): string[] {
-  const out: string[] = [];
-  const add = (v?: string) => v && out.push(v);
-  const any = c as any;
-  ["a", "b", "l1", "l2", "e1", "e2", "c1", "c2", "point", "line", "circle"].forEach((k) =>
-    add(any[k])
-  );
-  return out;
-}
-
-// Convenience selectors
-export const activeSketch = (s: AppState): Sketch | null =>
-  s.activeSketchId ? s.sketches[s.activeSketchId] ?? null : null;
-
-export type { DimensionType };
