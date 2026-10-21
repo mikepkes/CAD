@@ -414,6 +414,41 @@ export const BUILTINS: CommandDef<any>[] = [
       return { createdIds: [id], affectedSketchId: sk.id };
     },
   },
+  // ---- features (3D) ----
+  {
+    type: "feature.extrude",
+    title: "Extrude",
+    summary: "Extrude a sketch's closed profile into a solid.",
+    description:
+      "Creates an extruded solid from the closed profile of a sketch, along the sketch plane normal. `distance` is an expression (parametric), e.g. \"10\" or \"height*2\". The largest closed loop is the outer boundary; inner loops become holes. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "distance"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        distance: { type: "string", description: "Distance expression, e.g. '10' or 'height*2'." },
+        symmetric: { type: "boolean", description: "Extrude symmetrically about the plane." },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Extrude sketch1 by the `height` parameter", params: { sketch: "sketch1", distance: "height" } }],
+    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; name?: string }, ctx) {
+      if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
+      const id = ctx.alloc("ext");
+      draft.features[id] = {
+        id,
+        kind: "extrude",
+        name: p.name ?? "Extrude",
+        sketchId: p.sketch,
+        distanceExpr: String(p.distance),
+        distanceValue: 0,
+        symmetric: !!p.symmetric,
+      };
+      return { createdIds: [id], message: `Extrude ${p.sketch}` };
+    },
+  },
+
   {
     type: "sketch.deleteEntities",
     title: "Delete entities",

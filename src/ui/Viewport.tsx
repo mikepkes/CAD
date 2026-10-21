@@ -5,6 +5,14 @@ import { AppState, useStore } from "../model/store";
 
 function buildView(s: AppState): ViewData {
   const sketch = s.renderSketch();
+  const solids = Object.values(s.solids)
+    .filter((sol) => sol.mesh)
+    .map((sol) => ({
+      positions: sol.mesh!.positions,
+      normals: sol.mesh!.normals,
+      indices: sol.mesh!.indices,
+      edges: sol.mesh!.edges,
+    }));
   return {
     mode: s.mode,
     planeId: sketch ? sketch.planeId : null,
@@ -14,6 +22,7 @@ function buildView(s: AppState): ViewData {
     preview: null,
     showPlanes: s.showPlanes,
     showGrid: s.showGrid,
+    solids,
   };
 }
 

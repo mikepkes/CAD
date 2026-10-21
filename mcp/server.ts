@@ -8,6 +8,8 @@
 // The core is renderer-agnostic and runs headless here (PlaneGCS via WASM), so
 // an agent can build and edit CNC/3D-print-ready models with no browser.
 
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { CadSession, DispatchResult } from "../src/core/command/session";
@@ -16,6 +18,19 @@ import { CadDocument, createDocument } from "../src/core/document";
 import { PlaneGCSSolver, PlaneGCSOptions } from "../src/core/solver/planegcs";
 import { Evaluations } from "../src/core/recompute";
 import { JSONSchema } from "../src/core/command/types";
+import { initKernel, isKernelReady } from "../src/core/occ/kernel";
+import { evaluateFeatures, exportFeatureBlob } from "../src/core/features";
+import { resolveParameters } from "../src/model/parameters";
+
+let kernelInit: Promise<void> | null = null;
+async function ensureKernel(): Promise<void> {
+  if (!kernelInit) {
+    const require = createRequire(import.meta.url);
+    const wasmPath = require.resolve("replicad-opencascadejs/wasm");
+    kernelInit = initKernel({ wasmBinary: readFileSync(wasmPath) });
+  }
+  await kernelInit;
+}
 
 const COMMAND_PREFIX_SEP = "__"; // "sketch.addLine" <-> "sketch__addLine"
 const toToolName = (cmd: string) => cmd.replace(/\./g, COMMAND_PREFIX_SEP);
@@ -182,6 +197,39 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
       description: "Redo the last undone edit transaction.",
       inputSchema: { type: "object", properties: {} },
       handler: async () => ({ ok: session.redo(), sketches: diagnoseAll(session.evaluations) }),
+    },
+    {
+      name: "get_solids",
+      description: "Evaluate the 3D solid features (extrudes) with the OpenCASCADE kernel and return a summary per feature (triangle count, distance, or error).",
+      inputSchema: { type: "object", properties: {} },
+      handler: async () => {
+        await ensureKernel();
+        const scope = resolveParameters(session.doc.parameters).scope;
+        const solids = evaluateFeatures(session.doc, scope);
+        return {
+          kernelReady: isKernelReady(),
+          solids: Object.values(solids).map((s) => ({ featureId: s.featureId, name: s.name, sketch: s.sketchId, distance: s.distance, triangles: s.mesh?.triangleCount, error: s.error })),
+        };
+      },
+    },
+    {
+      name: "export_model",
+      description: "Export a solid feature to STL (3D print) or STEP (CAD/CNC). Returns base64-encoded file bytes. If featureId is omitted, the first feature is used.",
+      inputSchema: {
+        type: "object",
+        required: ["format"],
+        properties: { format: { type: "string", enum: ["stl", "step"] }, featureId: { type: "string" } },
+      },
+      handler: async (a) => {
+        await ensureKernel();
+        const scope = resolveParameters(session.doc.parameters).scope;
+        const fid = (a.featureId as string) || Object.keys(session.doc.features)[0];
+        if (!fid) return { ok: false, error: "No feature to export — run feature.extrude first." };
+        const blob = exportFeatureBlob(session.doc, scope, fid, a.format as "stl" | "step");
+        if (!blob) return { ok: false, error: "Export failed (no closed profile?)." };
+        const buf = Buffer.from(await blob.arrayBuffer());
+        return { ok: true, featureId: fid, format: a.format, bytes: buf.length, base64: buf.toString("base64") };
+      },
     },
     {
       name: "export_document",

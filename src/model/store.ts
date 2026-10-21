@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import planegcsWasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
+import occWasmUrl from "replicad-opencascadejs/wasm?url";
 
 import { CadSession, DispatchResult } from "../core/command/session";
 import { createDefaultRegistry } from "../core/command/builtins";
@@ -9,6 +10,8 @@ import { Evaluations } from "../core/recompute";
 import { resolveParameters } from "./parameters";
 import { solveDrag } from "../core/drag";
 import { Sketch } from "../sketch/types";
+import { initKernel } from "../core/occ/kernel";
+import { evaluateFeatures, exportFeatureBlob, SolidEval } from "../core/features";
 
 export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point";
 export type AppMode = "model" | "sketch";
@@ -38,6 +41,11 @@ export interface AppState {
 
   dragging: { pointId: string } | null;
   transient: Record<string, { x: number; y: number }> | null;
+
+  // 3D solids (derived from features via the OCC kernel)
+  solids: Record<string, SolidEval>;
+  kernelReady: boolean;
+  kernelLoading: boolean;
 
   toast: Toast | null;
   lastMessage: string;
@@ -91,6 +99,14 @@ export interface AppState {
   suppressOperation: (opId: string, suppressed: boolean) => Promise<void>;
   deleteOperation: (opId: string) => Promise<void>;
   moveRollback: (index: number) => Promise<void>;
+
+  // features (3D)
+  ensureKernel: () => Promise<void>;
+  rebuildSolids: () => Promise<void>;
+  extrudeSketch: (sketchId: string, distanceExpr?: string) => Promise<void>;
+  editFeatureDistance: (featureId: string, expr: string) => Promise<void>;
+  deleteFeature: (featureId: string) => Promise<void>;
+  exportSolid: (format: "stl" | "step") => Promise<void>;
 }
 
 function toastFor(r: DispatchResult): Toast | null {
@@ -102,9 +118,14 @@ function toastFor(r: DispatchResult): Toast | null {
 export const useStore = create<AppState>((set, get) => {
   const bump = (extra: Partial<AppState> = {}) => set((s) => ({ rev: s.rev + 1, ...extra }));
 
+  const afterMutate = () => {
+    if (Object.keys(get().session.doc.features).length) void get().rebuildSolids();
+  };
+
   const runDispatch = async (type: string, params: Record<string, unknown>, opts?: { rejectOnConflict?: boolean }) => {
     const r = await get().session.dispatch(type, params, opts);
     bump({ ready: true, toast: toastFor(r), lastMessage: r.ok ? r.message ?? "" : r.error ?? "" });
+    afterMutate();
     return r;
   };
 
@@ -124,6 +145,9 @@ export const useStore = create<AppState>((set, get) => {
     showGrid: true,
     dragging: null,
     transient: null,
+    solids: {},
+    kernelReady: false,
+    kernelLoading: false,
     toast: null,
     lastMessage: "Pick an origin plane to start a sketch.",
 
@@ -231,15 +255,60 @@ export const useStore = create<AppState>((set, get) => {
       if (op) await get().deleteOperation(op.opId);
     },
 
-    undo: () => { get().session.undo(); bump(); },
-    redo: () => { get().session.redo(); bump(); },
+    undo: () => { get().session.undo(); bump(); afterMutate(); },
+    redo: () => { get().session.redo(); bump(); afterMutate(); },
     editOperation: async (opId, params) => {
       const r = await get().session.editOperation(opId, params);
       bump({ toast: toastFor(r), lastMessage: r.ok ? r.message ?? "" : r.error ?? "" });
+      afterMutate();
     },
-    suppressOperation: async (opId, suppressed) => { await get().session.setSuppressed(opId, suppressed); bump(); },
-    deleteOperation: async (opId) => { await get().session.deleteOperation(opId); bump(); },
-    moveRollback: async (index) => { await get().session.moveRollback(index); bump(); },
+    suppressOperation: async (opId, suppressed) => { await get().session.setSuppressed(opId, suppressed); bump(); afterMutate(); },
+    deleteOperation: async (opId) => { await get().session.deleteOperation(opId); bump(); afterMutate(); },
+    moveRollback: async (index) => { await get().session.moveRollback(index); bump(); afterMutate(); },
+
+    ensureKernel: async () => {
+      if (get().kernelReady) return;
+      set({ kernelLoading: true });
+      try {
+        await initKernel({ wasmUrl: occWasmUrl }); // idempotent
+        set({ kernelReady: true, kernelLoading: false });
+      } catch (e) {
+        set({ kernelLoading: false, toast: { kind: "error", text: `3D kernel failed to load: ${(e as Error).message}` } });
+      }
+    },
+    rebuildSolids: async () => {
+      await get().ensureKernel();
+      if (!get().kernelReady) return;
+      const solids = evaluateFeatures(get().session.doc, scope());
+      bump({ solids });
+    },
+    extrudeSketch: async (sketchId, distanceExpr) => {
+      await get().ensureKernel();
+      await runDispatch("feature.extrude", { sketch: sketchId, distance: distanceExpr ?? "10" });
+    },
+    editFeatureDistance: async (featureId, expr) => {
+      const op = get().session.timeline.find((o) => o.type === "feature.extrude" && o.createdIds.includes(featureId));
+      if (op) await get().editOperation(op.opId, { ...op.params, distance: expr });
+    },
+    deleteFeature: async (featureId) => {
+      const op = get().session.timeline.find((o) => o.type === "feature.extrude" && o.createdIds.includes(featureId));
+      if (op) await get().deleteOperation(op.opId);
+    },
+    exportSolid: async (format) => {
+      await get().ensureKernel();
+      const doc = get().session.doc;
+      const sc = scope();
+      const fid = Object.keys(doc.features)[0];
+      if (!fid) { set({ toast: { kind: "error", text: "Nothing to export — extrude a sketch first." } }); return; }
+      const blob = exportFeatureBlob(doc, sc, fid, format);
+      if (!blob) { set({ toast: { kind: "error", text: "Export failed (no closed profile?)." } }); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `model.${format === "step" ? "step" : "stl"}`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    },
   };
 });
 

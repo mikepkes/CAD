@@ -12,6 +12,13 @@ export interface PreviewGeom {
   cursor?: { u: number; v: number } | null;
 }
 
+export interface SolidView {
+  positions: Float32Array;
+  normals: Float32Array;
+  indices: Uint32Array;
+  edges: Float32Array;
+}
+
 export interface ViewData {
   mode: "model" | "sketch";
   planeId: string | null;
@@ -21,6 +28,7 @@ export interface ViewData {
   preview: PreviewGeom | null;
   showPlanes: boolean;
   showGrid: boolean;
+  solids?: SolidView[];
 }
 
 export interface PickResult {
@@ -55,6 +63,7 @@ export class SceneManager {
   private grid: THREE.GridHelper;
   private sketchGroup = new THREE.Group();
   private previewGroup = new THREE.Group();
+  private solidsGroup = new THREE.Group();
   private raycaster = new THREE.Raycaster();
   private disposed = false;
   private container: HTMLElement;
@@ -104,6 +113,7 @@ export class SceneManager {
     this.scene.add(this.planeGroup);
     this.scene.add(this.sketchGroup);
     this.scene.add(this.previewGroup);
+    this.scene.add(this.solidsGroup);
 
     window.addEventListener("resize", this.onResize);
     this.animate();
@@ -278,10 +288,43 @@ export class SceneManager {
 
     this.clearGroup(this.sketchGroup);
     this.clearGroup(this.previewGroup);
+    this.clearGroup(this.solidsGroup);
+
+    // Solids render in model mode (and faded while sketching).
+    this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
+    if (data.solids) for (const s of data.solids) this.renderSolid(s, data.mode === "sketch");
 
     if (data.sketch && data.planeId) {
       this.renderSketch(data.sketch, planeById(data.planeId), data);
       if (data.preview) this.renderPreview(data.preview, planeById(data.planeId));
+    }
+  }
+
+  private renderSolid(s: SolidView, faded: boolean) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(s.positions, 3));
+    if (s.normals.length === s.positions.length) geo.setAttribute("normal", new THREE.BufferAttribute(s.normals, 3));
+    else geo.computeVertexNormals();
+    geo.setIndex(new THREE.BufferAttribute(s.indices, 1));
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x7b86e0,
+      metalness: 0.15,
+      roughness: 0.5,
+      side: THREE.DoubleSide,
+      transparent: faded,
+      opacity: faded ? 0.25 : 1,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    this.solidsGroup.add(mesh);
+
+    if (s.edges.length) {
+      const egeo = new THREE.BufferGeometry();
+      egeo.setAttribute("position", new THREE.BufferAttribute(s.edges, 3));
+      const eseg = new THREE.LineSegments(
+        egeo,
+        new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1 })
+      );
+      this.solidsGroup.add(eseg);
     }
   }
 

@@ -14,6 +14,46 @@ const geomLabel: Record<string, string> = {
 const displayValue = (d: DimensionConstraint): string =>
   d.type === "angle" ? `${((d.value * 180) / Math.PI).toFixed(2)}°` : d.value.toFixed(3);
 
+function ModelInspector() {
+  const session = useStore((s) => s.session);
+  useStore((s) => s.rev);
+  const solids = useStore((s) => s.solids);
+  const editFeatureDistance = useStore((s) => s.editFeatureDistance);
+  const deleteFeature = useStore((s) => s.deleteFeature);
+  const features = Object.values(session.doc.features);
+
+  return (
+    <div className="panel inspector">
+      <div className="panel-head"><span>Inspector</span></div>
+      <div className="inspector-section">
+        <div className="section-title">Bodies / Features ({features.length})</div>
+        {features.length === 0 && (
+          <div className="muted">Finish a sketch, then press ⬆ Extrude to make a solid.</div>
+        )}
+        {features.map((f) => {
+          const sol = solids[f.id];
+          return (
+            <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "1fr 1fr 60px 22px" }}>
+              <span className="dim-type" title={`Extrude of ${f.sketchId}`}>{f.name}</span>
+              <input
+                className="dim-expr"
+                defaultValue={f.distanceExpr}
+                key={f.id + f.distanceExpr}
+                onBlur={(e) => { if (e.target.value !== f.distanceExpr) editFeatureDistance(f.id, e.target.value); }}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+              />
+              <span className="dim-val" title={sol?.error}>
+                {sol?.error ? "⚠" : sol?.mesh ? `${f.distanceValue.toFixed(2)}` : "…"}
+              </span>
+              <button className="icon-btn danger" onClick={() => deleteFeature(f.id)}>✕</button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function InspectorPanel() {
   const mode = useStore((s) => s.mode);
   useStore((s) => s.rev);
@@ -25,12 +65,7 @@ export function InspectorPanel() {
   const deleteSelected = useStore((s) => s.deleteSelected);
 
   if (mode !== "sketch" || !sk) {
-    return (
-      <div className="panel inspector">
-        <div className="panel-head"><span>Inspector</span></div>
-        <div className="inspector-empty">Enter a sketch to see constraints &amp; dimensions.</div>
-      </div>
-    );
+    return <ModelInspector />;
   }
 
   const evaln = session.evaluations[sk.id];

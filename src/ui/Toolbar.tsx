@@ -20,6 +20,15 @@ export function Toolbar() {
   const showGrid = useStore((s) => s.showGrid);
   const toggleShowPlanes = useStore((s) => s.toggleShowPlanes);
   const toggleShowGrid = useStore((s) => s.toggleShowGrid);
+  const session = useStore((s) => s.session);
+  useStore((s) => s.rev);
+  const extrudeSketch = useStore((s) => s.extrudeSketch);
+  const exportSolid = useStore((s) => s.exportSolid);
+  const kernelLoading = useStore((s) => s.kernelLoading);
+  const hasSolids = useStore((s) => Object.keys(s.solids).length > 0);
+
+  const root = session.doc.components[session.doc.rootComponentId];
+  const lastSketch = root?.sketches[root.sketches.length - 1];
 
   return (
     <div className="toolbar">
@@ -63,6 +72,22 @@ export function Toolbar() {
                 {p.id}
               </button>
             ))}
+          </div>
+          <div className="tool-group">
+            <button
+              className="btn"
+              disabled={!lastSketch || kernelLoading}
+              title={lastSketch ? "Extrude the most recent sketch into a solid" : "Create a sketch first"}
+              onClick={() => lastSketch && extrudeSketch(lastSketch, "10")}
+            >
+              {kernelLoading ? "⏳ Loading 3D…" : "⬆ Extrude"}
+            </button>
+            {hasSolids && (
+              <>
+                <button className="btn" title="Export STEP (CAD/CNC)" onClick={() => exportSolid("step")}>⬇ STEP</button>
+                <button className="btn" title="Export STL (3D print)" onClick={() => exportSolid("stl")}>⬇ STL</button>
+              </>
+            )}
           </div>
           <div className="spacer" />
           <label className="toggle">

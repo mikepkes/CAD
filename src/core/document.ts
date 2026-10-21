@@ -25,6 +25,19 @@ export interface Component {
   sketches: string[];
 }
 
+/** A solid feature (currently extrude). Geometry is derived by the OCC kernel. */
+export interface ExtrudeFeature {
+  id: string;
+  kind: "extrude";
+  name: string;
+  sketchId: string;
+  /** Distance expression (parametric), e.g. "10" or "height*2". */
+  distanceExpr: string;
+  distanceValue: number;
+  symmetric?: boolean;
+}
+export type FeatureDef = ExtrudeFeature;
+
 export interface CadDocument {
   schema: 1;
   id: string;
@@ -43,6 +56,7 @@ export interface CadDocument {
   rootComponentId: string;
   components: Record<string, Component>;
   sketches: Record<string, Sketch>;
+  features: Record<string, FeatureDef>;
 }
 
 /** A fresh, empty root component map (used when rebuilding derived state). */
@@ -65,6 +79,7 @@ export function createDocument(id = "doc1"): CadDocument {
     rootComponentId: rootId,
     components: freshComponents(rootId),
     sketches: {},
+    features: {},
   };
 }
 
