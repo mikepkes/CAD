@@ -1,7 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // Relative base in the production build so the app works at a project-site
+  // subpath (e.g. https://<user>.github.io/CAD/) without hardcoding the repo
+  // name. Dev server keeps an absolute base.
+  base: command === "build" ? "./" : "/",
   plugins: [react()],
   server: {
     host: true,
@@ -18,4 +22,4 @@ export default defineConfig({
     target: "es2020",
     sourcemap: true,
   },
-});
+}));
