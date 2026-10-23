@@ -697,6 +697,47 @@ export const BUILTINS: CommandDef<any>[] = [
       return trimCurve(sketchOf(draft, p.sketch), p.target, p.u, p.v, ctx);
     },
   },
+  {
+    type: "sketch.extend",
+    title: "Extend",
+    summary: "Lengthen a line or arc to the next curve it meets.",
+    description:
+      "Extends the end of `target` nearest the click point (u,v) until it reaches the closest other curve along its own path. Moves that endpoint; adds no new entities.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "target", "u", "v"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        target: { type: "string" },
+        u: { type: "number" },
+        v: { type: "number" },
+      },
+    },
+    apply(draft, p: { sketch: string; target: string; u: number; v: number }) {
+      return extendCurve(sketchOf(draft, p.sketch), p.target, p.u, p.v);
+    },
+  },
+  {
+    type: "sketch.offset",
+    title: "Offset",
+    summary: "Create a parallel copy of a curve at a signed distance.",
+    description:
+      "Offsets a single line, circle or arc by `distance` (perpendicular for lines, radial for circles/arcs; negative flips the side / shrinks the radius). Returns the created entity ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "target", "distance"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        target: { type: "string" },
+        distance: { type: "number" },
+      },
+    },
+    apply(draft, p: { sketch: string; target: string; distance: number }, ctx) {
+      return offsetCurve(sketchOf(draft, p.sketch), p.target, p.distance, ctx);
+    },
+  },
 ];
 
 type Vec = { x: number; y: number };
@@ -802,6 +843,105 @@ function trimCurve(sk: Sketch, targetId: string, u: number, v: number, ctx: Comm
 
   pruneSketch(sk);
   return { createdIds: created, affectedSketchId: sk.id, message: "Trimmed" };
+}
+
+const TAU = Math.PI * 2;
+const normAng = (a: number) => ((a % TAU) + TAU) % TAU;
+
+function extendCurve(sk: Sketch, targetId: string, u: number, v: number): CommandApplyInfo {
+  const tgt = sk.entities[targetId];
+  if (!tgt || (tgt.kind !== "line" && tgt.kind !== "arc")) throw new Error("extend works on lines and arcs");
+  const P = (id: string) => sk.entities[id] as SketchPoint;
+  const click = { x: u, y: v };
+  const others = Object.values(sk.entities).filter((e) => e.id !== targetId && e.kind !== "point");
+  const dist = (p: Vec, q: Vec) => Math.hypot(p.x - q.x, p.y - q.y);
+  const EPS = 1e-4;
+
+  if (tgt.kind === "line") {
+    const a = P(tgt.p1), b = P(tgt.p2);
+    const endIsB = dist(click, b) <= dist(click, a);
+    const dir = { x: b.x - a.x, y: b.y - a.y };
+    const dl = Math.hypot(dir.x, dir.y) || 1; dir.x /= dl; dir.y /= dl;
+    const BIG = 1e5;
+    const longLine: ICurve = { kind: "line", a: { x: a.x - dir.x * BIG, y: a.y - dir.y * BIG }, b: { x: b.x + dir.x * BIG, y: b.y + dir.y * BIG } };
+    const orig: ICurve = { kind: "line", a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } };
+    let bestT: number | null = null;
+    for (const o of others) {
+      const oc = toICurve(sk, o as any); if (!oc) continue;
+      for (const pt of intersect(longLine, oc)) {
+        const t = paramOf(orig, pt);
+        if (endIsB && t > 1 + EPS) { if (bestT === null || t < bestT) bestT = t; }
+        else if (!endIsB && t < -EPS) { if (bestT === null || t > bestT) bestT = t; }
+      }
+    }
+    if (bestT === null) throw new Error("nothing to extend to in that direction");
+    const np = pointAt(orig, bestT);
+    const ep = endIsB ? P(tgt.p2) : P(tgt.p1);
+    ep.x = np.x; ep.y = np.y;
+    return { affectedSketchId: sk.id, message: "Extended" };
+  }
+
+  // arc
+  const c = P(tgt.center), s = P(tgt.p1), e = P(tgt.p2);
+  const a0 = Math.atan2(s.y - c.y, s.x - c.x);
+  const a1 = Math.atan2(e.y - c.y, e.x - c.x);
+  const endIsEnd = dist(click, e) <= dist(click, s);
+  const full: ICurve = { kind: "circle", c: { x: c.x, y: c.y }, r: (tgt as any).r };
+  let best: { ang: number; d: number } | null = null;
+  for (const o of others) {
+    const oc = toICurve(sk, o as any); if (!oc) continue;
+    for (const pt of intersect(full, oc)) {
+      const ang = Math.atan2(pt.y - c.y, pt.x - c.x);
+      let d: number;
+      if (endIsEnd) d = tgt.ccw ? normAng(ang - a1) : normAng(a1 - ang);
+      else d = tgt.ccw ? normAng(a0 - ang) : normAng(ang - a0);
+      if (d > EPS && (best === null || d < best.d)) best = { ang, d };
+    }
+  }
+  if (!best) throw new Error("nothing to extend to");
+  const np = { x: c.x + (tgt as any).r * Math.cos(best.ang), y: c.y + (tgt as any).r * Math.sin(best.ang) };
+  const ep = endIsEnd ? P(tgt.p2) : P(tgt.p1);
+  ep.x = np.x; ep.y = np.y;
+  return { affectedSketchId: sk.id, message: "Extended" };
+}
+
+function offsetCurve(sk: Sketch, targetId: string, d: number, ctx: CommandContext): CommandApplyInfo {
+  const tgt = sk.entities[targetId];
+  if (!tgt || tgt.kind === "point") throw new Error("offset works on a line, circle or arc");
+  const P = (id: string) => sk.entities[id] as SketchPoint;
+  const mkPt = (x: number, y: number): string => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x, y }; return id; };
+
+  if (tgt.kind === "line") {
+    const a = P(tgt.p1), b = P(tgt.p2);
+    let nx = -(b.y - a.y), ny = b.x - a.x;
+    const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+    const p1 = mkPt(a.x + nx * d, a.y + ny * d);
+    const p2 = mkPt(b.x + nx * d, b.y + ny * d);
+    const id = ctx.alloc("ln");
+    sk.entities[id] = { id, kind: "line", p1, p2, construction: tgt.construction };
+    return { createdIds: [id, p1, p2], affectedSketchId: sk.id, message: "Offset line" };
+  }
+  if (tgt.kind === "circle") {
+    const c = P(tgt.center);
+    const r = tgt.r + d;
+    if (r <= 1e-6) throw new Error("offset distance collapses the circle");
+    const ctr = mkPt(c.x, c.y);
+    const id = ctx.alloc("ci");
+    sk.entities[id] = { id, kind: "circle", center: ctr, r, construction: tgt.construction };
+    return { createdIds: [id, ctr], affectedSketchId: sk.id, message: "Offset circle" };
+  }
+  // arc
+  const c = P(tgt.center), s = P(tgt.p1), e = P(tgt.p2);
+  const r = (tgt as any).r + d;
+  if (r <= 1e-6) throw new Error("offset distance collapses the arc");
+  const a0 = Math.atan2(s.y - c.y, s.x - c.x);
+  const a1 = Math.atan2(e.y - c.y, e.x - c.x);
+  const ctr = mkPt(c.x, c.y);
+  const p1 = mkPt(c.x + r * Math.cos(a0), c.y + r * Math.sin(a0));
+  const p2 = mkPt(c.x + r * Math.cos(a1), c.y + r * Math.sin(a1));
+  const id = ctx.alloc("ar");
+  sk.entities[id] = { id, kind: "arc", center: ctr, p1, p2, r, ccw: (tgt as any).ccw, construction: tgt.construction };
+  return { createdIds: [id, ctr, p1, p2], affectedSketchId: sk.id, message: "Offset arc" };
 }
 
 /** Find the point id two lines share, with each line's far endpoint. */

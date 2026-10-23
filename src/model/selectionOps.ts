@@ -153,6 +153,21 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
     }
   }
 
+  // Offset: a single curve → a parallel copy at a default distance (editable).
+  if (s.lines.length === 1 && s.radii.length === 0 && s.points.length === 0) {
+    const l = s.lines[0];
+    const a = pt(l.p1), b = pt(l.p2);
+    const dist = Math.max(1, Math.round(Math.hypot(a.x - b.x, a.y - b.y) * 0.2));
+    modify.push({ id: "offset", label: "Offset", glyph: "⇉", hint: "Parallel copy (edit distance / sign in the timeline)",
+      command: { type: "sketch.offset", params: { sketch: sid, target: l.id, distance: dist } } });
+  }
+  if (s.radii.length === 1 && s.lines.length === 0 && s.points.length === 0) {
+    const r = s.radii[0];
+    const dist = Math.max(1, Math.round(r.r * 0.25));
+    modify.push({ id: "offset", label: "Offset", glyph: "⇉", hint: "Concentric copy (edit distance / sign in the timeline)",
+      command: { type: "sketch.offset", params: { sketch: sid, target: r.id, distance: dist } } });
+  }
+
   const sel = selection.filter((id) => sk.entities[id] && id !== sk.originPointId);
   if (sel.length >= 1) {
     // Mirror: use the last selected line as the axis, mirror the rest.

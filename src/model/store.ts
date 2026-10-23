@@ -18,7 +18,7 @@ import { serializeDocument, deserializeDocument } from "../core/persistence";
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim";
+export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim" | "extend";
 export type AppMode = "model" | "sketch";
 export type GeoRef = { x: number; y: number } | { ref: string };
 

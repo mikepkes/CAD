@@ -32,6 +32,7 @@ const TOOLS: { id: Tool; label: string; key: string; glyph: string }[] = [
   { id: "point", label: "Point", key: "P", glyph: "•" },
   { id: "dimension", label: "Dimension", key: "D", glyph: "↦" },
   { id: "trim", label: "Trim", key: "T", glyph: "✂" },
+  { id: "extend", label: "Extend", key: "E", glyph: "⇥" },
 ];
 
 export function Toolbar() {
