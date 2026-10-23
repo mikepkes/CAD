@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SceneManager, ViewData } from "../viewport/SceneManager";
 import { Interactions } from "../viewport/interactions";
 import { AppState, useStore } from "../model/store";
+import { ContextMenu } from "./ContextMenu";
 
 function buildView(s: AppState): ViewData {
   const sketch = s.renderSketch();
@@ -71,6 +72,7 @@ export function Viewport() {
   return (
     <div className="viewport" ref={containerRef}>
       <InlineDimensionEditor />
+      <ContextMenu />
     </div>
   );
 }

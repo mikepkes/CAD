@@ -53,6 +53,7 @@ export interface AppState {
   dragging: { pointId: string } | null;
   transient: Record<string, { x: number; y: number }> | null;
   inlineEdit: InlineEdit | null;
+  contextMenu: { x: number; y: number } | null;
 
   // 3D solids (derived from features via the OCC kernel)
   solids: Record<string, SolidEval>;
@@ -109,6 +110,10 @@ export interface AppState {
   beginInlineEdit: (edit: InlineEdit) => void;
   commitInlineEdit: (expr: string) => Promise<void>;
   cancelInlineEdit: () => void;
+
+  // right-click context menu
+  openContextMenu: (x: number, y: number) => void;
+  closeContextMenu: () => void;
 
   // timeline / history
   undo: () => void;
@@ -184,6 +189,7 @@ export const useStore = create<AppState>((set, get) => {
     dragging: null,
     transient: null,
     inlineEdit: null,
+    contextMenu: null,
     solids: {},
     kernelReady: false,
     kernelLoading: false,
@@ -207,7 +213,7 @@ export const useStore = create<AppState>((set, get) => {
       const r = await runDispatch("sketch.create", { plane });
       if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], lastMessage: `Sketching on ${plane}.` });
     },
-    finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null }),
+    finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null }),
     editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [] }),
 
     placePoint: (x, y) => runDispatch("sketch.addPoint", { sketch: activeId(), x, y }),
@@ -315,6 +321,9 @@ export const useStore = create<AppState>((set, get) => {
       else await get().editDimension(edit.cid, expr);
     },
     cancelInlineEdit: () => set({ inlineEdit: null }),
+
+    openContextMenu: (x, y) => set({ contextMenu: { x, y } }),
+    closeContextMenu: () => set({ contextMenu: null }),
 
     undo: () => { get().session.undo(); bump(); afterMutate(); },
     redo: () => { get().session.redo(); bump(); afterMutate(); },

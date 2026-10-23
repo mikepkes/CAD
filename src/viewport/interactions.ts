@@ -197,6 +197,7 @@ export class Interactions {
 
   // ---- events ----
   private onDown = (e: PointerEvent) => {
+    if (this.st().contextMenu) this.st().closeContextMenu();
     if (e.button !== 0) return;
     this.downPt = { x: e.clientX, y: e.clientY };
     this.moved = false;
@@ -514,10 +515,21 @@ export class Interactions {
   };
 
   private onContext = (e: MouseEvent) => {
-    if (this.st().mode === "sketch" && this.stage.kind !== "idle") {
+    const st = this.st();
+    if (st.mode !== "sketch") return;
+    // During an active draw, right-click cancels the tool (Fusion behaviour).
+    if (this.stage.kind !== "idle") {
       e.preventDefault();
       this.stage = { kind: "idle" };
       this.setPreview(null);
+      return;
+    }
+    if ((st.tool === "select" || st.tool === "dimension") && this.base) {
+      e.preventDefault();
+      // If right-clicking an unselected entity, select it first.
+      const pick = this.scene.pick(e.clientX, e.clientY, this.base);
+      if (pick.type === "entity" && pick.id && !st.selection.includes(pick.id)) st.select([pick.id]);
+      st.openContextMenu(e.clientX, e.clientY);
     }
   };
 
@@ -526,6 +538,7 @@ export class Interactions {
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (e.key === "Escape") {
+      if (st.contextMenu) { st.closeContextMenu(); return; }
       if (this.stage.kind !== "idle") { this.stage = { kind: "idle" }; this.setPreview(null); }
       else if (st.tool !== "select") st.setTool("select");
       return;
