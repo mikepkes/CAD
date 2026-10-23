@@ -242,6 +242,22 @@ body {
 .viewport canvas {
   display: block;
 }
+.inline-dim {
+  position: fixed;
+  z-index: 50;
+  width: 108px;
+  background: var(--panel-2);
+  border: 1px solid var(--accent-2);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 4px 7px;
+  font-size: 13px;
+  font-family: ui-monospace, monospace;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.inline-dim:focus {
+  outline: none;
+}
 
 .side {
   width: 272px;

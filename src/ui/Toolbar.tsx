@@ -30,6 +30,7 @@ const TOOLS: { id: Tool; label: string; key: string; glyph: string }[] = [
   { id: "circle", label: "Circle", key: "C", glyph: "◯" },
   { id: "arc", label: "Arc", key: "A", glyph: "◜" },
   { id: "point", label: "Point", key: "P", glyph: "•" },
+  { id: "dimension", label: "Dimension", key: "D", glyph: "↦" },
 ];
 
 export function Toolbar() {

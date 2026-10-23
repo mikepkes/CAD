@@ -15,10 +15,10 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
   - [x] shade closed profiles (what's extrudable)
   - [ ] per-entity DOF coloring (needs solver Jacobian introspection — follow-up)
   - [ ] click a shaded profile to extrude just it
-- [ ] A3 Dimension tool + in-canvas editing
-  - [ ] modal Dimension tool (`D`), smart by selection
-  - [ ] inline value input on placement (number or parameter expression)
-  - [ ] double-click a dimension in the viewport to edit
+- [x] A3 Dimension tool + in-canvas editing
+  - [x] modal Dimension tool (`D`), smart by selection (reuses availableOps)
+  - [x] inline value input on placement (number or parameter expression)
+  - [x] double-click a dimension in the viewport to edit
 
 ## Sprint B — editing
 - [ ] Trim, Extend, Offset, sketch-corner Fillet / Chamfer

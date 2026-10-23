@@ -18,9 +18,14 @@ import { serializeDocument, deserializeDocument } from "../core/persistence";
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point";
+export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension";
 export type AppMode = "model" | "sketch";
 export type GeoRef = { x: number; y: number } | { ref: string };
+
+/** A pending in-canvas numeric/expression editor (dimension placement or edit). */
+export type InlineEdit =
+  | { mode: "new"; params: Record<string, unknown>; value: string; screen: { x: number; y: number } }
+  | { mode: "edit"; cid: string; value: string; screen: { x: number; y: number } };
 
 export interface Toast {
   kind: "error" | "info";
@@ -47,6 +52,7 @@ export interface AppState {
 
   dragging: { pointId: string } | null;
   transient: Record<string, { x: number; y: number }> | null;
+  inlineEdit: InlineEdit | null;
 
   // 3D solids (derived from features via the OCC kernel)
   solids: Record<string, SolidEval>;
@@ -98,6 +104,11 @@ export interface AppState {
   // constraints/dimensions by id (mapped to their creating operation)
   editDimension: (constraintId: string, expr: string) => Promise<void>;
   deleteConstraintById: (constraintId: string) => Promise<void>;
+
+  // in-canvas dimension editor
+  beginInlineEdit: (edit: InlineEdit) => void;
+  commitInlineEdit: (expr: string) => Promise<void>;
+  cancelInlineEdit: () => void;
 
   // timeline / history
   undo: () => void;
@@ -172,6 +183,7 @@ export const useStore = create<AppState>((set, get) => {
     showConstraints: true,
     dragging: null,
     transient: null,
+    inlineEdit: null,
     solids: {},
     kernelReady: false,
     kernelLoading: false,
@@ -195,7 +207,7 @@ export const useStore = create<AppState>((set, get) => {
       const r = await runDispatch("sketch.create", { plane });
       if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], lastMessage: `Sketching on ${plane}.` });
     },
-    finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null }),
+    finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null }),
     editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [] }),
 
     placePoint: (x, y) => runDispatch("sketch.addPoint", { sketch: activeId(), x, y }),
@@ -294,6 +306,16 @@ export const useStore = create<AppState>((set, get) => {
       if (sid) await runDispatch("sketch.deleteConstraints", { sketch: sid, ids: [cid] });
     },
 
+    beginInlineEdit: (edit) => set({ inlineEdit: edit }),
+    commitInlineEdit: async (expr) => {
+      const edit = get().inlineEdit;
+      set({ inlineEdit: null });
+      if (!edit || !expr.trim()) return;
+      if (edit.mode === "new") await runDispatch("sketch.addDimension", { ...edit.params, expression: expr });
+      else await get().editDimension(edit.cid, expr);
+    },
+    cancelInlineEdit: () => set({ inlineEdit: null }),
+
     undo: () => { get().session.undo(); bump(); afterMutate(); },
     redo: () => { get().session.redo(); bump(); afterMutate(); },
     editOperation: async (opId, params) => {
@@ -375,6 +397,7 @@ export const useStore = create<AppState>((set, get) => {
         hover: null,
         transient: null,
         dragging: null,
+        inlineEdit: null,
         solids: {},
         toast: null,
       });

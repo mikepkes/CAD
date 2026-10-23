@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { SceneManager, PreviewGeom, ViewData } from "./SceneManager";
 import { GeoRef, useStore } from "../model/store";
 import { SketchPoint } from "../sketch/types";
+import { availableOps } from "../model/selectionOps";
 import { infer, InferResult } from "./snapping";
 
 type Snap = InferResult;
@@ -140,13 +141,13 @@ export class Interactions {
       return;
     }
 
-    if (st.tool === "select") {
+    if (st.tool === "select" || st.tool === "dimension") {
       if (this.base) {
         const pick = this.scene.pick(e.clientX, e.clientY, this.base);
         const id = pick.type === "entity" ? pick.id ?? null : null;
         if (id !== st.hover) st.setHover(id);
       }
-      // No snap ghost while selecting — only while a drawing tool is active.
+      // No snap ghost while selecting/dimensioning — only while drawing.
       if (this.preview) this.setPreview(null);
       return;
     }
@@ -183,6 +184,9 @@ export class Interactions {
       case "select":
         this.handleSelectClick(e);
         break;
+      case "dimension":
+        this.handleDimensionClick(e);
+        break;
       case "point":
         await st.placePoint(snap.u, snap.v);
         break;
@@ -210,6 +214,32 @@ export class Interactions {
       else st.select([pick.id]);
     } else if (!e.shiftKey) {
       st.clearSelection();
+    }
+  }
+
+  // Modal Dimension tool: click geometry to accumulate a selection; as soon as
+  // the set is dimensionable, open the inline value editor (Fusion-style).
+  private handleDimensionClick(e: PointerEvent) {
+    const st = this.st();
+    if (!this.base || !st.activeSketchId) return;
+    const sk = st.session.doc.sketches[st.activeSketchId];
+    if (!sk) return;
+    const pick = this.scene.pick(e.clientX, e.clientY, this.base);
+    if (pick.type !== "entity" || !pick.id) { st.clearSelection(); return; }
+    const sel = st.selection.includes(pick.id) ? st.selection : [...st.selection, pick.id];
+    const dims = availableOps(sk, sel).dimensions;
+    if (dims.length) {
+      // Prefer diameter on a circle (Fusion's default); otherwise the first.
+      const chosen = dims.find((d) => d.id === "diameter") ?? dims[0];
+      st.beginInlineEdit({
+        mode: "new",
+        params: chosen.command.params,
+        value: String(chosen.command.params.expression ?? ""),
+        screen: { x: e.clientX, y: e.clientY },
+      });
+      st.clearSelection();
+    } else {
+      st.select(sel);
     }
   }
 
@@ -352,10 +382,22 @@ export class Interactions {
     this.setPreview(preview);
   }
 
-  private onDblClick = () => {
+  private onDblClick = (e: MouseEvent) => {
     if (this.stage.kind === "line") {
       this.stage = { kind: "idle" };
       this.setPreview(null);
+      return;
+    }
+    const st = this.st();
+    if (st.mode !== "sketch" || !this.base || !st.activeSketchId) return;
+    // Double-click a dimension label to edit its value/expression in place.
+    const pick = this.scene.pick(e.clientX, e.clientY, this.base);
+    if (pick.type === "entity" && pick.id && pick.entityKind === "dimension") {
+      const sk = st.session.doc.sketches[st.activeSketchId];
+      const c = sk?.constraints[pick.id] as { expr?: string } | undefined;
+      if (c && typeof c.expr === "string") {
+        st.beginInlineEdit({ mode: "edit", cid: pick.id, value: c.expr, screen: { x: e.clientX, y: e.clientY } });
+      }
     }
   };
 
@@ -383,7 +425,7 @@ export class Interactions {
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); st.redo(); return; }
     if (st.mode !== "sketch") return;
-    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", p: "point", s: "select" };
+    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", p: "point", s: "select", d: "dimension" };
     if (map[e.key.toLowerCase()]) st.setTool(map[e.key.toLowerCase()]);
     if ((e.key === "Delete" || e.key === "Backspace") && st.selection.length) st.deleteSelected();
   };

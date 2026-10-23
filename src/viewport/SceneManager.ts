@@ -451,6 +451,7 @@ export class SceneManager {
         if (pos) {
           const sprite = this.makeTextSprite(label, "#7bd88f");
           sprite.position.copy(pos);
+          sprite.userData = { id: c.id, kind: "dimension" };
           this.sketchGroup.add(sprite);
         }
       } else if (data.showConstraints) {

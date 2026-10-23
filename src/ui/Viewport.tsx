@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SceneManager, ViewData } from "../viewport/SceneManager";
 import { Interactions } from "../viewport/interactions";
 import { AppState, useStore } from "../model/store";
@@ -68,5 +68,53 @@ export function Viewport() {
     };
   }, []);
 
-  return <div className="viewport" ref={containerRef} />;
+  return (
+    <div className="viewport" ref={containerRef}>
+      <InlineDimensionEditor />
+    </div>
+  );
+}
+
+/** Small floating input for placing a new dimension or editing one in place. */
+function InlineDimensionEditor() {
+  const edit = useStore((s) => s.inlineEdit);
+  const commit = useStore((s) => s.commitInlineEdit);
+  const cancel = useStore((s) => s.cancelInlineEdit);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState("");
+  const done = useRef(false);
+
+  useLayoutEffect(() => {
+    if (edit) {
+      setValue(edit.value);
+      done.current = false;
+      // focus + select after the element mounts
+      requestAnimationFrame(() => { inputRef.current?.focus(); inputRef.current?.select(); });
+    }
+  }, [edit]);
+
+  if (!edit) return null;
+
+  const finish = (ok: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    if (ok) void commit(value); else cancel();
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      className="inline-dim"
+      value={value}
+      style={{ left: edit.screen.x + 10, top: edit.screen.y - 12 }}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); finish(true); }
+        else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+        e.stopPropagation();
+      }}
+      onBlur={() => finish(true)}
+      placeholder="value or expr"
+    />
+  );
 }
