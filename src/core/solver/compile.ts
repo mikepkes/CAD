@@ -112,7 +112,7 @@ export function compileSketch(sketch: Sketch, scope: Scope = {}): CompileResult 
           if (c.l1 && c.l2) push({ id: c.id, kind: "angle", l1: c.l1, l2: c.l2, value: v });
           break;
         case "pointLineDistance":
-          warnings.push(`pointLineDistance not yet mapped to the solver (${c.id})`);
+          if (c.point && c.line) push({ id: c.id, kind: "pointLineDistance", point: c.point, line: c.line, value: v });
           break;
       }
       continue;

@@ -99,6 +99,12 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
     const a = pt(l.p1), b = pt(l.p2);
     dim("length", "Length", "↔", "Line length", { type: "distance", a: l.p1, b: l.p2, expression: fmt(Math.hypot(a.x - b.x, a.y - b.y)) });
   }
+  if (s.points.length === 1 && s.lines.length === 1) {
+    const p = s.points[0], l = s.lines[0];
+    dim("pld", "Pt→Line Dist", "⟂", "Perpendicular distance from point to line", {
+      type: "pointLineDistance", point: p.id, line: l.id, expression: fmt(perpDistance(sk, p.id, l)),
+    });
+  }
   if (s.radii.length === 1 && s.lines.length === 0 && s.points.length === 0) {
     const c = s.radii[0];
     dim("radius", "Radius", "R", "Set radius", { type: "radius", circle: c.id, expression: fmt(c.r) });
@@ -108,7 +114,15 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
     const [l1, l2] = s.lines;
     const d1 = dirOf(l1), d2 = dirOf(l2);
     const ang = Math.atan2(d1.x * d2.y - d1.y * d2.x, d1.x * d2.x + d1.y * d2.y);
-    dim("angle", "Angle", "∠", "Angle between lines", { type: "angle", l1: l1.id, l2: l2.id, expression: fmt(ang) });
+    // Near-parallel lines: offer a gap distance (Fusion-style); otherwise angle.
+    const parallelish = Math.abs(Math.sin(ang)) < 0.09;
+    if (parallelish) {
+      dim("lld", "Distance", "↔", "Distance between the two (parallel) lines", {
+        type: "pointLineDistance", point: l2.p1, line: l1.id, expression: fmt(perpDistance(sk, l2.p1, l1)),
+      });
+    } else {
+      dim("angle", "Angle", "∠", "Angle between lines", { type: "angle", l1: l1.id, l2: l2.id, expression: fmt(ang) });
+    }
   }
 
   // ---- modify ----
@@ -143,6 +157,15 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
   }
 
   return { geometric, dimensions, modify };
+}
+
+function perpDistance(sk: Sketch, pointId: string, line: SketchLine): number {
+  const p = sk.entities[pointId] as SketchPoint;
+  const a = sk.entities[line.p1] as SketchPoint;
+  const b = sk.entities[line.p2] as SketchPoint;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const mag = Math.hypot(dx, dy) || 1;
+  return Math.abs((dx * (p.y - a.y) - dy * (p.x - a.x)) / mag);
 }
 
 function pointXs(sk: Sketch, id: string): number[] {

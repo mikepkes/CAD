@@ -199,6 +199,8 @@ export class PlaneGCSSolver implements ConstraintSolver {
           param2: { o_id: c.b, prop: "y" },
           difference: c.value,
         };
+      case "pointLineDistance":
+        return { id: c.id, type: "p2l_distance", p_id: c.point, l_id: c.line, distance: c.value };
       case "radius":
         return { id: c.id, type: "circle_radius", c_id: c.circle, radius: c.value };
       case "diameter":

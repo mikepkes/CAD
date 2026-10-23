@@ -51,6 +51,7 @@ export type SolverConstraint =
   | { id: string; kind: "distance"; a: string; b: string; value: number }
   | { id: string; kind: "distanceX"; a: string; b: string; value: number }
   | { id: string; kind: "distanceY"; a: string; b: string; value: number }
+  | { id: string; kind: "pointLineDistance"; point: string; line: string; value: number }
   | { id: string; kind: "radius"; circle: string; value: number }
   | { id: string; kind: "diameter"; circle: string; value: number }
   | { id: string; kind: "angle"; l1: string; l2: string; value: number };
