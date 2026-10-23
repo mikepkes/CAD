@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLANES, WorkPlane, planeById, to3d } from "../geometry/plane";
 import { Sketch, SketchArc, SketchCircle, SketchLine, SketchPoint } from "../sketch/types";
 import { isDimension } from "../sketch/types";
+import { extractProfiles, Loop } from "../core/geometry/profile";
 
 export interface PreviewGeom {
   segments?: { u1: number; v1: number; u2: number; v2: number }[];
@@ -29,6 +30,8 @@ export interface ViewData {
   showPlanes: boolean;
   showGrid: boolean;
   showConstraints: boolean;
+  /** Overall constrained state of the active sketch, for Fusion-style coloring. */
+  constraintState: "under" | "full" | "conflict";
   solids?: SolidView[];
 }
 
@@ -44,6 +47,8 @@ const COLORS = {
   grid: 0x2d3340,
   gridMajor: 0x3a4152,
   geometry: 0xdfe6f2,
+  underConstrained: 0x5a8cff, // Fusion-style blue for under-constrained geometry
+  profileFill: 0x4f8cff,
   construction: 0x8a93a6,
   selected: 0xffb454,
   hover: 0x5ac8fa,
@@ -51,6 +56,7 @@ const COLORS = {
   origin: 0xffd166,
   dimension: 0x7bd88f,
   fullyConstrained: 0x8fe388,
+  bad: 0xff6b6b,
 };
 
 export class SceneManager {
@@ -359,6 +365,18 @@ export class SceneManager {
     const pts = sk.entities;
     const getPt = (id: string) => pts[id] as SketchPoint;
 
+    // Fusion-style state color: blue = under-constrained, light = fully
+    // constrained, red = conflicting.
+    const baseColor =
+      data.constraintState === "full"
+        ? COLORS.geometry
+        : data.constraintState === "conflict"
+          ? COLORS.bad
+          : COLORS.underConstrained;
+
+    // shade closed profiles (what's extrudable) behind the curves
+    this.renderProfileFill(sk, plane);
+
     // curves
     for (const e of Object.values(sk.entities)) {
       if (e.kind === "line") {
@@ -370,7 +388,7 @@ export class SceneManager {
           this.worldPt(plane, a.x, a.y),
           this.worldPt(plane, b.x, b.y),
         ]);
-        const color = this.colorFor(l.id, data, COLORS.geometry, l.construction);
+        const color = this.colorFor(l.id, data, baseColor, l.construction);
         const mat = l.construction
           ? new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.6 })
           : new THREE.LineBasicMaterial({ color });
@@ -383,7 +401,7 @@ export class SceneManager {
         const ctr = getPt(c.center);
         if (!ctr) continue;
         const line = this.makeArcLine(plane, ctr.x, ctr.y, c.r, 0, Math.PI * 2, true,
-          this.colorFor(c.id, data, COLORS.geometry, c.construction));
+          this.colorFor(c.id, data, baseColor, c.construction));
         line.userData = { id: c.id, kind: "circle" };
         this.sketchGroup.add(line);
       } else if (e.kind === "arc") {
@@ -395,7 +413,7 @@ export class SceneManager {
         const a1 = Math.atan2(a.y - ctr.y, a.x - ctr.x);
         const a2 = Math.atan2(b.y - ctr.y, b.x - ctr.x);
         const line = this.makeArcLine(plane, ctr.x, ctr.y, ar.r, a1, a2, ar.ccw,
-          this.colorFor(ar.id, data, COLORS.geometry, ar.construction));
+          this.colorFor(ar.id, data, baseColor, ar.construction));
         line.userData = { id: ar.id, kind: "arc" };
         this.sketchGroup.add(line);
       }
@@ -412,7 +430,9 @@ export class SceneManager {
           ? COLORS.hover
           : isOrigin
             ? COLORS.origin
-            : COLORS.point;
+            : pt.fixed
+              ? COLORS.point
+              : baseColor;
       const geo = new THREE.SphereGeometry(isOrigin ? 1.8 : 1.3, 10, 10);
       const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color }));
       const w = this.worldPt(plane, pt.x, pt.y);
@@ -440,6 +460,87 @@ export class SceneManager {
         }
       }
     }
+  }
+
+  /** Shade the sketch's closed profile(s) so you can see what's extrudable. */
+  private renderProfileFill(sk: Sketch, plane: WorkPlane) {
+    let profile;
+    try {
+      profile = extractProfiles(sk);
+    } catch {
+      return;
+    }
+    if (!profile) return;
+    try {
+      const outer = this.loopToUV(profile.outer);
+      if (outer.length < 3) return;
+      const holes = profile.holes.map((h) => this.loopToUV(h)).filter((h) => h.length >= 3);
+      const contour = outer.map((p) => new THREE.Vector2(p.x, p.y));
+      const holeContours = holes.map((h) => h.map((p) => new THREE.Vector2(p.x, p.y)));
+      const faces = THREE.ShapeUtils.triangulateShape(contour, holeContours);
+      const all = [...contour];
+      holeContours.forEach((h) => all.push(...h));
+      const positions: number[] = [];
+      for (const v of all) {
+        const w = this.worldPt(plane, v.x, v.y);
+        positions.push(w.x, w.y, w.z);
+      }
+      const indices: number[] = [];
+      faces.forEach((f) => indices.push(f[0], f[1], f[2]));
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geo.setIndex(indices);
+      const mat = new THREE.MeshBasicMaterial({
+        color: COLORS.profileFill,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.renderOrder = -1;
+      this.sketchGroup.add(mesh);
+    } catch {
+      /* triangulation failed for this profile — skip the fill */
+    }
+  }
+
+  private loopToUV(loop: Loop): { x: number; y: number }[] {
+    if (loop.circle) {
+      const { center, r } = loop.circle;
+      const out: { x: number; y: number }[] = [];
+      for (let i = 0; i < 48; i++) {
+        const a = (i / 48) * Math.PI * 2;
+        out.push({ x: center.x + r * Math.cos(a), y: center.y + r * Math.sin(a) });
+      }
+      return out;
+    }
+    const out = [{ x: loop.start.x, y: loop.start.y }];
+    let cur = loop.start;
+    for (const seg of loop.segments) {
+      if (seg.kind === "line") out.push({ x: seg.to.x, y: seg.to.y });
+      else out.push(...this.sampleArcPoints(cur, seg.via, seg.to));
+      cur = seg.to;
+    }
+    if (out.length > 1) out.pop(); // drop the duplicated closing point
+    return out;
+  }
+
+  private sampleArcPoints(from: { x: number; y: number }, via: { x: number; y: number }, to: { x: number; y: number }, n = 14) {
+    const c = circleFrom3(from, via, to);
+    if (!c) return [{ x: to.x, y: to.y }];
+    const norm = (a: number) => { while (a < 0) a += Math.PI * 2; while (a >= Math.PI * 2) a -= Math.PI * 2; return a; };
+    const a0 = Math.atan2(from.y - c.y, from.x - c.x);
+    const am = norm(Math.atan2(via.y - c.y, via.x - c.x) - a0);
+    const a1span = norm(Math.atan2(to.y - c.y, to.x - c.x) - a0);
+    const ccw = am <= a1span;
+    const span = ccw ? a1span : -(Math.PI * 2 - a1span);
+    const out: { x: number; y: number }[] = [];
+    for (let i = 1; i <= n; i++) {
+      const a = a0 + span * (i / n);
+      out.push({ x: c.x + c.r * Math.cos(a), y: c.y + c.r * Math.sin(a) });
+    }
+    return out;
   }
 
   private static CONSTRAINT_GLYPH: Record<string, string> = {
@@ -596,4 +697,14 @@ export class SceneManager {
     sprite.renderOrder = 999;
     return sprite;
   }
+}
+
+/** Circle through 3 points; null if (nearly) collinear. */
+function circleFrom3(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-9) return null;
+  const a2 = a.x * a.x + a.y * a.y, b2 = b.x * b.x + b.y * b.y, c2 = c.x * c.x + c.y * c.y;
+  const ux = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d;
+  const uy = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
+  return { x: ux, y: uy, r: Math.hypot(a.x - ux, a.y - uy) };
 }

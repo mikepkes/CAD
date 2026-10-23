@@ -23,6 +23,13 @@ function buildView(s: AppState): ViewData {
     showPlanes: s.showPlanes,
     showGrid: s.showGrid,
     showConstraints: s.showConstraints,
+    constraintState: !sketch
+      ? "under"
+      : sketch.status.conflicting
+        ? "conflict"
+        : sketch.status.fullyConstrained
+          ? "full"
+          : "under",
     solids,
   };
 }
