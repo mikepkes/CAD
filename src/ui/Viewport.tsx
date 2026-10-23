@@ -22,6 +22,7 @@ function buildView(s: AppState): ViewData {
     preview: null,
     showPlanes: s.showPlanes,
     showGrid: s.showGrid,
+    showConstraints: s.showConstraints,
     solids,
   };
 }

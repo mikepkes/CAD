@@ -581,6 +581,30 @@ export const BUILTINS: CommandDef<any>[] = [
   },
 
   {
+    type: "sketch.deleteConstraints",
+    title: "Delete constraint",
+    summary: "Remove constraints by id (works even for ones created by composite tools).",
+    description:
+      "Removes the given constraint ids from a sketch. Applied during replay after the constraints are created, so it reliably removes constraints regardless of which command created them (including rectangle/mirror).",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "ids"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        ids: { type: "array", items: { type: "string" } },
+      },
+    },
+    apply(draft, p: { sketch: string; ids: string[] }) {
+      const sk = sketchOf(draft, p.sketch);
+      let n = 0;
+      for (const id of p.ids) {
+        if (sk.constraints[id]) { delete sk.constraints[id]; n++; }
+      }
+      return { affectedSketchId: sk.id, message: `Deleted ${n} constraint${n === 1 ? "" : "s"}` };
+    },
+  },
+  {
     type: "sketch.deleteEntities",
     title: "Delete entities",
     summary: "Delete entities (and any constraints that reference them) from a sketch.",

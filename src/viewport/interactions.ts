@@ -155,10 +155,15 @@ export class Interactions {
       return;
     }
 
-    if (st.tool === "select" && this.base) {
-      const pick = this.scene.pick(e.clientX, e.clientY, this.base);
-      const id = pick.type === "entity" ? pick.id ?? null : null;
-      if (id !== st.hover) st.setHover(id);
+    if (st.tool === "select") {
+      if (this.base) {
+        const pick = this.scene.pick(e.clientX, e.clientY, this.base);
+        const id = pick.type === "entity" ? pick.id ?? null : null;
+        if (id !== st.hover) st.setHover(id);
+      }
+      // No snap ghost while selecting — only while a drawing tool is active.
+      if (this.preview) this.setPreview(null);
+      return;
     }
 
     this.updatePreview(snap);
@@ -232,12 +237,20 @@ export class Interactions {
     const from = this.stage.from;
     const fromUV = this.stage.fromUV;
     const adj = this.axisSnap(fromUV, snap);
+    // Ignore a click essentially on the start point (zero-length line).
+    if (!snap.ref && Math.hypot(adj.u - fromUV.u, adj.v - fromUV.v) < this.scene.pixelToWorld(4)) return;
+    // Decide the auto H/V constraint from the SAME axis-snap that shaped the
+    // preview, so what you see is exactly what gets created and constrained.
+    const tol = this.scene.pixelToWorld(8);
+    const snapV = !snap.ref && Math.abs(snap.u - fromUV.u) < tol; // near-vertical line
+    const snapH = !snap.ref && Math.abs(snap.v - fromUV.v) < tol; // near-horizontal line
     const end = snap.ref ? ({ ref: snap.ref } as GeoRef) : ({ x: adj.u, y: adj.v } as GeoRef);
     const r = await st.placeLine(from, end);
     if (r.ok && r.createdIds.length >= 3) {
       const startId = r.createdIds[1];
       const endId = r.createdIds[2];
-      await this.autoAxis(startId, endId);
+      if (snapH && !snapV) await st.dispatch("sketch.addConstraint", { sketch: st.activeSketchId!, type: "horizontal", a: startId, b: endId }, { rejectOnConflict: true });
+      else if (snapV && !snapH) await st.dispatch("sketch.addConstraint", { sketch: st.activeSketchId!, type: "vertical", a: startId, b: endId }, { rejectOnConflict: true });
       this.stage = { kind: "line", from: { ref: endId }, fromUV: { u: adj.u, v: adj.v } };
     } else {
       this.stage = { kind: "idle" };
@@ -298,22 +311,6 @@ export class Interactions {
       u: Math.abs(snap.u - from.u) < tol ? from.u : snap.u,
       v: Math.abs(snap.v - from.v) < tol ? from.v : snap.v,
     };
-  }
-
-  private async autoAxis(startId: string, endId: string) {
-    const st = this.st();
-    const sk = st.session.doc.sketches[st.activeSketchId!];
-    const a = sk.entities[startId] as SketchPoint;
-    const b = sk.entities[endId] as SketchPoint;
-    if (!a || !b) return;
-    const dx = Math.abs(a.x - b.x);
-    const dy = Math.abs(a.y - b.y);
-    const len = Math.hypot(dx, dy);
-    if (len < 1e-6) return;
-    const tol = len * 0.04;
-    // rejectOnConflict so an auto-constraint that would over-constrain is skipped
-    if (dy < tol && dx > dy) await st.dispatch("sketch.addConstraint", { sketch: sk.id, type: "horizontal", a: startId, b: endId }, { rejectOnConflict: true });
-    else if (dx < tol && dy > dx) await st.dispatch("sketch.addConstraint", { sketch: sk.id, type: "vertical", a: startId, b: endId }, { rejectOnConflict: true });
   }
 
   private setPreview(p: PreviewGeom | null) {

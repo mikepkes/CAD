@@ -43,6 +43,7 @@ export interface AppState {
   hover: string | null;
   showPlanes: boolean;
   showGrid: boolean;
+  showConstraints: boolean;
 
   dragging: { pointId: string } | null;
   transient: Record<string, { x: number; y: number }> | null;
@@ -66,6 +67,7 @@ export interface AppState {
   setHover: (id: string | null) => void;
   toggleShowPlanes: () => void;
   toggleShowGrid: () => void;
+  toggleShowConstraints: () => void;
   dismissToast: () => void;
 
   // sketch lifecycle
@@ -167,6 +169,7 @@ export const useStore = create<AppState>((set, get) => {
     hover: null,
     showPlanes: true,
     showGrid: true,
+    showConstraints: true,
     dragging: null,
     transient: null,
     solids: {},
@@ -185,6 +188,7 @@ export const useStore = create<AppState>((set, get) => {
     setHover: (id) => set({ hover: id }),
     toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
     toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+    toggleShowConstraints: () => set((s) => ({ showConstraints: !s.showConstraints })),
     dismissToast: () => set({ toast: null }),
 
     startSketch: async (plane) => {
@@ -273,10 +277,21 @@ export const useStore = create<AppState>((set, get) => {
       if (op) await get().editOperation(op.opId, { ...op.params, expression: expr });
     },
     deleteConstraintById: async (cid) => {
-      const op = get().session.timeline.find(
-        (o) => (o.type === "sketch.addDimension" || o.type === "sketch.addConstraint") && o.createdIds.includes(cid)
+      // If the constraint has its own dedicated operation, remove that op (clean).
+      const dedicated = get().session.timeline.find(
+        (o) =>
+          (o.type === "sketch.addDimension" || o.type === "sketch.addConstraint") &&
+          o.createdIds.length === 1 &&
+          o.createdIds[0] === cid
       );
-      if (op) await get().deleteOperation(op.opId);
+      if (dedicated) {
+        await get().deleteOperation(dedicated.opId);
+        return;
+      }
+      // Otherwise it was created inside a composite op (rectangle, mirror, …);
+      // tombstone it with a deleteConstraints op so it's still removable.
+      const sid = get().activeSketchId;
+      if (sid) await runDispatch("sketch.deleteConstraints", { sketch: sid, ids: [cid] });
     },
 
     undo: () => { get().session.undo(); bump(); afterMutate(); },

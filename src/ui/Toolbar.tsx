@@ -42,6 +42,8 @@ export function Toolbar() {
   const showGrid = useStore((s) => s.showGrid);
   const toggleShowPlanes = useStore((s) => s.toggleShowPlanes);
   const toggleShowGrid = useStore((s) => s.toggleShowGrid);
+  const showConstraints = useStore((s) => s.showConstraints);
+  const toggleShowConstraints = useStore((s) => s.toggleShowConstraints);
   const session = useStore((s) => s.session);
   useStore((s) => s.rev);
   const extrudeSketch = useStore((s) => s.extrudeSketch);
@@ -75,6 +77,9 @@ export function Toolbar() {
             ))}
           </div>
           <div className="spacer" />
+          <label className="toggle" title="Show geometric constraint glyphs in the sketch">
+            <input type="checkbox" checked={showConstraints} onChange={toggleShowConstraints} /> Constraints
+          </label>
           <button className="btn primary" onClick={finishSketch}>
             ✓ Finish Sketch
           </button>

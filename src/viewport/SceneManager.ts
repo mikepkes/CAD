@@ -28,6 +28,7 @@ export interface ViewData {
   preview: PreviewGeom | null;
   showPlanes: boolean;
   showGrid: boolean;
+  showConstraints: boolean;
   solids?: SolidView[];
 }
 
@@ -420,7 +421,7 @@ export class SceneManager {
       this.sketchGroup.add(mesh);
     }
 
-    // dimension labels + constraint badges
+    // dimension labels (always) + geometric constraint glyphs (toggleable)
     for (const c of Object.values(sk.constraints)) {
       if (isDimension(c)) {
         const label = this.dimensionLabel(c.type, c.value);
@@ -430,8 +431,54 @@ export class SceneManager {
           sprite.position.copy(pos);
           this.sketchGroup.add(sprite);
         }
+      } else if (data.showConstraints) {
+        const badge = this.constraintBadge(sk, plane, c as unknown as Record<string, string>);
+        if (badge) {
+          const sprite = this.makeTextSprite(badge.glyph, "#9ab0e8", 0.03);
+          sprite.position.copy(badge.pos);
+          this.sketchGroup.add(sprite);
+        }
       }
     }
+  }
+
+  private static CONSTRAINT_GLYPH: Record<string, string> = {
+    horizontal: "H", vertical: "V", parallel: "∥", perpendicular: "⊥",
+    equal: "=", coincident: "●", pointOnLine: "⊢", pointOnCircle: "◠",
+    concentric: "◎", tangent: "◯", symmetric: "⇔", fix: "⚓",
+  };
+
+  /** Anchor + glyph for a geometric constraint, offset slightly off the geometry. */
+  private constraintBadge(sk: Sketch, plane: WorkPlane, c: Record<string, string>): { glyph: string; pos: THREE.Vector3 } | null {
+    const glyph = SceneManager.CONSTRAINT_GLYPH[c.type];
+    if (!glyph) return null;
+    const P = (id: string) => sk.entities[id] as SketchPoint;
+    const off = this.pixelToWorld(11);
+    const at = (u: number, v: number) => this.worldPt(plane, u + off, v + off);
+    try {
+      if (c.type === "fix" || c.type === "pointOnLine" || c.type === "pointOnCircle") {
+        const p = P(c.point);
+        return { glyph, pos: at(p.x, p.y) };
+      }
+      if (c.a && c.b) {
+        const a = P(c.a), b = P(c.b);
+        return { glyph, pos: at((a.x + b.x) / 2, (a.y + b.y) / 2) };
+      }
+      if (c.l1 && c.l2) {
+        const l = sk.entities[c.l1] as SketchLine;
+        const a = P(l.p1), b = P(l.p2);
+        return { glyph, pos: at((a.x + b.x) / 2, (a.y + b.y) / 2) };
+      }
+      if (c.e1) {
+        const e = sk.entities[c.e1];
+        if (e.kind === "line") { const a = P(e.p1), b = P(e.p2); return { glyph, pos: at((a.x + b.x) / 2, (a.y + b.y) / 2) }; }
+        const ctr = P((e as SketchCircle).center); return { glyph, pos: at(ctr.x, ctr.y) };
+      }
+      if (c.c1) { const ctr = P((sk.entities[c.c1] as SketchCircle).center); return { glyph, pos: at(ctr.x, ctr.y) }; }
+    } catch {
+      return null;
+    }
+    return null;
   }
 
   private dimensionAnchor(sk: Sketch, plane: WorkPlane, c: any): THREE.Vector3 | null {
@@ -512,14 +559,14 @@ export class SceneManager {
       this.previewGroup.add(line);
     });
     if (preview.snap) {
-      const geo = new THREE.SphereGeometry(2.4, 12, 12);
-      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffd166, wireframe: true }));
-      mesh.position.copy(this.worldPt(plane, preview.snap.u, preview.snap.v));
-      this.previewGroup.add(mesh);
+      // A flat ring on the sketch plane reads as a snap marker, not a floating sphere.
+      const r = this.pixelToWorld(6);
+      const ring = this.makeArcLine(plane, preview.snap.u, preview.snap.v, r, 0, Math.PI * 2, true, 0xffd166);
+      this.previewGroup.add(ring);
     }
   }
 
-  private makeTextSprite(text: string, color: string): THREE.Sprite {
+  private makeTextSprite(text: string, color: string, heightFrac = 0.04): THREE.Sprite {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d")!;
     const font = 48;
@@ -544,7 +591,7 @@ export class SceneManager {
     });
     const sprite = new THREE.Sprite(mat);
     // With sizeAttenuation disabled, scale is a fraction of viewport height.
-    const h = 0.04;
+    const h = heightFrac;
     sprite.scale.set(h * (canvas.width / canvas.height), h, 1);
     sprite.renderOrder = 999;
     return sprite;
