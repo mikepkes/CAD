@@ -274,6 +274,53 @@ export const BUILTINS: CommandDef<any>[] = [
   },
 
   {
+    type: "sketch.addPolygon",
+    title: "Add polygon",
+    summary: "Add a regular N-sided polygon inscribed in a circle.",
+    description:
+      "Creates a regular polygon with `sides` edges, centered at `center`, with one vertex at `vertex` (sets size + rotation). Adds a construction circle through the vertices (point-on-circle) and equal-length edges so it stays regular. Returns the created line ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "center", "vertex", "sides"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        center: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+        vertex: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+        sides: { type: "integer", minimum: 3, maximum: 64 },
+      },
+    },
+    examples: [{ note: "Hexagon", params: { sketch: "sketch1", center: { x: 0, y: 0 }, vertex: { x: 20, y: 0 }, sides: 6 } }],
+    apply(draft, p: { sketch: string; center: Vec; vertex: Vec; sides: number }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const R = Math.hypot(p.vertex.x - p.center.x, p.vertex.y - p.center.y);
+      if (R < 1e-6) throw new Error("polygon radius is zero");
+      const base = Math.atan2(p.vertex.y - p.center.y, p.vertex.x - p.center.x);
+      const N = p.sides;
+      const centerId = ctx.alloc("pt");
+      sk.entities[centerId] = { id: centerId, kind: "point", x: p.center.x, y: p.center.y };
+      const circleId = ctx.alloc("ci");
+      sk.entities[circleId] = { id: circleId, kind: "circle", center: centerId, r: R, construction: true };
+      const verts: string[] = [];
+      for (let i = 0; i < N; i++) {
+        const a = base + (i * 2 * Math.PI) / N;
+        const id = ctx.alloc("pt");
+        sk.entities[id] = { id, kind: "point", x: p.center.x + R * Math.cos(a), y: p.center.y + R * Math.sin(a) };
+        verts.push(id);
+      }
+      const lines: string[] = [];
+      for (let i = 0; i < N; i++) {
+        const id = ctx.alloc("ln");
+        sk.entities[id] = { id, kind: "line", p1: verts[i], p2: verts[(i + 1) % N] };
+        lines.push(id);
+      }
+      const con = (c: GeometricConstraint) => (sk.constraints[c.id] = c);
+      for (const vid of verts) con({ id: ctx.alloc("c"), type: "pointOnCircle", point: vid, circle: circleId });
+      for (let i = 0; i < N - 1; i++) con({ id: ctx.alloc("c"), type: "equal", e1: lines[i], e2: lines[i + 1] });
+      return { createdIds: [circleId, ...verts, ...lines], affectedSketchId: sk.id, message: `${N}-gon` };
+    },
+  },
+  {
     type: "sketch.addArc",
     title: "Add arc",
     summary: "Add a circular arc by center, start and end points.",

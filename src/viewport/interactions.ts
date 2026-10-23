@@ -17,7 +17,8 @@ type Stage =
   | { kind: "line"; from: GeoRef; fromUV: { u: number; v: number }; startInfer?: { onLine?: string; midpointOf?: string } }
   | { kind: "rect"; from: { u: number; v: number } }
   | { kind: "circle"; center: GeoRef; centerUV: { u: number; v: number } }
-  | { kind: "arc"; center?: GeoRef; centerUV?: { u: number; v: number }; start?: GeoRef; startUV?: { u: number; v: number } };
+  | { kind: "arc"; center?: GeoRef; centerUV?: { u: number; v: number }; start?: GeoRef; startUV?: { u: number; v: number } }
+  | { kind: "polygon"; centerUV: { u: number; v: number } };
 
 export class Interactions {
   private scene: SceneManager;
@@ -321,7 +322,24 @@ export class Interactions {
       case "arc":
         await this.handleArcClick(snap);
         break;
+      case "polygon":
+        await this.handlePolygonClick(snap);
+        break;
     }
+  }
+
+  private async handlePolygonClick(snap: Snap) {
+    const st = this.st();
+    if (this.stage.kind !== "polygon") {
+      this.stage = { kind: "polygon", centerUV: { u: snap.u, v: snap.v } };
+      return;
+    }
+    const c = this.stage.centerUV;
+    if (Math.hypot(snap.u - c.u, snap.v - c.v) > 1e-3) {
+      await st.placePolygon({ x: c.u, y: c.v }, { x: snap.u, y: snap.v });
+    }
+    this.stage = { kind: "idle" };
+    this.setPreview(null);
   }
 
   private handleSelectClick(e: PointerEvent) {
@@ -514,6 +532,17 @@ export class Interactions {
         const r = Math.hypot(s.u - c.u, s.v - c.v);
         preview.arcs = [{ cu: c.u, cv: c.v, r, a1: Math.atan2(s.v - c.v, s.u - c.u), a2: Math.atan2(snap.v - c.v, snap.u - c.u), ccw: true }];
       }
+    } else if (this.stage.kind === "polygon") {
+      const c = this.stage.centerUV;
+      const r = Math.hypot(snap.u - c.u, snap.v - c.v);
+      const base = Math.atan2(snap.v - c.v, snap.u - c.u);
+      const N = 6;
+      const segs: { u1: number; v1: number; u2: number; v2: number }[] = [];
+      for (let i = 0; i < N; i++) {
+        const a1 = base + (i * 2 * Math.PI) / N, a2 = base + ((i + 1) * 2 * Math.PI) / N;
+        segs.push({ u1: c.u + r * Math.cos(a1), v1: c.v + r * Math.sin(a1), u2: c.u + r * Math.cos(a2), v2: c.v + r * Math.sin(a2) });
+      }
+      preview.segments = segs;
     }
     this.setPreview(preview);
   }
@@ -579,7 +608,7 @@ export class Interactions {
       const op = availableOps(sk, st.selection).modify.find((o) => o.id === "construction");
       if (op) { void st.dispatch(op.command.type, op.command.params); return; }
     }
-    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", p: "point", s: "select", d: "dimension", t: "trim", e: "extend" };
+    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", g: "polygon", p: "point", s: "select", d: "dimension", t: "trim", e: "extend" };
     if (map[e.key.toLowerCase()]) st.setTool(map[e.key.toLowerCase()]);
     if ((e.key === "Delete" || e.key === "Backspace") && st.selection.length) st.deleteSelected();
   };

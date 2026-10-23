@@ -18,7 +18,7 @@ import { serializeDocument, deserializeDocument } from "../core/persistence";
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim" | "extend";
+export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim" | "extend" | "polygon";
 export type AppMode = "model" | "sketch";
 export type GeoRef = { x: number; y: number } | { ref: string };
 
@@ -88,6 +88,7 @@ export interface AppState {
   placeRectangle: (corner: { x: number; y: number }, opposite: { x: number; y: number }) => Promise<DispatchResult>;
   placeCircle: (center: GeoRef, radius: number) => Promise<DispatchResult>;
   placeArc: (center: GeoRef, start: GeoRef, end: GeoRef, ccw: boolean) => Promise<DispatchResult>;
+  placePolygon: (center: { x: number; y: number }, vertex: { x: number; y: number }, sides?: number) => Promise<DispatchResult>;
   deleteSelected: () => Promise<void>;
 
   // drag
@@ -222,6 +223,7 @@ export const useStore = create<AppState>((set, get) => {
     placeRectangle: (corner, opposite) => runDispatch("sketch.addRectangle", { sketch: activeId(), corner, opposite }),
     placeCircle: (center, radius) => runDispatch("sketch.addCircle", { sketch: activeId(), center, radius }),
     placeArc: (center, start, end, ccw) => runDispatch("sketch.addArc", { sketch: activeId(), center, start, end, ccw }),
+    placePolygon: (center, vertex, sides = 6) => runDispatch("sketch.addPolygon", { sketch: activeId(), center, vertex, sides }),
     deleteSelected: async () => {
       const s = get();
       if (!s.activeSketchId || s.selection.length === 0) return;
