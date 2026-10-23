@@ -78,6 +78,13 @@ export function Toolbar() {
             ))}
           </div>
           <div className="spacer" />
+          <button
+            className="btn ghost"
+            title="Look at the sketch plane (orient normal-to)"
+            onClick={() => window.dispatchEvent(new CustomEvent("chisel:lookAt"))}
+          >
+            ⟂ Look At
+          </button>
           <label className="toggle" title="Show geometric constraint glyphs in the sketch">
             <input type="checkbox" checked={showConstraints} onChange={toggleShowConstraints} /> Constraints
           </label>

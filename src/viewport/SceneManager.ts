@@ -266,6 +266,17 @@ export class SceneManager {
     return this.worldThreshold(px);
   }
 
+  /** Project a sketch-plane (u,v) point to client screen coordinates. */
+  uvToScreen(planeId: string, u: number, v: number): { x: number; y: number } {
+    const world = this.worldPt(planeById(planeId), u, v);
+    const ndc = world.project(this.camera);
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return {
+      x: rect.left + (ndc.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (-ndc.y * 0.5 + 0.5) * rect.height,
+    };
+  }
+
   /** Approximate world-space size of `px` screen pixels at the target depth. */
   private worldThreshold(px: number): number {
     const dist = this.camera.position.distanceTo(this.controls.target);

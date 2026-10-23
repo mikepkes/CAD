@@ -258,6 +258,18 @@ body {
 .inline-dim:focus {
   outline: none;
 }
+.box-select {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  border: 1px solid var(--accent-2);
+  background: rgba(90, 140, 255, 0.12);
+}
+.box-select.crossing {
+  border-style: dashed;
+  border-color: #6ddf9c;
+  background: rgba(109, 223, 156, 0.1);
+}
 
 .side {
   width: 272px;

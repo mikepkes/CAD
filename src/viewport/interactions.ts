@@ -6,7 +6,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as THREE from "three";
 import { SceneManager, PreviewGeom, ViewData } from "./SceneManager";
 import { GeoRef, useStore } from "../model/store";
-import { SketchPoint } from "../sketch/types";
+import { Sketch, SketchArc, SketchCircle, SketchPoint } from "../sketch/types";
 import { availableOps } from "../model/selectionOps";
 import { infer, InferResult } from "./snapping";
 
@@ -30,6 +30,8 @@ export class Interactions {
   private downPt: { x: number; y: number } | null = null;
   private dragging = false;
   private moved = false;
+  private boxStart: { x: number; y: number } | null = null;
+  private boxDiv: HTMLDivElement | null = null;
 
   constructor(scene: SceneManager, dom: HTMLElement) {
     this.scene = scene;
@@ -40,6 +42,7 @@ export class Interactions {
     dom.addEventListener("dblclick", this.onDblClick);
     dom.addEventListener("contextmenu", this.onContext);
     window.addEventListener("keydown", this.onKey);
+    window.addEventListener("chisel:lookAt", this.onLookAt as EventListener);
   }
 
   dispose() {
@@ -49,7 +52,16 @@ export class Interactions {
     this.dom.removeEventListener("dblclick", this.onDblClick);
     this.dom.removeEventListener("contextmenu", this.onContext);
     window.removeEventListener("keydown", this.onKey);
+    window.removeEventListener("chisel:lookAt", this.onLookAt as EventListener);
   }
+
+  private onLookAt = () => {
+    const st = this.st();
+    if (st.mode === "sketch" && st.activeSketchId) {
+      const sk = st.session.doc.sketches[st.activeSketchId];
+      if (sk) this.scene.focusPlane(sk.planeId);
+    }
+  };
 
   configureControls(controls: OrbitControls, mode: "model" | "sketch") {
     if (mode === "sketch") {
@@ -101,6 +113,88 @@ export class Interactions {
     return snap.ref ? { ref: snap.ref } : { x: snap.u, y: snap.v };
   }
 
+  // ---- box (rubber-band) selection ----
+  private updateBox(x: number, y: number) {
+    if (!this.boxStart) return;
+    if (!this.boxDiv) {
+      const div = document.createElement("div");
+      div.className = "box-select";
+      (this.dom.parentElement ?? document.body).appendChild(div);
+      this.boxDiv = div;
+    }
+    const x0 = Math.min(this.boxStart.x, x), y0 = Math.min(this.boxStart.y, y);
+    const w = Math.abs(x - this.boxStart.x), h = Math.abs(y - this.boxStart.y);
+    // Left→right = window (solid); right→left = crossing (dashed), per Fusion.
+    const crossing = x < this.boxStart.x;
+    const s = this.boxDiv.style;
+    s.left = `${x0}px`; s.top = `${y0}px`; s.width = `${w}px`; s.height = `${h}px`;
+    this.boxDiv.classList.toggle("crossing", crossing);
+  }
+
+  private clearBox() {
+    this.boxStart = null;
+    if (this.boxDiv) { this.boxDiv.remove(); this.boxDiv = null; }
+  }
+
+  private commitBoxSelect(start: { x: number; y: number }, end: { x: number; y: number }, additive: boolean) {
+    const st = this.st();
+    if (!st.activeSketchId) return;
+    const sk = st.session.doc.sketches[st.activeSketchId];
+    if (!sk) return;
+    const crossing = end.x < start.x;
+    const box = {
+      x0: Math.min(start.x, end.x), y0: Math.min(start.y, end.y),
+      x1: Math.max(start.x, end.x), y1: Math.max(start.y, end.y),
+    };
+    const ids = this.entitiesInBox(sk, box, crossing);
+    if (ids.length || !additive) st.select(ids, additive);
+  }
+
+  private entitiesInBox(
+    sk: Sketch,
+    box: { x0: number; y0: number; x1: number; y1: number },
+    crossing: boolean
+  ): string[] {
+    const planeId = sk.planeId as string;
+    const P = (id: string) => sk.entities[id] as SketchPoint;
+    const toS = (u: number, v: number) => this.scene.uvToScreen(planeId, u, v);
+    const inRect = (p: { x: number; y: number }) => p.x >= box.x0 && p.x <= box.x1 && p.y >= box.y0 && p.y <= box.y1;
+
+    // Rule for a list of screen samples: window = all inside; crossing = any inside.
+    const matchSamples = (pts: { x: number; y: number }[]) =>
+      crossing ? pts.some(inRect) : pts.every(inRect);
+
+    const curves: string[] = [];
+    const referenced = new Set<string>();
+    for (const e of Object.values(sk.entities) as any[]) {
+      if (e.kind === "line") {
+        const a = toS(P(e.p1).x, P(e.p1).y), b = toS(P(e.p2).x, P(e.p2).y);
+        const hit = crossing ? (inRect(a) || inRect(b) || segIntersectsRect(a, b, box)) : (inRect(a) && inRect(b));
+        if (hit) { curves.push(e.id); referenced.add(e.p1); referenced.add(e.p2); }
+      } else if (e.kind === "circle" || e.kind === "arc") {
+        const c = sk.entities[e.center] as SketchPoint;
+        let a0 = 0, span = Math.PI * 2;
+        if (e.kind === "arc") {
+          const arc = e as SketchArc;
+          const s = P(arc.p1), t = P(arc.p2);
+          a0 = Math.atan2(s.y - c.y, s.x - c.x);
+          let a2 = Math.atan2(t.y - c.y, t.x - c.x);
+          span = a2 - a0;
+          if (arc.ccw) { while (span <= 0) span += Math.PI * 2; } else { while (span >= 0) span -= Math.PI * 2; }
+          referenced.add(arc.p1); referenced.add(arc.p2);
+        }
+        const samples = sampleRing(c, (e as SketchCircle).r, a0, span).map((s) => toS(s.x, s.y));
+        if (matchSamples(samples)) { curves.push(e.id); referenced.add(e.center); }
+      }
+    }
+    // Standalone points (not owned by a selected curve) that fall inside.
+    const points: string[] = [];
+    for (const e of Object.values(sk.entities) as any[]) {
+      if (e.kind === "point" && !referenced.has(e.id) && inRect(toS(e.x, e.y))) points.push(e.id);
+    }
+    return [...curves, ...points];
+  }
+
   // ---- events ----
   private onDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
@@ -118,8 +212,11 @@ export class Interactions {
           this.dragging = true;
           st.beginDrag(pick.id);
           (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+          return;
         }
       }
+      // Empty space (or a curve) → a drag here becomes a box selection.
+      this.boxStart = { x: e.clientX, y: e.clientY };
     }
   };
 
@@ -138,6 +235,11 @@ export class Interactions {
       // use raw uv (don't snap to the dragged point itself)
       const uv = this.scene.pointerToUV(e.clientX, e.clientY, st.session.doc.sketches[st.activeSketchId!].planeId);
       if (uv) st.dragTo(uv.u, uv.v);
+      return;
+    }
+
+    if (this.boxStart && this.moved) {
+      this.updateBox(e.clientX, e.clientY);
       return;
     }
 
@@ -170,6 +272,16 @@ export class Interactions {
       this.downPt = null;
       st.endDrag();
       return;
+    }
+    if (this.boxStart) {
+      const start = this.boxStart;
+      const hadBox = !!this.boxDiv;
+      this.clearBox();
+      if (hadBox && this.moved) {
+        this.commitBoxSelect(start, { x: e.clientX, y: e.clientY }, e.shiftKey);
+        this.downPt = null;
+        return;
+      }
     }
     if (this.downPt && !this.moved && e.button === 0) {
       const snap = this.snap(e.clientX, e.clientY);
@@ -425,8 +537,48 @@ export class Interactions {
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); st.redo(); return; }
     if (st.mode !== "sketch") return;
+    // X toggles construction (reference) geometry on the selection.
+    if (e.key.toLowerCase() === "x" && st.selection.length && st.activeSketchId) {
+      const sk = st.session.doc.sketches[st.activeSketchId];
+      const op = availableOps(sk, st.selection).modify.find((o) => o.id === "construction");
+      if (op) { void st.dispatch(op.command.type, op.command.params); return; }
+    }
     const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", p: "point", s: "select", d: "dimension" };
     if (map[e.key.toLowerCase()]) st.setTool(map[e.key.toLowerCase()]);
     if ((e.key === "Delete" || e.key === "Backspace") && st.selection.length) st.deleteSelected();
   };
+}
+
+type Pt = { x: number; y: number };
+type Rect = { x0: number; y0: number; x1: number; y1: number };
+
+/** Does segment a-b cross any edge of the (screen-space) rect? */
+function segIntersectsRect(a: Pt, b: Pt, r: Rect): boolean {
+  const corners = [
+    { x: r.x0, y: r.y0 }, { x: r.x1, y: r.y0 },
+    { x: r.x1, y: r.y1 }, { x: r.x0, y: r.y1 },
+  ];
+  for (let i = 0; i < 4; i++) {
+    if (segSeg(a, b, corners[i], corners[(i + 1) % 4])) return true;
+  }
+  return false;
+}
+
+function segSeg(p1: Pt, p2: Pt, p3: Pt, p4: Pt): boolean {
+  const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+  if (Math.abs(d) < 1e-9) return false;
+  const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+  const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+/** Sample points along a ring arc (center c, radius r, from a0 sweeping span). */
+function sampleRing(c: Pt, r: number, a0: number, span: number): Pt[] {
+  const out: Pt[] = [{ x: c.x, y: c.y }];
+  const n = 16;
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + (span * i) / n;
+    out.push({ x: c.x + r * Math.cos(a), y: c.y + r * Math.sin(a) });
+  }
+  return out;
 }

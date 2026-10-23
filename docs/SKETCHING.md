@@ -22,7 +22,8 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
 
 ## Sprint B — editing
 - [ ] Trim, Extend, Offset, sketch-corner Fillet / Chamfer
-- [ ] Window/box select, right-click context menu, `X` toggles construction, Look At
+- [x] Window/box select (window = solid, crossing = dashed), `X` toggles construction, Look At (normal-to)
+  - [ ] right-click context menu (in progress)
 
 ## Sprint C — breadth
 - [ ] Rectangle: center, 3-point · Circle: 2-point, 3-point, tangent · Arc: 3-point, tangent
