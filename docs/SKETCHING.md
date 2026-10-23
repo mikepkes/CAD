@@ -22,7 +22,8 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
 
 ## Sprint B — editing
 - [x] Sketch-corner **Fillet** (tangent arc) / **Chamfer** (bevel) — trims both edges, rehomes corner constraints
-- [ ] Trim, Extend, Offset
+- [x] **Trim** (T) — removes the clicked span between intersections; line/arc split or shorten, circle → arc, unbounded deletes. Curve–curve intersection module.
+- [ ] Extend, Offset
 - [x] Window/box select (window = solid, crossing = dashed), right-click context menu, `X` toggles construction, Look At (normal-to)
 
 ## Sprint C — breadth

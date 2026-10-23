@@ -12,6 +12,7 @@ import {
 } from "../../sketch/types";
 import { CommandRegistry } from "./registry";
 import { CommandApplyInfo, CommandContext, CommandDef, JSONSchema } from "./types";
+import { ICurve, intersect, paramOf, pointAt } from "../geometry/intersect";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 
@@ -674,9 +675,134 @@ export const BUILTINS: CommandDef<any>[] = [
       return blendCorner(sketchOf(draft, p.sketch), p.line1, p.line2, p.distance, ctx, "chamfer");
     },
   },
+  {
+    type: "sketch.trim",
+    title: "Trim",
+    summary: "Remove the clicked piece of a curve, bounded by its intersections.",
+    description:
+      "Trims the curve `target` at the point (u,v): removes the span between the nearest intersections with other curves on either side of the click. A line/arc may split in two or shorten; a circle becomes an arc; an unbounded click deletes the curve. Returns the ids of any new fragments.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "target", "u", "v"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        target: { type: "string" },
+        u: { type: "number" },
+        v: { type: "number" },
+      },
+    },
+    examples: [{ note: "Trim line ln4 near (12,0)", params: { sketch: "sketch1", target: "ln4", u: 12, v: 0 } }],
+    apply(draft, p: { sketch: string; target: string; u: number; v: number }, ctx) {
+      return trimCurve(sketchOf(draft, p.sketch), p.target, p.u, p.v, ctx);
+    },
+  },
 ];
 
 type Vec = { x: number; y: number };
+
+function toICurve(sk: Sketch, e: { kind: string } & Record<string, unknown>): ICurve | null {
+  const P = (id: string) => sk.entities[id] as SketchPoint;
+  if (e.kind === "line") { const a = P(e.p1 as string), b = P(e.p2 as string); return { kind: "line", a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } }; }
+  if (e.kind === "circle") { const c = P(e.center as string); return { kind: "circle", c: { x: c.x, y: c.y }, r: e.r as number }; }
+  if (e.kind === "arc") {
+    const c = P(e.center as string), s = P(e.p1 as string), t = P(e.p2 as string);
+    return { kind: "arc", c: { x: c.x, y: c.y }, r: e.r as number, a0: Math.atan2(s.y - c.y, s.x - c.x), a1: Math.atan2(t.y - c.y, t.x - c.x), ccw: e.ccw as boolean };
+  }
+  return null;
+}
+
+/** Remove orphaned points and any constraints that reference missing entities. */
+function pruneSketch(sk: Sketch) {
+  const used = new Set<string>();
+  for (const e of Object.values(sk.entities)) {
+    if (e.kind === "line") { used.add(e.p1); used.add(e.p2); }
+    else if (e.kind === "circle") used.add(e.center);
+    else if (e.kind === "arc") { used.add(e.center); used.add(e.p1); used.add(e.p2); }
+  }
+  for (const [id, e] of Object.entries(sk.entities)) {
+    if (e.kind === "point" && id !== sk.originPointId && !used.has(id)) delete sk.entities[id];
+  }
+  for (const [cid, c] of Object.entries(sk.constraints) as [string, Record<string, unknown>][]) {
+    for (const [k, v] of Object.entries(c)) {
+      if (typeof v === "string" && k !== "id" && k !== "type" && k !== "expr" && !sk.entities[v]) { delete sk.constraints[cid]; break; }
+    }
+  }
+}
+
+function trimCurve(sk: Sketch, targetId: string, u: number, v: number, ctx: CommandContext): CommandApplyInfo {
+  const tgt = sk.entities[targetId];
+  if (!tgt || tgt.kind === "point") throw new Error("trim target must be a line, circle or arc");
+  const tc = toICurve(sk, tgt as any)!;
+  const EPS = 1e-4;
+  const mkPt = (pt: Vec): string => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x: pt.x, y: pt.y }; return id; };
+
+  // Intersection parameters along the target from every other curve.
+  const cuts: number[] = [];
+  for (const e of Object.values(sk.entities)) {
+    if (e.id === targetId || e.kind === "point") continue;
+    const oc = toICurve(sk, e as any);
+    if (!oc) continue;
+    for (const pt of intersect(tc, oc)) cuts.push(paramOf(tc, pt));
+  }
+  const click = paramOf(tc, { x: u, y: v });
+  const created: string[] = [];
+
+  if (tgt.kind === "line" || tgt.kind === "arc") {
+    const cu = Math.max(0, Math.min(1, click));
+    const inside = cuts.filter((c) => c > EPS && c < 1 - EPS).sort((a, b) => a - b);
+    let lo = 0, hi = 1;
+    for (const c of inside) if (c <= cu) lo = c;
+    for (const c of inside) if (c >= cu) { hi = c; break; }
+    const pieces: [number, number][] = [];
+    if (lo > EPS) pieces.push([0, lo]);
+    if (hi < 1 - EPS) pieces.push([hi, 1]);
+    const origP1 = (tgt as { p1: string }).p1;
+    const origP2 = (tgt as { p2: string }).p2;
+
+    if (pieces.length === 0) {
+      delete sk.entities[targetId];
+    } else {
+      pieces.forEach(([s, e], i) => {
+        const startId = s <= EPS ? origP1 : mkPt(pointAt(tc, s));
+        const endId = e >= 1 - EPS ? origP2 : mkPt(pointAt(tc, e));
+        if (startId !== origP1 && s > EPS) created.push(startId);
+        if (endId !== origP2 && e < 1 - EPS) created.push(endId);
+        if (i === 0) {
+          (tgt as { p1: string }).p1 = startId;
+          (tgt as { p2: string }).p2 = endId;
+        } else {
+          const nid = ctx.alloc(tgt.kind === "arc" ? "ar" : "ln");
+          sk.entities[nid] = tgt.kind === "arc"
+            ? { id: nid, kind: "arc", center: (tgt as any).center, p1: startId, p2: endId, r: (tgt as any).r, ccw: (tgt as any).ccw }
+            : { id: nid, kind: "line", p1: startId, p2: endId };
+          created.push(nid);
+        }
+      });
+    }
+  } else {
+    // circle → arc (or delete if the click isn't bounded on both sides)
+    const inside = cuts.map((c) => ((c % 1) + 1) % 1).sort((a, b) => a - b);
+    if (inside.length < 2) {
+      delete sk.entities[targetId];
+    } else {
+      const cu = ((click % 1) + 1) % 1;
+      const below = inside.filter((c) => c <= cu);
+      const above = inside.filter((c) => c > cu);
+      const lo = below.length ? below[below.length - 1] : inside[inside.length - 1];
+      const hi = above.length ? above[0] : inside[0];
+      const startId = mkPt(pointAt(tc, hi));
+      const endId = mkPt(pointAt(tc, lo));
+      const arcId = ctx.alloc("ar");
+      sk.entities[arcId] = { id: arcId, kind: "arc", center: (tgt as any).center, p1: startId, p2: endId, r: (tgt as any).r, ccw: true };
+      delete sk.entities[targetId];
+      created.push(arcId, startId, endId);
+    }
+  }
+
+  pruneSketch(sk);
+  return { createdIds: created, affectedSketchId: sk.id, message: "Trimmed" };
+}
 
 /** Find the point id two lines share, with each line's far endpoint. */
 function sharedCorner(l1: SketchLine, l2: SketchLine): { c: string; a: string; b: string; l1End: "p1" | "p2"; l2End: "p1" | "p2" } | null {

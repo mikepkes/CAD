@@ -244,13 +244,13 @@ export class Interactions {
       return;
     }
 
-    if (st.tool === "select" || st.tool === "dimension") {
+    if (st.tool === "select" || st.tool === "dimension" || st.tool === "trim") {
       if (this.base) {
         const pick = this.scene.pick(e.clientX, e.clientY, this.base);
         const id = pick.type === "entity" ? pick.id ?? null : null;
         if (id !== st.hover) st.setHover(id);
       }
-      // No snap ghost while selecting/dimensioning — only while drawing.
+      // No snap ghost while selecting/dimensioning/trimming — only while drawing.
       if (this.preview) this.setPreview(null);
       return;
     }
@@ -300,6 +300,9 @@ export class Interactions {
       case "dimension":
         this.handleDimensionClick(e);
         break;
+      case "trim":
+        await this.handleTrimClick(e);
+        break;
       case "point":
         await st.placePoint(snap.u, snap.v);
         break;
@@ -328,6 +331,22 @@ export class Interactions {
     } else if (!e.shiftKey) {
       st.clearSelection();
     }
+  }
+
+  // Trim tool: click the piece of a curve to remove (bounded by intersections).
+  private async handleTrimClick(e: PointerEvent) {
+    const st = this.st();
+    if (!this.base || !st.activeSketchId) return;
+    const sk = st.session.doc.sketches[st.activeSketchId];
+    if (!sk) return;
+    const pick = this.scene.pick(e.clientX, e.clientY, this.base);
+    if (pick.type !== "entity" || !pick.id) return;
+    const ent = sk.entities[pick.id];
+    if (!ent || (ent.kind !== "line" && ent.kind !== "circle" && ent.kind !== "arc")) return;
+    // Use the exact click point on the plane (not a snapped grid point).
+    const uv = this.scene.pointerToUV(e.clientX, e.clientY, sk.planeId);
+    if (!uv) return;
+    await st.dispatch("sketch.trim", { sketch: st.activeSketchId, target: pick.id, u: uv.u, v: uv.v });
   }
 
   // Modal Dimension tool: click geometry to accumulate a selection; as soon as
@@ -556,7 +575,7 @@ export class Interactions {
       const op = availableOps(sk, st.selection).modify.find((o) => o.id === "construction");
       if (op) { void st.dispatch(op.command.type, op.command.params); return; }
     }
-    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", p: "point", s: "select", d: "dimension" };
+    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", p: "point", s: "select", d: "dimension", t: "trim" };
     if (map[e.key.toLowerCase()]) st.setTool(map[e.key.toLowerCase()]);
     if ((e.key === "Delete" || e.key === "Backspace") && st.selection.length) st.deleteSelected();
   };
