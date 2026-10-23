@@ -11,6 +11,8 @@ export interface PreviewGeom {
   arcs?: { cu: number; cv: number; r: number; a1: number; a2: number; ccw: boolean }[];
   snap?: { u: number; v: number; kind: string } | null;
   cursor?: { u: number; v: number } | null;
+  /** Inference glyphs (H/V, ∥, ⊥, on-line, …) shown beside the cursor. */
+  markers?: string[];
 }
 
 export interface SolidView {
@@ -546,7 +548,7 @@ export class SceneManager {
   private static CONSTRAINT_GLYPH: Record<string, string> = {
     horizontal: "H", vertical: "V", parallel: "∥", perpendicular: "⊥",
     equal: "=", coincident: "●", pointOnLine: "⊢", pointOnCircle: "◠",
-    concentric: "◎", tangent: "◯", symmetric: "⇔", fix: "⚓",
+    concentric: "◎", tangent: "◯", symmetric: "⇔", fix: "⚓", midpoint: "▷◁",
   };
 
   /** Anchor + glyph for a geometric constraint, offset slightly off the geometry. */
@@ -557,7 +559,7 @@ export class SceneManager {
     const off = this.pixelToWorld(11);
     const at = (u: number, v: number) => this.worldPt(plane, u + off, v + off);
     try {
-      if (c.type === "fix" || c.type === "pointOnLine" || c.type === "pointOnCircle") {
+      if (c.type === "fix" || c.type === "pointOnLine" || c.type === "pointOnCircle" || c.type === "midpoint") {
         const p = P(c.point);
         return { glyph, pos: at(p.x, p.y) };
       }
@@ -664,6 +666,15 @@ export class SceneManager {
       const r = this.pixelToWorld(6);
       const ring = this.makeArcLine(plane, preview.snap.u, preview.snap.v, r, 0, Math.PI * 2, true, 0xffd166);
       this.previewGroup.add(ring);
+    }
+    if (preview.markers && preview.markers.length) {
+      const anchor = preview.snap ?? preview.cursor ?? null;
+      if (anchor) {
+        const off = this.pixelToWorld(14);
+        const sprite = this.makeTextSprite(preview.markers.join(" "), "#ffd166", 0.03);
+        sprite.position.copy(this.worldPt(plane, anchor.u + off, anchor.v + off));
+        this.previewGroup.add(sprite);
+      }
     }
   }
 

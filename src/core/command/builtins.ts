@@ -341,7 +341,7 @@ export const BUILTINS: CommandDef<any>[] = [
     description:
       "Adds one geometric constraint. Provide `type` plus the reference fields it needs: " +
       "coincident/horizontal/vertical {a,b} points; parallel/perpendicular {l1,l2} lines; " +
-      "equal {e1,e2}; pointOnLine {point,line}; pointOnCircle {point,circle}; concentric {c1,c2}; " +
+      "equal {e1,e2}; pointOnLine {point,line}; pointOnCircle {point,circle}; midpoint {point,line}; concentric {c1,c2}; " +
       "tangent {a,b}; symmetric {a,b,line}; fix {point}. Rejected (by default) if it over-constrains.",
     constrains: true,
     paramsSchema: {
@@ -353,7 +353,7 @@ export const BUILTINS: CommandDef<any>[] = [
           type: "string",
           enum: [
             "coincident", "horizontal", "vertical", "parallel", "perpendicular",
-            "equal", "pointOnLine", "pointOnCircle", "concentric", "tangent", "symmetric", "fix",
+            "equal", "pointOnLine", "pointOnCircle", "midpoint", "concentric", "tangent", "symmetric", "fix",
           ],
         },
         a: { type: "string" }, b: { type: "string" },

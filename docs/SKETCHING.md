@@ -5,11 +5,11 @@ helps (agent-first commands, parametric timeline, precision/keyboard input,
 local-first). Everything stays command-driven (undoable, MCP-exposed).
 
 ## Sprint A — the "feel" sprint
-- [ ] A1 Constraint inference while drawing + rich snapping
-  - [ ] snap targets: endpoint (have), center (have), **midpoint**, **on-curve**, **intersection**
-  - [ ] inference: H/V (have), **parallel / perpendicular** to existing lines, **coincident / point-on-line** when ending on geometry, **tangent**
-  - [ ] on-screen inference markers; apply inferred constraints on commit
-  - [ ] new constraints needed: **midpoint**, **collinear**
+- [x] A1 Constraint inference while drawing + rich snapping
+  - [x] snap targets: endpoint, center, **midpoint**, **on-curve (line projection)** — intersection/tangent deferred to Sprint C
+  - [x] inference: H/V, **parallel / perpendicular** to existing lines, **coincident / point-on-line** when ending on geometry — tangent deferred
+  - [x] on-screen inference markers; apply inferred constraints on commit
+  - [x] new constraint: **midpoint** (collinear deferred to Sprint C)
 - [ ] A2 Constrained-state coloring + profile shading
   - [x] under-constrained = blue, fully constrained = light, conflicting = red
   - [x] shade closed profiles (what's extrudable)

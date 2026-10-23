@@ -175,6 +175,9 @@ export class PlaneGCSSolver implements ConstraintSolver {
         return { id: c.id, type: "equal_radius_cc", c1_id: c.c1, c2_id: c.c2 };
       case "pointOnLine":
         return { id: c.id, type: "point_on_line_pl", p_id: c.point, l_id: c.line };
+      case "midpoint":
+        // point is the midpoint of a,b  ⇔  a,b symmetric about point
+        return { id: c.id, type: "p2p_symmetric_ppp", p1_id: c.a, p2_id: c.b, p_id: c.point };
       case "pointOnCircle":
         return { id: c.id, type: "point_on_circle", p_id: c.point, c_id: c.circle };
       case "symmetric":

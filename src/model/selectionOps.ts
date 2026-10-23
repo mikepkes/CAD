@@ -76,6 +76,7 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
   }
   if (s.points.length === 1 && s.lines.length === 1) {
     geo("pointOnLine", "On Line", "•—", "Point lies on line", { type: "pointOnLine", point: s.points[0].id, line: s.lines[0].id });
+    geo("midpoint", "Midpoint", "▷◁", "Point at the line's midpoint", { type: "midpoint", point: s.points[0].id, line: s.lines[0].id });
   }
   if (s.points.length === 1 && s.radii.length === 1) {
     geo("pointOnCircle", "On Circle", "•◯", "Point lies on circle", { type: "pointOnCircle", point: s.points[0].id, circle: s.radii[0].id });

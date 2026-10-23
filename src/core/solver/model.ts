@@ -47,6 +47,7 @@ export type SolverConstraint =
   | { id: string; kind: "equalRadius"; c1: string; c2: string }
   | { id: string; kind: "pointOnLine"; point: string; line: string }
   | { id: string; kind: "pointOnCircle"; point: string; circle: string }
+  | { id: string; kind: "midpoint"; a: string; b: string; point: string }
   | { id: string; kind: "symmetric"; a: string; b: string; line: string }
   | { id: string; kind: "distance"; a: string; b: string; value: number }
   | { id: string; kind: "distanceX"; a: string; b: string; value: number }

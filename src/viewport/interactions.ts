@@ -7,17 +7,13 @@ import * as THREE from "three";
 import { SceneManager, PreviewGeom, ViewData } from "./SceneManager";
 import { GeoRef, useStore } from "../model/store";
 import { SketchPoint } from "../sketch/types";
+import { infer, InferResult } from "./snapping";
 
-interface Snap {
-  u: number;
-  v: number;
-  ref?: string; // existing point id when snapped to one
-  kind: string;
-}
+type Snap = InferResult;
 
 type Stage =
   | { kind: "idle" }
-  | { kind: "line"; from: GeoRef; fromUV: { u: number; v: number } }
+  | { kind: "line"; from: GeoRef; fromUV: { u: number; v: number }; startInfer?: { onLine?: string; midpointOf?: string } }
   | { kind: "rect"; from: { u: number; v: number } }
   | { kind: "circle"; center: GeoRef; centerUV: { u: number; v: number } }
   | { kind: "arc"; center?: GeoRef; centerUV?: { u: number; v: number }; start?: GeoRef; startUV?: { u: number; v: number } };
@@ -83,32 +79,21 @@ export class Interactions {
   }
 
   // ---- snapping ----
+  // Snap + constraint inference. `from` (the active segment start, when drawing
+  // a line) lets infer() record H/V, parallel and perpendicular intent and keeps
+  // the cursor from snapping onto its own start point.
   private snap(clientX: number, clientY: number): Snap | null {
     const st = this.st();
     if (!st.activeSketchId) return null;
     const sk = st.session.doc.sketches[st.activeSketchId];
     const uv = this.scene.pointerToUV(clientX, clientY, sk.planeId);
     if (!uv) return null;
-    const thr = this.scene.pixelToWorld(10);
-
-    let best: Snap | null = null;
-    let bestD = thr;
-    for (const e of Object.values(sk.entities)) {
-      if (e.kind !== "point") continue;
-      const p = e as SketchPoint;
-      const d = Math.hypot(p.x - uv.u, p.y - uv.v);
-      if (d < bestD) {
-        bestD = d;
-        best = { u: p.x, v: p.y, ref: p.id, kind: p.id === sk.originPointId ? "origin" : "point" };
-      }
+    let from: { u: number; v: number; id?: string } | undefined;
+    if (this.stage.kind === "line") {
+      const f = this.stage.from;
+      from = { u: this.stage.fromUV.u, v: this.stage.fromUV.v, id: "ref" in f ? f.ref : undefined };
     }
-    if (best) return best;
-
-    const g = 5;
-    const gu = Math.round(uv.u / g) * g;
-    const gv = Math.round(uv.v / g) * g;
-    if (Math.hypot(gu - uv.u, gv - uv.v) < this.scene.pixelToWorld(6)) return { u: gu, v: gv, kind: "grid" };
-    return { u: uv.u, v: uv.v, kind: "free" };
+    return infer(sk, { x: uv.u, y: uv.v }, (p) => this.scene.pixelToWorld(p), from);
   }
 
   private ref(snap: Snap): GeoRef {
@@ -231,31 +216,57 @@ export class Interactions {
   private async handleLineClick(snap: Snap) {
     const st = this.st();
     if (this.stage.kind !== "line") {
-      this.stage = { kind: "line", from: this.ref(snap), fromUV: { u: snap.u, v: snap.v } };
+      // Remember start-on-line / start-at-midpoint intent; the start point is
+      // only created on the next click (placeLine), so we apply it then.
+      this.stage = {
+        kind: "line",
+        from: this.ref(snap),
+        fromUV: { u: snap.u, v: snap.v },
+        startInfer: snap.ref ? undefined : { onLine: snap.onLine, midpointOf: snap.midpointOf },
+      };
       return;
     }
     const from = this.stage.from;
     const fromUV = this.stage.fromUV;
-    const adj = this.axisSnap(fromUV, snap);
-    // Ignore a click essentially on the start point (zero-length line).
-    if (!snap.ref && Math.hypot(adj.u - fromUV.u, adj.v - fromUV.v) < this.scene.pixelToWorld(4)) return;
-    // Decide the auto H/V constraint from the SAME axis-snap that shaped the
-    // preview, so what you see is exactly what gets created and constrained.
-    const tol = this.scene.pixelToWorld(8);
-    const snapV = !snap.ref && Math.abs(snap.u - fromUV.u) < tol; // near-vertical line
-    const snapH = !snap.ref && Math.abs(snap.v - fromUV.v) < tol; // near-horizontal line
-    const end = snap.ref ? ({ ref: snap.ref } as GeoRef) : ({ x: adj.u, y: adj.v } as GeoRef);
+    const startInfer = this.stage.startInfer;
+    // infer() has already repositioned snap.u/v for axis/parallel/perp intent,
+    // so the committed geometry is exactly what the preview showed.
+    if (!snap.ref && Math.hypot(snap.u - fromUV.u, snap.v - fromUV.v) < this.scene.pixelToWorld(4)) return;
+    const end: GeoRef = snap.ref ? { ref: snap.ref } : { x: snap.u, y: snap.v };
     const r = await st.placeLine(from, end);
     if (r.ok && r.createdIds.length >= 3) {
+      const lineId = r.createdIds[0];
       const startId = r.createdIds[1];
       const endId = r.createdIds[2];
-      if (snapH && !snapV) await st.dispatch("sketch.addConstraint", { sketch: st.activeSketchId!, type: "horizontal", a: startId, b: endId }, { rejectOnConflict: true });
-      else if (snapV && !snapH) await st.dispatch("sketch.addConstraint", { sketch: st.activeSketchId!, type: "vertical", a: startId, b: endId }, { rejectOnConflict: true });
-      this.stage = { kind: "line", from: { ref: endId }, fromUV: { u: adj.u, v: adj.v } };
+      const sid = st.activeSketchId!;
+      const add = (params: Record<string, unknown>) =>
+        st.dispatch("sketch.addConstraint", { sketch: sid, ...params }, { rejectOnConflict: true });
+      // Direction intent on the segment itself.
+      if (snap.axis === "horizontal") await add({ type: "horizontal", a: startId, b: endId });
+      else if (snap.axis === "vertical") await add({ type: "vertical", a: startId, b: endId });
+      else if (snap.parallelTo) await add({ type: "parallel", l1: lineId, l2: snap.parallelTo });
+      else if (snap.perpendicularTo) await add({ type: "perpendicular", l1: lineId, l2: snap.perpendicularTo });
+      // Start-point intent, deferred from the previous click.
+      if (startInfer?.midpointOf) await add({ type: "midpoint", point: startId, line: startInfer.midpointOf });
+      else if (startInfer?.onLine) await add({ type: "pointOnLine", point: startId, line: startInfer.onLine });
+      // End-point intent (coincident is implicit in placeLine's ref reuse).
+      await this.applyPointInference(snap, endId);
+      this.stage = { kind: "line", from: { ref: endId }, fromUV: { u: snap.u, v: snap.v } };
     } else {
       this.stage = { kind: "idle" };
     }
     this.setPreview(null);
+  }
+
+  /** Apply on-line / midpoint inference for a just-placed endpoint. */
+  private async applyPointInference(snap: Snap, pointId?: string) {
+    if (!pointId) return;
+    const st = this.st();
+    const sid = st.activeSketchId!;
+    const add = (params: Record<string, unknown>) =>
+      st.dispatch("sketch.addConstraint", { sketch: sid, ...params }, { rejectOnConflict: true });
+    if (snap.midpointOf) await add({ type: "midpoint", point: pointId, line: snap.midpointOf });
+    else if (snap.onLine) await add({ type: "pointOnLine", point: pointId, line: snap.onLine });
   }
 
   private async handleRectClick(snap: Snap) {
@@ -304,25 +315,18 @@ export class Interactions {
     this.setPreview(null);
   }
 
-  private axisSnap(from: { u: number; v: number }, snap: Snap): { u: number; v: number } {
-    if (snap.ref) return { u: snap.u, v: snap.v };
-    const tol = this.scene.pixelToWorld(8);
-    return {
-      u: Math.abs(snap.u - from.u) < tol ? from.u : snap.u,
-      v: Math.abs(snap.v - from.v) < tol ? from.v : snap.v,
-    };
-  }
-
   private setPreview(p: PreviewGeom | null) {
     this.preview = p;
     this.render();
   }
 
   private updatePreview(snap: Snap) {
-    const preview: PreviewGeom = { snap: snap.kind !== "free" ? { u: snap.u, v: snap.v, kind: snap.kind } : null };
+    const preview: PreviewGeom = {
+      snap: snap.kind !== "free" ? { u: snap.u, v: snap.v, kind: snap.kind } : null,
+      markers: snap.markers.length ? snap.markers : undefined,
+    };
     if (this.stage.kind === "line") {
-      const adj = this.axisSnap(this.stage.fromUV, snap);
-      preview.segments = [{ u1: this.stage.fromUV.u, v1: this.stage.fromUV.v, u2: adj.u, v2: adj.v }];
+      preview.segments = [{ u1: this.stage.fromUV.u, v1: this.stage.fromUV.v, u2: snap.u, v2: snap.v }];
     } else if (this.stage.kind === "rect") {
       const a = this.stage.from;
       preview.segments = [

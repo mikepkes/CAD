@@ -9,6 +9,7 @@ const geomLabel: Record<string, string> = {
   coincident: "Coincident", horizontal: "Horizontal", vertical: "Vertical", parallel: "Parallel",
   perpendicular: "Perpendicular", equal: "Equal", pointOnLine: "Point on line", pointOnCircle: "Point on circle",
   concentric: "Concentric", tangent: "Tangent", symmetric: "Symmetric", fix: "Fixed",
+  midpoint: "Midpoint",
 };
 
 const displayValue = (d: DimensionConstraint): string =>

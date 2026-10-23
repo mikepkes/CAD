@@ -56,6 +56,7 @@ export type GeometricConstraint =
   | { id: ConstraintId; type: "perpendicular"; l1: EntityId; l2: EntityId }
   | { id: ConstraintId; type: "equal"; e1: EntityId; e2: EntityId }
   | { id: ConstraintId; type: "pointOnLine"; point: EntityId; line: EntityId }
+  | { id: ConstraintId; type: "midpoint"; point: EntityId; line: EntityId }
   | { id: ConstraintId; type: "pointOnCircle"; point: EntityId; circle: EntityId }
   | { id: ConstraintId; type: "concentric"; c1: EntityId; c2: EntityId }
   | { id: ConstraintId; type: "tangent"; a: EntityId; b: EntityId }

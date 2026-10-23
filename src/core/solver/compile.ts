@@ -145,6 +145,11 @@ export function compileSketch(sketch: Sketch, scope: Scope = {}): CompileResult 
       case "pointOnLine":
         push({ id: c.id, kind: "pointOnLine", point: c.point, line: c.line });
         break;
+      case "midpoint": {
+        const l = sketch.entities[c.line];
+        if (l && l.kind === "line") push({ id: c.id, kind: "midpoint", a: (l as SketchLine).p1, b: (l as SketchLine).p2, point: c.point });
+        break;
+      }
       case "pointOnCircle":
         push({ id: c.id, kind: "pointOnCircle", point: c.point, circle: c.circle });
         break;
