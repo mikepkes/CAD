@@ -104,6 +104,7 @@ export interface AppState {
 
   // constraints/dimensions by id (mapped to their creating operation)
   editDimension: (constraintId: string, expr: string) => Promise<void>;
+  toggleDrivenDimension: (constraintId: string) => Promise<void>;
   deleteConstraintById: (constraintId: string) => Promise<void>;
 
   // in-canvas dimension editor
@@ -293,6 +294,10 @@ export const useStore = create<AppState>((set, get) => {
     editDimension: async (cid, expr) => {
       const op = get().session.timeline.find((o) => o.type === "sketch.addDimension" && o.createdIds.includes(cid));
       if (op) await get().editOperation(op.opId, { ...op.params, expression: expr });
+    },
+    toggleDrivenDimension: async (cid) => {
+      const op = get().session.timeline.find((o) => o.type === "sketch.addDimension" && o.createdIds.includes(cid));
+      if (op) await get().editOperation(op.opId, { ...op.params, driven: !op.params.driven });
     },
     deleteConstraintById: async (cid) => {
       // If the constraint has its own dedicated operation, remove that op (clean).

@@ -558,7 +558,7 @@ export class SceneManager {
   }
 
   private static CONSTRAINT_GLYPH: Record<string, string> = {
-    horizontal: "H", vertical: "V", parallel: "∥", perpendicular: "⊥",
+    horizontal: "H", vertical: "V", parallel: "∥", perpendicular: "⊥", collinear: "┈",
     equal: "=", coincident: "●", pointOnLine: "⊢", pointOnCircle: "◠",
     concentric: "◎", tangent: "◯", symmetric: "⇔", fix: "⚓", midpoint: "▷◁",
   };

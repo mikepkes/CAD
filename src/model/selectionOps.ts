@@ -63,6 +63,7 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
     const [l1, l2] = s.lines;
     geo("parallel", "Parallel", "∥", "Make lines parallel", { type: "parallel", l1: l1.id, l2: l2.id });
     geo("perpendicular", "Perpendicular", "⊥", "Make lines perpendicular", { type: "perpendicular", l1: l1.id, l2: l2.id });
+    geo("collinear", "Collinear", "┈", "Make lines collinear (same infinite line)", { type: "collinear", l1: l1.id, l2: l2.id });
     geo("equal", "Equal", "=", "Make lengths equal", { type: "equal", e1: l1.id, e2: l2.id });
   }
   if (s.radii.length === 2 && s.lines.length === 0 && s.points.length === 0) {
@@ -80,6 +81,20 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
   }
   if (s.points.length === 1 && s.radii.length === 1) {
     geo("pointOnCircle", "On Circle", "•◯", "Point lies on circle", { type: "pointOnCircle", point: s.points[0].id, circle: s.radii[0].id });
+  }
+  // Distance from a point to a circle/arc center.
+  if (s.points.length === 1 && s.radii.length === 1) {
+    const p = s.points[0], c = pt(s.radii[0].center);
+    dim("pcDist", "Pt→Center", "↔", "Distance from the point to the circle center", {
+      type: "distance", a: p.id, b: s.radii[0].center, expression: fmt(Math.hypot(p.x - c.x, p.y - c.y)),
+    });
+  }
+  // Distance between two circle/arc centers.
+  if (s.radii.length === 2 && s.lines.length === 0 && s.points.length === 0) {
+    const a = pt(s.radii[0].center), b = pt(s.radii[1].center);
+    dim("ccDist", "Center Dist", "↔", "Distance between the two centers", {
+      type: "distance", a: s.radii[0].center, b: s.radii[1].center, expression: fmt(Math.hypot(a.x - b.x, a.y - b.y)),
+    });
   }
   if (s.points.length === 2 && s.lines.length === 1) {
     geo("symmetric", "Symmetric", "⧓", "Symmetric about line", { type: "symmetric", a: s.points[0].id, b: s.points[1].id, line: s.lines[0].id });
@@ -184,11 +199,27 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
     }
     // Linear pattern: spacing from the selection's x-extent.
     const xs = sel.flatMap((id) => pointXs(sk, id));
+    const ys = sel.flatMap((id) => pointYs(sk, id));
     const width = xs.length ? Math.max(...xs) - Math.min(...xs) : 20;
+    const height = ys.length ? Math.max(...ys) - Math.min(...ys) : 20;
     const dx = Math.max(15, Math.round(width * 1.3));
+    const dy = Math.max(15, Math.round(height * 1.3));
     modify.push({
-      id: "pattern", label: "Pattern ×3", glyph: "▦", hint: "Linear pattern (edit count/spacing in the timeline)",
+      id: "pattern", label: "Linear ×3", glyph: "▦", hint: "Linear pattern (edit count/spacing in the timeline)",
       command: { type: "sketch.linearPattern", params: { sketch: sid, entities: sel, dx, dy: 0, count: 3 } },
+    });
+    modify.push({
+      id: "grid", label: "Grid 3×2", glyph: "▥", hint: "2D grid pattern (edit counts/spacing in the timeline)",
+      command: { type: "sketch.gridPattern", params: { sketch: sid, entities: sel, dx, dy, countX: 3, countY: 2 } },
+    });
+    // Circular pattern about the selection centroid.
+    const cxs = sel.flatMap((id) => pointXs(sk, id));
+    const cys = sel.flatMap((id) => pointYs(sk, id));
+    const cx = cxs.length ? cxs.reduce((a, b) => a + b, 0) / cxs.length : 0;
+    const cy = cys.length ? cys.reduce((a, b) => a + b, 0) / cys.length : 0;
+    modify.push({
+      id: "circular", label: "Circular ×6", glyph: "✳", hint: "Circular pattern about the selection centroid (edit in the timeline)",
+      command: { type: "sketch.circularPattern", params: { sketch: sid, entities: sel, cx: Math.round(cx * 100) / 100, cy: Math.round(cy * 100) / 100, count: 6, step: 60 } },
     });
     // Construction toggle.
     const anyReal = sel.some((id) => !(sk.entities[id] as { construction?: boolean }).construction);
@@ -225,5 +256,15 @@ function pointXs(sk: Sketch, id: string): number[] {
   if (e.kind === "line") return [(sk.entities[e.p1] as SketchPoint).x, (sk.entities[e.p2] as SketchPoint).x];
   if (e.kind === "circle") { const c = sk.entities[e.center] as SketchPoint; return [c.x - e.r, c.x + e.r]; }
   if (e.kind === "arc") { const c = sk.entities[e.center] as SketchPoint; return [c.x - e.r, c.x + e.r]; }
+  return [];
+}
+
+function pointYs(sk: Sketch, id: string): number[] {
+  const e = sk.entities[id];
+  if (!e) return [];
+  if (e.kind === "point") return [e.y];
+  if (e.kind === "line") return [(sk.entities[e.p1] as SketchPoint).y, (sk.entities[e.p2] as SketchPoint).y];
+  if (e.kind === "circle") { const c = sk.entities[e.center] as SketchPoint; return [c.y - e.r, c.y + e.r]; }
+  if (e.kind === "arc") { const c = sk.entities[e.center] as SketchPoint; return [c.y - e.r, c.y + e.r]; }
   return [];
 }

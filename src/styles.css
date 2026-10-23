@@ -404,6 +404,18 @@ body {
   color: var(--bad);
   border-color: var(--bad);
 }
+.icon-btn.active {
+  color: var(--accent-2);
+  border-color: var(--accent-2);
+}
+.dim-row.driven .dim-expr {
+  opacity: 0.5;
+  font-style: italic;
+}
+.dim-row.driven .dim-val {
+  color: var(--muted);
+  font-style: italic;
+}
 
 /* tree */
 .tree {

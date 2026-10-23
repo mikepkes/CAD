@@ -354,7 +354,7 @@ export const BUILTINS: CommandDef<any>[] = [
         type: {
           type: "string",
           enum: [
-            "coincident", "horizontal", "vertical", "parallel", "perpendicular",
+            "coincident", "horizontal", "vertical", "parallel", "perpendicular", "collinear",
             "equal", "pointOnLine", "pointOnCircle", "midpoint", "concentric", "tangent", "symmetric", "fix",
           ],
         },
@@ -398,6 +398,7 @@ export const BUILTINS: CommandDef<any>[] = [
           enum: ["distance", "distanceX", "distanceY", "radius", "diameter", "angle", "pointLineDistance"],
         },
         expression: { type: "string" },
+        driven: { type: "boolean", description: "Reference dimension: measures without constraining." },
         a: { type: "string" }, b: { type: "string" },
         circle: { type: "string" }, point: { type: "string" }, line: { type: "string" },
         l1: { type: "string" }, l2: { type: "string" },
@@ -555,6 +556,72 @@ export const BUILTINS: CommandDef<any>[] = [
         }
       }
       return { createdIds: created, affectedSketchId: sk.id, message: `Patterned ×${p.count}` };
+    },
+  },
+  {
+    type: "sketch.circularPattern",
+    title: "Circular pattern",
+    summary: "Repeat entities around a center point.",
+    description:
+      "Creates `count`-1 rotated copies of `entities` about (cx, cy), each turned `step` degrees from the previous (positive = counter-clockwise). count includes the original. Returns the created ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "entities", "cx", "cy", "count", "step"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        entities: { type: "array", items: { type: "string" } },
+        cx: { type: "number" },
+        cy: { type: "number" },
+        count: { type: "integer", minimum: 2 },
+        step: { type: "number", description: "Degrees between copies." },
+      },
+    },
+    apply(draft, p: { sketch: string; entities: string[]; cx: number; cy: number; count: number; step: number }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const created: string[] = [];
+      for (let i = 1; i < p.count; i++) {
+        const a = (p.step * i * Math.PI) / 180;
+        const cos = Math.cos(a), sin = Math.sin(a);
+        const tf = (pt: Vec): Vec => {
+          const dx = pt.x - p.cx, dy = pt.y - p.cy;
+          return { x: p.cx + dx * cos - dy * sin, y: p.cy + dx * sin + dy * cos };
+        };
+        created.push(...copyEntities(sk, p.entities, ctx, tf));
+      }
+      return { createdIds: created, affectedSketchId: sk.id, message: `Circular ×${p.count}` };
+    },
+  },
+  {
+    type: "sketch.gridPattern",
+    title: "Grid pattern",
+    summary: "Repeat entities in a 2D grid.",
+    description:
+      "Creates a `countX` × `countY` grid of `entities` spaced (dx, dy), omitting the original cell. Counts include the original row/column. Returns the created ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "entities", "dx", "dy", "countX", "countY"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        entities: { type: "array", items: { type: "string" } },
+        dx: { type: "number" },
+        dy: { type: "number" },
+        countX: { type: "integer", minimum: 1 },
+        countY: { type: "integer", minimum: 1 },
+      },
+    },
+    apply(draft, p: { sketch: string; entities: string[]; dx: number; dy: number; countX: number; countY: number }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const created: string[] = [];
+      for (let i = 0; i < p.countX; i++) {
+        for (let j = 0; j < p.countY; j++) {
+          if (i === 0 && j === 0) continue;
+          const tf = (pt: Vec): Vec => ({ x: pt.x + p.dx * i, y: pt.y + p.dy * j });
+          created.push(...copyEntities(sk, p.entities, ctx, tf));
+        }
+      }
+      return { createdIds: created, affectedSketchId: sk.id, message: `Grid ${p.countX}×${p.countY}` };
     },
   },
   {
@@ -741,6 +808,30 @@ export const BUILTINS: CommandDef<any>[] = [
 ];
 
 type Vec = { x: number; y: number };
+
+/** Copy entities, mapping each point through `tf`. Shared by the pattern tools. */
+function copyEntities(sk: Sketch, ids: string[], ctx: CommandContext, tf: (p: Vec) => Vec): string[] {
+  const map = new Map<string, string>();
+  const mp = (id: string): string => {
+    if (map.has(id)) return map.get(id)!;
+    const o = sk.entities[id] as SketchPoint;
+    const t = tf({ x: o.x, y: o.y });
+    const nid = ctx.alloc("pt");
+    sk.entities[nid] = { id: nid, kind: "point", x: t.x, y: t.y, construction: o.construction };
+    map.set(id, nid);
+    return nid;
+  };
+  const created: string[] = [];
+  for (const eid of ids) {
+    const e = sk.entities[eid];
+    if (!e) continue;
+    if (e.kind === "point") created.push(mp(eid));
+    else if (e.kind === "line") { const nid = ctx.alloc("ln"); sk.entities[nid] = { id: nid, kind: "line", p1: mp(e.p1), p2: mp(e.p2), construction: e.construction }; created.push(nid); }
+    else if (e.kind === "circle") { const nid = ctx.alloc("ci"); sk.entities[nid] = { id: nid, kind: "circle", center: mp(e.center), r: e.r, construction: e.construction }; created.push(nid); }
+    else if (e.kind === "arc") { const nid = ctx.alloc("ar"); sk.entities[nid] = { id: nid, kind: "arc", center: mp(e.center), p1: mp(e.p1), p2: mp(e.p2), r: e.r, ccw: e.ccw, construction: e.construction }; created.push(nid); }
+  }
+  return created;
+}
 
 function toICurve(sk: Sketch, e: { kind: string } & Record<string, unknown>): ICurve | null {
   const P = (id: string) => sk.entities[id] as SketchPoint;

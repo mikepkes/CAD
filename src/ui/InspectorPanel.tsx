@@ -7,9 +7,9 @@ const dimLabel: Record<string, string> = {
 };
 const geomLabel: Record<string, string> = {
   coincident: "Coincident", horizontal: "Horizontal", vertical: "Vertical", parallel: "Parallel",
-  perpendicular: "Perpendicular", equal: "Equal", pointOnLine: "Point on line", pointOnCircle: "Point on circle",
-  concentric: "Concentric", tangent: "Tangent", symmetric: "Symmetric", fix: "Fixed",
-  midpoint: "Midpoint",
+  perpendicular: "Perpendicular", collinear: "Collinear", equal: "Equal", pointOnLine: "Point on line",
+  pointOnCircle: "Point on circle", concentric: "Concentric", tangent: "Tangent", symmetric: "Symmetric",
+  fix: "Fixed", midpoint: "Midpoint",
 };
 
 const displayValue = (d: DimensionConstraint): string =>
@@ -62,6 +62,7 @@ export function InspectorPanel() {
   const session = useStore((s) => s.session);
   const selection = useStore((s) => s.selection);
   const editDimension = useStore((s) => s.editDimension);
+  const toggleDrivenDimension = useStore((s) => s.toggleDrivenDimension);
   const deleteConstraintById = useStore((s) => s.deleteConstraintById);
   const deleteSelected = useStore((s) => s.deleteSelected);
 
@@ -94,16 +95,25 @@ export function InspectorPanel() {
         <div className="section-title">Dimensions ({dims.length})</div>
         {dims.length === 0 && <div className="muted">None</div>}
         {dims.map((d) => (
-          <div className={`dim-row ${conflicting.has(d.id) ? "conflict" : ""}`} key={d.id}>
+          <div className={`dim-row ${conflicting.has(d.id) ? "conflict" : ""} ${d.driven ? "driven" : ""}`} key={d.id} style={{ gridTemplateColumns: "1fr 1fr 48px 22px 22px" }}>
             <span className="dim-type">{dimLabel[d.type]}</span>
             <input
               className="dim-expr"
               defaultValue={d.expr}
-              key={d.id + d.expr}
+              key={d.id + d.expr + (d.driven ? "ref" : "")}
+              disabled={d.driven}
+              title={d.driven ? "Reference dimension — measured, not driving" : undefined}
               onBlur={(e) => { if (e.target.value !== d.expr) editDimension(d.id, e.target.value); }}
               onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
             />
-            <span className="dim-val">{displayValue(d)}</span>
+            <span className="dim-val">{d.driven ? `(${displayValue(d)})` : displayValue(d)}</span>
+            <button
+              className={`icon-btn ${d.driven ? "active" : ""}`}
+              title={d.driven ? "Make driving dimension" : "Make reference (driven) dimension"}
+              onClick={() => toggleDrivenDimension(d.id)}
+            >
+              ⟨⟩
+            </button>
             <button className="icon-btn danger" onClick={() => deleteConstraintById(d.id)}>✕</button>
           </div>
         ))}

@@ -28,10 +28,12 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
 - [x] Window/box select (window = solid, crossing = dashed), right-click context menu, `X` toggles construction, Look At (normal-to)
 
 ## Sprint C — breadth
-- [ ] Rectangle: center, 3-point · Circle: 2-point, 3-point, tangent · Arc: 3-point, tangent
-- [ ] Ellipse, slot, polygon, spline (PlaneGCS supports ellipse + b-spline)
-- [ ] Circular pattern, rectangular (grid) pattern
-- [ ] Driven (reference) dimensions; point-to-circle / circle-to-circle distances
+- [x] **Collinear** constraint (parallel + point-on-line)
+- [x] **Circular pattern** + **rectangular (grid) pattern**
+- [x] **Driven (reference) dimensions** (measure without constraining; ⟨⟩ toggle in the inspector)
+- [x] Point-to-center / center-to-center distance dimensions
+- [ ] Rectangle: center, 3-point · Circle: 2-point, 3-point, tangent · Arc: 3-point, tangent (draw-tool flyouts)
+- [ ] Ellipse, slot, polygon, spline (new entity kinds; PlaneGCS supports ellipse + b-spline)
 
 ## Later (needs 3D)
 - [ ] Sketch on a body face; construction / offset planes; project / intersect edges

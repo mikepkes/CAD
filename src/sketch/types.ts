@@ -54,6 +54,7 @@ export type GeometricConstraint =
   | { id: ConstraintId; type: "vertical"; a: EntityId; b: EntityId }
   | { id: ConstraintId; type: "parallel"; l1: EntityId; l2: EntityId }
   | { id: ConstraintId; type: "perpendicular"; l1: EntityId; l2: EntityId }
+  | { id: ConstraintId; type: "collinear"; l1: EntityId; l2: EntityId }
   | { id: ConstraintId; type: "equal"; e1: EntityId; e2: EntityId }
   | { id: ConstraintId; type: "pointOnLine"; point: EntityId; line: EntityId }
   | { id: ConstraintId; type: "midpoint"; point: EntityId; line: EntityId }
@@ -87,6 +88,8 @@ export interface DimensionConstraint {
   expr: string;
   /** Last evaluated numeric value (radians for angle). */
   value: number;
+  /** Driven (reference) dimension: measures geometry, does not constrain it. */
+  driven?: boolean;
   /** Label placement offset in sketch (u,v) space, for rendering. */
   label?: { x: number; y: number };
 }

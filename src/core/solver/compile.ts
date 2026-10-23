@@ -91,6 +91,9 @@ export function compileSketch(sketch: Sketch, scope: Scope = {}): CompileResult 
 
   for (const c of Object.values(sketch.constraints) as Constraint[]) {
     if (isDimension(c)) {
+      // Driven (reference) dimensions measure geometry; they add no solver
+      // constraint and their value is read back after the solve.
+      if (c.driven) continue;
       const v = evalExpr(c);
       switch (c.type) {
         case "distance":
@@ -134,6 +137,15 @@ export function compileSketch(sketch: Sketch, scope: Scope = {}): CompileResult 
       case "perpendicular":
         push({ id: c.id, kind: "perpendicular", l1: c.l1, l2: c.l2 });
         break;
+      case "collinear": {
+        // Collinear = parallel + one endpoint of l2 lies on l1's infinite line.
+        const l2 = sketch.entities[c.l2];
+        if (sketch.entities[c.l1]?.kind === "line" && l2?.kind === "line") {
+          push({ id: c.id, kind: "parallel", l1: c.l1, l2: c.l2 });
+          push({ id: c.id + "~on", kind: "pointOnLine", point: (l2 as SketchLine).p1, line: c.l1 });
+        }
+        break;
+      }
       case "equal": {
         if (isRadiusEntity(c.e1) && isRadiusEntity(c.e2)) {
           push({ id: c.id, kind: "equalRadius", c1: c.e1, c2: c.e2 });

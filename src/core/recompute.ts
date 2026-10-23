@@ -7,7 +7,7 @@ import { CadDocument } from "./document";
 import { resolveParameters } from "../model/parameters";
 import { ConstraintSolver, SolveDiagnosis } from "./solver/model";
 import { compileSketch } from "./solver/compile";
-import { SketchArc, SketchCircle, SketchPoint } from "../sketch/types";
+import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchLine, SketchPoint } from "../sketch/types";
 
 export interface SketchEvaluation {
   sketchId: string;
@@ -59,6 +59,15 @@ export async function recompute(
       else if (e && e.kind === "arc") (e as SketchArc).r = r;
     }
 
+    // Driven (reference) dimensions: report the measured value from the solved
+    // geometry rather than an expression.
+    for (const c of Object.values(sketch.constraints)) {
+      if ("expr" in c && (c as { driven?: boolean }).driven) {
+        const m = measureDimension(sketch, c as DimensionConstraint);
+        if (m != null) (c as { value: number }).value = m;
+      }
+    }
+
     const d = result.diagnosis;
     const message = d.hasConflict
       ? `Over-constrained — conflicting: ${d.conflicting.join(", ") || "unknown"}`
@@ -83,6 +92,42 @@ export async function recompute(
   }
 
   return evals;
+}
+
+/** Measure a dimension's current geometric value from solved entities. */
+function measureDimension(sk: Sketch, d: DimensionConstraint): number | null {
+  const P = (id?: string) => (id ? (sk.entities[id] as SketchPoint) : undefined);
+  const circle = d.circle ? (sk.entities[d.circle] as SketchCircle | SketchArc) : undefined;
+  const dir = (lid?: string) => {
+    const l = lid ? (sk.entities[lid] as SketchLine) : undefined;
+    if (!l) return null;
+    const a = P(l.p1)!, b = P(l.p2)!;
+    return { x: b.x - a.x, y: b.y - a.y };
+  };
+  try {
+    switch (d.type) {
+      case "distance": { const a = P(d.a)!, b = P(d.b)!; return Math.hypot(a.x - b.x, a.y - b.y); }
+      case "distanceX": return P(d.b)!.x - P(d.a)!.x;
+      case "distanceY": return P(d.b)!.y - P(d.a)!.y;
+      case "radius": return circle ? circle.r : null;
+      case "diameter": return circle ? circle.r * 2 : null;
+      case "angle": {
+        const d1 = dir(d.l1), d2 = dir(d.l2);
+        if (!d1 || !d2) return null;
+        return Math.atan2(d1.x * d2.y - d1.y * d2.x, d1.x * d2.x + d1.y * d2.y);
+      }
+      case "pointLineDistance": {
+        const p = P(d.point)!, l = sk.entities[d.line!] as SketchLine;
+        const a = P(l.p1)!, b = P(l.p2)!;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const mag = Math.hypot(dx, dy) || 1;
+        return Math.abs((dx * (p.y - a.y) - dy * (p.x - a.x)) / mag);
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function emptyEval(sketchId: string): SketchEvaluation {
