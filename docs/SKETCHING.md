@@ -21,7 +21,8 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
   - [x] double-click a dimension in the viewport to edit
 
 ## Sprint B — editing
-- [ ] Trim, Extend, Offset, sketch-corner Fillet / Chamfer
+- [x] Sketch-corner **Fillet** (tangent arc) / **Chamfer** (bevel) — trims both edges, rehomes corner constraints
+- [ ] Trim, Extend, Offset
 - [x] Window/box select (window = solid, crossing = dashed), right-click context menu, `X` toggles construction, Look At (normal-to)
 
 ## Sprint C — breadth

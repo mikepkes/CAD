@@ -7,10 +7,11 @@ import {
   DimensionConstraint,
   GeometricConstraint,
   Sketch,
+  SketchLine,
   SketchPoint,
 } from "../../sketch/types";
 import { CommandRegistry } from "./registry";
-import { CommandContext, CommandDef, JSONSchema } from "./types";
+import { CommandApplyInfo, CommandContext, CommandDef, JSONSchema } from "./types";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 
@@ -629,4 +630,126 @@ export const BUILTINS: CommandDef<any>[] = [
       return { affectedSketchId: sk.id, message: `Deleted ${remove.size} entit${remove.size === 1 ? "y" : "ies"}` };
     },
   },
+  {
+    type: "sketch.fillet",
+    title: "Fillet",
+    summary: "Round the corner where two lines meet with a tangent arc.",
+    description:
+      "Replaces the shared corner of two lines with a tangent arc of the given radius, trimming both lines back to the tangent points. Constraints on each trimmed edge are preserved. Returns [arcId, centerId, tangent1, tangent2].",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "line1", "line2", "radius"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        line1: { type: "string" },
+        line2: { type: "string" },
+        radius: { type: "number", minimum: 0 },
+      },
+    },
+    examples: [{ note: "5mm round on a corner", params: { sketch: "sketch1", line1: "ln3", line2: "ln6", radius: 5 } }],
+    apply(draft, p: { sketch: string; line1: string; line2: string; radius: number }, ctx) {
+      return blendCorner(sketchOf(draft, p.sketch), p.line1, p.line2, p.radius, ctx, "fillet");
+    },
+  },
+  {
+    type: "sketch.chamfer",
+    title: "Chamfer",
+    summary: "Bevel the corner where two lines meet with a straight segment.",
+    description:
+      "Replaces the shared corner of two lines with a straight chamfer, setting back `distance` along each edge. Constraints on each trimmed edge are preserved. Returns [lineId, tangent1, tangent2].",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "line1", "line2", "distance"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        line1: { type: "string" },
+        line2: { type: "string" },
+        distance: { type: "number", minimum: 0 },
+      },
+    },
+    examples: [{ note: "3mm chamfer", params: { sketch: "sketch1", line1: "ln3", line2: "ln6", distance: 3 } }],
+    apply(draft, p: { sketch: string; line1: string; line2: string; distance: number }, ctx) {
+      return blendCorner(sketchOf(draft, p.sketch), p.line1, p.line2, p.distance, ctx, "chamfer");
+    },
+  },
 ];
+
+type Vec = { x: number; y: number };
+
+/** Find the point id two lines share, with each line's far endpoint. */
+function sharedCorner(l1: SketchLine, l2: SketchLine): { c: string; a: string; b: string; l1End: "p1" | "p2"; l2End: "p1" | "p2" } | null {
+  const e1: ["p1" | "p2", string][] = [["p1", l1.p1], ["p2", l1.p2]];
+  const e2: ["p1" | "p2", string][] = [["p1", l2.p1], ["p2", l2.p2]];
+  for (const [k1, c1] of e1) for (const [k2, c2] of e2) {
+    if (c1 === c2) return { c: c1, a: k1 === "p1" ? l1.p2 : l1.p1, b: k2 === "p1" ? l2.p2 : l2.p1, l1End: k1, l2End: k2 };
+  }
+  return null;
+}
+
+/** Shared implementation of fillet (tangent arc) and chamfer (straight bevel). */
+function blendCorner(sk: Sketch, l1id: string, l2id: string, size: number, ctx: CommandContext, mode: "fillet" | "chamfer"): CommandApplyInfo {
+  const L1 = sk.entities[l1id];
+  const L2 = sk.entities[l2id];
+  if (!L1 || L1.kind !== "line" || !L2 || L2.kind !== "line") throw new Error("fillet/chamfer needs two lines");
+  const sc = sharedCorner(L1, L2);
+  if (!sc) throw new Error("the two lines must share a corner");
+  const P = (id: string) => sk.entities[id] as SketchPoint;
+  const C = P(sc.c), A = P(sc.a), B = P(sc.b);
+  const n = (v: Vec): Vec => { const m = Math.hypot(v.x, v.y) || 1; return { x: v.x / m, y: v.y / m }; };
+  const u1 = n({ x: A.x - C.x, y: A.y - C.y });
+  const u2 = n({ x: B.x - C.x, y: B.y - C.y });
+  const len1 = Math.hypot(A.x - C.x, A.y - C.y);
+  const len2 = Math.hypot(B.x - C.x, B.y - C.y);
+  const cosT = Math.max(-1, Math.min(1, u1.x * u2.x + u1.y * u2.y));
+  const theta = Math.acos(cosT);
+  if (theta < 1e-3 || Math.PI - theta < 1e-3) throw new Error("the lines are collinear — no corner to blend");
+
+  // Setback distance t along each edge from the corner.
+  const t = mode === "fillet" ? size / Math.tan(theta / 2) : size;
+  if (t > len1 - 1e-6 || t > len2 - 1e-6) throw new Error(`${mode} is too large for these edges`);
+
+  const T1 = { x: C.x + u1.x * t, y: C.y + u1.y * t };
+  const T2 = { x: C.x + u2.x * t, y: C.y + u2.y * t };
+  const t1id = ctx.alloc("pt"); sk.entities[t1id] = { id: t1id, kind: "point", x: T1.x, y: T1.y };
+  const t2id = ctx.alloc("pt"); sk.entities[t2id] = { id: t2id, kind: "point", x: T2.x, y: T2.y };
+
+  let created: string[];
+  let message: string;
+  if (mode === "fillet") {
+    const bis = n({ x: u1.x + u2.x, y: u1.y + u2.y });
+    const dCenter = size / Math.sin(theta / 2);
+    const center = { x: C.x + bis.x * dCenter, y: C.y + bis.y * dCenter };
+    const cid = ctx.alloc("pt"); sk.entities[cid] = { id: cid, kind: "point", x: center.x, y: center.y };
+    const arcId = ctx.alloc("ar");
+    const v1 = { x: T1.x - center.x, y: T1.y - center.y };
+    const v2 = { x: T2.x - center.x, y: T2.y - center.y };
+    const ccw = v1.x * v2.y - v1.y * v2.x > 0; // minor arc T1→T2
+    sk.entities[arcId] = { id: arcId, kind: "arc", center: cid, p1: t1id, p2: t2id, r: size, ccw };
+    created = [arcId, cid, t1id, t2id];
+    message = "Filleted corner";
+  } else {
+    const lnId = ctx.alloc("ln");
+    sk.entities[lnId] = { id: lnId, kind: "line", p1: t1id, p2: t2id };
+    created = [lnId, t1id, t2id];
+    message = "Chamfered corner";
+  }
+
+  // Trim both edges back to their tangent points.
+  (L1 as SketchLine)[sc.l1End] = t1id;
+  (L2 as SketchLine)[sc.l2End] = t2id;
+
+  // Rehome constraints that used the old corner onto the correct trimmed edge
+  // (so e.g. each edge keeps its horizontal/vertical); drop any that can't map.
+  for (const con of Object.values(sk.constraints) as Record<string, unknown>[]) {
+    const vals = Object.values(con);
+    if (!vals.includes(sc.c)) continue;
+    const to = vals.includes(sc.a) ? t1id : vals.includes(sc.b) ? t2id : null;
+    if (to) { for (const k of Object.keys(con)) if (con[k] === sc.c) con[k] = to; }
+    else delete sk.constraints[con.id as string];
+  }
+  delete sk.entities[sc.c];
+
+  return { createdIds: created, affectedSketchId: sk.id, message };
+}

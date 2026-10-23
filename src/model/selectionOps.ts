@@ -127,6 +127,32 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
   }
 
   // ---- modify ----
+  // Fillet / chamfer: exactly two lines that share a corner.
+  if (s.lines.length === 2 && s.points.length === 0 && s.radii.length === 0) {
+    const [l1, l2] = s.lines;
+    const corner = sharedCorner(l1, l2);
+    if (corner) {
+      const C = pt(corner.c), A = pt(corner.a), B = pt(corner.b);
+      const len1 = Math.hypot(A.x - C.x, A.y - C.y);
+      const len2 = Math.hypot(B.x - C.x, B.y - C.y);
+      const u1x = (A.x - C.x) / (len1 || 1), u1y = (A.y - C.y) / (len1 || 1);
+      const u2x = (B.x - C.x) / (len2 || 1), u2y = (B.y - C.y) / (len2 || 1);
+      const theta = Math.acos(Math.max(-1, Math.min(1, u1x * u2x + u1y * u2y)));
+      const setback = Math.max(1, Math.min(len1, len2) * 0.25);
+      if (theta > 1e-3 && Math.PI - theta > 1e-3) {
+        const radius = Math.round(Math.tan(theta / 2) * setback * 100) / 100;
+        modify.push({
+          id: "fillet", label: "Fillet", glyph: "◝", hint: "Round this corner (edit radius in the timeline)",
+          command: { type: "sketch.fillet", params: { sketch: sid, line1: l1.id, line2: l2.id, radius } },
+        });
+        modify.push({
+          id: "chamfer", label: "Chamfer", glyph: "◿", hint: "Bevel this corner (edit distance in the timeline)",
+          command: { type: "sketch.chamfer", params: { sketch: sid, line1: l1.id, line2: l2.id, distance: Math.round(setback * 100) / 100 } },
+        });
+      }
+    }
+  }
+
   const sel = selection.filter((id) => sk.entities[id] && id !== sk.originPointId);
   if (sel.length >= 1) {
     // Mirror: use the last selected line as the axis, mirror the rest.
@@ -158,6 +184,14 @@ export function availableOps(sk: Sketch, selection: string[]): { geometric: Op[]
   }
 
   return { geometric, dimensions, modify };
+}
+
+function sharedCorner(l1: SketchLine, l2: SketchLine): { c: string; a: string; b: string } | null {
+  const e1 = [l1.p1, l1.p2], e2 = [l2.p1, l2.p2];
+  for (const c1 of e1) for (const c2 of e2) {
+    if (c1 === c2) return { c: c1, a: c1 === l1.p1 ? l1.p2 : l1.p1, b: c1 === l2.p1 ? l2.p2 : l2.p1 };
+  }
+  return null;
 }
 
 function perpDistance(sk: Sketch, pointId: string, line: SketchLine): number {
