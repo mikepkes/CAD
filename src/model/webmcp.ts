@@ -28,7 +28,7 @@ export interface WebMcpHost {
   render: (opts: { view?: string; width?: number; height?: number }) => Promise<{ base64: string; width: number; height: number; view: string }>;
 }
 
-const INFO = {
+export const WEBMCP_INFO = {
   name: "ChiselCAD",
   version: 1,
   description:
@@ -38,7 +38,8 @@ const INFO = {
 let registered = false;
 const unregister: (() => void)[] = [];
 
-function buildTools(host: WebMcpHost): WebMcpTool[] {
+/** The tool surface shared by WebMCP and the desktop MCP server: every registry command + get_state / render_view / hotkeys. */
+export function buildTools(host: WebMcpHost): WebMcpTool[] {
   const ok = (v: unknown): WebMcpResult => ({ content: [{ type: "text", text: JSON.stringify(v) }] });
   const tools: WebMcpTool[] = host.registry.toMcpTools().map((t) => ({
     name: t.name,
@@ -121,7 +122,7 @@ export function enableWebMcp(host: WebMcpHost): void {
 
   // Stable, framework-agnostic surface for any external agent/extension.
   (window as unknown as Record<string, unknown>).chiselWebMCP = {
-    info: INFO,
+    info: WEBMCP_INFO,
     listTools: () => tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
     callTool: async (name: string, args: Record<string, unknown>): Promise<WebMcpResult> => {
       const t = tools.find((x) => x.name === name);

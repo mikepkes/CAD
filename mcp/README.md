@@ -4,6 +4,12 @@ An MCP server that exposes the Chisel CAD core to an LLM/agent. The core runs
 headless here (PlaneGCS via WebAssembly), so an agent can build and edit
 parametric, CNC/3D-print-ready models with no browser.
 
+> **Two ways to get MCP.** This directory is the **headless** server: its own
+> document, no UI, stdio transport — right for batch/agent-only use. The
+> optional **desktop app** (`npm run tauri:dev`, see the root README) instead
+> serves MCP over local HTTP *from the running app*, so a client edits the
+> document you are looking at, and can `render_view` it. Enable it in Settings.
+
 ## Run
 
 ```bash

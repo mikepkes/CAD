@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2230"/>
+      <stop offset="1" stop-color="#0d1017"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+  <!-- sketch plane grid -->
+  <g stroke="#2e3a4e" stroke-width="6">
+    <path d="M200 760 L824 760 M200 640 L824 640 M200 520 L824 520 M200 400 L824 400 M200 280 L824 280"/>
+    <path d="M280 220 L280 820 M400 220 L400 820 M520 220 L520 820 M640 220 L640 820 M760 220 L760 820"/>
+  </g>
+  <!-- constrained profile -->
+  <path d="M300 740 L300 420 L520 300 L740 420 L740 740 Z" fill="#3b82f6" fill-opacity="0.22" stroke="#60a5fa" stroke-width="28" stroke-linejoin="round"/>
+  <circle cx="520" cy="560" r="110" fill="none" stroke="#f59e0b" stroke-width="28"/>
+  <!-- dimension -->
+  <g stroke="#e5e7eb" stroke-width="12" stroke-linecap="round">
+    <path d="M300 820 L740 820"/>
+    <path d="M300 800 L300 840 M740 800 L740 840"/>
+  </g>
+  <!-- points -->
+  <g fill="#f8fafc">
+    <circle cx="300" cy="740" r="22"/><circle cx="300" cy="420" r="22"/><circle cx="520" cy="300" r="22"/>
+    <circle cx="740" cy="420" r="22"/><circle cx="740" cy="740" r="22"/>
+  </g>
+</svg>

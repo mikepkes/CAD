@@ -1,0 +1,6 @@
+# Tauri 2.x crates currently need rustc >= 1.90. Pinned here so `npm run tauri:*`
+# picks a compatible toolchain (rustup installs it on first use) without
+# touching your default toolchain. Bump as Tauri's MSRV moves.
+[toolchain]
+channel = "1.90"
+profile = "minimal"

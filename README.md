@@ -54,6 +54,10 @@ on.
   (stored only in your browser, sent only to Anthropic) and describe what to
   sketch — the agent drives the same commands through a tool-use loop and you
   watch the geometry build live.
+- **Desktop app (optional, Tauri)** with a built-in **MCP server**: Settings →
+  *Expose MCP server* serves the same tools to external MCP clients (Claude
+  Code, Claude Desktop) over local HTTP, driving the **live document** you’re
+  looking at. The website build is unaffected — see [Desktop app](#desktop-app-optional).
 - **WebMCP** (Settings → *Expose tools to browser agents*): registers the same
   commands as MCP tools for external in-browser agents (an AI browser, a Chrome
   extension, Claude-in-Chrome) via `navigator.modelContext`, and always
@@ -76,6 +80,40 @@ npm run build        # type-check (browser + mcp) + production build
 npm run typecheck
 npm run mcp          # build + run the MCP server over stdio
 ```
+
+### Desktop app (optional)
+
+The web app is the product and is what GitHub Pages serves; the desktop app is
+an **opt-in Tauri shell** around the same build (`src-tauri/`). Nothing in
+`npm run build`, CI or the Pages deploy touches Rust. It exists for one thing
+the static site can’t do: **serve MCP to external clients.**
+
+```bash
+# prerequisites: Rust via rustup (src-tauri/rust-toolchain.toml pins a
+# compatible version and rustup installs it on first use) + Xcode CLT on macOS
+npm run tauri:dev    # live-reload dev window (runs `vite` for you)
+npm run tauri:build  # .app / .dmg under src-tauri/target/release/bundle/
+```
+
+Then in the app: **Settings (⚙) → Expose MCP server (desktop app)**. The
+status bar shows `● MCP :4673` and Settings shows the URL. It speaks MCP’s
+Streamable HTTP transport, bound to 127.0.0.1 only, and the tools are exactly
+the WebMCP set (every command, `get_state`, `render_view`, hotkeys) applied to
+the open document:
+
+```bash
+claude mcp add --transport http chisel-cad http://127.0.0.1:4673/mcp
+```
+
+Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{ "mcpServers": { "chisel-cad": { "type": "http", "url": "http://127.0.0.1:4673/mcp" } } }
+```
+
+The toggle and port persist; the server starts with the app when enabled and
+stops when the window closes. This is distinct from `npm run mcp`, the
+**headless** stdio server that runs its own document with no UI.
 
 ### Controls
 
