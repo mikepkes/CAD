@@ -108,33 +108,50 @@ export function enableWebMcp(host: WebMcpHost): void {
     },
   };
 
-  // Native WebMCP API, when the browser/agent provides it.
-  const nav = navigator as unknown as {
-    modelContext?: {
-      registerTool?: (t: unknown) => (() => void) | void;
-      provideContext?: (c: { tools: unknown[] }) => void;
-    };
+  // Register with the native WebMCP API wherever the browser exposes it. The
+  // surface is still in flux: most builds put it on navigator.modelContext, some
+  // on document.modelContext; registerTool() is the consistent method (returns a
+  // registration with .unregister() or a bare unregister fn), with provideContext
+  // as an older fallback. We try both objects so discovery works either way.
+  type Ctx = {
+    registerTool?: (t: unknown) => (() => void) | { unregister?: () => void } | void;
+    provideContext?: (c: { tools: unknown[] }) => void;
   };
-  try {
-    if (nav.modelContext?.registerTool) {
-      for (const t of tools) {
-        const un = nav.modelContext.registerTool(t);
-        if (typeof un === "function") unregister.push(un);
+  const surfaces: Ctx[] = [];
+  const navCtx = (navigator as unknown as { modelContext?: Ctx }).modelContext;
+  const docCtx = (document as unknown as { modelContext?: Ctx }).modelContext;
+  if (navCtx) surfaces.push(navCtx);
+  if (docCtx && docCtx !== navCtx) surfaces.push(docCtx);
+
+  let registeredNatively = false;
+  for (const ctx of surfaces) {
+    try {
+      if (ctx.registerTool) {
+        for (const t of tools) {
+          const reg = ctx.registerTool(t);
+          if (typeof reg === "function") unregister.push(reg);
+          else if (reg && typeof reg.unregister === "function") unregister.push(reg.unregister.bind(reg));
+        }
+        registeredNatively = true;
+      } else if (ctx.provideContext) {
+        ctx.provideContext({ tools });
+        registeredNatively = true;
       }
-    } else if (nav.modelContext?.provideContext) {
-      nav.modelContext.provideContext({ tools });
-    } else {
-      // Minimal polyfill so an injected agent still finds the standard surface.
-      (nav as { modelContext?: unknown }).modelContext = {
-        registerTool: (t: WebMcpTool) => { tools.push(t); return () => {}; },
-        provideContext: () => {},
-        listTools: () => tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
-        callTool: (name: string, args: Record<string, unknown>) =>
-          (window as unknown as { chiselWebMCP: { callTool: (n: string, a: unknown) => unknown } }).chiselWebMCP.callTool(name, args),
-      };
+    } catch {
+      /* this surface rejected our tools — others / the window surface still work */
     }
-  } catch {
-    /* native API rejected our tools — the window surface still works */
+  }
+
+  // No native API at all → publish a minimal polyfill so an injected agent still
+  // finds the standard shape (the window surface already works regardless).
+  if (!registeredNatively) {
+    (navigator as unknown as { modelContext?: unknown }).modelContext = {
+      registerTool: (t: WebMcpTool) => { tools.push(t); return () => {}; },
+      provideContext: () => {},
+      listTools: () => tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+      callTool: (name: string, args: Record<string, unknown>) =>
+        (window as unknown as { chiselWebMCP: { callTool: (n: string, a: unknown) => unknown } }).chiselWebMCP.callTool(name, args),
+    };
   }
   registered = true;
 }
