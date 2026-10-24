@@ -25,7 +25,12 @@ export interface WebMcpHost {
   registry: CommandRegistry;
   runCommand: (type: string, params: Record<string, unknown>) => Promise<{ ok: boolean; createdIds?: string[]; message?: string; error?: string }>;
   describe: () => unknown;
-  render: (opts: { view?: string; width?: number; height?: number }) => Promise<{ base64: string; width: number; height: number; view: string }>;
+  render: (opts: { view?: string; width?: number; height?: number; hideSketches?: boolean }) => Promise<{ base64: string; width: number; height: number; view: string }>;
+  /** Document-level actions (optional; the desktop/in-page hosts provide them). */
+  newDocument?: () => Promise<void>;
+  undo?: () => void;
+  redo?: () => void;
+  deleteOperation?: (opId: string) => Promise<void>;
 }
 
 export const WEBMCP_INFO = {
@@ -62,25 +67,59 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
   });
   tools.push({
     name: "render_view",
-    description: "Render the current model and return a PNG image. `view` is one of iso (default), front, back, top, bottom, left, right. Optional `width`/`height` in pixels (max 1920). Use it to see what you've built.",
+    description: "Render the current model and return a PNG image. `view` is one of iso (default), front, back, top, bottom, left, right. Optional `width`/`height` in pixels (max 1920). `hideSketches` hides sketch curves/points/constraint glyphs for a clean solids-only capture. Use it to see what you've built.",
     inputSchema: {
       type: "object",
       properties: {
         view: { type: "string", enum: ["iso", "front", "back", "top", "bottom", "left", "right"] },
         width: { type: "number" },
         height: { type: "number" },
+        hideSketches: { type: "boolean" },
       },
     },
     execute: async (args) => {
       try {
-        const a = args as { view?: string; width?: number; height?: number };
-        const r = await host.render({ view: a.view, width: a.width, height: a.height });
+        const a = args as { view?: string; width?: number; height?: number; hideSketches?: boolean };
+        const r = await host.render({ view: a.view, width: a.width, height: a.height, hideSketches: a.hideSketches });
         return { content: [{ type: "image", data: r.base64, mimeType: "image/png" }] };
       } catch (e) {
         return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
       }
     },
   });
+  if (host.newDocument) {
+    tools.push({
+      name: "new_document",
+      description: "Start a fresh, empty document (discards the current one; the browser autosave is cleared). Use before building something unrelated.",
+      inputSchema: { type: "object", properties: {} },
+      execute: async () => { await host.newDocument!(); return ok({ ok: true }); },
+    });
+  }
+  if (host.undo && host.redo) {
+    tools.push({
+      name: "undo",
+      description: "Undo the last edit transaction.",
+      inputSchema: { type: "object", properties: {} },
+      execute: async () => { host.undo!(); return ok({ ok: true, state: host.describe() }); },
+    });
+    tools.push({
+      name: "redo",
+      description: "Redo the last undone edit transaction.",
+      inputSchema: { type: "object", properties: {} },
+      execute: async () => { host.redo!(); return ok({ ok: true, state: host.describe() }); },
+    });
+  }
+  if (host.deleteOperation) {
+    tools.push({
+      name: "delete_operation",
+      description: "Delete a timeline operation by its opId (e.g. an extrude feature id). Downstream operations that referenced it will error. Undoable.",
+      inputSchema: { type: "object", required: ["opId"], properties: { opId: { type: "string" } } },
+      execute: async (args) => {
+        try { await host.deleteOperation!(String((args as { opId?: string }).opId)); return ok({ ok: true, state: host.describe() }); }
+        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+      },
+    });
+  }
   tools.push({
     name: "get_hotkeys",
     description: "List keyboard shortcuts: contexts (in stack order, active flagged), each action's id/label/primary/secondary binding, and any within-context conflicts.",
