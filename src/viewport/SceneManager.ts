@@ -69,8 +69,19 @@ const COLORS = {
 export class SceneManager {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
-  readonly camera: THREE.PerspectiveCamera;
+  /** Active camera: perspective in model mode, orthographic in a sketch. */
+  camera: THREE.Camera;
+  private perspCam: THREE.PerspectiveCamera;
+  private orthoCam: THREE.OrthographicCamera;
   readonly controls: OrbitControls;
+  private clock = new THREE.Clock();
+  /** Active camera animation (reorient / dolly between two framings). */
+  private tween: {
+    t: number; dur: number;
+    from: { off: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; zoom: number };
+    to: { off: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; zoom: number };
+    onDone?: () => void;
+  } | null = null;
 
   private planeMeshes = new Map<string, THREE.Mesh>();
   private planeGroup = new THREE.Group();
@@ -94,14 +105,14 @@ export class SceneManager {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(COLORS.bg);
 
-    this.camera = new THREE.PerspectiveCamera(
-      45,
-      container.clientWidth / container.clientHeight,
-      0.1,
-      100000
-    );
-    this.camera.up.set(0, 0, 1); // Z up
-    this.camera.position.set(140, -180, 140);
+    const aspect = container.clientWidth / container.clientHeight;
+    this.perspCam = new THREE.PerspectiveCamera(45, aspect, 0.1, 100000);
+    this.perspCam.up.set(0, 0, 1); // Z up
+    this.perspCam.position.set(140, -180, 140);
+    this.orthoCam = new THREE.OrthographicCamera(-100 * aspect, 100 * aspect, 100, -100, -100000, 100000);
+    this.orthoCam.up.set(0, 0, 1);
+    this.orthoCam.position.set(140, -180, 140);
+    this.camera = this.perspCam;
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -191,17 +202,53 @@ export class SceneManager {
   private onResize = () => {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    const aspect = w / h;
+    this.perspCam.aspect = aspect;
+    this.perspCam.updateProjectionMatrix();
+    const halfH = (this.orthoCam.top - this.orthoCam.bottom) / 2;
+    this.orthoCam.left = -halfH * aspect;
+    this.orthoCam.right = halfH * aspect;
+    this.orthoCam.updateProjectionMatrix();
     this.renderer.setSize(w, h);
   };
 
   private animate = () => {
     if (this.disposed) return;
     requestAnimationFrame(this.animate);
-    this.controls.update();
+    const dt = this.clock.getDelta();
+    if (this.tween) this.stepTween(dt);
+    else this.controls.update();
     this.renderer.render(this.scene, this.camera);
   };
+
+  /** Advance the active-camera animation one frame (slerp orientation, lerp dolly). */
+  private stepTween(dt: number) {
+    const tw = this.tween!;
+    tw.t = Math.min(1, tw.t + dt / tw.dur);
+    const e = tw.t * tw.t * (3 - 2 * tw.t); // smoothstep
+    const target = tw.from.target.clone().lerp(tw.to.target, e);
+    // Slerp the camera offset direction, lerp its length, so it arcs around the target.
+    const fromDir = tw.from.off.clone().normalize();
+    const toDir = tw.to.off.clone().normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(fromDir, toDir);
+    const dir = fromDir.clone().applyQuaternion(new THREE.Quaternion().slerpQuaternions(new THREE.Quaternion(), q, e));
+    const len = THREE.MathUtils.lerp(tw.from.off.length(), tw.to.off.length(), e);
+    const up = tw.from.up.clone().lerp(tw.to.up, e).normalize();
+    this.camera.position.copy(target).addScaledVector(dir, len);
+    this.camera.up.copy(up);
+    this.controls.target.copy(target);
+    this.camera.lookAt(target);
+    const oc = this.camera as THREE.OrthographicCamera;
+    if (oc.isOrthographicCamera) {
+      oc.zoom = THREE.MathUtils.lerp(tw.from.zoom, tw.to.zoom, e);
+      oc.updateProjectionMatrix();
+    }
+    if (tw.t >= 1) {
+      this.tween = null;
+      this.controls.enabled = true;
+      tw.onDone?.();
+    }
+  }
 
   dispose() {
     this.disposed = true;
@@ -288,23 +335,93 @@ export class SceneManager {
 
   /** Approximate world-space size of `px` screen pixels at the target depth. */
   private worldThreshold(px: number): number {
-    const dist = this.camera.position.distanceTo(this.controls.target);
-    const vFov = (this.camera.fov * Math.PI) / 180;
-    const worldPerPixel = (2 * Math.tan(vFov / 2) * dist) / this.container.clientHeight;
-    return px * worldPerPixel;
+    const oc = this.camera as THREE.OrthographicCamera;
+    if (oc.isOrthographicCamera) {
+      return (px * (oc.top - oc.bottom)) / oc.zoom / this.container.clientHeight;
+    }
+    const pc = this.camera as THREE.PerspectiveCamera;
+    const dist = pc.position.distanceTo(this.controls.target);
+    const vFov = (pc.fov * Math.PI) / 180;
+    return (px * (2 * Math.tan(vFov / 2) * dist)) / this.container.clientHeight;
   }
 
-  /** Smoothly orient the camera to look straight at a plane. */
-  focusPlane(p: WorkPlane) {
+  // ---- camera transitions (Fusion-style) ----
+
+  private camOff(): THREE.Vector3 {
+    return this.camera.position.clone().sub(this.controls.target);
+  }
+
+  /** Copy the perspective framing onto the ortho camera (so a swap is seamless). */
+  private matchOrthoToPerspective() {
+    const t = this.controls.target;
+    const dist = this.perspCam.position.distanceTo(t);
+    const h = 2 * dist * Math.tan(((this.perspCam.fov * Math.PI) / 180) / 2);
+    const aspect = this.container.clientWidth / this.container.clientHeight;
+    this.orthoCam.top = h / 2; this.orthoCam.bottom = -h / 2;
+    this.orthoCam.left = (-h / 2) * aspect; this.orthoCam.right = (h / 2) * aspect;
+    this.orthoCam.zoom = 1;
+    this.orthoCam.position.copy(this.perspCam.position);
+    this.orthoCam.up.copy(this.perspCam.up);
+    this.orthoCam.lookAt(t);
+    this.orthoCam.updateProjectionMatrix();
+  }
+
+  /** Copy the ortho framing onto the perspective camera (reverse of the above). */
+  private matchPerspectiveToOrtho() {
+    const t = this.controls.target;
+    const h = (this.orthoCam.top - this.orthoCam.bottom) / this.orthoCam.zoom;
+    const dist = (h / 2) / Math.tan(((this.perspCam.fov * Math.PI) / 180) / 2);
+    const dir = this.orthoCam.position.clone().sub(t).normalize();
+    this.perspCam.position.copy(t).addScaledVector(dir, dist);
+    this.perspCam.up.copy(this.orthoCam.up);
+    this.perspCam.lookAt(t);
+    this.perspCam.updateProjectionMatrix();
+  }
+
+  private setActiveCamera(cam: THREE.Camera) {
+    this.camera = cam;
+    (this.controls as unknown as { object: THREE.Camera }).object = cam;
+  }
+
+  /**
+   * Animate from the current view (perspective or ortho) into the orthographic,
+   * plane-aligned sketch view. Used on sketch entry and by "Look At".
+   */
+  transitionToSketchView(p: WorkPlane) {
+    // Ensure the ortho camera is active, matched to the current framing.
+    if (!(this.camera as THREE.OrthographicCamera).isOrthographicCamera) {
+      this.matchOrthoToPerspective();
+      this.setActiveCamera(this.orthoCam);
+    }
     const target = new THREE.Vector3(p.origin.x, p.origin.y, p.origin.z);
-    const normal = new THREE.Vector3(p.normal.x, p.normal.y, p.normal.z);
-    const dist = 180;
-    const eye = target.clone().add(normal.multiplyScalar(dist));
-    this.controls.target.copy(target);
-    this.camera.position.copy(eye);
-    this.camera.up.set(p.v.x, p.v.y, p.v.z);
-    this.camera.lookAt(target);
+    const normal = new THREE.Vector3(p.normal.x, p.normal.y, p.normal.z).normalize();
+    const curOff = this.camOff();
+    const len = Math.max(50, curOff.length());
+    this.beginTween({
+      from: { off: curOff, target: this.controls.target.clone(), up: this.camera.up.clone(), zoom: this.orthoCam.zoom },
+      to: { off: normal.multiplyScalar(len), target, up: new THREE.Vector3(p.v.x, p.v.y, p.v.z), zoom: this.orthoCam.zoom },
+    });
+  }
+
+  /** Animate back to a perspective 3D view (on finishing a sketch). */
+  exitSketchView() {
+    if ((this.camera as THREE.OrthographicCamera).isOrthographicCamera) {
+      this.matchPerspectiveToOrtho();
+      this.setActiveCamera(this.perspCam);
+    }
+    // keep the current orientation; just a gentle settle (no reframe)
+    this.tween = null;
+    this.controls.enabled = true;
     this.controls.update();
+  }
+
+  private beginTween(spec: {
+    from: { off: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; zoom: number };
+    to: { off: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; zoom: number };
+    onDone?: () => void;
+  }) {
+    this.controls.enabled = false;
+    this.tween = { t: 0, dur: 0.5, from: spec.from, to: spec.to, onDone: spec.onDone };
   }
 
   // ---- rendering the sketch ----

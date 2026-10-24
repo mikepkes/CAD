@@ -63,7 +63,7 @@ export class Interactions {
     const st = this.st();
     if (st.mode === "sketch" && st.activeSketchId) {
       const sk = st.session.doc.sketches[st.activeSketchId];
-      if (sk) this.scene.focusPlane(resolveSketchPlane(sk));
+      if (sk) this.scene.transitionToSketchView(resolveSketchPlane(sk));
     }
   };
 

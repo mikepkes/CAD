@@ -55,11 +55,12 @@ export function Viewport() {
       controller.setBase(buildView(s));
       if (s.mode !== prevMode) {
         controller.configureControls(scene.controls, s.mode);
+        if (s.mode === "model") scene.exitSketchView();
         prevMode = s.mode;
       }
       if (s.mode === "sketch" && s.activeSketchId && s.activeSketchId !== prevSketch) {
         const sk = s.session.doc.sketches[s.activeSketchId];
-        if (sk) scene.focusPlane(resolveSketchPlane(sk));
+        if (sk) scene.transitionToSketchView(resolveSketchPlane(sk));
       }
       prevSketch = s.activeSketchId;
     });
