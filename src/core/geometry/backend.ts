@@ -7,18 +7,35 @@
 
 import { CadDocument } from "../document";
 import { resolveParameters } from "../../model/parameters";
+import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
 import { evaluateFeatures, featureEdges, exportFeatureBytes, SolidEval } from "../features";
 
 export type ExportFormat = "stl" | "step";
+
+/** Evaluated geometry plus the re-resolved planes of any face-referenced sketches
+ *  (so the caller can fold them back onto a doc the worker only saw a copy of). */
+export interface EvaluateResult {
+  solids: Record<string, SolidEval>;
+  facePlanes: Record<string, WorkPlane>;
+}
+
+/** The current planes of sketches that re-resolve to a body face (set by evaluate). */
+function collectFacePlanes(doc: CadDocument): Record<string, WorkPlane> {
+  const out: Record<string, WorkPlane> = {};
+  for (const sk of Object.values(doc.sketches)) {
+    if (sk.faceRef && sk.plane) out[sk.id] = sk.plane;
+  }
+  return out;
+}
 
 export interface GeometryBackend {
   /** Load the kernel (wherever this backend runs it). Idempotent. */
   init(opts: KernelInitOptions): Promise<void>;
   /** True once the kernel is loaded and jobs will produce geometry. */
   ready(): boolean;
-  /** Evaluate every feature into display meshes (keyed by feature/body id). */
-  evaluate(doc: CadDocument): Promise<Record<string, SolidEval>>;
+  /** Evaluate every feature into display meshes, plus re-resolved face-sketch planes. */
+  evaluate(doc: CadDocument): Promise<EvaluateResult>;
   /** World-space B-rep edges of one feature's solid (for projection into a sketch). */
   edges(doc: CadDocument, featureId: string): Promise<Edge3D[]>;
   /** STL/STEP bytes for one feature's solid. */
@@ -37,7 +54,7 @@ export type GeometryRequest =
   | { id: number; kind: "export"; doc: CadDocument; featureId: string; format: ExportFormat };
 
 export type GeometryResponse =
-  | { id: number; kind: "evaluate"; solids: Record<string, SolidEval> }
+  | { id: number; kind: "evaluate"; solids: Record<string, SolidEval>; facePlanes: Record<string, WorkPlane> }
   | { id: number; kind: "edges"; edges: Edge3D[] }
   | { id: number; kind: "export"; bytes: Uint8Array | null }
   | { id: number; kind: "error"; message: string };
@@ -70,7 +87,7 @@ export async function runGeometryJob(req: GeometryRequest): Promise<{ res: Geome
     const scope = scopeOf(req.doc);
     if (req.kind === "evaluate") {
       const solids = evaluateFeatures(req.doc, scope);
-      return { res: { id: req.id, kind: "evaluate", solids }, transfer: meshTransferables(solids) };
+      return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(req.doc) }, transfer: meshTransferables(solids) };
     }
     if (req.kind === "edges") {
       const edges = featureEdges(req.doc, scope, req.featureId);
@@ -94,8 +111,9 @@ export class InlineGeometryBackend implements GeometryBackend {
     this.isReady = isKernelReady();
   }
   ready(): boolean { return this.isReady; }
-  async evaluate(doc: CadDocument): Promise<Record<string, SolidEval>> {
-    return evaluateFeatures(doc, scopeOf(doc));
+  async evaluate(doc: CadDocument): Promise<EvaluateResult> {
+    const solids = evaluateFeatures(doc, scopeOf(doc));
+    return { solids, facePlanes: collectFacePlanes(doc) };
   }
   async edges(doc: CadDocument, featureId: string): Promise<Edge3D[]> {
     return featureEdges(doc, scopeOf(doc), featureId);

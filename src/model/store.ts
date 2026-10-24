@@ -450,7 +450,7 @@ export const useStore = create<AppState>((set, get) => {
       // Stable sketch origin: foot of the perpendicular from world (0,0,0) to the face plane.
       const d = hit.x * normal.x + hit.y * normal.y + hit.z * normal.z;
       const origin = { x: normal.x * d, y: normal.y * d, z: normal.z * d };
-      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, ...scopeComponent() });
+      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, faceRef: { normal, point: hit }, ...scopeComponent() });
       if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: "Sketching on face." });
     },
     finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null }),
@@ -738,12 +738,17 @@ export const useStore = create<AppState>((set, get) => {
       await get().ensureKernel();
       if (!get().kernelReady) return;
       const doc = get().session.doc;
-      const solids = await geometry.evaluate(doc);
-      // The backend may run on a worker (a doc copy), so fold the resolved
-      // feature distances back onto the live doc for the inspector.
+      const { solids, facePlanes } = await geometry.evaluate(doc);
+      // The backend may run on a worker (a doc copy), so fold the derived state
+      // back onto the live doc: feature distances (inspector) and re-resolved
+      // face-sketch planes (so the ghost sketch tracks its face).
       for (const [fid, s] of Object.entries(solids)) {
         const f = doc.features[fid];
         if (f && f.kind === "extrude" && Number.isFinite(s.distance)) f.distanceValue = s.distance;
+      }
+      for (const [sid, plane] of Object.entries(facePlanes)) {
+        const sk = doc.sketches[sid];
+        if (sk) sk.plane = plane;
       }
       bump({ solids });
     },
@@ -807,7 +812,7 @@ export const useStore = create<AppState>((set, get) => {
       const onPlane = all.filter((e) => e.pts.every((p) => Math.abs((p.x - origin.x) * normal.x + (p.y - origin.y) * normal.y + (p.z - origin.z) * normal.z) < tol));
       const curves = projectEdges(onPlane, plane);
       if (!curves.length) { bump({ toast: { kind: "info", text: "Couldn't read that face's boundary." } }); return; }
-      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, name: "Face" });
+      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, faceRef: { normal, point: hit }, name: "Face" });
       if (!r.ok) return;
       const sid = r.createdIds[0];
       await runDispatch("sketch.projectCurves", { sketch: sid, curves });

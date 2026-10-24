@@ -185,6 +185,14 @@ export const BUILTINS: CommandDef<any>[] = [
           },
         },
         component: { type: "string", description: "Owning component id (from component.create). Defaults to the root component." },
+        faceRef: {
+          type: "object",
+          description: "Parametric body-face reference (with planeDef): the sketch re-resolves to this face each rebuild.",
+          properties: {
+            normal: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+            point: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+          },
+        },
         name: { type: "string", description: "Optional sketch name." },
       },
     },
@@ -193,7 +201,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Sketch 20mm above XY", params: { plane: "XY", offset: 20 } },
       { note: "Sketch on a datum plane", params: { datum: "pl5" } },
     ],
-    apply(draft, p: { plane?: string; offset?: number; datum?: string; planeDef?: { origin: Vec3; normal: Vec3 }; component?: string; name?: string }, ctx) {
+    apply(draft, p: { plane?: string; offset?: number; datum?: string; planeDef?: { origin: Vec3; normal: Vec3 }; faceRef?: { normal: Vec3; point: Vec3 }; component?: string; name?: string }, ctx) {
       const sid = ctx.alloc("sketch");
       const originId = ctx.alloc("pt");
       const count = Object.keys(draft.sketches).length + 1;
@@ -221,6 +229,7 @@ export const BUILTINS: CommandDef<any>[] = [
         plane,
         datumId,
         componentId: comp,
+        faceRef: p.faceRef,
         originPointId: originId,
         entities: { [originId]: origin },
         constraints: {},

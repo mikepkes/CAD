@@ -33,7 +33,7 @@ describe("geometry backend", () => {
     await backend.init({ wasmBinary: wasm });
     expect(backend.ready()).toBe(true);
 
-    const viaBackend = await backend.evaluate(s.doc);
+    const { solids: viaBackend } = await backend.evaluate(s.doc);
     const direct = evaluateFeatures(s.doc, resolveParameters(s.doc.parameters).scope);
     expect(Object.keys(viaBackend).sort()).toEqual(Object.keys(direct).sort());
     const fid = Object.keys(viaBackend)[0];

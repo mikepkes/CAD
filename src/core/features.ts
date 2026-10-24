@@ -7,11 +7,12 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import { CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature } from "./document";
-import { offsetPlane, resolveSketchPlane, planeById, WorkPlane } from "../geometry/plane";
+import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, WorkPlane } from "../geometry/plane";
 import { extractRegions, regionAt, Region } from "./geometry/profile";
+import { FaceRef } from "../sketch/types";
 import {
   Edge3D, buildRegionsSolid, fuseShapes, cutShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
-  isKernelReady, SolidMesh,
+  planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh,
 } from "./occ/kernel";
 import type { Shape3D } from "replicad";
 
@@ -59,6 +60,36 @@ function buildFeatureSolid(doc: CadDocument, scope: Scope, f: ExtrudeFeature): S
 
 interface Body { id: string; name: string; sketchId: string; distance: number; shape: Shape3D }
 
+const dot = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => a.x * b.x + a.y * b.y + a.z * b.z;
+
+/**
+ * Re-resolve the current plane of the face a sketch references, by matching the
+ * stored normal against the live bodies' planar faces (tie-broken by nearness to
+ * the original pick point). Returns the face's frame, built with the same origin
+ * convention as creation (foot of the perpendicular from the world origin), so
+ * the sketch's (u,v) geometry maps consistently as the face moves.
+ */
+function resolveFacePlane(bodies: Body[], ref: FaceRef): WorkPlane | undefined {
+  const faces: PlanarFace[] = [];
+  for (const b of bodies) {
+    try { faces.push(...planarFacesOfShape(b.shape)); } catch { /* skip a bad body */ }
+  }
+  let best: PlanarFace | undefined;
+  let bestScore = Infinity;
+  for (const f of faces) {
+    const align = dot(f.normal, ref.normal); // both ~unit; ~1 when same direction
+    if (align < 0.99) continue; // only faces pointing the same way as the pick
+    const dx = f.origin.x - ref.point.x, dy = f.origin.y - ref.point.y, dz = f.origin.z - ref.point.z;
+    const score = dx * dx + dy * dy + dz * dz; // nearest centroid to the pick
+    if (score < bestScore) { bestScore = score; best = f; }
+  }
+  if (!best) return undefined;
+  const n = best.normal;
+  const off = dot(best.origin, n); // signed plane offset along the normal
+  const origin = { x: n.x * off, y: n.y * off, z: n.z * off };
+  return makePlaneFromNormal(origin, n);
+}
+
 /** Resolve the plane a mirror reflects across (origin plane or a datum frame). */
 function mirrorPlane(doc: CadDocument, f: MirrorFeature): WorkPlane {
   if (["XY", "XZ", "YZ"].includes(f.plane)) return planeById(f.plane);
@@ -70,6 +101,13 @@ function mirrorPlane(doc: CadDocument, f: MirrorFeature): WorkPlane {
 /** Fold an extrude into the running body list via its boolean op. */
 function applyExtrude(doc: CadDocument, scope: Scope, f: ExtrudeFeature, bodies: Body[], out: Record<string, SolidEval>) {
   const distance = resolveDistance(f, scope);
+  // A sketch on a body face re-resolves to the face's CURRENT plane against the
+  // bodies built so far, so it tracks the face when upstream geometry changes.
+  const sketch = doc.sketches[f.sketchId];
+  if (sketch?.faceRef && bodies.length) {
+    const wp = resolveFacePlane(bodies, sketch.faceRef);
+    if (wp) sketch.plane = wp; // also the frame the ghost render / next pass uses
+  }
   let shape: Shape3D;
   try {
     shape = buildFeatureSolid(doc, scope, f);

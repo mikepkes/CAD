@@ -7,10 +7,9 @@
 // bundler/browser realm — it is imported solely from the browser store, never
 // from Node tests (those use InlineGeometryBackend).
 
-import { GeometryBackend, GeometryRequest, GeometryRequestInit, GeometryResponse, ExportFormat } from "./backend";
+import { GeometryBackend, GeometryRequest, GeometryRequestInit, GeometryResponse, ExportFormat, EvaluateResult } from "./backend";
 import { CadDocument } from "../document";
 import { KernelInitOptions, Edge3D } from "../occ/kernel";
-import { SolidEval } from "../features";
 
 export class WorkerGeometryBackend implements GeometryBackend {
   private worker: Worker;
@@ -47,9 +46,9 @@ export class WorkerGeometryBackend implements GeometryBackend {
     });
   }
 
-  async evaluate(doc: CadDocument): Promise<Record<string, SolidEval>> {
+  async evaluate(doc: CadDocument): Promise<EvaluateResult> {
     const r = await this.send({ kind: "evaluate", doc });
-    if (r.kind === "evaluate") return r.solids;
+    if (r.kind === "evaluate") return { solids: r.solids, facePlanes: r.facePlanes };
     throw new Error(r.kind === "error" ? r.message : "evaluate failed");
   }
   async edges(doc: CadDocument, featureId: string): Promise<Edge3D[]> {

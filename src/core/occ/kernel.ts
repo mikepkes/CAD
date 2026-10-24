@@ -182,6 +182,35 @@ export function edgesOfShape(solid: Shape3D): Edge3D[] {
   }
 }
 
+/** A planar B-rep face: its centroid and outward normal (for face references). */
+export interface PlanarFace {
+  origin: { x: number; y: number; z: number };
+  normal: { x: number; y: number; z: number };
+}
+
+/** The planar faces of a solid. Does NOT free the shape (frees the Face handles). */
+export function planarFacesOfShape(solid: Shape3D): PlanarFace[] {
+  const out: PlanarFace[] = [];
+  const faces = (solid as unknown as { faces: unknown[] }).faces;
+  for (const f of faces as {
+    geomType: string;
+    center: { x: number; y: number; z: number };
+    normalAt: (p?: unknown) => { x: number; y: number; z: number };
+    delete?: () => void;
+  }[]) {
+    try {
+      if (String(f.geomType).toUpperCase() === "PLANE") {
+        const c = f.center;
+        const n = f.normalAt(c);
+        out.push({ origin: { x: c.x, y: c.y, z: c.z }, normal: { x: n.x, y: n.y, z: n.z } });
+      }
+    } finally {
+      f.delete?.();
+    }
+  }
+  return out;
+}
+
 /** Extrude a profile and return its B-rep edges. Frees the shape. */
 export function extrudeToEdges(wp: WorkPlane, profile: Profile, distance: number): Edge3D[] {
   const solid = buildSolid(wp, profile, distance);

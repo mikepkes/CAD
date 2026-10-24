@@ -2,6 +2,14 @@
 // coordinates and circle/arc radii become solver variables.
 
 import type { WorkPlane } from "../geometry/plane";
+import type { Vec3 } from "../math/vec";
+
+/** A parametric handle to a planar body face: matched by normal, tie-broken by
+ *  the original pick point. Re-resolved against the live geometry each rebuild. */
+export interface FaceRef {
+  normal: Vec3;
+  point: Vec3;
+}
 
 export type EntityId = string;
 export type ConstraintId = string;
@@ -125,6 +133,13 @@ export interface Sketch {
   datumId?: string;
   /** Owning component; recompute composes its world frame into `plane`. Defaults to root. */
   componentId?: string;
+  /**
+   * Parametric reference to the body face this sketch lives on. When set, the
+   * geometry pass re-resolves the face's current plane each rebuild (so the
+   * sketch tracks the face when upstream geometry changes) and writes it into
+   * `plane`. `plane` (the baked frame from creation) is the fallback.
+   */
+  faceRef?: FaceRef;
   originPointId: EntityId;
   entities: Record<EntityId, SketchEntity>;
   constraints: Record<ConstraintId, Constraint>;
