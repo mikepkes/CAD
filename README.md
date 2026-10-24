@@ -16,18 +16,36 @@ on.
   orbit/pan/zoom (mouse + touch). The renderer is an *adapter* — the core is
   renderer-agnostic.
 - **Sketch on any origin plane**; draw with line / rectangle / circle / arc /
-  point, with snapping, rubber-band preview, and automatic horizontal/vertical.
+  **polygon** / point. **Constraint inference while drawing** (coincident,
+  horizontal/vertical, parallel, perpendicular, on-curve, midpoint) with
+  on-screen glyphs and rich snapping (endpoint, center, midpoint, on-curve).
 - **Geometric + dimensional constraints**, every dimension a **parametric
-  expression** over named parameters (`width`, `width/2`, `rad(30)`).
+  expression** over named parameters (`width`, `width/2`, `rad(30)`). Modal
+  **Dimension tool** with in-canvas value entry and double-click-to-edit;
+  **driven (reference)** dimensions that measure without constraining.
+  Constraints include collinear, equal, concentric, symmetric, point-on-line /
+  -circle, midpoint, fix.
+- **Editing tools:** Trim, Extend, Offset, corner **Fillet / Chamfer**, Mirror,
+  Linear / Grid / Circular patterns — backed by a curve–curve intersection
+  module.
+- **Selection & UX:** window/crossing box-select, right-click context menu,
+  `X` → construction, Look At (normal-to-plane), a selection-aware
+  constraint/dimension/modify bar.
 - **PlaneGCS** (FreeCAD's constraint solver, via WebAssembly) solves the sketch
   and reports **degrees of freedom**, a **fully-constrained** state, and on
   over-constraint **which constraints conflict** — surfaced as a toast and
-  inline highlight.
+  inline highlight. Closed profiles are shaded (what's extrudable).
+- **3D:** extrude a sketch profile into a solid on the **OpenCASCADE** kernel
+  (replicad/OCCT WASM); export **STEP** (CAD/CNC) and **STL** (3D print).
 - **Command-driven, with a parametric timeline separate from undo/redo.** Edit
   an earlier operation and it propagates downstream (Fusion-style), and that
   edit is undoable. Drag a point for live preview; release commits one step.
+- **Persistence:** autosave to the browser, plus save/open `.chisel.json`.
 - **MCP server** (`npm run mcp`) exposes every command to an LLM/agent — see
   [`mcp/README.md`](mcp/README.md).
+
+See [`docs/SKETCHING.md`](docs/SKETCHING.md) for the Fusion-parity sketching
+roadmap and what's done vs. planned.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the design, the timeline-vs-undo
 distinction, and the precision stance (float64 + relative tolerances + robust
