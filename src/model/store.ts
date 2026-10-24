@@ -72,6 +72,8 @@ export interface AppState {
   toolVariant: string;
   /** Active explicit constraint tool (e.g. "coincident"); clicks pick its entities. */
   constraintTool: string | null;
+  /** When on, newly drawn geometry is construction (reference) — excluded from fills. */
+  constructionMode: boolean;
   selection: string[];
   hover: string | null;
   showPlanes: boolean;
@@ -110,6 +112,8 @@ export interface AppState {
   setTool: (t: Tool) => void;
   setToolVariant: (v: string) => void;
   setConstraintTool: (type: string | null) => void;
+  setConstructionMode: (on: boolean) => void;
+  toggleConstruction: () => void;
   pickForConstraint: (id: string) => Promise<void>;
   select: (ids: string[], additive?: boolean) => void;
   toggleSelect: (id: string) => void;
@@ -265,6 +269,7 @@ export const useStore = create<AppState>((set, get) => {
     tool: "select",
     toolVariant: "",
     constraintTool: null,
+    constructionMode: false,
     selection: [],
     hover: null,
     showPlanes: true,
@@ -294,6 +299,19 @@ export const useStore = create<AppState>((set, get) => {
     setTool: (t) => set({ tool: t, toolVariant: DEFAULT_VARIANT[t] ?? "", constraintTool: null }),
     setToolVariant: (v) => set({ toolVariant: v }),
     setConstraintTool: (type) => set({ constraintTool: type, tool: "select", selection: [] }),
+    setConstructionMode: (on) => set({ constructionMode: on }),
+    toggleConstruction: () => {
+      // With geometry selected, convert it (toggle construction) like the X key
+      // or the context menu. With nothing selected, arm/disarm construction
+      // draw mode so subsequent geometry comes in as reference, Fusion-style.
+      const s = get();
+      const sk = activeSketch(s);
+      if (sk && s.selection.length) {
+        const op = availableOps(sk, s.selection).modify.find((o) => o.id === "construction");
+        if (op) { void runDispatch(op.command.type, op.command.params); return; }
+      }
+      set({ constructionMode: !s.constructionMode });
+    },
     pickForConstraint: async (id) => {
       const type = get().constraintTool;
       const sk = activeSketch(get());
@@ -334,14 +352,14 @@ export const useStore = create<AppState>((set, get) => {
     editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [] }),
 
     placePoint: (x, y) => runDispatch("sketch.addPoint", { sketch: activeId(), x, y }),
-    placeLine: (start, end) => runDispatch("sketch.addLine", { sketch: activeId(), start, end }),
-    placeRectangle: (corner, opposite) => runDispatch("sketch.addRectangle", { sketch: activeId(), corner, opposite }),
-    placeCircle: (center, radius) => runDispatch("sketch.addCircle", { sketch: activeId(), center, radius }),
-    placeArc: (center, start, end, ccw) => runDispatch("sketch.addArc", { sketch: activeId(), center, start, end, ccw }),
-    placePolygon: (center, vertex, sides = 6) => runDispatch("sketch.addPolygon", { sketch: activeId(), center, vertex, sides }),
-    placeRectangle3: (p1, p2, p3) => runDispatch("sketch.addRectangle3", { sketch: activeId(), p1, p2, p3 }),
-    placeSlot: (p1, p2, width) => runDispatch("sketch.addSlot", { sketch: activeId(), p1, p2, width }),
-    placeEllipse: (center, rx, ry, rotation) => runDispatch("sketch.addEllipse", { sketch: activeId(), center, rx, ry, rotation }),
+    placeLine: (start, end) => runDispatch("sketch.addLine", { sketch: activeId(), start, end, construction: get().constructionMode }),
+    placeRectangle: (corner, opposite) => runDispatch("sketch.addRectangle", { sketch: activeId(), corner, opposite, construction: get().constructionMode }),
+    placeCircle: (center, radius) => runDispatch("sketch.addCircle", { sketch: activeId(), center, radius, construction: get().constructionMode }),
+    placeArc: (center, start, end, ccw) => runDispatch("sketch.addArc", { sketch: activeId(), center, start, end, ccw, construction: get().constructionMode }),
+    placePolygon: (center, vertex, sides = 6) => runDispatch("sketch.addPolygon", { sketch: activeId(), center, vertex, sides, construction: get().constructionMode }),
+    placeRectangle3: (p1, p2, p3) => runDispatch("sketch.addRectangle3", { sketch: activeId(), p1, p2, p3, construction: get().constructionMode }),
+    placeSlot: (p1, p2, width) => runDispatch("sketch.addSlot", { sketch: activeId(), p1, p2, width, construction: get().constructionMode }),
+    placeEllipse: (center, rx, ry, rotation) => runDispatch("sketch.addEllipse", { sketch: activeId(), center, rx, ry, rotation, construction: get().constructionMode }),
     projectBodies: async (construction = false) => {
       const sid = activeId();
       if (!sid) return;

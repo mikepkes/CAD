@@ -767,11 +767,11 @@ export class Interactions {
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); st.redo(); return; }
     if (st.mode !== "sketch") return;
-    // X toggles construction (reference) geometry on the selection.
-    if (e.key.toLowerCase() === "x" && st.selection.length && st.activeSketchId) {
-      const sk = st.session.doc.sketches[st.activeSketchId];
-      const op = availableOps(sk, st.selection).modify.find((o) => o.id === "construction");
-      if (op) { void st.dispatch(op.command.type, op.command.params); return; }
+    // X converts the selection to/from construction, or (with nothing selected)
+    // arms construction draw mode so new geometry comes in as reference.
+    if (e.key.toLowerCase() === "x" && st.activeSketchId) {
+      st.toggleConstruction();
+      return;
     }
     const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", g: "polygon", o: "slot", p: "point", s: "select", d: "dimension", t: "trim", e: "extend", i: "ellipse" };
     if (map[e.key.toLowerCase()]) st.setTool(map[e.key.toLowerCase()]);

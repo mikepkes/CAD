@@ -52,6 +52,8 @@ export function Toolbar() {
   const toggleShowGrid = useStore((s) => s.toggleShowGrid);
   const showConstraints = useStore((s) => s.showConstraints);
   const toggleShowConstraints = useStore((s) => s.toggleShowConstraints);
+  const constructionMode = useStore((s) => s.constructionMode);
+  const hasSelection = useStore((s) => s.selection.length > 0);
   const session = useStore((s) => s.session);
   useStore((s) => s.rev);
   const extrudeSketch = useStore((s) => s.extrudeSketch);
@@ -100,6 +102,18 @@ export function Toolbar() {
               ))}
             </div>
           )}
+          <button
+            className={`tool construction-toggle ${constructionMode ? "active" : ""}`}
+            title={
+              hasSelection
+                ? "Convert the selected geometry to/from construction (reference)"
+                : "Construction mode (X): new geometry becomes reference — dashed, excluded from filled profiles"
+            }
+            onClick={() => useStore.getState().toggleConstruction()}
+          >
+            <span className="tool-glyph">┄</span>
+            <span className="tool-label">{hasSelection ? "Construction" : constructionMode ? "Construction ✓" : "Construction"}</span>
+          </button>
           <div className="spacer" />
           <button
             className="btn ghost"

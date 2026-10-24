@@ -29,6 +29,11 @@ const POINT_REF_SCHEMA: JSONSchema = {
   ],
 };
 
+const CONSTRUCTION_SCHEMA: JSONSchema = {
+  type: "boolean",
+  description: "Construction (reference) geometry: drawn dashed and excluded from filled profiles / extrusion.",
+};
+
 type PointRef = { x: number; y: number } | { ref: string };
 
 function sketchOf(doc: CadDocument, id: unknown): Sketch {
@@ -212,17 +217,18 @@ export const BUILTINS: CommandDef<any>[] = [
         sketch: { type: "string" },
         start: POINT_REF_SCHEMA,
         end: POINT_REF_SCHEMA,
+        construction: CONSTRUCTION_SCHEMA,
       },
     },
     examples: [
       { note: "From origin to (60,0)", params: { sketch: "sketch1", start: { ref: "pt2" }, end: { x: 60, y: 0 } } },
     ],
-    apply(draft, p: { sketch: string; start: PointRef; end: PointRef }, ctx) {
+    apply(draft, p: { sketch: string; start: PointRef; end: PointRef; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
       const a = resolvePoint(sk, p.start, ctx);
       const b = resolvePoint(sk, p.end, ctx);
       const id = ctx.alloc("ln");
-      sk.entities[id] = { id, kind: "line", p1: a, p2: b };
+      sk.entities[id] = { id, kind: "line", p1: a, p2: b, construction: !!p.construction };
       return { createdIds: [id, a, b], affectedSketchId: sk.id };
     },
   },
@@ -239,13 +245,14 @@ export const BUILTINS: CommandDef<any>[] = [
         sketch: { type: "string" },
         center: POINT_REF_SCHEMA,
         radius: { type: "number", minimum: 0 },
+        construction: CONSTRUCTION_SCHEMA,
       },
     },
-    apply(draft, p: { sketch: string; center: PointRef; radius: number }, ctx) {
+    apply(draft, p: { sketch: string; center: PointRef; radius: number; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
       const c = resolvePoint(sk, p.center, ctx);
       const id = ctx.alloc("ci");
-      sk.entities[id] = { id, kind: "circle", center: c, r: p.radius };
+      sk.entities[id] = { id, kind: "circle", center: c, r: p.radius, construction: !!p.construction };
       return { createdIds: [id, c], affectedSketchId: sk.id };
     },
   },
@@ -265,13 +272,14 @@ export const BUILTINS: CommandDef<any>[] = [
         rx: { type: "number", minimum: 0 },
         ry: { type: "number", minimum: 0 },
         rotation: { type: "number" },
+        construction: CONSTRUCTION_SCHEMA,
       },
     },
-    apply(draft, p: { sketch: string; center: PointRef; rx: number; ry: number; rotation?: number }, ctx) {
+    apply(draft, p: { sketch: string; center: PointRef; rx: number; ry: number; rotation?: number; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
       const c = resolvePoint(sk, p.center, ctx);
       const id = ctx.alloc("el");
-      sk.entities[id] = { id, kind: "ellipse", center: c, rx: p.rx, ry: p.ry, rotation: p.rotation ?? 0 };
+      sk.entities[id] = { id, kind: "ellipse", center: c, rx: p.rx, ry: p.ry, rotation: p.rotation ?? 0, construction: !!p.construction };
       return { createdIds: [id, c], affectedSketchId: sk.id };
     },
   },
@@ -289,14 +297,16 @@ export const BUILTINS: CommandDef<any>[] = [
         sketch: { type: "string" },
         corner: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
         opposite: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+        construction: CONSTRUCTION_SCHEMA,
       },
     },
     apply(
       draft,
-      p: { sketch: string; corner: { x: number; y: number }; opposite: { x: number; y: number } },
+      p: { sketch: string; corner: { x: number; y: number }; opposite: { x: number; y: number }; construction?: boolean },
       ctx
     ) {
       const sk = sketchOf(draft, p.sketch);
+      const cn = !!p.construction;
       const mk = (x: number, y: number) => {
         const id = ctx.alloc("pt");
         sk.entities[id] = { id, kind: "point", x, y };
@@ -308,7 +318,7 @@ export const BUILTINS: CommandDef<any>[] = [
       const p01 = mk(p.corner.x, p.opposite.y);
       const line = (a: string, b: string) => {
         const id = ctx.alloc("ln");
-        sk.entities[id] = { id, kind: "line", p1: a, p2: b };
+        sk.entities[id] = { id, kind: "line", p1: a, p2: b, construction: cn };
       };
       line(p00, p10);
       line(p10, p11);
@@ -338,10 +348,11 @@ export const BUILTINS: CommandDef<any>[] = [
         center: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
         vertex: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
         sides: { type: "integer", minimum: 3, maximum: 64 },
+        construction: CONSTRUCTION_SCHEMA,
       },
     },
     examples: [{ note: "Hexagon", params: { sketch: "sketch1", center: { x: 0, y: 0 }, vertex: { x: 20, y: 0 }, sides: 6 } }],
-    apply(draft, p: { sketch: string; center: Vec; vertex: Vec; sides: number }, ctx) {
+    apply(draft, p: { sketch: string; center: Vec; vertex: Vec; sides: number; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
       const R = Math.hypot(p.vertex.x - p.center.x, p.vertex.y - p.center.y);
       if (R < 1e-6) throw new Error("polygon radius is zero");
@@ -361,7 +372,7 @@ export const BUILTINS: CommandDef<any>[] = [
       const lines: string[] = [];
       for (let i = 0; i < N; i++) {
         const id = ctx.alloc("ln");
-        sk.entities[id] = { id, kind: "line", p1: verts[i], p2: verts[(i + 1) % N] };
+        sk.entities[id] = { id, kind: "line", p1: verts[i], p2: verts[(i + 1) % N], construction: !!p.construction };
         lines.push(id);
       }
       const con = (c: GeometricConstraint) => (sk.constraints[c.id] = c);
@@ -432,10 +443,12 @@ export const BUILTINS: CommandDef<any>[] = [
         p1: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
         p2: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
         p3: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
+        construction: CONSTRUCTION_SCHEMA,
       },
     },
-    apply(draft, p: { sketch: string; p1: Vec; p2: Vec; p3: Vec }, ctx) {
+    apply(draft, p: { sketch: string; p1: Vec; p2: Vec; p3: Vec; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
+      const cn = !!p.construction;
       let dx = p.p2.x - p.p1.x, dy = p.p2.y - p.p1.y;
       const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const px = -dy, py = dx; // perpendicular
@@ -445,7 +458,7 @@ export const BUILTINS: CommandDef<any>[] = [
       const c1 = mk(p.p2.x, p.p2.y);
       const c2 = mk(p.p2.x + px * w, p.p2.y + py * w);
       const c3 = mk(p.p1.x + px * w, p.p1.y + py * w);
-      const ln = (a: string, b: string) => { const id = ctx.alloc("ln"); sk.entities[id] = { id, kind: "line", p1: a, p2: b }; return id; };
+      const ln = (a: string, b: string) => { const id = ctx.alloc("ln"); sk.entities[id] = { id, kind: "line", p1: a, p2: b, construction: cn }; return id; };
       const e0 = ln(c0, c1), e1 = ln(c1, c2), e2 = ln(c2, c3), e3 = ln(c3, c0);
       const addP = (l1: string, l2: string) => { const id = ctx.alloc("c"); sk.constraints[id] = { id, type: "perpendicular", l1, l2 }; };
       addP(e0, e1); addP(e1, e2); addP(e2, e3);
@@ -467,24 +480,26 @@ export const BUILTINS: CommandDef<any>[] = [
         p1: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
         p2: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
         width: { type: "number", minimum: 0 },
+        construction: CONSTRUCTION_SCHEMA,
       },
     },
-    apply(draft, p: { sketch: string; p1: Vec; p2: Vec; width: number }, ctx) {
+    apply(draft, p: { sketch: string; p1: Vec; p2: Vec; width: number; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
+      const cn = !!p.construction;
       let dx = p.p2.x - p.p1.x, dy = p.p2.y - p.p1.y;
       const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const px = -dy, py = dx; // 90° ccw → "left"
       const r = p.width / 2;
-      const mk = (x: number, y: number, cn = false) => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x, y, construction: cn }; return id; };
+      const mk = (x: number, y: number, c = false) => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x, y, construction: c }; return id; };
       const P1 = mk(p.p1.x, p.p1.y, true), P2 = mk(p.p2.x, p.p2.y, true);
       const A = mk(p.p1.x - px * r, p.p1.y - py * r); // bottom-left
       const B = mk(p.p2.x - px * r, p.p2.y - py * r); // bottom-right
       const C = mk(p.p2.x + px * r, p.p2.y + py * r); // top-right
       const D = mk(p.p1.x + px * r, p.p1.y + py * r); // top-left
-      const lnAB = ctx.alloc("ln"); sk.entities[lnAB] = { id: lnAB, kind: "line", p1: A, p2: B };
-      const lnCD = ctx.alloc("ln"); sk.entities[lnCD] = { id: lnCD, kind: "line", p1: C, p2: D };
-      const arcR = ctx.alloc("ar"); sk.entities[arcR] = { id: arcR, kind: "arc", center: P2, p1: B, p2: C, r, ccw: true };
-      const arcL = ctx.alloc("ar"); sk.entities[arcL] = { id: arcL, kind: "arc", center: P1, p1: D, p2: A, r, ccw: true };
+      const lnAB = ctx.alloc("ln"); sk.entities[lnAB] = { id: lnAB, kind: "line", p1: A, p2: B, construction: cn };
+      const lnCD = ctx.alloc("ln"); sk.entities[lnCD] = { id: lnCD, kind: "line", p1: C, p2: D, construction: cn };
+      const arcR = ctx.alloc("ar"); sk.entities[arcR] = { id: arcR, kind: "arc", center: P2, p1: B, p2: C, r, ccw: true, construction: cn };
+      const arcL = ctx.alloc("ar"); sk.entities[arcL] = { id: arcL, kind: "arc", center: P1, p1: D, p2: A, r, ccw: true, construction: cn };
       const con = (c: GeometricConstraint) => (sk.constraints[c.id] = c);
       con({ id: ctx.alloc("c"), type: "equal", e1: arcL, e2: arcR });
       con({ id: ctx.alloc("c"), type: "parallel", l1: lnAB, l2: lnCD });
@@ -507,9 +522,10 @@ export const BUILTINS: CommandDef<any>[] = [
         start: POINT_REF_SCHEMA,
         end: POINT_REF_SCHEMA,
         ccw: { type: "boolean" },
+        construction: CONSTRUCTION_SCHEMA,
       },
     },
-    apply(draft, p: { sketch: string; center: PointRef; start: PointRef; end: PointRef; ccw?: boolean }, ctx) {
+    apply(draft, p: { sketch: string; center: PointRef; start: PointRef; end: PointRef; ccw?: boolean; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
       const c = resolvePoint(sk, p.center, ctx);
       const s = resolvePoint(sk, p.start, ctx);
@@ -518,7 +534,7 @@ export const BUILTINS: CommandDef<any>[] = [
       const sp = sk.entities[s] as SketchPoint;
       const r = Math.hypot(sp.x - cp.x, sp.y - cp.y);
       const id = ctx.alloc("ar");
-      sk.entities[id] = { id, kind: "arc", center: c, p1: s, p2: e, r, ccw: p.ccw ?? true };
+      sk.entities[id] = { id, kind: "arc", center: c, p1: s, p2: e, r, ccw: p.ccw ?? true, construction: !!p.construction };
       return { createdIds: [id, c, s, e], affectedSketchId: sk.id };
     },
   },
