@@ -3,7 +3,7 @@
 // features and solved geometry are rebuilt by replay + recompute on load. This
 // keeps files small, forward-compatible, and independent of solver output.
 
-import { CadDocument, createDocument } from "./document";
+import { CadDocument, createDocument, TimelineGroup } from "./document";
 import { OperationRecord } from "./command/types";
 
 export interface SerializedDocument {
@@ -14,6 +14,7 @@ export interface SerializedDocument {
   nextId: number;
   rollbackIndex: number;
   operations: OperationRecord[];
+  timelineGroups?: TimelineGroup[];
 }
 
 export function serializeDocument(doc: CadDocument): string {
@@ -25,6 +26,7 @@ export function serializeDocument(doc: CadDocument): string {
     nextId: doc.nextId,
     rollbackIndex: doc.rollbackIndex,
     operations: doc.operations,
+    timelineGroups: doc.timelineGroups,
   };
   return JSON.stringify(out, null, 2);
 }
@@ -38,6 +40,7 @@ export function deserializeDocument(json: string): CadDocument {
   doc.nextId = typeof d.nextId === "number" ? d.nextId : 1;
   doc.operations = d.operations as OperationRecord[];
   doc.rollbackIndex = typeof d.rollbackIndex === "number" ? d.rollbackIndex : doc.operations.length;
+  doc.timelineGroups = Array.isArray(d.timelineGroups) ? d.timelineGroups : [];
   // Derived state (parameters/sketches/features) is reconstructed by recompute.
   return doc;
 }

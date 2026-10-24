@@ -146,6 +146,12 @@ export interface AppState {
   openContextMenu: (x: number, y: number) => void;
   closeContextMenu: () => void;
 
+  // timeline groups (organization)
+  createTimelineGroup: (opIds: string[], name?: string) => void;
+  renameTimelineGroup: (id: string, name: string) => void;
+  toggleTimelineGroup: (id: string) => void;
+  ungroupTimeline: (id: string) => void;
+
   // timeline / history
   undo: () => void;
   redo: () => void;
@@ -425,6 +431,31 @@ export const useStore = create<AppState>((set, get) => {
 
     openContextMenu: (x, y) => set({ contextMenu: { x, y } }),
     closeContextMenu: () => set({ contextMenu: null }),
+
+    createTimelineGroup: (opIds, name) => {
+      const doc = get().session.doc;
+      const ids = opIds.filter((id) => doc.operations.some((o) => o.opId === id));
+      if (!ids.length) return;
+      // an op belongs to at most one group
+      for (const g of doc.timelineGroups) g.opIds = g.opIds.filter((id) => !ids.includes(id));
+      doc.timelineGroups = doc.timelineGroups.filter((g) => g.opIds.length > 0);
+      const gid = `grp${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
+      doc.timelineGroups.push({ id: gid, name: name || `Group ${doc.timelineGroups.length + 1}`, opIds: ids, collapsed: false });
+      bump(); scheduleAutosave();
+    },
+    renameTimelineGroup: (id, name) => {
+      const g = get().session.doc.timelineGroups.find((x) => x.id === id);
+      if (g) { g.name = name; bump(); scheduleAutosave(); }
+    },
+    toggleTimelineGroup: (id) => {
+      const g = get().session.doc.timelineGroups.find((x) => x.id === id);
+      if (g) { g.collapsed = !g.collapsed; bump(); scheduleAutosave(); }
+    },
+    ungroupTimeline: (id) => {
+      const doc = get().session.doc;
+      doc.timelineGroups = doc.timelineGroups.filter((g) => g.id !== id);
+      bump(); scheduleAutosave();
+    },
 
     undo: () => { get().session.undo(); bump(); afterMutate(); },
     redo: () => { get().session.redo(); bump(); afterMutate(); },

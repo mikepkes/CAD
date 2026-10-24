@@ -38,6 +38,14 @@ export interface ExtrudeFeature {
 }
 export type FeatureDef = ExtrudeFeature;
 
+/** A named, collapsible grouping of timeline operations (organization only). */
+export interface TimelineGroup {
+  id: string;
+  name: string;
+  opIds: string[];
+  collapsed: boolean;
+}
+
 export interface CadDocument {
   schema: 1;
   id: string;
@@ -50,6 +58,8 @@ export interface CadDocument {
   operations: OperationRecord[];
   /** Operations at index >= rollbackIndex are rolled back (inactive). */
   rollbackIndex: number;
+  /** Named, collapsible groupings over the operations (UI organization). */
+  timelineGroups: TimelineGroup[];
 
   // ---- derived state (a cache, always reproducible from `operations`) ----
   parameters: Parameter[];
@@ -75,6 +85,7 @@ export function createDocument(id = "doc1"): CadDocument {
     nextId: 1,
     operations: [],
     rollbackIndex: 0,
+    timelineGroups: [],
     parameters: [],
     rootComponentId: rootId,
     components: freshComponents(rootId),
