@@ -9,3 +9,7 @@ yarn-debug.log*
 yarn-error.log*
 *.tsbuildinfo
 dist-mcp
+
+# Tauri (optional desktop app)
+src-tauri/target
+src-tauri/gen/schemas

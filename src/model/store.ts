@@ -12,11 +12,14 @@ import { availableOps } from "./selectionOps";
 import type AnthropicNS from "@anthropic-ai/sdk";
 import { ChatEntry, describeDocument, runAgent } from "./agent";
 import { enableWebMcp, disableWebMcp } from "./webmcp";
+import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus, isTauri, startDesktopMcp, stopDesktopMcp } from "./desktopMcp";
 import { getActiveScene } from "../viewport/sceneRef";
 
 const AGENT_KEY_LS = "chisel.anthropic.key";
 const AGENT_MODEL_LS = "chisel.anthropic.model";
 const WEBMCP_LS = "chisel.webmcp.enabled";
+const DESKTOP_MCP_LS = "chisel.desktopmcp.enabled";
+const DESKTOP_MCP_PORT_LS = "chisel.desktopmcp.port";
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
 import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
@@ -120,6 +123,10 @@ export interface AppState {
   agentRunning: boolean;
   /** Expose the app's commands to in-browser external agents via WebMCP. */
   webMcpEnabled: boolean;
+  /** Desktop app only: serve the same tools to external MCP clients over local HTTP. */
+  desktopMcpEnabled: boolean;
+  desktopMcpPort: number;
+  desktopMcp: DesktopMcpStatus & { error?: string };
 
   // generic command dispatch (used by the constraint/dimension bar)
   dispatch: (type: string, params: Record<string, unknown>, opts?: { rejectOnConflict?: boolean }) => Promise<DispatchResult>;
@@ -249,6 +256,8 @@ export interface AppState {
   stopAgent: () => void;
   clearAgentChat: () => void;
   setWebMcpEnabled: (on: boolean) => void;
+  setDesktopMcpEnabled: (on: boolean) => Promise<void>;
+  setDesktopMcpPort: (port: number) => void;
 
   // persistence
   initApp: () => Promise<void>;
@@ -361,6 +370,9 @@ export const useStore = create<AppState>((set, get) => {
     agentChat: [],
     agentRunning: false,
     webMcpEnabled: readLS(WEBMCP_LS) === "1",
+    desktopMcpEnabled: readLS(DESKTOP_MCP_LS) === "1",
+    desktopMcpPort: Number(readLS(DESKTOP_MCP_PORT_LS, String(DEFAULT_DESKTOP_MCP_PORT))) || DEFAULT_DESKTOP_MCP_PORT,
+    desktopMcp: { running: false },
 
     dispatch: (type, params, opts) => runDispatch(type, params, opts),
 
@@ -627,6 +639,27 @@ export const useStore = create<AppState>((set, get) => {
       else disableWebMcp();
       set({ webMcpEnabled: on });
     },
+    setDesktopMcpEnabled: async (on) => {
+      try { localStorage.setItem(DESKTOP_MCP_LS, on ? "1" : "0"); } catch { /* ignore */ }
+      set({ desktopMcpEnabled: on });
+      if (!isTauri()) return;
+      try {
+        const status = on
+          ? await startDesktopMcp({ registry, ...commandHost() }, get().desktopMcpPort)
+          : await stopDesktopMcp();
+        set({ desktopMcp: status });
+      } catch (e) {
+        // e.g. port in use — leave the preference as set but report why it isn't live.
+        set({ desktopMcp: { running: false, error: (e as Error).message || String(e) } });
+      }
+    },
+    setDesktopMcpPort: (port) => {
+      const p = Math.min(65535, Math.max(1024, Math.round(port))) || DEFAULT_DESKTOP_MCP_PORT;
+      try { localStorage.setItem(DESKTOP_MCP_PORT_LS, String(p)); } catch { /* ignore */ }
+      set({ desktopMcpPort: p });
+      // Live server follows the port (mcp_start on a new port restarts it).
+      if (get().desktopMcpEnabled && isTauri()) void get().setDesktopMcpEnabled(true);
+    },
     sendAgentMessage: async (text) => {
       const s = get();
       if (!s.apiKey) { set({ settingsOpen: true }); return; }
@@ -813,6 +846,7 @@ export const useStore = create<AppState>((set, get) => {
 
     initApp: async () => {
       if (get().webMcpEnabled) enableWebMcp({ registry, ...commandHost() });
+      if (isTauri() && get().desktopMcpEnabled) void get().setDesktopMcpEnabled(true);
       let saved: string | null = null;
       try {
         saved = localStorage.getItem(AUTOSAVE_KEY);

@@ -10,6 +10,9 @@ export default defineConfig(({ command }) => ({
   server: {
     host: true,
     port: 5173,
+    // The optional Tauri shell (`npm run tauri:dev`) points at this exact port.
+    strictPort: true,
+    watch: { ignored: ["**/src-tauri/**"] },
   },
   // The OpenCASCADE emscripten glue has a `new URL('…wasm', import.meta.url)`
   // fallback that Vite's dep-scanner can't resolve (the package's exports map

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../model/store";
+import { isTauri } from "../model/desktopMcp";
 
 const MODELS = [
   { id: "claude-opus-5-5", label: "Claude Opus 5.5 (most capable)" },
@@ -16,7 +17,13 @@ export function SettingsPanel() {
   const setAgentModel = useStore((s) => s.setAgentModel);
   const webMcp = useStore((s) => s.webMcpEnabled);
   const setWebMcp = useStore((s) => s.setWebMcpEnabled);
+  const desktopMcp = useStore((s) => s.desktopMcpEnabled);
+  const setDesktopMcp = useStore((s) => s.setDesktopMcpEnabled);
+  const desktopMcpPort = useStore((s) => s.desktopMcpPort);
+  const setDesktopMcpPort = useStore((s) => s.setDesktopMcpPort);
+  const desktopMcpStatus = useStore((s) => s.desktopMcp);
   const [draft, setDraft] = useState(apiKey);
+  const [portDraft, setPortDraft] = useState(String(desktopMcpPort));
 
   if (!open) return null;
   return (
@@ -63,6 +70,43 @@ export function SettingsPanel() {
             <code> window.chiselWebMCP</code> (<code>.listTools()</code> / <code>.callTool(name, args)</code>).
             {webMcp && <> <span className="ok-dot">● live</span></>}
           </p>
+
+          {isTauri() && (
+            <>
+              <div className="field-divider" />
+              <label className="field-toggle">
+                <input type="checkbox" checked={desktopMcp} onChange={(e) => void setDesktopMcp(e.target.checked)} />
+                <span>Expose MCP server (desktop app)</span>
+              </label>
+              <p className="field-note">
+                Serves the same tools to external MCP clients (Claude Code, Claude Desktop, …) over
+                local HTTP, driving <strong>this live document</strong>. Streamable HTTP transport, bound to
+                127.0.0.1 only.
+              </p>
+              <label className="field-label">Port</label>
+              <input
+                className="field-input"
+                type="number"
+                min={1024}
+                max={65535}
+                value={portDraft}
+                onChange={(e) => setPortDraft(e.target.value)}
+                onBlur={() => { const n = Number(portDraft); if (n && n !== desktopMcpPort) setDesktopMcpPort(n); else setPortDraft(String(desktopMcpPort)); }}
+              />
+              {desktopMcp && desktopMcpStatus.running && desktopMcpStatus.url && (
+                <p className="field-note">
+                  <span className="ok-dot">● live</span> at <code>{desktopMcpStatus.url}</code>
+                  <br />
+                  Claude Code: <code>claude mcp add --transport http chisel-cad {desktopMcpStatus.url}</code>
+                </p>
+              )}
+              {desktopMcp && !desktopMcpStatus.running && (
+                <p className="field-note">
+                  {desktopMcpStatus.error ? <>Not running: {desktopMcpStatus.error}</> : <>Starting…</>}
+                </p>
+              )}
+            </>
+          )}
         </div>
         <div className="modal-foot">
           <button className="btn primary" onClick={() => { setApiKey(draft.trim()); close(); }}>Save</button>
