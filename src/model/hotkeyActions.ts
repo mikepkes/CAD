@@ -31,6 +31,7 @@ const ACTIONS: HotkeyAction[] = [
       const s = st();
       if (s.contextMenu) { s.closeContextMenu(); return; }
       if (s.extrudeActive) { s.closeExtrude(); return; }
+      if (s.sketchPlacing) { s.setSketchPlacing(false); return; }
       if (s.constraintTool) { s.setConstraintTool(null); return; }
       fire("chisel:cancel");
     },

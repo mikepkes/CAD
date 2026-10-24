@@ -366,10 +366,14 @@ export class Interactions {
           else if (pick.type === "face" && pick.world && pick.normal) {
             void st.startFaceExtrude({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);
           }
-        } else if (pick.type === "plane" && pick.id) st.startSketch(pick.id);
-        else if (pick.type === "face" && pick.world && pick.normal) {
-          st.startSketchOnFace({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);
+        } else if (st.sketchPlacing) {
+          // "Create Sketch" tool armed: pick a plane or a planar face.
+          if (pick.type === "plane" && pick.id) st.startSketch(pick.id);
+          else if (pick.type === "face" && pick.world && pick.normal) {
+            st.startSketchOnFace({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);
+          }
         }
+        // Otherwise a viewport click just orbits/selects — no implicit sketch.
       }
       this.downPt = null;
       return;

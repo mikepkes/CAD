@@ -126,6 +126,9 @@ export interface AppState {
   dismissToast: () => void;
 
   // sketch lifecycle
+  /** "Create Sketch" tool armed: a viewport click on a plane/face starts a sketch. */
+  sketchPlacing: boolean;
+  setSketchPlacing: (on: boolean) => void;
   startSketch: (plane: string, offset?: number) => Promise<void>;
   startSketchOnFace: (hit: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => Promise<void>;
   finishSketch: () => void;
@@ -288,6 +291,7 @@ export const useStore = create<AppState>((set, get) => {
     toolVariant: "",
     constraintTool: null,
     constructionMode: false,
+    sketchPlacing: false,
     selection: [],
     hover: null,
     showPlanes: true,
@@ -362,16 +366,17 @@ export const useStore = create<AppState>((set, get) => {
     toggleShowConstraints: () => set((s) => ({ showConstraints: !s.showConstraints })),
     dismissToast: () => set({ toast: null }),
 
+    setSketchPlacing: (on) => set({ sketchPlacing: on }),
     startSketch: async (plane, offset) => {
       const r = await runDispatch("sketch.create", offset ? { plane, offset } : { plane });
-      if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], lastMessage: `Sketching on ${plane}${offset ? ` +${offset}` : ""}.` });
+      if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: `Sketching on ${plane}${offset ? ` +${offset}` : ""}.` });
     },
     startSketchOnFace: async (hit, normal) => {
       // Stable sketch origin: foot of the perpendicular from world (0,0,0) to the face plane.
       const d = hit.x * normal.x + hit.y * normal.y + hit.z * normal.z;
       const origin = { x: normal.x * d, y: normal.y * d, z: normal.z * d };
       const r = await runDispatch("sketch.create", { planeDef: { origin, normal } });
-      if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], lastMessage: "Sketching on face." });
+      if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: "Sketching on face." });
     },
     finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null }),
     editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [] }),

@@ -54,6 +54,7 @@ export function Toolbar() {
   const toggleShowConstraints = useStore((s) => s.toggleShowConstraints);
   const constructionMode = useStore((s) => s.constructionMode);
   const hasSelection = useStore((s) => s.selection.length > 0);
+  const sketchPlacing = useStore((s) => s.sketchPlacing);
   const session = useStore((s) => s.session);
   useStore((s) => s.rev);
   const exportSolid = useStore((s) => s.exportSolid);
@@ -138,15 +139,22 @@ export function Toolbar() {
         </>
       ) : (
         <>
+          <button
+            className={`btn ${sketchPlacing ? "primary" : ""}`}
+            title="Create Sketch — then click a plane or a planar face (or pick a plane below)"
+            onClick={() => useStore.getState().setSketchPlacing(!sketchPlacing)}
+          >
+            ✏ Create Sketch
+          </button>
           <div className="tool-group">
-            <span className="hint">New sketch:</span>
+            <span className="hint">{sketchPlacing ? "Pick a plane or face:" : "On plane:"}</span>
             {PLANES.map((p) => (
               <button
                 key={p.id}
                 className="tool"
                 style={{ borderColor: p.color }}
                 onClick={() => startSketch(p.id, offset || undefined)}
-                title={`Start a sketch on the ${p.name} plane${offset ? ` (offset ${offset})` : ""} — or click a body face in the viewport`}
+                title={`Start a sketch on the ${p.name} plane${offset ? ` (offset ${offset})` : ""}`}
               >
                 <span className="swatch" style={{ background: p.color }} />
                 {p.id}
