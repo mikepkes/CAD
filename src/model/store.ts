@@ -9,14 +9,12 @@ import { PlaneGCSSolver } from "../core/solver/planegcs";
 import { Evaluations } from "../core/recompute";
 import { resolveParameters } from "./parameters";
 import { availableOps } from "./selectionOps";
-import type AnthropicNS from "@anthropic-ai/sdk";
-import { ChatEntry, describeDocument, runAgent } from "./agent";
+import { ChatEntry, describeDocument } from "./agent";
+import { createAgentController, AGENT_KEY_LS, AGENT_MODEL_LS } from "./agentController";
 import { enableWebMcp, disableWebMcp } from "./webmcp";
 import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus, isTauri, startDesktopMcp, stopDesktopMcp } from "./desktopMcp";
 import { getActiveScene } from "../viewport/sceneRef";
 
-const AGENT_KEY_LS = "chisel.anthropic.key";
-const AGENT_MODEL_LS = "chisel.anthropic.model";
 const WEBMCP_LS = "chisel.webmcp.enabled";
 const DESKTOP_MCP_LS = "chisel.desktopmcp.enabled";
 const DESKTOP_MCP_PORT_LS = "chisel.desktopmcp.port";
@@ -44,10 +42,6 @@ const geometry = createGeometryBackend();
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Agent conversation state lives outside the store (not React-reactive): the full
-// Anthropic message history (for multi-turn) and the in-flight request's aborter.
-let agentHistory: AnthropicNS.MessageParam[] = [];
-let agentAbort: AbortController | null = null;
 
 export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim" | "extend" | "polygon" | "slot" | "ellipse";
 
@@ -331,6 +325,15 @@ export const useStore = create<AppState>((set, get) => {
       if (!scene) throw new Error("viewport not ready");
       return scene.renderView(opts);
     },
+  });
+
+  // The embedded agent's actions (history + aborter live inside the controller).
+  const agentActions = createAgentController({
+    getState: get,
+    patch: set,
+    appendChat: (e) => set((st) => ({ agentChat: [...st.agentChat, e] })),
+    registry,
+    commandHost,
   });
 
   return {
@@ -635,11 +638,7 @@ export const useStore = create<AppState>((set, get) => {
 
     setSettingsOpen: (open) => set({ settingsOpen: open }),
     setHotkeysOpen: (open) => set({ hotkeysOpen: open }),
-    toggleAgent: () => set((s) => ({ agentOpen: !s.agentOpen })),
-    setApiKey: (key) => { try { localStorage.setItem(AGENT_KEY_LS, key); } catch { /* ignore */ } set({ apiKey: key }); },
-    setAgentModel: (model) => { try { localStorage.setItem(AGENT_MODEL_LS, model); } catch { /* ignore */ } set({ agentModel: model }); },
-    stopAgent: () => { agentAbort?.abort(); },
-    clearAgentChat: () => { agentHistory = []; set({ agentChat: [] }); },
+    ...agentActions,
     setWebMcpEnabled: (on) => {
       try { localStorage.setItem(WEBMCP_LS, on ? "1" : "0"); } catch { /* ignore */ }
       if (on) enableWebMcp({ registry, ...commandHost() });
@@ -667,34 +666,6 @@ export const useStore = create<AppState>((set, get) => {
       // Live server follows the port (mcp_start on a new port restarts it).
       if (get().desktopMcpEnabled && isTauri()) void get().setDesktopMcpEnabled(true);
     },
-    sendAgentMessage: async (text) => {
-      const s = get();
-      if (!s.apiKey) { set({ settingsOpen: true }); return; }
-      if (s.agentRunning || !text.trim()) return;
-      const push = (e: ChatEntry) => set((st) => ({ agentChat: [...st.agentChat, e] }));
-      push({ role: "user", text });
-      agentHistory.push({ role: "user", content: text });
-      agentAbort = new AbortController();
-      set({ agentRunning: true, agentOpen: true });
-      try {
-        agentHistory = await runAgent({
-          apiKey: s.apiKey,
-          model: s.agentModel,
-          history: agentHistory,
-          registry,
-          signal: agentAbort.signal,
-          ctx: commandHost(),
-          onText: (t) => push({ role: "assistant", text: t }),
-          onTool: (name, ok, detail) => push({ role: "tool", name: name.replace(/__/g, "."), ok, detail }),
-        });
-      } catch (e) {
-        if (!agentAbort.signal.aborted) push({ role: "error", text: (e as Error).message || String(e) });
-      } finally {
-        set({ agentRunning: false });
-        agentAbort = null;
-      }
-    },
-
     createTimelineGroup: (opIds, name) => {
       const doc = get().session.doc;
       const ids = opIds.filter((id) => doc.operations.some((o) => o.opId === id));
