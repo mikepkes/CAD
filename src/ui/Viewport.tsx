@@ -82,6 +82,7 @@ function buildView(s: AppState): ViewData {
     preview: null,
     showPlanes: s.showPlanes,
     showGrid: s.showGrid,
+    gridSize: s.gridSize,
     showConstraints: s.showConstraints,
     constraintState: !sketch
       ? "under"

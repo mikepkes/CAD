@@ -176,7 +176,7 @@ export class Interactions {
       const f = this.stage.from;
       from = { u: this.stage.fromUV.u, v: this.stage.fromUV.v, id: "ref" in f ? f.ref : undefined };
     }
-    return infer(sk, { x: uv.u, y: uv.v }, (p) => this.scene.pixelToWorld(p), from);
+    return infer(sk, { x: uv.u, y: uv.v }, (p) => this.scene.pixelToWorld(p), from, { snap: st.gridSnap, size: st.gridSize });
   }
 
   private ref(snap: Snap): GeoRef {

@@ -35,6 +35,7 @@ export interface ViewData {
   preview: PreviewGeom | null;
   showPlanes: boolean;
   showGrid: boolean;
+  gridSize?: number;
   showConstraints: boolean;
   /** Overall constrained state of the active sketch, for Fusion-style coloring. */
   constraintState: "under" | "full" | "conflict";
@@ -99,6 +100,7 @@ export class SceneManager {
   private previewSolidGroup = new THREE.Group();
   private planeGroup = new THREE.Group();
   private grid: THREE.GridHelper;
+  private gridSize = 10;
   private sketchGroup = new THREE.Group();
   private previewGroup = new THREE.Group();
   private solidsGroup = new THREE.Group();
@@ -148,10 +150,7 @@ export class SceneManager {
     this.scene.add(dir);
 
     // grid on XY (world), rotated so it lies in XY with Z up
-    this.grid = new THREE.GridHelper(400, 40, COLORS.gridMajor, COLORS.grid);
-    this.grid.rotation.x = Math.PI / 2;
-    (this.grid.material as THREE.Material).transparent = true;
-    (this.grid.material as THREE.Material).opacity = 0.5;
+    this.grid = this.makeGrid(this.gridSize);
     this.scene.add(this.grid);
 
     this.buildAxes();
@@ -173,6 +172,28 @@ export class SceneManager {
     this.resizeObs = new ResizeObserver(() => this.onResize());
     this.resizeObs.observe(container);
     this.animate();
+  }
+
+  private makeGrid(size: number): THREE.GridHelper {
+    const divisions = 40;
+    const grid = new THREE.GridHelper(size * divisions, divisions, COLORS.gridMajor, COLORS.grid);
+    grid.rotation.x = Math.PI / 2; // GridHelper is XZ by default; lay it in XY (Z up)
+    (grid.material as THREE.Material).transparent = true;
+    (grid.material as THREE.Material).opacity = 0.5;
+    this.gridSize = size;
+    return grid;
+  }
+
+  /** Rebuild the grid at a new cell size (mm). */
+  private applyGrid(size: number) {
+    if (Math.abs(size - this.gridSize) < 1e-9) return;
+    const visible = this.grid.visible;
+    this.scene.remove(this.grid);
+    this.grid.geometry.dispose();
+    (this.grid.material as THREE.Material).dispose();
+    this.grid = this.makeGrid(size);
+    this.grid.visible = visible;
+    this.scene.add(this.grid);
   }
 
   private buildAxes() {
@@ -639,6 +660,7 @@ export class SceneManager {
   update(data: ViewData) {
     this.lastData = data;
     this.planeGroup.visible = data.showPlanes && data.mode === "model";
+    if (data.gridSize) this.applyGrid(data.gridSize);
     this.grid.visible = data.showGrid;
 
     this.clearGroup(this.sketchGroup);

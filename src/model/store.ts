@@ -80,6 +80,9 @@ export interface AppState {
   showPlanes: boolean;
   showGrid: boolean;
   showConstraints: boolean;
+  /** Grid cell size (mm) and whether drawing snaps to grid intersections. */
+  gridSize: number;
+  gridSnap: boolean;
 
   dragging: { pointId: string } | null;
   transient: Record<string, { x: number; y: number }> | null;
@@ -123,6 +126,8 @@ export interface AppState {
   setHover: (id: string | null) => void;
   toggleShowPlanes: () => void;
   toggleShowGrid: () => void;
+  setGridSize: (n: number) => void;
+  setGridSnap: (on: boolean) => void;
   toggleShowConstraints: () => void;
   dismissToast: () => void;
 
@@ -306,6 +311,8 @@ export const useStore = create<AppState>((set, get) => {
     hover: null,
     showPlanes: true,
     showGrid: true,
+    gridSize: 10,
+    gridSnap: false,
     showConstraints: true,
     dragging: null,
     transient: null,
@@ -373,6 +380,8 @@ export const useStore = create<AppState>((set, get) => {
     setHover: (id) => set({ hover: id }),
     toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
     toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+    setGridSize: (n) => set({ gridSize: Math.max(0.1, n) }),
+    setGridSnap: (on) => set({ gridSnap: on }),
     toggleShowConstraints: () => set((s) => ({ showConstraints: !s.showConstraints })),
     dismissToast: () => set({ toast: null }),
 

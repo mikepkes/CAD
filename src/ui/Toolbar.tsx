@@ -23,6 +23,31 @@ function FileMenu() {
   );
 }
 
+function GridControls() {
+  const showGrid = useStore((s) => s.showGrid);
+  const gridSize = useStore((s) => s.gridSize);
+  const gridSnap = useStore((s) => s.gridSnap);
+  return (
+    <div className="grid-controls" title="Grid display, cell size (mm), and snapping">
+      <label className="toggle">
+        <input type="checkbox" checked={showGrid} onChange={() => useStore.getState().toggleShowGrid()} /> Grid
+      </label>
+      <input
+        className="grid-size"
+        type="number"
+        min={0.1}
+        step={1}
+        value={gridSize}
+        title="Grid cell size (mm)"
+        onChange={(e) => { const n = Number(e.target.value); if (n > 0) useStore.getState().setGridSize(n); }}
+      />
+      <label className="toggle" title="Snap drawing to grid intersections">
+        <input type="checkbox" checked={gridSnap} onChange={(e) => useStore.getState().setGridSnap(e.target.checked)} /> Snap
+      </label>
+    </div>
+  );
+}
+
 const TOOLS: { id: Tool; label: string; key: string; glyph: string }[] = [
   { id: "select", label: "Select", key: "S", glyph: "⤢" },
   { id: "line", label: "Line", key: "L", glyph: "╱" },
@@ -47,9 +72,7 @@ export function Toolbar() {
   const finishSketch = useStore((s) => s.finishSketch);
   const startSketch = useStore((s) => s.startSketch);
   const showPlanes = useStore((s) => s.showPlanes);
-  const showGrid = useStore((s) => s.showGrid);
   const toggleShowPlanes = useStore((s) => s.toggleShowPlanes);
-  const toggleShowGrid = useStore((s) => s.toggleShowGrid);
   const showConstraints = useStore((s) => s.showConstraints);
   const toggleShowConstraints = useStore((s) => s.toggleShowConstraints);
   const constructionMode = useStore((s) => s.constructionMode);
@@ -133,6 +156,7 @@ export function Toolbar() {
           <label className="toggle" title="Show geometric constraint glyphs in the sketch">
             <input type="checkbox" checked={showConstraints} onChange={toggleShowConstraints} /> Constraints
           </label>
+          <GridControls />
           <button className="btn primary" onClick={finishSketch}>
             ✓ Finish Sketch
           </button>
@@ -189,9 +213,7 @@ export function Toolbar() {
           <label className="toggle">
             <input type="checkbox" checked={showPlanes} onChange={toggleShowPlanes} /> Planes
           </label>
-          <label className="toggle">
-            <input type="checkbox" checked={showGrid} onChange={toggleShowGrid} /> Grid
-          </label>
+          <GridControls />
         </>
       )}
     </div>

@@ -1113,3 +1113,11 @@ body {
 .group-glyph { font-size: 11px; color: var(--accent); }
 .group-sub { color: var(--text-dim); font-size: 11px; }
 .sketch-group .op-row.grouped { padding-left: 20px; }
+
+/* ---------- Grid controls ---------- */
+.grid-controls { display: inline-flex; align-items: center; gap: 8px; }
+.grid-controls .grid-size {
+  width: 52px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 5px; padding: 3px 6px; font-size: 12px; font-family: ui-monospace, monospace;
+}
+.grid-controls .grid-size:focus { outline: none; border-color: var(--accent); }

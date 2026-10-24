@@ -39,7 +39,8 @@ export function infer(
   sk: Sketch,
   cursor: XY,
   px: (pixels: number) => number,
-  from?: { u: number; v: number; id?: string }
+  from?: { u: number; v: number; id?: string },
+  grid?: { snap: boolean; size: number }
 ): InferResult {
   const res: InferResult = { u: cursor.x, v: cursor.y, kind: "free", markers: [] };
   const P = (id: string) => sk.entities[id] as SketchPoint;
@@ -99,11 +100,13 @@ export function infer(
     return finishDirection(res, from, lines, sk, px, true);
   }
 
-  // 4) grid
-  const g = 5;
-  const gu = Math.round(cursor.x / g) * g, gv = Math.round(cursor.y / g) * g;
-  if (Math.hypot(gu - cursor.x, gv - cursor.y) < px(6)) {
-    res.u = gu; res.v = gv; res.kind = "grid";
+  // 4) grid — only when the user has grid snapping on; then every free cursor
+  // position rounds to the nearest grid intersection (geometry snaps above win).
+  if (grid?.snap && grid.size > 0) {
+    const g = grid.size;
+    res.u = Math.round(cursor.x / g) * g;
+    res.v = Math.round(cursor.y / g) * g;
+    res.kind = "grid";
   }
 
   return finishDirection(res, from, lines, sk, px);
