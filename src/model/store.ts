@@ -20,12 +20,23 @@ const WEBMCP_LS = "chisel.webmcp.enabled";
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
 import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
-import { initKernel } from "../core/occ/kernel";
-import { evaluateFeatures, exportFeatureBlob, featureEdges, SolidEval } from "../core/features";
+import type { SolidEval } from "../core/features";
+import { GeometryBackend, InlineGeometryBackend } from "../core/geometry/backend";
+import { WorkerGeometryBackend } from "../core/geometry/worker-backend";
 import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
 import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
+
+/** The geometry backend: a Web Worker when available (keeps the OCC kernel off
+ *  the main thread), else inline on this thread. */
+function createGeometryBackend(): GeometryBackend {
+  try {
+    if (typeof Worker !== "undefined") return new WorkerGeometryBackend();
+  } catch { /* fall through to inline */ }
+  return new InlineGeometryBackend();
+}
+const geometry = createGeometryBackend();
 
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -450,8 +461,7 @@ export const useStore = create<AppState>((set, get) => {
       const doc = get().session.doc;
       const sk = doc.sketches[sid];
       if (!sk) return;
-      const sc = scope();
-      const edges = Object.keys(doc.features).flatMap((fid) => featureEdges(doc, sc, fid));
+      const edges = (await Promise.all(Object.keys(doc.features).map((fid) => geometry.edges(doc, fid)))).flat();
       if (!edges.length) { bump({ toast: { kind: "info", text: "No body to project — extrude a sketch first." } }); return; }
       const curves = projectEdges(edges, resolveSketchPlane(sk));
       if (!curves.length) { bump({ toast: { kind: "info", text: "Nothing projects onto this plane." } }); return; }
@@ -685,8 +695,8 @@ export const useStore = create<AppState>((set, get) => {
       if (get().kernelReady) return;
       set({ kernelLoading: true });
       try {
-        await initKernel({ wasmUrl: occWasmUrl }); // idempotent
-        set({ kernelReady: true, kernelLoading: false });
+        await geometry.init({ wasmUrl: occWasmUrl }); // idempotent
+        set({ kernelReady: geometry.ready(), kernelLoading: false });
       } catch (e) {
         set({ kernelLoading: false, toast: { kind: "error", text: `3D kernel failed to load: ${(e as Error).message}` } });
       }
@@ -694,7 +704,14 @@ export const useStore = create<AppState>((set, get) => {
     rebuildSolids: async () => {
       await get().ensureKernel();
       if (!get().kernelReady) return;
-      const solids = evaluateFeatures(get().session.doc, scope());
+      const doc = get().session.doc;
+      const solids = await geometry.evaluate(doc);
+      // The backend may run on a worker (a doc copy), so fold the resolved
+      // feature distances back onto the live doc for the inspector.
+      for (const [fid, s] of Object.entries(solids)) {
+        const f = doc.features[fid];
+        if (f && f.kind === "extrude" && Number.isFinite(s.distance)) f.distanceValue = s.distance;
+      }
       bump({ solids });
     },
     extrudeSketch: async (sketchId, distanceExpr, opts) => {
@@ -747,13 +764,12 @@ export const useStore = create<AppState>((set, get) => {
       await get().ensureKernel();
       if (!get().kernelReady) return;
       const doc = get().session.doc;
-      const sc = scope();
       // Stable origin: foot of the perpendicular from world (0,0,0) to the face plane.
       const d = hit.x * normal.x + hit.y * normal.y + hit.z * normal.z;
       const origin = { x: normal.x * d, y: normal.y * d, z: normal.z * d };
       const plane = makePlaneFromNormal(origin, normal);
       // Edges of every body, kept only where they lie in the picked face's plane.
-      const all = Object.keys(doc.features).flatMap((fid) => featureEdges(doc, sc, fid));
+      const all = (await Promise.all(Object.keys(doc.features).map((fid) => geometry.edges(doc, fid)))).flat();
       const tol = 0.02;
       const onPlane = all.filter((e) => e.pts.every((p) => Math.abs((p.x - origin.x) * normal.x + (p.y - origin.y) * normal.y + (p.z - origin.z) * normal.z) < tol));
       const curves = projectEdges(onPlane, plane);
@@ -782,11 +798,11 @@ export const useStore = create<AppState>((set, get) => {
     exportSolid: async (format) => {
       await get().ensureKernel();
       const doc = get().session.doc;
-      const sc = scope();
       const fid = Object.keys(doc.features)[0];
       if (!fid) { set({ toast: { kind: "error", text: "Nothing to export — extrude a sketch first." } }); return; }
-      const blob = exportFeatureBlob(doc, sc, fid, format);
-      if (!blob) { set({ toast: { kind: "error", text: "Export failed (no closed profile?)." } }); return; }
+      const bytes = await geometry.exportBytes(doc, fid, format);
+      if (!bytes) { set({ toast: { kind: "error", text: "Export failed (no closed profile?)." } }); return; }
+      const blob = new Blob([bytes as BlobPart], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

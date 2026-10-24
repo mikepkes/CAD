@@ -168,3 +168,10 @@ export function exportFeatureBlob(doc: CadDocument, scope: Scope, featureId: str
     return null;
   }
 }
+
+/** Export bytes (transferable) — the worker-safe form of exportFeatureBlob. */
+export async function exportFeatureBytes(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step"): Promise<Uint8Array | null> {
+  const blob = exportFeatureBlob(doc, scope, featureId, format);
+  if (!blob) return null;
+  return new Uint8Array(await blob.arrayBuffer());
+}
