@@ -85,6 +85,9 @@ export function Toolbar() {
   const hasSolids = useStore((s) => Object.keys(s.solids).length > 0);
 
   const [offset, setOffset] = useState(0);
+  const [datumBase, setDatumBase] = useState("XY");
+  const createDatumPlane = useStore((s) => s.createDatumPlane);
+  const datumPlanes = Object.values(session.doc.planes);
   const root = session.doc.components[session.doc.rootComponentId];
   const lastSketch = root?.sketches[root.sketches.length - 1];
 
@@ -192,6 +195,37 @@ export function Toolbar() {
               onChange={(e) => setOffset(Number(e.target.value) || 0)}
               placeholder="offset"
             />
+          </div>
+          <div className="tool-group">
+            <span className="hint">Datum:</span>
+            <select
+              className="offset-input"
+              value={datumBase}
+              title="Base plane for a new offset (datum) plane"
+              onChange={(e) => setDatumBase(e.target.value)}
+            >
+              {PLANES.map((p) => <option key={p.id} value={p.id}>{p.id}</option>)}
+              {datumPlanes.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+            <button
+              className="tool"
+              title={`Create a reusable offset plane ${offset} from ${datumBase} (parametric; editable in the timeline)`}
+              onClick={() => createDatumPlane(datumBase, String(offset))}
+            >
+              ＋ Offset Plane
+            </button>
+            {datumPlanes.map((d) => (
+              <button
+                key={d.id}
+                className="tool"
+                style={{ borderColor: "#c9a227" }}
+                onClick={() => startSketch(d.id)}
+                title={`Start a sketch on ${d.name}${d.error ? ` (unresolved: ${d.error})` : ""}`}
+              >
+                <span className="swatch" style={{ background: "#c9a227" }} />
+                {d.name}
+              </button>
+            ))}
           </div>
           <div className="tool-group">
             <button

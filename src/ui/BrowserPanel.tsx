@@ -8,8 +8,10 @@ export function BrowserPanel() {
   const editSketch = useStore((s) => s.editSketch);
   const finishSketch = useStore((s) => s.finishSketch);
 
+  const startSketch = useStore((s) => s.startSketch);
   const doc = session.doc;
   const root = doc.components[doc.rootComponentId];
+  const datums = Object.values(doc.planes);
 
   return (
     <div className="panel browser">
@@ -21,6 +23,21 @@ export function BrowserPanel() {
           <span className="tree-icon">▣</span>
           <span className="tree-label">{root?.name ?? "Root Component"}</span>
         </div>
+        {datums.map((d) => (
+          <div
+            key={d.id}
+            className="tree-row"
+            style={{ paddingLeft: 22 }}
+            onClick={() => startSketch(d.id)}
+            title={d.error ? `Unresolved: ${d.error}` : `Offset ${d.offsetExpr} from ${d.base} — click to sketch on it`}
+          >
+            <span className="tree-icon" style={{ color: "#c9a227" }}>▱</span>
+            <span className="tree-label">
+              {d.name} <span className="muted-inline">· {d.base} +{d.offsetExpr}</span>
+            </span>
+            {d.error && <span className="dof-dot bad" />}
+          </div>
+        ))}
         {(root?.sketches ?? []).map((sid) => {
           const sk = doc.sketches[sid];
           if (!sk) return null;

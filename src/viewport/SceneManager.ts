@@ -40,6 +40,8 @@ export interface ViewData {
   /** Overall constrained state of the active sketch, for Fusion-style coloring. */
   constraintState: "under" | "full" | "conflict";
   solids?: SolidView[];
+  /** Datum/reference planes to show in the scene (resolved frames), pickable for Create Sketch. */
+  datumPlanes?: { id: string; name: string; plane: WorkPlane }[];
   /** Other sketches to show dimmed on their planes (every sketch but the active one). */
   ghostSketches?: { sketch: Sketch; plane: WorkPlane }[];
   /** Pickable region fills for the active extrude session (click to choose a region). */
@@ -95,6 +97,8 @@ export class SceneManager {
   } | null = null;
 
   private planeMeshes = new Map<string, THREE.Mesh>();
+  private datumMeshes = new Map<string, THREE.Mesh>();
+  private datumGroup = new THREE.Group();
   private ghostGroup = new THREE.Group();
   private regionGroup = new THREE.Group();
   private previewSolidGroup = new THREE.Group();
@@ -159,6 +163,7 @@ export class SceneManager {
     this.scene.add(this.regionGroup);
     this.scene.add(this.previewSolidGroup);
     this.scene.add(this.planeGroup);
+    this.scene.add(this.datumGroup);
     this.scene.add(this.sketchGroup);
     this.scene.add(this.previewGroup);
     this.scene.add(this.solidsGroup);
@@ -249,6 +254,48 @@ export class SceneManager {
     // center the square around the +,+ quadrant a little
     const center = u.clone().multiplyScalar(half * 0.6).add(v.clone().multiplyScalar(half * 0.6));
     obj.position.copy(center);
+  }
+
+  /** Rebuild the datum/reference plane visuals each frame (they are parametric). */
+  private renderDatumPlanes(datums: { id: string; name: string; plane: WorkPlane }[]) {
+    this.clearGroup(this.datumGroup);
+    this.datumMeshes.clear();
+    const size = 90;
+    for (const d of datums) {
+      const p = d.plane;
+      const color = new THREE.Color(0xc9a227); // datum amber, distinct from origin planes
+      const geo = new THREE.PlaneGeometry(size, size);
+      const mat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      this.orientDatum(mesh, p, size / 2);
+      mesh.userData = { planeId: d.id, datumId: d.id, kind: "plane" };
+      this.datumMeshes.set(d.id, mesh);
+      this.datumGroup.add(mesh);
+
+      const edges = new THREE.EdgesGeometry(geo);
+      const line = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6 })
+      );
+      this.orientDatum(line, p, size / 2);
+      this.datumGroup.add(line);
+    }
+  }
+
+  /** Orient+position a datum visual: basis from the frame, centered on its origin. */
+  private orientDatum(obj: THREE.Object3D, p: WorkPlane, half: number) {
+    const u = new THREE.Vector3(p.u.x, p.u.y, p.u.z);
+    const v = new THREE.Vector3(p.v.x, p.v.y, p.v.z);
+    const n = new THREE.Vector3(p.normal.x, p.normal.y, p.normal.z);
+    obj.setRotationFromMatrix(new THREE.Matrix4().makeBasis(u, v, n));
+    const center = u.clone().multiplyScalar(half * 0.6).add(v.clone().multiplyScalar(half * 0.6));
+    obj.position.set(p.origin.x, p.origin.y, p.origin.z).add(center);
   }
 
   // Once we have seen a wheel event that could only come from a trackpad
@@ -427,7 +474,10 @@ export class SceneManager {
       // Prefer a solid face (for sketch-on-face / face extrude), else an origin plane.
       const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh);
       const faceHits = this.raycaster.intersectObjects(solidMeshes, false);
-      const planeHits = this.raycaster.intersectObjects([...this.planeMeshes.values()], false);
+      const planeHits = this.raycaster.intersectObjects(
+        [...this.planeMeshes.values(), ...this.datumMeshes.values()],
+        false
+      );
       const fh = faceHits[0], ph = planeHits[0];
       if (fh && fh.face && (!ph || fh.distance <= ph.distance)) {
         const n = fh.face.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
@@ -660,9 +710,11 @@ export class SceneManager {
   update(data: ViewData) {
     this.lastData = data;
     this.planeGroup.visible = data.showPlanes && data.mode === "model";
+    this.datumGroup.visible = data.showPlanes && data.mode === "model";
     if (data.gridSize) this.applyGrid(data.gridSize);
     this.grid.visible = data.showGrid;
 
+    this.renderDatumPlanes(data.datumPlanes ?? []);
     this.clearGroup(this.sketchGroup);
     this.clearGroup(this.previewGroup);
     this.clearGroup(this.solidsGroup);

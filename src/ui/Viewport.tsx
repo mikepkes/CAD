@@ -64,6 +64,9 @@ function buildView(s: AppState): ViewData {
   const ghostSketches = Object.values(s.session.doc.sketches)
     .filter((sk) => sk.id !== s.activeSketchId)
     .map((sk) => ({ sketch: sk, plane: resolveSketchPlane(sk) }));
+  const datumPlanes = Object.values(s.session.doc.planes)
+    .filter((d) => d.plane)
+    .map((d) => ({ id: d.id, name: d.name, plane: d.plane! }));
   const solids = Object.values(s.solids)
     .filter((sol) => sol.mesh)
     .map((sol) => ({
@@ -93,6 +96,7 @@ function buildView(s: AppState): ViewData {
           : "under",
     solids,
     ghostSketches,
+    datumPlanes,
     extrudeRegions: buildExtrudeRegions(s),
     extrudePreview: buildExtrudePreview(s),
   };

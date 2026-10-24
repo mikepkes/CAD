@@ -136,6 +136,7 @@ export interface AppState {
   sketchPlacing: boolean;
   setSketchPlacing: (on: boolean) => void;
   startSketch: (plane: string, offset?: number) => Promise<void>;
+  createDatumPlane: (base: string, offset: string) => Promise<string | null>;
   startSketchOnFace: (hit: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => Promise<void>;
   finishSketch: () => void;
   editSketch: (id: string) => void;
@@ -387,8 +388,20 @@ export const useStore = create<AppState>((set, get) => {
 
     setSketchPlacing: (on) => set({ sketchPlacing: on }),
     startSketch: async (plane, offset) => {
-      const r = await runDispatch("sketch.create", offset ? { plane, offset } : { plane });
-      if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: `Sketching on ${plane}${offset ? ` +${offset}` : ""}.` });
+      // A datum plane id (from plane.create) routes to the {datum} param; an
+      // origin plane id (XY/XZ/YZ) keeps the {plane[, offset]} form.
+      const isDatum = !!get().session.doc.planes[plane];
+      const params = isDatum ? { datum: plane } : offset ? { plane, offset } : { plane };
+      const r = await runDispatch("sketch.create", params);
+      if (r.ok) {
+        const label = isDatum ? get().session.doc.planes[plane].name : `${plane}${offset ? ` +${offset}` : ""}`;
+        set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: `Sketching on ${label}.` });
+      }
+    },
+    createDatumPlane: async (base, offset) => {
+      const r = await runDispatch("plane.create", { base, offset });
+      if (r.ok) { set({ lastMessage: `Created offset plane from ${base} by ${offset}.` }); return r.createdIds[0]; }
+      return null;
     },
     startSketchOnFace: async (hit, normal) => {
       // Stable sketch origin: foot of the perpendicular from world (0,0,0) to the face plane.
