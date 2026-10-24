@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { SceneManager, PreviewGeom, ViewData } from "./SceneManager";
 import { GeoRef, useStore } from "../model/store";
 import { Sketch, SketchArc, SketchCircle, SketchPoint } from "../sketch/types";
+import { resolveSketchPlane } from "../geometry/plane";
 import { availableOps } from "../model/selectionOps";
 import { infer, InferResult } from "./snapping";
 
@@ -60,7 +61,7 @@ export class Interactions {
     const st = this.st();
     if (st.mode === "sketch" && st.activeSketchId) {
       const sk = st.session.doc.sketches[st.activeSketchId];
-      if (sk) this.scene.focusPlane(sk.planeId);
+      if (sk) this.scene.focusPlane(resolveSketchPlane(sk));
     }
   };
 
@@ -100,7 +101,7 @@ export class Interactions {
     const st = this.st();
     if (!st.activeSketchId) return null;
     const sk = st.session.doc.sketches[st.activeSketchId];
-    const uv = this.scene.pointerToUV(clientX, clientY, sk.planeId);
+    const uv = this.scene.pointerToUV(clientX, clientY, resolveSketchPlane(sk));
     if (!uv) return null;
     let from: { u: number; v: number; id?: string } | undefined;
     if (this.stage.kind === "line") {
@@ -156,9 +157,9 @@ export class Interactions {
     box: { x0: number; y0: number; x1: number; y1: number },
     crossing: boolean
   ): string[] {
-    const planeId = sk.planeId as string;
+    const plane = resolveSketchPlane(sk);
     const P = (id: string) => sk.entities[id] as SketchPoint;
-    const toS = (u: number, v: number) => this.scene.uvToScreen(planeId, u, v);
+    const toS = (u: number, v: number) => this.scene.uvToScreen(plane, u, v);
     const inRect = (p: { x: number; y: number }) => p.x >= box.x0 && p.x <= box.x1 && p.y >= box.y0 && p.y <= box.y1;
 
     // Rule for a list of screen samples: window = all inside; crossing = any inside.
@@ -235,7 +236,7 @@ export class Interactions {
 
     if (this.dragging) {
       // use raw uv (don't snap to the dragged point itself)
-      const uv = this.scene.pointerToUV(e.clientX, e.clientY, st.session.doc.sketches[st.activeSketchId!].planeId);
+      const uv = this.scene.pointerToUV(e.clientX, e.clientY, resolveSketchPlane(st.session.doc.sketches[st.activeSketchId!]));
       if (uv) st.dragTo(uv.u, uv.v);
       return;
     }
@@ -265,6 +266,9 @@ export class Interactions {
       if (!this.moved && this.downPt && this.base) {
         const pick = this.scene.pick(e.clientX, e.clientY, this.base);
         if (pick.type === "plane" && pick.id) st.startSketch(pick.id);
+        else if (pick.type === "face" && pick.world && pick.normal) {
+          st.startSketchOnFace({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);
+        }
       }
       this.downPt = null;
       return;
@@ -366,7 +370,7 @@ export class Interactions {
     const ent = sk.entities[pick.id];
     if (!ent || (ent.kind !== "line" && ent.kind !== "circle" && ent.kind !== "arc")) return;
     // Use the exact click point on the plane (not a snapped grid point).
-    const uv = this.scene.pointerToUV(e.clientX, e.clientY, sk.planeId);
+    const uv = this.scene.pointerToUV(e.clientX, e.clientY, resolveSketchPlane(sk));
     if (!uv) return;
     await st.dispatch(command, { sketch: st.activeSketchId, target: pick.id, u: uv.u, v: uv.v });
   }

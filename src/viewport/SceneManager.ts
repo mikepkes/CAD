@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { PLANES, WorkPlane, planeById, to3d } from "../geometry/plane";
+import { PLANES, WorkPlane, to3d } from "../geometry/plane";
 import { Sketch, SketchArc, SketchCircle, SketchLine, SketchPoint } from "../sketch/types";
 import { isDimension } from "../sketch/types";
 import { extractProfiles, Loop } from "../core/geometry/profile";
@@ -25,6 +25,8 @@ export interface SolidView {
 export interface ViewData {
   mode: "model" | "sketch";
   planeId: string | null;
+  /** Resolved work plane of the active sketch (origin, offset, or face). */
+  plane: WorkPlane | null;
   sketch: Sketch | null;
   selection: Set<string>;
   hover: string | null;
@@ -38,10 +40,12 @@ export interface ViewData {
 }
 
 export interface PickResult {
-  type: "plane" | "entity" | "empty";
+  type: "plane" | "entity" | "face" | "empty";
   id?: string;
   entityKind?: string;
   world?: THREE.Vector3;
+  /** World-space normal of a picked solid face. */
+  normal?: { x: number; y: number; z: number };
 }
 
 const COLORS = {
@@ -218,8 +222,7 @@ export class SceneManager {
   }
 
   /** Intersect the active work plane; returns sketch (u,v). */
-  pointerToUV(clientX: number, clientY: number, planeId: string): { u: number; v: number } | null {
-    const p = planeById(planeId);
+  pointerToUV(clientX: number, clientY: number, p: WorkPlane): { u: number; v: number } | null {
     const ndc = this.ndc(clientX, clientY);
     this.raycaster.setFromCamera(ndc, this.camera);
     const plane = new THREE.Plane();
@@ -252,11 +255,16 @@ export class SceneManager {
       }
       return { type: "empty", world: hits[0]?.point };
     } else {
-      const meshes = [...this.planeMeshes.values()];
-      const hits = this.raycaster.intersectObjects(meshes, false);
-      if (hits.length) {
-        return { type: "plane", id: hits[0].object.userData.planeId, world: hits[0].point };
+      // Prefer a solid face (for sketch-on-face), else an origin plane.
+      const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh);
+      const faceHits = this.raycaster.intersectObjects(solidMeshes, false);
+      const planeHits = this.raycaster.intersectObjects([...this.planeMeshes.values()], false);
+      const fh = faceHits[0], ph = planeHits[0];
+      if (fh && fh.face && (!ph || fh.distance <= ph.distance)) {
+        const n = fh.face.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
+        return { type: "face", world: fh.point, normal: { x: n.x, y: n.y, z: n.z } };
       }
+      if (ph) return { type: "plane", id: ph.object.userData.planeId, world: ph.point };
       return { type: "empty" };
     }
   }
@@ -267,8 +275,8 @@ export class SceneManager {
   }
 
   /** Project a sketch-plane (u,v) point to client screen coordinates. */
-  uvToScreen(planeId: string, u: number, v: number): { x: number; y: number } {
-    const world = this.worldPt(planeById(planeId), u, v);
+  uvToScreen(plane: WorkPlane, u: number, v: number): { x: number; y: number } {
+    const world = this.worldPt(plane, u, v);
     const ndc = world.project(this.camera);
     const rect = this.renderer.domElement.getBoundingClientRect();
     return {
@@ -286,8 +294,7 @@ export class SceneManager {
   }
 
   /** Smoothly orient the camera to look straight at a plane. */
-  focusPlane(planeId: string) {
-    const p = planeById(planeId);
+  focusPlane(p: WorkPlane) {
     const target = new THREE.Vector3(p.origin.x, p.origin.y, p.origin.z);
     const normal = new THREE.Vector3(p.normal.x, p.normal.y, p.normal.z);
     const dist = 180;
@@ -314,9 +321,9 @@ export class SceneManager {
     this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
     if (data.solids) for (const s of data.solids) this.renderSolid(s, data.mode === "sketch");
 
-    if (data.sketch && data.planeId) {
-      this.renderSketch(data.sketch, planeById(data.planeId), data);
-      if (data.preview) this.renderPreview(data.preview, planeById(data.planeId));
+    if (data.sketch && data.plane) {
+      this.renderSketch(data.sketch, data.plane, data);
+      if (data.preview) this.renderPreview(data.preview, data.plane);
     }
   }
 

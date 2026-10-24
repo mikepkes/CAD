@@ -38,8 +38,9 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
 
 ## Milestone 4 — 3D workflow
 - [x] **Project body edges** onto the active sketch (OCC edge extraction → fit lines/circles/arcs, dedupe, merge split circles). Snapshot (non-associative) for now; associative re-projection needs a dependency-ordered rebuild.
-- [ ] Sketch on a body face (face pick → work plane)
-- [ ] Construction / offset planes
+- [x] **Sketch on a body face** — pick a solid face in model mode → a work plane coincident with it (stable origin at the perpendicular foot from the world origin)
+- [x] **Offset planes** — start a sketch offset along an origin plane's normal (offset field in the toolbar)
+- [x] Generalized work planes (arbitrary origin/normal stored on the sketch); renderer/interactions/features all plane-agnostic
 - [ ] Intersect edges; revolve; 3D fillet / shell; components
 
 ## Deviations from Fusion (intentional)

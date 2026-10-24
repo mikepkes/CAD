@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Tool, useStore } from "../model/store";
 import { PLANES } from "../geometry/plane";
 
@@ -55,6 +55,7 @@ export function Toolbar() {
   const kernelLoading = useStore((s) => s.kernelLoading);
   const hasSolids = useStore((s) => Object.keys(s.solids).length > 0);
 
+  const [offset, setOffset] = useState(0);
   const root = session.doc.components[session.doc.rootComponentId];
   const lastSketch = root?.sketches[root.sketches.length - 1];
 
@@ -111,13 +112,21 @@ export function Toolbar() {
                 key={p.id}
                 className="tool"
                 style={{ borderColor: p.color }}
-                onClick={() => startSketch(p.id)}
-                title={`Start a sketch on the ${p.name} plane`}
+                onClick={() => startSketch(p.id, offset || undefined)}
+                title={`Start a sketch on the ${p.name} plane${offset ? ` (offset ${offset})` : ""} — or click a body face in the viewport`}
               >
                 <span className="swatch" style={{ background: p.color }} />
                 {p.id}
               </button>
             ))}
+            <input
+              className="offset-input"
+              type="number"
+              value={offset}
+              title="Offset distance along the plane normal (0 = on the plane)"
+              onChange={(e) => setOffset(Number(e.target.value) || 0)}
+              placeholder="offset"
+            />
           </div>
           <div className="tool-group">
             <button

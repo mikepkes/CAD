@@ -1,6 +1,8 @@
 // Data model for 2D sketches. Entities reference points by id; only point
 // coordinates and circle/arc radii become solver variables.
 
+import type { WorkPlane } from "../geometry/plane";
+
 export type EntityId = string;
 export type ConstraintId = string;
 
@@ -106,7 +108,9 @@ export const isDimension = (c: Constraint): c is DimensionConstraint =>
 export interface Sketch {
   id: string;
   name: string;
-  planeId: string; // which plane this sketch lives on
+  planeId: string; // which plane this sketch lives on ("XY"/"XZ"/"YZ", or "custom")
+  /** Full plane geometry when not one of the origin planes (face / offset plane). */
+  plane?: WorkPlane;
   originPointId: EntityId;
   entities: Record<EntityId, SketchEntity>;
   constraints: Record<ConstraintId, Constraint>;

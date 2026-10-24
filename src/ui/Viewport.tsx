@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SceneManager, ViewData } from "../viewport/SceneManager";
 import { Interactions } from "../viewport/interactions";
 import { AppState, useStore } from "../model/store";
+import { resolveSketchPlane } from "../geometry/plane";
 import { ContextMenu } from "./ContextMenu";
 
 function buildView(s: AppState): ViewData {
@@ -17,6 +18,7 @@ function buildView(s: AppState): ViewData {
   return {
     mode: s.mode,
     planeId: sketch ? sketch.planeId : null,
+    plane: sketch ? resolveSketchPlane(sketch) : null,
     sketch,
     selection: new Set(s.selection),
     hover: s.hover,
@@ -57,7 +59,7 @@ export function Viewport() {
       }
       if (s.mode === "sketch" && s.activeSketchId && s.activeSketchId !== prevSketch) {
         const sk = s.session.doc.sketches[s.activeSketchId];
-        if (sk) scene.focusPlane(sk.planeId);
+        if (sk) scene.focusPlane(resolveSketchPlane(sk));
       }
       prevSketch = s.activeSketchId;
     });

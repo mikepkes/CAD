@@ -13,7 +13,7 @@ import { Sketch } from "../sketch/types";
 import { initKernel } from "../core/occ/kernel";
 import { evaluateFeatures, exportFeatureBlob, featureEdges, SolidEval } from "../core/features";
 import { projectEdges } from "../core/geometry/project";
-import { planeById } from "../geometry/plane";
+import { resolveSketchPlane } from "../geometry/plane";
 import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
 
@@ -80,7 +80,8 @@ export interface AppState {
   dismissToast: () => void;
 
   // sketch lifecycle
-  startSketch: (plane: string) => Promise<void>;
+  startSketch: (plane: string, offset?: number) => Promise<void>;
+  startSketchOnFace: (hit: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => Promise<void>;
   finishSketch: () => void;
   editSketch: (id: string) => void;
 
@@ -214,9 +215,16 @@ export const useStore = create<AppState>((set, get) => {
     toggleShowConstraints: () => set((s) => ({ showConstraints: !s.showConstraints })),
     dismissToast: () => set({ toast: null }),
 
-    startSketch: async (plane) => {
-      const r = await runDispatch("sketch.create", { plane });
-      if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], lastMessage: `Sketching on ${plane}.` });
+    startSketch: async (plane, offset) => {
+      const r = await runDispatch("sketch.create", offset ? { plane, offset } : { plane });
+      if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], lastMessage: `Sketching on ${plane}${offset ? ` +${offset}` : ""}.` });
+    },
+    startSketchOnFace: async (hit, normal) => {
+      // Stable sketch origin: foot of the perpendicular from world (0,0,0) to the face plane.
+      const d = hit.x * normal.x + hit.y * normal.y + hit.z * normal.z;
+      const origin = { x: normal.x * d, y: normal.y * d, z: normal.z * d };
+      const r = await runDispatch("sketch.create", { planeDef: { origin, normal } });
+      if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], lastMessage: "Sketching on face." });
     },
     finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null }),
     editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [] }),
@@ -238,7 +246,7 @@ export const useStore = create<AppState>((set, get) => {
       const sc = scope();
       const edges = Object.keys(doc.features).flatMap((fid) => featureEdges(doc, sc, fid));
       if (!edges.length) { bump({ toast: { kind: "info", text: "No body to project — extrude a sketch first." } }); return; }
-      const curves = projectEdges(edges, planeById(sk.planeId));
+      const curves = projectEdges(edges, resolveSketchPlane(sk));
       if (!curves.length) { bump({ toast: { kind: "info", text: "Nothing projects onto this plane." } }); return; }
       await runDispatch("sketch.projectCurves", { sketch: sid, curves, construction });
     },

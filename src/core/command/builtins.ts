@@ -12,6 +12,8 @@ import {
 } from "../../sketch/types";
 import { CommandRegistry } from "./registry";
 import { CommandApplyInfo, CommandContext, CommandDef, JSONSchema } from "./types";
+import { makePlaneFromNormal, offsetPlane, planeById, WorkPlane } from "../../geometry/plane";
+import { Vec3 } from "../../math/vec";
 import { ICurve, intersect, paramOf, pointAt } from "../geometry/intersect";
 import { ProjectedCurve } from "../geometry/project";
 
@@ -119,28 +121,49 @@ export const BUILTINS: CommandDef<any>[] = [
   {
     type: "sketch.create",
     title: "Create sketch",
-    summary: "Start a new sketch on an origin plane (XY, XZ, or YZ).",
+    summary: "Start a new sketch on an origin plane, an offset plane, or a body face.",
     description:
-      "Creates a sketch bound to one of the three origin planes, with a fixed origin point at (0,0). Returns the sketch id and the origin point id (first createdId is the sketch, second is the origin).",
+      "Creates a sketch with a fixed origin point. Bind it to an origin plane (`plane`: XY/XZ/YZ), optionally offset along its normal (`offset`), or to an arbitrary plane via `planeDef` {origin, normal} (e.g. a picked face). Returns [sketchId, originId].",
     paramsSchema: {
       type: "object",
-      required: ["plane"],
       additionalProperties: false,
       properties: {
         plane: { type: "string", enum: PLANE_ENUM, description: "Origin plane." },
+        offset: { type: "number", description: "Offset distance along the plane normal." },
+        planeDef: {
+          type: "object",
+          description: "Arbitrary plane from a face: origin point + normal vector.",
+          properties: {
+            origin: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+            normal: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+          },
+        },
         name: { type: "string", description: "Optional sketch name." },
       },
     },
-    examples: [{ note: "Sketch on the front plane", params: { plane: "XZ" } }],
-    apply(draft, p: { plane: string; name?: string }, ctx) {
+    examples: [
+      { note: "Sketch on the front plane", params: { plane: "XZ" } },
+      { note: "Sketch 20mm above XY", params: { plane: "XY", offset: 20 } },
+    ],
+    apply(draft, p: { plane?: string; offset?: number; planeDef?: { origin: Vec3; normal: Vec3 }; name?: string }, ctx) {
       const sid = ctx.alloc("sketch");
       const originId = ctx.alloc("pt");
       const count = Object.keys(draft.sketches).length + 1;
       const origin: SketchPoint = { id: originId, kind: "point", x: 0, y: 0, fixed: true };
+      let planeId = p.plane ?? "custom";
+      let plane: WorkPlane | undefined;
+      if (p.planeDef) {
+        plane = makePlaneFromNormal(p.planeDef.origin, p.planeDef.normal, p.name);
+        planeId = "custom";
+      } else if (p.offset && Math.abs(p.offset) > 1e-9) {
+        plane = offsetPlane(planeById(p.plane ?? "XY"), p.offset);
+        planeId = "custom";
+      }
       draft.sketches[sid] = {
         id: sid,
         name: p.name ?? `Sketch ${count}`,
-        planeId: p.plane,
+        planeId,
+        plane,
         originPointId: originId,
         entities: { [originId]: origin },
         constraints: {},

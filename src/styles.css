@@ -258,6 +258,17 @@ body {
 .inline-dim:focus {
   outline: none;
 }
+.offset-input {
+  width: 58px;
+  margin-left: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+}
 .box-select {
   position: fixed;
   z-index: 40;

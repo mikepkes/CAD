@@ -5,7 +5,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import { CadDocument, ExtrudeFeature } from "./document";
-import { planeById, WorkPlane } from "../geometry/plane";
+import { offsetPlane, resolveSketchPlane } from "../geometry/plane";
 import { extractProfiles } from "./geometry/profile";
 import { Edge3D, extrudeToEdges, extrudeToMesh, extrudeToBlob, isKernelReady, SolidMesh } from "./occ/kernel";
 
@@ -31,14 +31,6 @@ function resolveDistance(f: ExtrudeFeature, scope: Scope): number {
   return f.distanceValue;
 }
 
-/** Offset a plane along its normal (for symmetric extrude). */
-function offsetPlane(wp: WorkPlane, d: number): WorkPlane {
-  return {
-    ...wp,
-    origin: { x: wp.origin.x + wp.normal.x * d, y: wp.origin.y + wp.normal.y * d, z: wp.origin.z + wp.normal.z * d },
-  };
-}
-
 export function evaluateFeatures(doc: CadDocument, scope: Scope): Record<string, SolidEval> {
   const out: Record<string, SolidEval> = {};
   for (const f of Object.values(doc.features)) {
@@ -51,7 +43,7 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope): Record<string,
     const profile = extractProfiles(sketch);
     if (!profile) { out[f.id] = { ...base, error: "no closed profile in sketch" }; continue; }
     const d = Math.abs(distance) < 1e-9 ? 1e-6 : distance;
-    const wp = f.symmetric ? offsetPlane(planeById(sketch.planeId), -d / 2) : planeById(sketch.planeId);
+    const wp = f.symmetric ? offsetPlane(resolveSketchPlane(sketch), -d / 2) : resolveSketchPlane(sketch);
     try {
       const mesh = extrudeToMesh(wp, profile, d);
       out[f.id] = { ...base, mesh };
@@ -72,7 +64,7 @@ export function featureEdges(doc: CadDocument, scope: Scope, featureId: string):
   if (!profile) return [];
   const distance = resolveDistance(f, scope);
   const d = Math.abs(distance) < 1e-9 ? 1e-6 : distance;
-  const wp = f.symmetric ? offsetPlane(planeById(sketch.planeId), -d / 2) : planeById(sketch.planeId);
+  const wp = f.symmetric ? offsetPlane(resolveSketchPlane(sketch), -d / 2) : resolveSketchPlane(sketch);
   try {
     return extrudeToEdges(wp, profile, d);
   } catch {
@@ -94,6 +86,6 @@ export function exportFeatureBlob(
   if (!profile) return null;
   const distance = resolveDistance(f, scope);
   const d = Math.abs(distance) < 1e-9 ? 1e-6 : distance;
-  const wp = f.symmetric ? offsetPlane(planeById(sketch.planeId), -d / 2) : planeById(sketch.planeId);
+  const wp = f.symmetric ? offsetPlane(resolveSketchPlane(sketch), -d / 2) : resolveSketchPlane(sketch);
   return extrudeToBlob(wp, profile, d, format);
 }
