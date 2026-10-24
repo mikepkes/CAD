@@ -156,10 +156,81 @@ function applyMirror(doc: CadDocument, f: MirrorFeature, bodies: Body[], out: Re
   }
 }
 
-export function evaluateFeatures(doc: CadDocument, scope: Scope): Record<string, SolidEval> {
-  const out: Record<string, SolidEval> = {};
+/**
+ * A per-body mesh cache for incremental evaluation. Keyed by a content signature
+ * of everything that shapes a body, so an edit only rebuilds the bodies whose
+ * inputs changed; the rest are served from cache. Lives in the geometry backend
+ * (persists across evaluations). Stored meshes are pristine copies — the output
+ * always gets its own copy, so transferring output buffers never detaches them.
+ */
+export class GeometryCache {
+  private meshes = new Map<string, SolidMesh>();
+  hits = 0;
+  misses = 0;
+  get(sig: string): SolidMesh | undefined { return this.meshes.get(sig); }
+  store(sig: string, mesh: SolidMesh): void { this.meshes.set(sig, cloneMesh(mesh)); }
+  /** Drop entries not touched this evaluation (bounds the cache to the live model). */
+  prune(used: Set<string>): void { for (const k of this.meshes.keys()) if (!used.has(k)) this.meshes.delete(k); }
+  clear(): void { this.meshes.clear(); }
+  get size(): number { return this.meshes.size; }
+}
+
+function cloneMesh(m: SolidMesh): SolidMesh {
+  return { positions: m.positions.slice(), normals: m.normals.slice(), indices: m.indices.slice(), edges: m.edges.slice(), triangleCount: m.triangleCount };
+}
+
+/** A body group: a "new" extrude plus the join/cut extrudes folded into it. */
+interface ExtrudeGroup { newId: string; name: string; sketchId: string; features: ExtrudeFeature[] }
+
+function groupExtrudes(features: FeatureDef[]): ExtrudeGroup[] {
+  const groups: ExtrudeGroup[] = [];
+  for (const f of features) {
+    if (f.kind !== "extrude") continue;
+    const op = f.operation ?? "new";
+    if (op === "new" || groups.length === 0) groups.push({ newId: f.id, name: f.name, sketchId: f.sketchId, features: [f] });
+    else groups[groups.length - 1].features.push(f);
+  }
+  return groups;
+}
+
+/** A content signature for a body group: changes iff its built shape would change. */
+function groupSignature(doc: CadDocument, scope: Scope, g: ExtrudeGroup): string {
+  const parts: string[] = [];
+  for (const f of g.features) {
+    parts.push(f.id, f.operation ?? "new", f.symmetric ? "s" : "", f.regionPoint ? `${f.regionPoint.x},${f.regionPoint.y}` : "", String(resolveDistance(f, scope)));
+    const sk = doc.sketches[f.sketchId];
+    if (sk) parts.push(sketchSignature(sk));
+  }
+  return parts.join("|");
+}
+
+function sketchSignature(sk: { entities: Record<string, unknown>; plane?: WorkPlane; planeId: string }): string {
+  const ents: number[] = [];
+  for (const e of Object.values(sk.entities) as { kind: string; x?: number; y?: number; r?: number; rx?: number; ry?: number; rotation?: number }[]) {
+    ents.push(e.x ?? 0, e.y ?? 0, e.r ?? 0, e.rx ?? 0, e.ry ?? 0, e.rotation ?? 0);
+  }
+  const p = sk.plane ? sk.plane.origin : { x: 0, y: 0, z: 0 };
+  const n = sk.plane ? sk.plane.normal : { x: 0, y: 0, z: 0 };
+  return `${sk.planeId}:${p.x},${p.y},${p.z},${n.x},${n.y},${n.z}#${ents.join(",")}`;
+}
+
+/** Build a body group's final shape: its "new" extrude with its joins/cuts folded in. */
+function buildGroupShape(doc: CadDocument, scope: Scope, g: ExtrudeGroup): Shape3D {
+  let shape = buildFeatureSolid(doc, scope, g.features[0]);
+  for (let i = 1; i < g.features.length; i++) {
+    const f = g.features[i];
+    const s = buildFeatureSolid(doc, scope, f);
+    const combined = (f.operation ?? "new") === "cut" ? cutShapes(shape, s) : fuseShapes(shape, s);
+    shape.delete(); s.delete();
+    shape = combined;
+  }
+  return shape;
+}
+
+export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: GeometryCache): Record<string, SolidEval> {
   const features: FeatureDef[] = Object.values(doc.features);
   if (!isKernelReady()) {
+    const out: Record<string, SolidEval> = {};
     for (const f of features) {
       out[f.id] = f.kind === "extrude"
         ? { featureId: f.id, name: f.name, sketchId: f.sketchId, distance: resolveDistance(f, scope), error: "kernel not ready" }
@@ -167,8 +238,45 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope): Record<string,
     }
     return out;
   }
+  // The cache only applies when every body is independent: no mirror (touches all
+  // bodies) and no face-referenced sketch (resolves against other bodies). Those
+  // cases take the full path — still correct, just not incremental.
+  const independent = !features.some((f) => f.kind === "mirror") && !Object.values(doc.sketches).some((s) => s.faceRef);
+  if (cache && independent) return evaluateCached(doc, scope, cache);
+  return evaluateFull(doc, scope);
+}
+
+/** Incremental: rebuild only the body groups whose signature changed. */
+function evaluateCached(doc: CadDocument, scope: Scope, cache: GeometryCache): Record<string, SolidEval> {
+  const out: Record<string, SolidEval> = {};
+  const used = new Set<string>();
+  for (const g of groupExtrudes(Object.values(doc.features))) {
+    const distance = resolveDistance(g.features[0], scope);
+    const meta = { featureId: g.newId, name: g.name, sketchId: g.sketchId, distance };
+    const sig = groupSignature(doc, scope, g);
+    used.add(sig);
+    const hit = cache.get(sig);
+    if (hit) { cache.hits++; out[g.newId] = { ...meta, mesh: cloneMesh(hit) }; continue; }
+    cache.misses++;
+    try {
+      const shape = buildGroupShape(doc, scope, g);
+      let mesh: SolidMesh;
+      try { mesh = meshShape(shape); } finally { shape.delete(); }
+      cache.store(sig, mesh);
+      out[g.newId] = { ...meta, mesh };
+    } catch (e) {
+      out[g.newId] = { ...meta, error: (e as Error).message };
+    }
+  }
+  cache.prune(used);
+  return out;
+}
+
+/** Full evaluation: builds every feature in order (handles mirror + face refs). */
+function evaluateFull(doc: CadDocument, scope: Scope): Record<string, SolidEval> {
+  const out: Record<string, SolidEval> = {};
   const bodies: Body[] = [];
-  for (const f of features) {
+  for (const f of Object.values(doc.features)) {
     if (f.kind === "extrude") applyExtrude(doc, scope, f, bodies, out);
     else if (f.kind === "mirror") applyMirror(doc, f, bodies, out);
   }

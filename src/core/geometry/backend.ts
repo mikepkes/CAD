@@ -9,7 +9,7 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../../model/parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
-import { evaluateFeatures, featureEdges, exportFeatureBytes, SolidEval } from "../features";
+import { evaluateFeatures, featureEdges, exportFeatureBytes, GeometryCache, SolidEval } from "../features";
 
 export type ExportFormat = "stl" | "step";
 
@@ -82,11 +82,11 @@ export function meshTransferables(solids: Record<string, SolidEval>): ArrayBuffe
  * `parentPort` — just a request in, a response plus its transfer list out. The
  * kernel must already be initialized in whatever realm this runs in.
  */
-export async function runGeometryJob(req: GeometryRequest): Promise<{ res: GeometryResponse; transfer: ArrayBuffer[] }> {
+export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache): Promise<{ res: GeometryResponse; transfer: ArrayBuffer[] }> {
   try {
     const scope = scopeOf(req.doc);
     if (req.kind === "evaluate") {
-      const solids = evaluateFeatures(req.doc, scope);
+      const solids = evaluateFeatures(req.doc, scope, cache);
       return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(req.doc) }, transfer: meshTransferables(solids) };
     }
     if (req.kind === "edges") {
@@ -106,13 +106,14 @@ export async function runGeometryJob(req: GeometryRequest): Promise<{ res: Geome
  *  fallback when workers aren't available. */
 export class InlineGeometryBackend implements GeometryBackend {
   private isReady = false;
+  private cache = new GeometryCache();
   async init(opts: KernelInitOptions): Promise<void> {
     await initKernel(opts);
     this.isReady = isKernelReady();
   }
   ready(): boolean { return this.isReady; }
   async evaluate(doc: CadDocument): Promise<EvaluateResult> {
-    const solids = evaluateFeatures(doc, scopeOf(doc));
+    const solids = evaluateFeatures(doc, scopeOf(doc), this.cache);
     return { solids, facePlanes: collectFacePlanes(doc) };
   }
   async edges(doc: CadDocument, featureId: string): Promise<Edge3D[]> {

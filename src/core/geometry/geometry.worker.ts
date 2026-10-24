@@ -5,10 +5,13 @@
 // list, so they move to the main thread zero-copy.
 
 import { runGeometryJob, GeometryRequest } from "./backend";
+import { GeometryCache } from "../features";
 import { initKernel } from "../occ/kernel";
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 let initPromise: Promise<void> | null = null;
+// Persists across messages so evaluations are incremental (see GeometryCache).
+const cache = new GeometryCache();
 
 ctx.onmessage = async (e: MessageEvent) => {
   const msg = e.data as { kind: "init"; wasmUrl?: string } | GeometryRequest;
@@ -19,6 +22,6 @@ ctx.onmessage = async (e: MessageEvent) => {
     return;
   }
   if (initPromise) await initPromise;
-  const { res, transfer } = await runGeometryJob(msg);
+  const { res, transfer } = await runGeometryJob(msg, cache);
   ctx.postMessage(res, transfer);
 };
