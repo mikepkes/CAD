@@ -116,7 +116,9 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
             ? { id: ent.id, kind: "line", p1: ent.p1, p2: ent.p2 }
             : ent.kind === "circle"
               ? { id: ent.id, kind: "circle", center: ent.center, r: round(ent.r) }
-              : { id: ent.id, kind: "arc", center: ent.center, start: ent.p1, end: ent.p2, r: round(ent.r) }
+              : ent.kind === "arc"
+                ? { id: ent.id, kind: "arc", center: ent.center, start: ent.p1, end: ent.p2, r: round(ent.r) }
+                : { id: ent.id, kind: "ellipse", center: ent.center, rx: round(ent.rx), ry: round(ent.ry), rotation: round(ent.rotation) }
       ),
       constraints: Object.values(s.constraints).map((c) => ({ ...c })),
     };
