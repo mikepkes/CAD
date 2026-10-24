@@ -7,6 +7,8 @@ import { CadDocument } from "./document";
 import { resolveParameters } from "../model/parameters";
 import { ConstraintSolver, SolveDiagnosis } from "./solver/model";
 import { compileSketch } from "./solver/compile";
+import { compileExpr, Scope } from "../math/expr";
+import { planeById, offsetPlane } from "../geometry/plane";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchLine, SketchPoint } from "../sketch/types";
 
 export interface SketchEvaluation {
@@ -25,6 +27,14 @@ export async function recompute(
 ): Promise<Evaluations> {
   const { scope, resolved } = resolveParameters(doc.parameters);
   doc.parameters = resolved;
+
+  // Resolve datum planes (parametric frames), then push each resolved frame onto
+  // the sketches that live on it — so a sketch/feature built on a datum moves
+  // when the datum's offset changes.
+  resolveDatumPlanes(doc, scope);
+  for (const sk of Object.values(doc.sketches)) {
+    if (sk.datumId) sk.plane = doc.planes[sk.datumId]?.plane;
+  }
 
   const evals: Evaluations = {};
 
@@ -92,6 +102,28 @@ export async function recompute(
   }
 
   return evals;
+}
+
+/** Resolve each datum plane's frame from its base + offset expression. Chains
+ *  (datum on datum) resolve over a few passes; a dangling base records an error. */
+function resolveDatumPlanes(doc: CadDocument, scope: Scope) {
+  const datums = Object.values(doc.planes);
+  for (const dp of datums) { dp.plane = undefined; dp.error = undefined; }
+  for (let pass = 0; pass <= datums.length; pass++) {
+    let progress = false;
+    for (const dp of datums) {
+      if (dp.plane) continue;
+      const base = ["XY", "XZ", "YZ"].includes(dp.base) ? planeById(dp.base) : doc.planes[dp.base]?.plane;
+      if (!base) continue; // base is an unresolved datum — try next pass
+      let off = dp.offsetValue;
+      try { const v = compileExpr(dp.offsetExpr).eval(scope); if (Number.isFinite(v)) off = v; } catch { /* keep last */ }
+      dp.offsetValue = off;
+      dp.plane = { ...offsetPlane(base, off), id: "datum", name: dp.name };
+      progress = true;
+    }
+    if (!progress) break;
+  }
+  for (const dp of datums) if (!dp.plane) dp.error = `Base plane "${dp.base}" not found`;
 }
 
 /** Measure a dimension's current geometric value from solved entities. */

@@ -118,9 +118,11 @@ export const isDimension = (c: Constraint): c is DimensionConstraint =>
 export interface Sketch {
   id: string;
   name: string;
-  planeId: string; // which plane this sketch lives on ("XY"/"XZ"/"YZ", or "custom")
-  /** Full plane geometry when not one of the origin planes (face / offset plane). */
+  planeId: string; // which plane this sketch lives on ("XY"/"XZ"/"YZ", "custom", or "datum")
+  /** Full plane geometry when not one of the origin planes (face / offset / datum plane). */
   plane?: WorkPlane;
+  /** Set when the sketch lives on a datum plane; recompute copies its resolved frame into `plane`. */
+  datumId?: string;
   originPointId: EntityId;
   entities: Record<EntityId, SketchEntity>;
   constraints: Record<ConstraintId, Constraint>;

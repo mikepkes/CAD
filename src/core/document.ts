@@ -5,6 +5,7 @@
 
 import { LinearUnit } from "./units";
 import { Sketch } from "../sketch/types";
+import { WorkPlane } from "../geometry/plane";
 import { OperationRecord } from "./command/types";
 
 export interface Parameter {
@@ -42,6 +43,26 @@ export interface ExtrudeFeature {
 }
 export type FeatureDef = ExtrudeFeature;
 
+/**
+ * A datum/reference plane — a reusable, parametric coordinate frame (the first
+ * step toward full reference geometry: axes, points, angled/through planes).
+ * Currently an offset from a base plane (an origin plane id, or another datum).
+ * `plane` is the resolved frame, written by recompute.
+ */
+export interface DatumPlane {
+  id: string;
+  name: string;
+  kind: "offset";
+  /** Base plane: "XY"/"XZ"/"YZ" or another datum plane id. */
+  base: string;
+  offsetExpr: string;
+  offsetValue: number;
+  /** Resolved world frame (set during recompute). */
+  plane?: WorkPlane;
+  /** Set if the datum could not be resolved (e.g. dangling base). */
+  error?: string;
+}
+
 /** A named, collapsible grouping of timeline operations (organization only). */
 export interface TimelineGroup {
   id: string;
@@ -69,6 +90,7 @@ export interface CadDocument {
   parameters: Parameter[];
   rootComponentId: string;
   components: Record<string, Component>;
+  planes: Record<string, DatumPlane>;
   sketches: Record<string, Sketch>;
   features: Record<string, FeatureDef>;
 }
@@ -93,6 +115,7 @@ export function createDocument(id = "doc1"): CadDocument {
     parameters: [],
     rootComponentId: rootId,
     components: freshComponents(rootId),
+    planes: {},
     sketches: {},
     features: {},
   };

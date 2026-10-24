@@ -128,13 +128,14 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Create sketch",
     summary: "Start a new sketch on an origin plane, an offset plane, or a body face.",
     description:
-      "Creates a sketch with a fixed origin point. Bind it to an origin plane (`plane`: XY/XZ/YZ), optionally offset along its normal (`offset`), or to an arbitrary plane via `planeDef` {origin, normal} (e.g. a picked face). Returns [sketchId, originId].",
+      "Creates a sketch with a fixed origin point. Bind it to an origin plane (`plane`: XY/XZ/YZ), optionally offset along its normal (`offset`), a datum plane (`datum`: a plane.create id), or an arbitrary plane via `planeDef` {origin, normal} (e.g. a picked face). Returns [sketchId, originId].",
     paramsSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         plane: { type: "string", enum: PLANE_ENUM, description: "Origin plane." },
         offset: { type: "number", description: "Offset distance along the plane normal." },
+        datum: { type: "string", description: "A datum plane id (from plane.create) to sketch on." },
         planeDef: {
           type: "object",
           description: "Arbitrary plane from a face: origin point + normal vector.",
@@ -149,15 +150,21 @@ export const BUILTINS: CommandDef<any>[] = [
     examples: [
       { note: "Sketch on the front plane", params: { plane: "XZ" } },
       { note: "Sketch 20mm above XY", params: { plane: "XY", offset: 20 } },
+      { note: "Sketch on a datum plane", params: { datum: "pl5" } },
     ],
-    apply(draft, p: { plane?: string; offset?: number; planeDef?: { origin: Vec3; normal: Vec3 }; name?: string }, ctx) {
+    apply(draft, p: { plane?: string; offset?: number; datum?: string; planeDef?: { origin: Vec3; normal: Vec3 }; name?: string }, ctx) {
       const sid = ctx.alloc("sketch");
       const originId = ctx.alloc("pt");
       const count = Object.keys(draft.sketches).length + 1;
       const origin: SketchPoint = { id: originId, kind: "point", x: 0, y: 0, fixed: true };
       let planeId = p.plane ?? "custom";
       let plane: WorkPlane | undefined;
-      if (p.planeDef) {
+      let datumId: string | undefined;
+      if (p.datum) {
+        if (!draft.planes[p.datum]) throw new Error(`No datum plane "${p.datum}"`);
+        planeId = "datum";
+        datumId = p.datum; // resolved into `plane` by recompute
+      } else if (p.planeDef) {
         plane = makePlaneFromNormal(p.planeDef.origin, p.planeDef.normal, p.name);
         planeId = "custom";
       } else if (p.offset && Math.abs(p.offset) > 1e-9) {
@@ -169,6 +176,7 @@ export const BUILTINS: CommandDef<any>[] = [
         name: p.name ?? `Sketch ${count}`,
         planeId,
         plane,
+        datumId,
         originPointId: originId,
         entities: { [originId]: origin },
         constraints: {},
@@ -176,6 +184,38 @@ export const BUILTINS: CommandDef<any>[] = [
       };
       draft.components[draft.rootComponentId].sketches.push(sid);
       return { createdIds: [sid, originId], affectedSketchId: sid, message: `Created ${draft.sketches[sid].name}` };
+    },
+  },
+  {
+    type: "plane.create",
+    title: "Offset plane",
+    summary: "Create a reusable datum plane offset from a base plane.",
+    description:
+      "Creates a parametric datum/reference plane offset from a base plane (an origin plane XY/XZ/YZ or another datum plane id) by `offset` along its normal. Reusable: sketch on it with sketch.create {datum: <id>}, and editing the offset propagates to everything built on it. Returns the plane id.",
+    paramsSchema: {
+      type: "object",
+      required: ["base", "offset"],
+      additionalProperties: false,
+      properties: {
+        base: { type: "string", description: "Base plane: XY/XZ/YZ or a datum plane id." },
+        offset: { type: "string", description: "Offset distance expression, e.g. '20' or 'height/2'." },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "A plane 25mm above XY", params: { base: "XY", offset: "25" } }],
+    apply(draft, p: { base: string; offset: string | number; name?: string }, ctx) {
+      if (!["XY", "XZ", "YZ"].includes(p.base) && !draft.planes[p.base]) throw new Error(`No base plane "${p.base}"`);
+      const id = ctx.alloc("pl");
+      const count = Object.keys(draft.planes).length + 1;
+      draft.planes[id] = {
+        id,
+        name: p.name ?? `Plane ${count}`,
+        kind: "offset",
+        base: p.base,
+        offsetExpr: String(p.offset),
+        offsetValue: 0,
+      };
+      return { createdIds: [id], message: `Offset plane from ${p.base}` };
     },
   },
 

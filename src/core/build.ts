@@ -40,6 +40,7 @@ export function rebuild(doc: CadDocument, registry: CommandRegistry): RebuildRes
   // Reset derived state; operations repopulate it.
   doc.parameters = [];
   doc.components = freshComponents(doc.rootComponentId);
+  doc.planes = {};
   doc.sketches = {};
   doc.features = {};
 
