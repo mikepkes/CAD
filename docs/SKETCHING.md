@@ -33,8 +33,10 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
 - [x] **Driven (reference) dimensions** (measure without constraining; ⟨⟩ toggle in the inspector)
 - [x] Point-to-center / center-to-center distance dimensions
 - [x] **Polygon** (G) — regular N-gon via center + vertex, held regular by a construction circle (point-on-circle) + equal edges; sides editable in the timeline
-- [ ] Rectangle: center, 3-point · Circle: 2-point, 3-point, tangent · Arc: 3-point, tangent (draw-tool flyouts)
-- [ ] Ellipse, slot, spline (new entity kinds; PlaneGCS supports ellipse + b-spline)
+- [x] Draw-tool variants via a variant selector: **Circle** center / 2-point / 3-point · **Rectangle** 2-corner / center / 3-point (rotated) · **Arc** center / 3-point
+- [x] **Slot** tool (two centers + width → 2 lines + 2 tangent arcs, equal + parallel)
+- [ ] Circle/arc tangent variants
+- [ ] Ellipse, spline (new entity kinds; PlaneGCS supports ellipse + b-spline)
 
 ## Milestone 4 — 3D workflow
 - [x] **Project body edges** onto the active sketch (OCC edge extraction → fit lines/circles/arcs, dedupe, merge split circles). Snapshot (non-associative) for now; associative re-projection needs a dependency-ordered rebuild.

@@ -258,6 +258,30 @@ body {
 .inline-dim:focus {
   outline: none;
 }
+.variant-group {
+  display: flex;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 2px;
+  background: var(--panel-2);
+  border-radius: 7px;
+}
+.variant-chip {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 4px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.variant-chip:hover {
+  color: var(--text);
+}
+.variant-chip.active {
+  background: var(--accent);
+  color: #fff;
+}
 .offset-input {
   width: 58px;
   margin-left: 6px;

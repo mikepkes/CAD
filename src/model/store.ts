@@ -20,7 +20,15 @@ import { serializeDocument, deserializeDocument } from "../core/persistence";
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim" | "extend" | "polygon";
+export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim" | "extend" | "polygon" | "slot";
+
+/** Default variant per shape tool, and the choices the UI offers. */
+export const TOOL_VARIANTS: Partial<Record<Tool, { id: string; label: string }[]>> = {
+  circle: [{ id: "center", label: "Center" }, { id: "2point", label: "2-Point" }, { id: "3point", label: "3-Point" }],
+  rectangle: [{ id: "corner", label: "2-Corner" }, { id: "center", label: "Center" }, { id: "3point", label: "3-Point" }],
+  arc: [{ id: "center", label: "Center" }, { id: "3point", label: "3-Point" }],
+};
+const DEFAULT_VARIANT: Partial<Record<Tool, string>> = { circle: "center", rectangle: "corner", arc: "center" };
 export type AppMode = "model" | "sketch";
 export type GeoRef = { x: number; y: number } | { ref: string };
 
@@ -46,6 +54,8 @@ export interface AppState {
   mode: AppMode;
   activeSketchId: string | null;
   tool: Tool;
+  /** Variant of the active shape tool (e.g. circle "center"|"2point"|"3point"). */
+  toolVariant: string;
   selection: string[];
   hover: string | null;
   showPlanes: boolean;
@@ -70,6 +80,7 @@ export interface AppState {
 
   // ui
   setTool: (t: Tool) => void;
+  setToolVariant: (v: string) => void;
   select: (ids: string[], additive?: boolean) => void;
   toggleSelect: (id: string) => void;
   clearSelection: () => void;
@@ -92,6 +103,8 @@ export interface AppState {
   placeCircle: (center: GeoRef, radius: number) => Promise<DispatchResult>;
   placeArc: (center: GeoRef, start: GeoRef, end: GeoRef, ccw: boolean) => Promise<DispatchResult>;
   placePolygon: (center: { x: number; y: number }, vertex: { x: number; y: number }, sides?: number) => Promise<DispatchResult>;
+  placeRectangle3: (p1: { x: number; y: number }, p2: { x: number; y: number }, p3: { x: number; y: number }) => Promise<DispatchResult>;
+  placeSlot: (p1: { x: number; y: number }, p2: { x: number; y: number }, width: number) => Promise<DispatchResult>;
   projectBodies: (construction?: boolean) => Promise<void>;
   deleteSelected: () => Promise<void>;
 
@@ -187,6 +200,7 @@ export const useStore = create<AppState>((set, get) => {
     mode: "model",
     activeSketchId: null,
     tool: "select",
+    toolVariant: "",
     selection: [],
     hover: null,
     showPlanes: true,
@@ -204,7 +218,8 @@ export const useStore = create<AppState>((set, get) => {
 
     dispatch: (type, params, opts) => runDispatch(type, params, opts),
 
-    setTool: (t) => set({ tool: t }),
+    setTool: (t) => set({ tool: t, toolVariant: DEFAULT_VARIANT[t] ?? "" }),
+    setToolVariant: (v) => set({ toolVariant: v }),
     select: (ids, additive) => set((s) => ({ selection: additive ? [...new Set([...s.selection, ...ids])] : ids })),
     toggleSelect: (id) =>
       set((s) => ({ selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id] })),
@@ -235,6 +250,8 @@ export const useStore = create<AppState>((set, get) => {
     placeCircle: (center, radius) => runDispatch("sketch.addCircle", { sketch: activeId(), center, radius }),
     placeArc: (center, start, end, ccw) => runDispatch("sketch.addArc", { sketch: activeId(), center, start, end, ccw }),
     placePolygon: (center, vertex, sides = 6) => runDispatch("sketch.addPolygon", { sketch: activeId(), center, vertex, sides }),
+    placeRectangle3: (p1, p2, p3) => runDispatch("sketch.addRectangle3", { sketch: activeId(), p1, p2, p3 }),
+    placeSlot: (p1, p2, width) => runDispatch("sketch.addSlot", { sketch: activeId(), p1, p2, width }),
     projectBodies: async (construction = false) => {
       const sid = activeId();
       if (!sid) return;

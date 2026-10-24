@@ -19,7 +19,8 @@ type Stage =
   | { kind: "rect"; from: { u: number; v: number } }
   | { kind: "circle"; center: GeoRef; centerUV: { u: number; v: number } }
   | { kind: "arc"; center?: GeoRef; centerUV?: { u: number; v: number }; start?: GeoRef; startUV?: { u: number; v: number } }
-  | { kind: "polygon"; centerUV: { u: number; v: number } };
+  | { kind: "polygon"; centerUV: { u: number; v: number } }
+  | { kind: "pts"; pts: { u: number; v: number }[] }; // generic multi-click for tool variants
 
 export class Interactions {
   private scene: SceneManager;
@@ -296,8 +297,17 @@ export class Interactions {
     this.downPt = null;
   };
 
+  /** Shape tools that use the generic multi-point flow (variants + slot). */
+  private isVariantShape(tool: string, variant: string): boolean {
+    return (tool === "circle" && variant !== "center") ||
+      (tool === "rectangle" && variant !== "corner") ||
+      (tool === "arc" && variant !== "center") ||
+      tool === "slot";
+  }
+
   private async onClick(snap: Snap, e: PointerEvent) {
     const st = this.st();
+    if (this.isVariantShape(st.tool, st.toolVariant)) { await this.handleVariantShape(snap); return; }
     switch (st.tool) {
       case "select":
         this.handleSelectClick(e);
@@ -329,6 +339,112 @@ export class Interactions {
       case "polygon":
         await this.handlePolygonClick(snap);
         break;
+    }
+  }
+
+  private variantNeed(tool: string, variant: string): number {
+    if (tool === "circle") return variant === "2point" ? 2 : 3;
+    if (tool === "rectangle") return variant === "center" ? 2 : 3;
+    if (tool === "arc") return 3; // 3-point
+    if (tool === "slot") return 3;
+    return 2;
+  }
+
+  private async handleVariantShape(snap: Snap) {
+    const st = this.st();
+    const need = this.variantNeed(st.tool, st.toolVariant);
+    const pts = this.stage.kind === "pts" ? this.stage.pts.slice() : [];
+    pts.push({ u: snap.u, v: snap.v });
+    if (pts.length < need) { this.stage = { kind: "pts", pts }; return; }
+    await this.executeVariant(st.tool, st.toolVariant, pts);
+    this.stage = { kind: "idle" };
+    this.setPreview(null);
+  }
+
+  private async executeVariant(tool: string, variant: string, pts: { u: number; v: number }[]) {
+    const st = this.st();
+    const P = (i: number) => ({ x: pts[i].u, y: pts[i].v });
+    if (tool === "circle") {
+      if (variant === "2point") {
+        const c = { x: (pts[0].u + pts[1].u) / 2, y: (pts[0].v + pts[1].v) / 2 };
+        const r = Math.hypot(pts[1].u - pts[0].u, pts[1].v - pts[0].v) / 2;
+        if (r > 1e-3) await st.placeCircle(c, r);
+      } else {
+        const f = circleFrom3(P(0), P(1), P(2));
+        if (f) await st.placeCircle({ x: f.x, y: f.y }, f.r);
+      }
+    } else if (tool === "rectangle") {
+      if (variant === "center") {
+        const c = pts[0], p = pts[1];
+        await st.placeRectangle({ x: 2 * c.u - p.u, y: 2 * c.v - p.v }, { x: p.u, y: p.v });
+      } else {
+        await st.placeRectangle3(P(0), P(1), P(2));
+      }
+    } else if (tool === "arc") {
+      const start = P(0), end = P(1), mid = P(2);
+      const f = circleFrom3(start, mid, end);
+      if (f) {
+        const cr = (start.x - f.x) * (mid.y - f.y) - (start.y - f.y) * (mid.x - f.x);
+        await st.placeArc({ x: f.x, y: f.y }, start, end, cr < 0);
+      }
+    } else if (tool === "slot") {
+      const p1 = P(0), p2 = P(1), p3 = P(2);
+      const dx = p2.x - p1.x, dy = p2.y - p1.y, m = Math.hypot(dx, dy) || 1;
+      const width = 2 * Math.abs((-dy * (p3.x - p1.x) + dx * (p3.y - p1.y)) / m);
+      if (width > 1e-3) await st.placeSlot(p1, p2, width);
+    }
+  }
+
+  private variantPreview(preview: PreviewGeom, pts: { u: number; v: number }[], snap: Snap) {
+    const st = this.st();
+    const all = [...pts, { u: snap.u, v: snap.v }];
+    const toP = (p: { u: number; v: number }) => ({ x: p.u, y: p.v });
+    const seg = (a: { u: number; v: number }, b: { u: number; v: number }) => ({ u1: a.u, v1: a.v, u2: b.u, v2: b.v });
+    if (st.tool === "circle") {
+      if (st.toolVariant === "2point" && all.length >= 2) {
+        const c = { u: (all[0].u + all[1].u) / 2, v: (all[0].v + all[1].v) / 2 };
+        preview.circles = [{ cu: c.u, cv: c.v, r: Math.hypot(all[1].u - all[0].u, all[1].v - all[0].v) / 2 }];
+      } else if (st.toolVariant === "3point" && all.length >= 3) {
+        const f = circleFrom3(toP(all[0]), toP(all[1]), toP(all[2]));
+        if (f) preview.circles = [{ cu: f.x, cv: f.y, r: f.r }];
+      } else if (all.length >= 2) {
+        preview.segments = [seg(all[0], all[all.length - 1])];
+      }
+    } else if (st.tool === "rectangle") {
+      if (st.toolVariant === "center" && all.length >= 2) {
+        const c = all[0], p = all[1];
+        const c0 = { u: 2 * c.u - p.u, v: 2 * c.v - p.v };
+        preview.segments = [seg(c0, { u: p.u, v: c0.v }), seg({ u: p.u, v: c0.v }, p), seg(p, { u: c0.u, v: p.v }), seg({ u: c0.u, v: p.v }, c0)];
+      } else if (st.toolVariant === "3point" && all.length >= 2) {
+        const p1 = all[0], p2 = all[1];
+        let dx = p2.u - p1.u, dy = p2.v - p1.v; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+        const px = -dy, py = dx;
+        const w = all.length >= 3 ? (all[2].u - p2.u) * px + (all[2].v - p2.v) * py : 0;
+        const c2 = { u: p2.u + px * w, v: p2.v + py * w }, c3 = { u: p1.u + px * w, v: p1.v + py * w };
+        preview.segments = [seg(p1, p2), seg(p2, c2), seg(c2, c3), seg(c3, p1)];
+      } else if (all.length >= 1) {
+        preview.segments = [seg(all[0], all[all.length - 1])];
+      }
+    } else if (st.tool === "arc" && all.length >= 3) {
+      const f = circleFrom3(toP(all[0]), toP(all[2]), toP(all[1]));
+      if (f) {
+        const cr = (all[0].u - f.x) * (all[2].v - f.y) - (all[0].v - f.y) * (all[2].u - f.x);
+        preview.arcs = [{ cu: f.x, cv: f.y, r: f.r, a1: Math.atan2(all[0].v - f.y, all[0].u - f.x), a2: Math.atan2(all[1].v - f.y, all[1].u - f.x), ccw: cr < 0 }];
+      }
+    } else if (st.tool === "slot" && all.length >= 2) {
+      const p1 = all[0], p2 = all[1];
+      let dx = p2.u - p1.u, dy = p2.v - p1.v; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+      const px = -dy, py = dx;
+      const r = all.length >= 3 ? Math.abs((-dy * (all[2].u - p1.u) + dx * (all[2].v - p1.v))) : 0;
+      const A = { u: p1.u - px * r, v: p1.v - py * r }, B = { u: p2.u - px * r, v: p2.v - py * r };
+      const C = { u: p2.u + px * r, v: p2.v + py * r }, D = { u: p1.u + px * r, v: p1.v + py * r };
+      preview.segments = [seg(A, B), seg(C, D)];
+      preview.arcs = [
+        { cu: p2.u, cv: p2.v, r, a1: Math.atan2(B.v - p2.v, B.u - p2.u), a2: Math.atan2(C.v - p2.v, C.u - p2.u), ccw: true },
+        { cu: p1.u, cv: p1.v, r, a1: Math.atan2(D.v - p1.v, D.u - p1.u), a2: Math.atan2(A.v - p1.v, A.u - p1.u), ccw: true },
+      ];
+    } else if (all.length >= 1) {
+      preview.segments = [seg(all[0], all[all.length - 1])];
     }
   }
 
@@ -536,6 +652,8 @@ export class Interactions {
         const r = Math.hypot(s.u - c.u, s.v - c.v);
         preview.arcs = [{ cu: c.u, cv: c.v, r, a1: Math.atan2(s.v - c.v, s.u - c.u), a2: Math.atan2(snap.v - c.v, snap.u - c.u), ccw: true }];
       }
+    } else if (this.stage.kind === "pts") {
+      this.variantPreview(preview, this.stage.pts, snap);
     } else if (this.stage.kind === "polygon") {
       const c = this.stage.centerUV;
       const r = Math.hypot(snap.u - c.u, snap.v - c.v);
@@ -612,7 +730,7 @@ export class Interactions {
       const op = availableOps(sk, st.selection).modify.find((o) => o.id === "construction");
       if (op) { void st.dispatch(op.command.type, op.command.params); return; }
     }
-    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", g: "polygon", p: "point", s: "select", d: "dimension", t: "trim", e: "extend" };
+    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", g: "polygon", o: "slot", p: "point", s: "select", d: "dimension", t: "trim", e: "extend" };
     if (map[e.key.toLowerCase()]) st.setTool(map[e.key.toLowerCase()]);
     if ((e.key === "Delete" || e.key === "Backspace") && st.selection.length) st.deleteSelected();
   };
@@ -620,6 +738,16 @@ export class Interactions {
 
 type Pt = { x: number; y: number };
 type Rect = { x0: number; y0: number; x1: number; y1: number };
+
+/** Circle through 3 points; null if collinear. */
+function circleFrom3(a: Pt, b: Pt, c: Pt): { x: number; y: number; r: number } | null {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-9) return null;
+  const a2 = a.x * a.x + a.y * a.y, b2 = b.x * b.x + b.y * b.y, c2 = c.x * c.x + c.y * c.y;
+  const ux = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d;
+  const uy = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
+  return { x: ux, y: uy, r: Math.hypot(a.x - ux, a.y - uy) };
+}
 
 /** Does segment a-b cross any edge of the (screen-space) rect? */
 function segIntersectsRect(a: Pt, b: Pt, r: Rect): boolean {

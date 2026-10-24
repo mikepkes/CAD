@@ -392,6 +392,80 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
   {
+    type: "sketch.addRectangle3",
+    title: "Add rectangle (3-point)",
+    summary: "Add a rotated rectangle from a base edge and a width point.",
+    description:
+      "Creates a rectangle: p1→p2 is one edge; p3 sets the perpendicular width. Adds perpendicular constraints so it stays rectangular. Returns the 4 corner ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "p1", "p2", "p3"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        p1: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
+        p2: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
+        p3: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
+      },
+    },
+    apply(draft, p: { sketch: string; p1: Vec; p2: Vec; p3: Vec }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      let dx = p.p2.x - p.p1.x, dy = p.p2.y - p.p1.y;
+      const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+      const px = -dy, py = dx; // perpendicular
+      const w = (p.p3.x - p.p2.x) * px + (p.p3.y - p.p2.y) * py;
+      const mk = (x: number, y: number) => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x, y }; return id; };
+      const c0 = mk(p.p1.x, p.p1.y);
+      const c1 = mk(p.p2.x, p.p2.y);
+      const c2 = mk(p.p2.x + px * w, p.p2.y + py * w);
+      const c3 = mk(p.p1.x + px * w, p.p1.y + py * w);
+      const ln = (a: string, b: string) => { const id = ctx.alloc("ln"); sk.entities[id] = { id, kind: "line", p1: a, p2: b }; return id; };
+      const e0 = ln(c0, c1), e1 = ln(c1, c2), e2 = ln(c2, c3), e3 = ln(c3, c0);
+      const addP = (l1: string, l2: string) => { const id = ctx.alloc("c"); sk.constraints[id] = { id, type: "perpendicular", l1, l2 }; };
+      addP(e0, e1); addP(e1, e2); addP(e2, e3);
+      return { createdIds: [c0, c1, c2, c3], affectedSketchId: sk.id, message: "Rectangle" };
+    },
+  },
+  {
+    type: "sketch.addSlot",
+    title: "Add slot",
+    summary: "Add a straight slot (two parallel lines capped by semicircular arcs).",
+    description:
+      "Creates a slot whose arc centers are at p1 and p2, with the given `width` (arc diameter). Adds equal-radius + parallel constraints. Returns the created ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "p1", "p2", "width"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        p1: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
+        p2: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } },
+        width: { type: "number", minimum: 0 },
+      },
+    },
+    apply(draft, p: { sketch: string; p1: Vec; p2: Vec; width: number }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      let dx = p.p2.x - p.p1.x, dy = p.p2.y - p.p1.y;
+      const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+      const px = -dy, py = dx; // 90° ccw → "left"
+      const r = p.width / 2;
+      const mk = (x: number, y: number, cn = false) => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x, y, construction: cn }; return id; };
+      const P1 = mk(p.p1.x, p.p1.y, true), P2 = mk(p.p2.x, p.p2.y, true);
+      const A = mk(p.p1.x - px * r, p.p1.y - py * r); // bottom-left
+      const B = mk(p.p2.x - px * r, p.p2.y - py * r); // bottom-right
+      const C = mk(p.p2.x + px * r, p.p2.y + py * r); // top-right
+      const D = mk(p.p1.x + px * r, p.p1.y + py * r); // top-left
+      const lnAB = ctx.alloc("ln"); sk.entities[lnAB] = { id: lnAB, kind: "line", p1: A, p2: B };
+      const lnCD = ctx.alloc("ln"); sk.entities[lnCD] = { id: lnCD, kind: "line", p1: C, p2: D };
+      const arcR = ctx.alloc("ar"); sk.entities[arcR] = { id: arcR, kind: "arc", center: P2, p1: B, p2: C, r, ccw: true };
+      const arcL = ctx.alloc("ar"); sk.entities[arcL] = { id: arcL, kind: "arc", center: P1, p1: D, p2: A, r, ccw: true };
+      const con = (c: GeometricConstraint) => (sk.constraints[c.id] = c);
+      con({ id: ctx.alloc("c"), type: "equal", e1: arcL, e2: arcR });
+      con({ id: ctx.alloc("c"), type: "parallel", l1: lnAB, l2: lnCD });
+      return { createdIds: [lnAB, lnCD, arcL, arcR, P1, P2], affectedSketchId: sk.id, message: "Slot" };
+    },
+  },
+  {
     type: "sketch.addArc",
     title: "Add arc",
     summary: "Add a circular arc by center, start and end points.",

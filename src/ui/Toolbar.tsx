@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Tool, useStore } from "../model/store";
+import { Tool, TOOL_VARIANTS, useStore } from "../model/store";
 import { PLANES } from "../geometry/plane";
 
 function FileMenu() {
@@ -30,6 +30,7 @@ const TOOLS: { id: Tool; label: string; key: string; glyph: string }[] = [
   { id: "circle", label: "Circle", key: "C", glyph: "◯" },
   { id: "arc", label: "Arc", key: "A", glyph: "◜" },
   { id: "polygon", label: "Polygon", key: "G", glyph: "⬡" },
+  { id: "slot", label: "Slot", key: "O", glyph: "⬭" },
   { id: "point", label: "Point", key: "P", glyph: "•" },
   { id: "dimension", label: "Dimension", key: "D", glyph: "↦" },
   { id: "trim", label: "Trim", key: "T", glyph: "✂" },
@@ -40,6 +41,8 @@ export function Toolbar() {
   const mode = useStore((s) => s.mode);
   const tool = useStore((s) => s.tool);
   const setTool = useStore((s) => s.setTool);
+  const toolVariant = useStore((s) => s.toolVariant);
+  const setToolVariant = useStore((s) => s.setToolVariant);
   const finishSketch = useStore((s) => s.finishSketch);
   const startSketch = useStore((s) => s.startSketch);
   const showPlanes = useStore((s) => s.showPlanes);
@@ -81,6 +84,19 @@ export function Toolbar() {
               </button>
             ))}
           </div>
+          {TOOL_VARIANTS[tool] && (
+            <div className="variant-group" title={`${tool} style`}>
+              {TOOL_VARIANTS[tool]!.map((v) => (
+                <button
+                  key={v.id}
+                  className={`variant-chip ${toolVariant === v.id ? "active" : ""}`}
+                  onClick={() => setToolVariant(v.id)}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="spacer" />
           <button
             className="btn ghost"
