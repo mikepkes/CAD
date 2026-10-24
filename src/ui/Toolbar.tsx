@@ -89,6 +89,8 @@ export function Toolbar() {
   const [mirrorPlane, setMirrorPlane] = useState("YZ");
   const createDatumPlane = useStore((s) => s.createDatumPlane);
   const mirrorModel = useStore((s) => s.mirrorModel);
+  const activeComponentId = useStore((s) => s.activeComponentId);
+  const activateComponent = useStore((s) => s.activateComponent);
   const datumPlanes = Object.values(session.doc.planes);
   const root = session.doc.components[session.doc.rootComponentId];
   const lastSketch = root?.sketches[root.sketches.length - 1];
@@ -175,6 +177,19 @@ export function Toolbar() {
           >
             ✏ Create Sketch
           </button>
+          <button
+            className="btn"
+            title="Create a sub-component under the active one and activate it (new sketches land there)"
+            onClick={() => useStore.getState().createComponent()}
+          >
+            ⬡ Component
+          </button>
+          {activeComponentId !== session.doc.rootComponentId && (
+            <span className="hint" title="Active component — new sketches are scoped here" style={{ color: "#8fd3ff" }}>
+              ⬡ {session.doc.components[activeComponentId]?.name}
+              <button className="icon-btn" title="Back to root component" onClick={() => activateComponent(session.doc.rootComponentId)}>✕</button>
+            </span>
+          )}
           <div className="tool-group">
             <span className="hint">{sketchPlacing ? "Pick a plane or face:" : "On plane:"}</span>
             {PLANES.map((p) => (

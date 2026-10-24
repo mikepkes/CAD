@@ -137,6 +137,9 @@ export interface AppState {
   setSketchPlacing: (on: boolean) => void;
   startSketch: (plane: string, offset?: number) => Promise<void>;
   createDatumPlane: (base: string, offset: string) => Promise<string | null>;
+  activeComponentId: string;
+  activateComponent: (id: string) => void;
+  createComponent: (position?: { x: number; y: number; z: number }, name?: string) => Promise<string | null>;
   startSketchOnFace: (hit: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => Promise<void>;
   finishSketch: () => void;
   editSketch: (id: string) => void;
@@ -278,6 +281,11 @@ export const useStore = create<AppState>((set, get) => {
 
   const activeId = () => get().activeSketchId;
   const scope = () => resolveParameters(get().session.doc.parameters).scope;
+  // Scope a new sketch to the active component (omit when it's root — root is the default).
+  const scopeComponent = (): { component?: string } => {
+    const c = get().activeComponentId;
+    return c && c !== get().session.doc.rootComponentId ? { component: c } : {};
+  };
 
   // Shared command host for both the in-app agent and WebMCP: dispatch a command
   // and keep the viewport in sync (activate a new sketch, switch to model on extrude).
@@ -327,6 +335,7 @@ export const useStore = create<AppState>((set, get) => {
     kernelLoading: false,
     toast: null,
     lastMessage: "Pick an origin plane to start a sketch.",
+    activeComponentId: session.doc.rootComponentId,
     settingsOpen: false,
     hotkeysOpen: false,
     extrudeActive: false,
@@ -390,10 +399,11 @@ export const useStore = create<AppState>((set, get) => {
     setSketchPlacing: (on) => set({ sketchPlacing: on }),
     startSketch: async (plane, offset) => {
       // A datum plane id (from plane.create) routes to the {datum} param; an
-      // origin plane id (XY/XZ/YZ) keeps the {plane[, offset]} form.
+      // origin plane id (XY/XZ/YZ) keeps the {plane[, offset]} form. New sketches
+      // land in the active component.
       const isDatum = !!get().session.doc.planes[plane];
       const params = isDatum ? { datum: plane } : offset ? { plane, offset } : { plane };
-      const r = await runDispatch("sketch.create", params);
+      const r = await runDispatch("sketch.create", { ...params, ...scopeComponent() });
       if (r.ok) {
         const label = isDatum ? get().session.doc.planes[plane].name : `${plane}${offset ? ` +${offset}` : ""}`;
         set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: `Sketching on ${label}.` });
@@ -404,11 +414,20 @@ export const useStore = create<AppState>((set, get) => {
       if (r.ok) { set({ lastMessage: `Created offset plane from ${base} by ${offset}.` }); return r.createdIds[0]; }
       return null;
     },
+    activateComponent: (id) => {
+      if (get().session.doc.components[id]) set({ activeComponentId: id, lastMessage: `Active: ${get().session.doc.components[id].name}` });
+    },
+    createComponent: async (position, name) => {
+      const parent = get().activeComponentId;
+      const r = await runDispatch("component.create", { parent, ...(position ? { position } : {}), ...(name ? { name } : {}) });
+      if (r.ok) { set({ activeComponentId: r.createdIds[0], lastMessage: `Created ${get().session.doc.components[r.createdIds[0]].name}` }); return r.createdIds[0]; }
+      return null;
+    },
     startSketchOnFace: async (hit, normal) => {
       // Stable sketch origin: foot of the perpendicular from world (0,0,0) to the face plane.
       const d = hit.x * normal.x + hit.y * normal.y + hit.z * normal.z;
       const origin = { x: normal.x * d, y: normal.y * d, z: normal.z * d };
-      const r = await runDispatch("sketch.create", { planeDef: { origin, normal } });
+      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, ...scopeComponent() });
       if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: "Sketching on face." });
     },
     finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null }),

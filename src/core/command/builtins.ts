@@ -122,6 +122,46 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
 
+  // ---- components (assembly tree) ----
+  {
+    type: "component.create",
+    title: "New component",
+    summary: "Create a sub-component with its own placement under a parent.",
+    description:
+      "Creates a child component (a node in the assembly tree) under `parent` (defaults to root), placed at `position` relative to the parent. Sketches and the bodies built on them can be scoped to it (sketch.create {component}); the component's frame composes down the tree. Returns the component id.",
+    paramsSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        parent: { type: "string", description: "Parent component id. Defaults to the root component." },
+        position: {
+          type: "object",
+          description: "Placement relative to the parent (mm).",
+          properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } },
+        },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "A component 50mm along X", params: { position: { x: 50, y: 0, z: 0 } } }],
+    apply(draft, p: { parent?: string; position?: { x?: number; y?: number; z?: number }; name?: string }, ctx) {
+      const parent = p.parent ?? draft.rootComponentId;
+      if (!draft.components[parent]) throw new Error(`No parent component "${parent}"`);
+      const id = ctx.alloc("cmp");
+      const count = Object.keys(draft.components).length; // root is #1
+      const pos = p.position ?? {};
+      draft.components[id] = {
+        id,
+        name: p.name ?? `Component ${count}`,
+        parentId: parent,
+        children: [],
+        sketches: [],
+        transform: { position: { x: pos.x ?? 0, y: pos.y ?? 0, z: pos.z ?? 0 } },
+      };
+      draft.components[parent].children.push(id);
+      return { createdIds: [id], message: `Created ${draft.components[id].name}` };
+    },
+  },
+
   // ---- sketch lifecycle ----
   {
     type: "sketch.create",
@@ -144,6 +184,7 @@ export const BUILTINS: CommandDef<any>[] = [
             normal: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
           },
         },
+        component: { type: "string", description: "Owning component id (from component.create). Defaults to the root component." },
         name: { type: "string", description: "Optional sketch name." },
       },
     },
@@ -152,10 +193,12 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Sketch 20mm above XY", params: { plane: "XY", offset: 20 } },
       { note: "Sketch on a datum plane", params: { datum: "pl5" } },
     ],
-    apply(draft, p: { plane?: string; offset?: number; datum?: string; planeDef?: { origin: Vec3; normal: Vec3 }; name?: string }, ctx) {
+    apply(draft, p: { plane?: string; offset?: number; datum?: string; planeDef?: { origin: Vec3; normal: Vec3 }; component?: string; name?: string }, ctx) {
       const sid = ctx.alloc("sketch");
       const originId = ctx.alloc("pt");
       const count = Object.keys(draft.sketches).length + 1;
+      const comp = p.component ?? draft.rootComponentId;
+      if (!draft.components[comp]) throw new Error(`No component "${comp}"`);
       const origin: SketchPoint = { id: originId, kind: "point", x: 0, y: 0, fixed: true };
       let planeId = p.plane ?? "custom";
       let plane: WorkPlane | undefined;
@@ -177,12 +220,13 @@ export const BUILTINS: CommandDef<any>[] = [
         planeId,
         plane,
         datumId,
+        componentId: comp,
         originPointId: originId,
         entities: { [originId]: origin },
         constraints: {},
         status: { dof: 0, fullyConstrained: false, converged: true, conflicting: false },
       };
-      draft.components[draft.rootComponentId].sketches.push(sid);
+      draft.components[comp].sketches.push(sid);
       return { createdIds: [sid, originId], affectedSketchId: sid, message: `Created ${draft.sketches[sid].name}` };
     },
   },

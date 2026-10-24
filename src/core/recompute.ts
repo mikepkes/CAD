@@ -34,6 +34,15 @@ export async function recompute(
   resolveDatumPlanes(doc, scope);
   for (const sk of Object.values(doc.sketches)) {
     if (sk.datumId) sk.plane = doc.planes[sk.datumId]?.plane;
+    // Component placement: compose the owning component's world translation into
+    // the frame. Rebuilt from an immutable base (datum frame or origin plane)
+    // every recompute, so the offset never accumulates. Face/offset ("custom")
+    // sketches already carry world position, so they are left as-is.
+    const off = componentWorldOffset(doc, sk.componentId);
+    if ((off.x || off.y || off.z) && sk.planeId !== "custom") {
+      const base = sk.datumId ? doc.planes[sk.datumId]?.plane : planeById(sk.planeId);
+      if (base) sk.plane = { ...base, origin: { x: base.origin.x + off.x, y: base.origin.y + off.y, z: base.origin.z + off.z } };
+    }
   }
 
   const evals: Evaluations = {};
@@ -102,6 +111,20 @@ export async function recompute(
   }
 
   return evals;
+}
+
+/** Sum a component's placement up the parent chain → its world translation. */
+function componentWorldOffset(doc: CadDocument, componentId?: string): { x: number; y: number; z: number } {
+  const off = { x: 0, y: 0, z: 0 };
+  const seen = new Set<string>();
+  let id = componentId;
+  while (id && doc.components[id] && !seen.has(id)) {
+    seen.add(id);
+    const t = doc.components[id].transform?.position;
+    if (t) { off.x += t.x; off.y += t.y; off.z += t.z; }
+    id = doc.components[id].parentId ?? undefined;
+  }
+  return off;
 }
 
 /** Resolve each datum plane's frame from its base + offset expression. Chains

@@ -123,6 +123,8 @@ export interface Sketch {
   plane?: WorkPlane;
   /** Set when the sketch lives on a datum plane; recompute copies its resolved frame into `plane`. */
   datumId?: string;
+  /** Owning component; recompute composes its world frame into `plane`. Defaults to root. */
+  componentId?: string;
   originPointId: EntityId;
   entities: Record<EntityId, SketchEntity>;
   constraints: Record<ConstraintId, Constraint>;

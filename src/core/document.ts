@@ -18,12 +18,23 @@ export interface Parameter {
   error?: string;
 }
 
+/**
+ * A component: a node in the assembly tree with its own placement frame. The
+ * frame is the hook instances and joints will build on — for now a translation,
+ * extensible to full rigid placement (rotation) without a data-model change.
+ */
+export interface ComponentTransform {
+  position: { x: number; y: number; z: number };
+}
+
 export interface Component {
   id: string;
   name: string;
   parentId: string | null;
   children: string[];
   sketches: string[];
+  /** Placement relative to the parent component (identity for root). */
+  transform: ComponentTransform;
 }
 
 /** A solid feature (currently extrude). Geometry is derived by the OCC kernel. */
@@ -110,8 +121,12 @@ export interface CadDocument {
 /** A fresh, empty root component map (used when rebuilding derived state). */
 export function freshComponents(rootId: string): Record<string, Component> {
   return {
-    [rootId]: { id: rootId, name: "Root Component", parentId: null, children: [], sketches: [] },
+    [rootId]: { id: rootId, name: "Root Component", parentId: null, children: [], sketches: [], transform: identityTransform() },
   };
+}
+
+export function identityTransform(): ComponentTransform {
+  return { position: { x: 0, y: 0, z: 0 } };
 }
 
 export function createDocument(id = "doc1"): CadDocument {
