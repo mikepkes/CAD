@@ -4,6 +4,7 @@ import { PLANES, WorkPlane, to3d } from "../geometry/plane";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchEllipse, SketchLine, SketchPoint } from "../sketch/types";
 import { isDimension } from "../sketch/types";
 import { extractProfiles, Loop } from "../core/geometry/profile";
+import { HandleManager } from "./handles";
 
 export interface PreviewGeom {
   segments?: { u1: number; v1: number; u2: number; v2: number }[];
@@ -42,6 +43,8 @@ export interface ViewData {
   ghostSketches?: { sketch: Sketch; plane: WorkPlane }[];
   /** Pickable region fills for the active extrude session (click to choose a region). */
   extrudeRegions?: { plane: WorkPlane; regions: { interior: { x: number; y: number }; outer: { x: number; y: number }[]; holes: { x: number; y: number }[][]; selected: boolean }[] };
+  /** Live translucent preview of the pending extrude. */
+  extrudePreview?: { plane: WorkPlane; regions: { outer: { x: number; y: number }[]; holes: { x: number; y: number }[][] }[]; distance: number; symmetric: boolean; operation: "new" | "join" | "cut" };
 }
 
 export interface PickResult {
@@ -93,12 +96,15 @@ export class SceneManager {
   private planeMeshes = new Map<string, THREE.Mesh>();
   private ghostGroup = new THREE.Group();
   private regionGroup = new THREE.Group();
+  private previewSolidGroup = new THREE.Group();
   private planeGroup = new THREE.Group();
   private grid: THREE.GridHelper;
   private sketchGroup = new THREE.Group();
   private previewGroup = new THREE.Group();
   private solidsGroup = new THREE.Group();
   private raycaster = new THREE.Raycaster();
+  private rayHelper = new THREE.Raycaster();
+  readonly handles = new HandleManager(this);
   private disposed = false;
   private resizeObs?: ResizeObserver;
   private lastPixelScale = 0;
@@ -152,10 +158,12 @@ export class SceneManager {
     this.buildPlanes();
     this.scene.add(this.ghostGroup);
     this.scene.add(this.regionGroup);
+    this.scene.add(this.previewSolidGroup);
     this.scene.add(this.planeGroup);
     this.scene.add(this.sketchGroup);
     this.scene.add(this.previewGroup);
     this.scene.add(this.solidsGroup);
+    this.scene.add(this.handles.group);
 
     window.addEventListener("resize", this.onResize);
     // The viewport also resizes when side panels toggle (Agent drawer, inspector)
@@ -410,6 +418,12 @@ export class SceneManager {
     return this.worldThreshold(px);
   }
 
+  /** A world-space pick ray through a client point (for the HandleManager). */
+  rayFrom(clientX: number, clientY: number): { origin: THREE.Vector3; dir: THREE.Vector3 } {
+    this.rayHelper.setFromCamera(this.ndc(clientX, clientY), this.camera);
+    return { origin: this.rayHelper.ray.origin.clone(), dir: this.rayHelper.ray.direction.clone() };
+  }
+
   /** Project a sketch-plane (u,v) point to client screen coordinates. */
   uvToScreen(plane: WorkPlane, u: number, v: number): { x: number; y: number } {
     const world = this.worldPt(plane, u, v);
@@ -419,6 +433,13 @@ export class SceneManager {
       x: rect.left + (ndc.x * 0.5 + 0.5) * rect.width,
       y: rect.top + (-ndc.y * 0.5 + 0.5) * rect.height,
     };
+  }
+
+  /** Project a world point to client (screen) coordinates. */
+  worldToScreen(p: { x: number; y: number; z: number }): { x: number; y: number } {
+    const ndc = new THREE.Vector3(p.x, p.y, p.z).project(this.camera);
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return { x: rect.left + (ndc.x * 0.5 + 0.5) * rect.width, y: rect.top + (-ndc.y * 0.5 + 0.5) * rect.height };
   }
 
   /** Approximate world-space size of `px` screen pixels at the target depth. */
@@ -565,12 +586,14 @@ export class SceneManager {
     this.clearGroup(this.solidsGroup);
     this.clearGroup(this.ghostGroup);
     this.clearGroup(this.regionGroup);
+    this.clearGroup(this.previewSolidGroup);
 
     // Other sketches stay visible on their planes, dimmed (Fusion-style).
     for (const g of data.ghostSketches ?? []) this.renderGhostSketch(g.sketch, g.plane);
 
     // Extrude session: pickable, highlightable region fills.
     if (data.extrudeRegions) this.renderExtrudeRegions(data.extrudeRegions);
+    if (data.extrudePreview) this.renderExtrudePreview(data.extrudePreview);
 
     // Solids render in model mode (and faded while sketching).
     this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
@@ -672,6 +695,60 @@ export class SceneManager {
         }
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(e.construction));
         dashed(line, e.construction); add(line);
+      }
+    }
+  }
+
+  /** Translucent extruded-prism preview of a pending extrude (built in JS, no kernel). */
+  private renderExtrudePreview(data: NonNullable<ViewData["extrudePreview"]>) {
+    const { plane, distance, symmetric, operation } = data;
+    if (Math.abs(distance) < 1e-6) return;
+    const d0 = symmetric ? -distance / 2 : 0;
+    const d1 = symmetric ? distance / 2 : distance;
+    const n = plane.normal;
+    const at = (u: number, v: number, depth: number) => {
+      const w = this.worldPt(plane, u, v);
+      return new THREE.Vector3(w.x + n.x * depth, w.y + n.y * depth, w.z + n.z * depth);
+    };
+    const color = operation === "cut" ? 0xe4564e : 0x5bbf84;
+    for (const region of data.regions) {
+      try {
+        const loops = [region.outer, ...region.holes];
+        const contour = region.outer.map((p) => new THREE.Vector2(p.x, p.y));
+        const holeContours = region.holes.map((h) => h.map((p) => new THREE.Vector2(p.x, p.y)));
+        const capFaces = THREE.ShapeUtils.triangulateShape(contour, holeContours);
+        const capVerts = [...contour, ...holeContours.flat()];
+        const positions: number[] = [];
+        const indices: number[] = [];
+        const push = (p: THREE.Vector3) => { positions.push(p.x, p.y, p.z); return positions.length / 3 - 1; };
+        // bottom + top caps
+        const bottomIdx = capVerts.map((v) => push(at(v.x, v.y, d0)));
+        const topIdx = capVerts.map((v) => push(at(v.x, v.y, d1)));
+        for (const f of capFaces) { indices.push(bottomIdx[f[0]], bottomIdx[f[2]], bottomIdx[f[1]]); indices.push(topIdx[f[0]], topIdx[f[1]], topIdx[f[2]]); }
+        // side walls, loop by loop
+        for (const loop of loops) {
+          const b = loop.map((p) => push(at(p.x, p.y, d0)));
+          const t = loop.map((p) => push(at(p.x, p.y, d1)));
+          for (let i = 0; i < loop.length; i++) {
+            const j = (i + 1) % loop.length;
+            indices.push(b[i], b[j], t[j]);
+            indices.push(b[i], t[j], t[i]);
+          }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geo.setIndex(indices);
+        const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }));
+        mesh.renderOrder = 2;
+        this.previewSolidGroup.add(mesh);
+        // crisp outline on the top cap
+        const edgePts: THREE.Vector3[] = [];
+        for (const loop of loops) for (let i = 0; i < loop.length; i++) { edgePts.push(at(loop[i].x, loop[i].y, d1), at(loop[(i + 1) % loop.length].x, loop[(i + 1) % loop.length].y, d1)); }
+        const eseg = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(edgePts), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 }));
+        eseg.renderOrder = 3;
+        this.previewSolidGroup.add(eseg);
+      } catch {
+        /* skip a region whose preview fails to triangulate */
       }
     }
   }

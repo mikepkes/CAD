@@ -192,13 +192,20 @@ export interface AppState {
   ensureKernel: () => Promise<void>;
   rebuildSolids: () => Promise<void>;
   extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut"; symmetric?: boolean; region?: { x: number; y: number } }) => Promise<void>;
-  /** Extrude session (model mode): active flag, target profile sketch, chosen region. */
+  /** Extrude session (model mode): active flag, target profile sketch, chosen region, live params. */
   extrudeActive: boolean;
   extrudeTarget: string | null;
   extrudeRegion: { x: number; y: number } | null;
+  extrudeDistanceExpr: string;
+  extrudeOperation: "new" | "join" | "cut";
+  extrudeSymmetric: boolean;
   openExtrude: (sketchId?: string) => void;
   closeExtrude: () => void;
   setExtrudeRegion: (p: { x: number; y: number } | null) => void;
+  setExtrudeDistanceExpr: (expr: string) => void;
+  setExtrudeOperation: (op: "new" | "join" | "cut") => void;
+  setExtrudeSymmetric: (on: boolean) => void;
+  commitExtrude: () => Promise<void>;
   /** Extrude a planar face directly: project its boundary into a new sketch and target it. */
   startFaceExtrude: (hit: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => Promise<void>;
   editFeatureDistance: (featureId: string, expr: string) => Promise<void>;
@@ -302,6 +309,9 @@ export const useStore = create<AppState>((set, get) => {
     extrudeActive: false,
     extrudeTarget: null,
     extrudeRegion: null,
+    extrudeDistanceExpr: "10",
+    extrudeOperation: "new",
+    extrudeSymmetric: false,
     agentOpen: false,
     apiKey: readLS(AGENT_KEY_LS),
     agentModel: readLS(AGENT_MODEL_LS, "claude-opus-5-5"),
@@ -626,11 +636,29 @@ export const useStore = create<AppState>((set, get) => {
       const hasBody = Object.keys(s.session.doc.features).length > 0;
       const target = sketchId ?? s.activeSketchId ?? (sketches.length ? sketches[sketches.length - 1].id : null);
       if (!target && !hasBody) { set({ toast: { kind: "info", text: "Draw a sketch first, then extrude." } }); return; }
+      const onFace = !!target && s.session.doc.sketches[target]?.planeId === "custom";
       // Enter an extrude session: click a profile region or a face to pick what to extrude.
-      set({ extrudeActive: true, extrudeTarget: target, extrudeRegion: null, mode: "model", activeSketchId: null, selection: [] });
+      set({
+        extrudeActive: true, extrudeTarget: target, extrudeRegion: null,
+        extrudeDistanceExpr: "10", extrudeOperation: hasBody && onFace ? "join" : "new", extrudeSymmetric: false,
+        mode: "model", activeSketchId: null, selection: [],
+      });
     },
     closeExtrude: () => set({ extrudeActive: false, extrudeTarget: null, extrudeRegion: null }),
     setExtrudeRegion: (p) => set({ extrudeRegion: p }),
+    setExtrudeDistanceExpr: (expr) => set({ extrudeDistanceExpr: expr }),
+    setExtrudeOperation: (op) => set({ extrudeOperation: op }),
+    setExtrudeSymmetric: (on) => set({ extrudeSymmetric: on }),
+    commitExtrude: async () => {
+      const s = get();
+      if (!s.extrudeTarget) return;
+      await s.extrudeSketch(s.extrudeTarget, s.extrudeDistanceExpr.trim() || "10", {
+        operation: s.extrudeOperation,
+        symmetric: s.extrudeSymmetric,
+        region: s.extrudeRegion ?? undefined,
+      });
+      get().closeExtrude();
+    },
     startFaceExtrude: async (hit, normal) => {
       await get().ensureKernel();
       if (!get().kernelReady) return;
@@ -650,9 +678,14 @@ export const useStore = create<AppState>((set, get) => {
       if (!r.ok) return;
       const sid = r.createdIds[0];
       await runDispatch("sketch.projectCurves", { sketch: sid, curves });
-      // Pre-select the region under the click.
+      // Pre-select the region under the click; a face boss defaults to Join.
       const uv = to2d(plane, hit);
-      set({ extrudeActive: true, extrudeTarget: sid, extrudeRegion: { x: uv.u, y: uv.v }, mode: "model", activeSketchId: null });
+      const hasBody = Object.keys(doc.features).length > 0;
+      set({
+        extrudeActive: true, extrudeTarget: sid, extrudeRegion: { x: uv.u, y: uv.v },
+        extrudeDistanceExpr: "10", extrudeOperation: hasBody ? "join" : "new", extrudeSymmetric: false,
+        mode: "model", activeSketchId: null,
+      });
     },
     editFeatureDistance: async (featureId, expr) => {
       const op = get().session.timeline.find((o) => o.type === "feature.extrude" && o.createdIds.includes(featureId));

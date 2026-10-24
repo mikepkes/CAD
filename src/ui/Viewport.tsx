@@ -2,8 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SceneManager, ViewData } from "../viewport/SceneManager";
 import { Interactions } from "../viewport/interactions";
 import { AppState, useStore } from "../model/store";
-import { resolveSketchPlane } from "../geometry/plane";
-import { extractRegions, loopPolygon } from "../core/geometry/profile";
+import { resolveSketchPlane, to3d } from "../geometry/plane";
+import { extractRegions, loopPolygon, Region } from "../core/geometry/profile";
+import { resolveParameters } from "../model/parameters";
+import { compileExpr } from "../math/expr";
 import { ContextMenu } from "./ContextMenu";
 
 function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
@@ -13,6 +15,46 @@ function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }
     if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
   }
   return inside;
+}
+
+function inRegion(p: { x: number; y: number }, r: Region): boolean {
+  return pointInPoly(p, loopPolygon(r.outer)) && !r.holes.some((h) => pointInPoly(p, loopPolygon(h)));
+}
+
+/** Regions of the extrude target chosen by the current pick (one region, or all). */
+function chosenRegions(s: AppState): { plane: ReturnType<typeof resolveSketchPlane>; regions: Region[] } | null {
+  if (!s.extrudeActive || !s.extrudeTarget) return null;
+  const sk = s.session.doc.sketches[s.extrudeTarget];
+  if (!sk) return null;
+  const all = extractRegions(sk);
+  const chosen = s.extrudeRegion ? all.filter((r) => inRegion(s.extrudeRegion!, r)) : all;
+  if (!chosen.length) return null;
+  return { plane: resolveSketchPlane(sk), regions: chosen };
+}
+
+function evalDistance(expr: string, s: AppState): number {
+  const { scope } = resolveParameters(s.session.doc.parameters);
+  try { const v = compileExpr(expr).eval(scope); if (Number.isFinite(v)) return v; } catch { /* fall through */ }
+  const f = parseFloat(expr);
+  return Number.isFinite(f) ? f : 10;
+}
+
+/** Install/clear the extrude distance drag handle for the current session. */
+function updateExtrudeHandle(scene: SceneManager, s: AppState) {
+  const ctx = chosenRegions(s);
+  if (!ctx) { scene.handles.clear(); return; }
+  let au = 0, av = 0;
+  for (const r of ctx.regions) { au += r.interior.x; av += r.interior.y; }
+  au /= ctx.regions.length; av /= ctx.regions.length;
+  const anchor = to3d(ctx.plane, au, av);
+  scene.handles.set([{
+    id: "extrude-distance",
+    anchor,
+    dir: ctx.plane.normal,
+    value: evalDistance(s.extrudeDistanceExpr, s),
+    color: s.extrudeOperation === "cut" ? 0xe4564e : 0x5bbf84,
+    onChange: (v) => useStore.getState().setExtrudeDistanceExpr(String(Math.round(v * 100) / 100)),
+  }]);
 }
 
 function buildView(s: AppState): ViewData {
@@ -50,6 +92,21 @@ function buildView(s: AppState): ViewData {
     solids,
     ghostSketches,
     extrudeRegions: buildExtrudeRegions(s),
+    extrudePreview: buildExtrudePreview(s),
+  };
+}
+
+function buildExtrudePreview(s: AppState): ViewData["extrudePreview"] {
+  const ctx = chosenRegions(s);
+  if (!ctx) return undefined;
+  const distance = evalDistance(s.extrudeDistanceExpr, s);
+  if (Math.abs(distance) < 1e-6) return undefined;
+  return {
+    plane: ctx.plane,
+    regions: ctx.regions.map((r) => ({ outer: loopPolygon(r.outer), holes: r.holes.map(loopPolygon) })),
+    distance,
+    symmetric: s.extrudeSymmetric,
+    operation: s.extrudeOperation,
   };
 }
 
@@ -82,9 +139,11 @@ export function Viewport() {
 
     controller.configureControls(scene.controls, prevMode);
     controller.setBase(buildView(useStore.getState()));
+    updateExtrudeHandle(scene, useStore.getState());
 
     const unsub = useStore.subscribe((s) => {
       controller.setBase(buildView(s));
+      updateExtrudeHandle(scene, s);
       if (s.mode !== prevMode) {
         controller.configureControls(scene.controls, s.mode);
         if (s.mode === "model") scene.exitSketchView();

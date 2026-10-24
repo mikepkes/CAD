@@ -45,6 +45,8 @@ export class Interactions {
     window.addEventListener("pointerup", this.onUp);
     dom.addEventListener("dblclick", this.onDblClick);
     dom.addEventListener("contextmenu", this.onContext);
+    // Capture phase so grabbing a drag handle wins over OrbitControls' rotate.
+    dom.addEventListener("pointerdown", this.onHandleDown, { capture: true });
     // Keyboard shortcuts are routed through the HotkeyManager (attached at app
     // init). Interactions only listens for the view-level events those actions
     // fire, because resetting the in-progress draw stage is interaction-local.
@@ -59,6 +61,7 @@ export class Interactions {
     window.removeEventListener("pointerup", this.onUp);
     this.dom.removeEventListener("dblclick", this.onDblClick);
     this.dom.removeEventListener("contextmenu", this.onContext);
+    this.dom.removeEventListener("pointerdown", this.onHandleDown, { capture: true } as EventListenerOptions);
     window.removeEventListener("chisel:lookAt", this.onLookAt as EventListener);
     window.removeEventListener("chisel:frame", this.onFrame as EventListener);
     window.removeEventListener("chisel:cancel", this.onCancel as EventListener);
@@ -107,6 +110,20 @@ export class Interactions {
     } else {
       this.scene.frameModel();
     }
+  };
+
+  private handleDragging = false;
+
+  /** Grab a drag handle (capture phase) before OrbitControls can rotate. */
+  private onHandleDown = (e: PointerEvent) => {
+    if (e.button !== 0 || !this.scene.handles.active) return;
+    const id = this.scene.handles.hitTest(e.clientX, e.clientY);
+    if (!id) return;
+    this.scene.handles.beginDrag(id, e.clientX, e.clientY);
+    this.handleDragging = true;
+    this.scene.controls.enabled = false;
+    e.stopImmediatePropagation();
+    e.preventDefault();
   };
 
   /** Escape cascade's interaction-local tail: reset the draw stage, else the tool. */
@@ -286,6 +303,10 @@ export class Interactions {
 
   private onMove = (e: PointerEvent) => {
     const st = this.st();
+    if (this.handleDragging) { this.scene.handles.drag(e.clientX, e.clientY); return; }
+    if (st.mode === "model" && this.scene.handles.active) {
+      this.scene.handles.setHover(this.scene.handles.hitTest(e.clientX, e.clientY));
+    }
     if (st.mode !== "sketch") return;
     if (this.downPt) {
       const d = Math.hypot(e.clientX - this.downPt.x, e.clientY - this.downPt.y);
@@ -329,6 +350,13 @@ export class Interactions {
 
   private onUp = (e: PointerEvent) => {
     const st = this.st();
+    if (this.handleDragging) {
+      this.handleDragging = false;
+      this.scene.handles.endDrag();
+      this.scene.controls.enabled = true;
+      this.downPt = null;
+      return;
+    }
     if (st.mode === "model") {
       if (!this.moved && this.downPt && this.base) {
         const pick = this.scene.pick(e.clientX, e.clientY, this.base);
