@@ -38,6 +38,8 @@ export interface ViewData {
   /** Overall constrained state of the active sketch, for Fusion-style coloring. */
   constraintState: "under" | "full" | "conflict";
   solids?: SolidView[];
+  /** Other sketches to show dimmed on their planes (every sketch but the active one). */
+  ghostSketches?: { sketch: Sketch; plane: WorkPlane }[];
 }
 
 export interface PickResult {
@@ -53,6 +55,7 @@ const COLORS = {
   bg: 0x1b1d23,
   grid: 0x2d3340,
   gridMajor: 0x3a4152,
+  ghost: 0x5b6472,
   geometry: 0xdfe6f2,
   underConstrained: 0x5a8cff, // Fusion-style blue for under-constrained geometry
   profileFill: 0x4f8cff,
@@ -84,6 +87,7 @@ export class SceneManager {
   } | null = null;
 
   private planeMeshes = new Map<string, THREE.Mesh>();
+  private ghostGroup = new THREE.Group();
   private planeGroup = new THREE.Group();
   private grid: THREE.GridHelper;
   private sketchGroup = new THREE.Group();
@@ -141,6 +145,7 @@ export class SceneManager {
 
     this.buildAxes();
     this.buildPlanes();
+    this.scene.add(this.ghostGroup);
     this.scene.add(this.planeGroup);
     this.scene.add(this.sketchGroup);
     this.scene.add(this.previewGroup);
@@ -544,6 +549,10 @@ export class SceneManager {
     this.clearGroup(this.sketchGroup);
     this.clearGroup(this.previewGroup);
     this.clearGroup(this.solidsGroup);
+    this.clearGroup(this.ghostGroup);
+
+    // Other sketches stay visible on their planes, dimmed (Fusion-style).
+    for (const g of data.ghostSketches ?? []) this.renderGhostSketch(g.sketch, g.plane);
 
     // Solids render in model mode (and faded while sketching).
     this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
@@ -607,6 +616,46 @@ export class SceneManager {
     if (data.hover === id) return COLORS.hover;
     if (construction) return COLORS.construction;
     return base;
+  }
+
+  /** Draw a non-active sketch dimmed on its plane — curves only, no points,
+   *  fills, dimensions or badges, and not pickable (it lives in its own group). */
+  private renderGhostSketch(sk: Sketch, plane: WorkPlane) {
+    const getPt = (id: string) => sk.entities[id] as SketchPoint | undefined;
+    const color = COLORS.ghost;
+    const add = (obj: THREE.Line) => { (obj.material as THREE.Material).transparent = true; (obj.material as THREE.Material).opacity = 0.65; this.ghostGroup.add(obj); };
+    const dashed = (line: THREE.Line, construction?: boolean) => { if (construction) line.computeLineDistances(); };
+    const lineMat = (construction?: boolean) =>
+      construction ? new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.6 }) : new THREE.LineBasicMaterial({ color });
+    for (const e of Object.values(sk.entities)) {
+      if (e.kind === "line") {
+        const a = getPt(e.p1), b = getPt(e.p2);
+        if (!a || !b) continue;
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([this.worldPt(plane, a.x, a.y), this.worldPt(plane, b.x, b.y)]), lineMat(e.construction));
+        dashed(line, e.construction); add(line);
+      } else if (e.kind === "circle") {
+        const ctr = getPt(e.center); if (!ctr) continue;
+        const line = this.makeArcLine(plane, ctr.x, ctr.y, e.r, 0, Math.PI * 2, true, color);
+        add(line);
+      } else if (e.kind === "arc") {
+        const ctr = getPt(e.center), a = getPt(e.p1), b = getPt(e.p2);
+        if (!ctr || !a || !b) continue;
+        const a1 = Math.atan2(a.y - ctr.y, a.x - ctr.x), a2 = Math.atan2(b.y - ctr.y, b.x - ctr.x);
+        add(this.makeArcLine(plane, ctr.x, ctr.y, e.r, a1, a2, e.ccw, color));
+      } else if (e.kind === "ellipse") {
+        const ctr = getPt(e.center); if (!ctr) continue;
+        const pts: THREE.Vector3[] = [];
+        for (let i = 0; i <= 72; i++) {
+          const t = (i / 72) * Math.PI * 2;
+          const ex = e.rx * Math.cos(t), ey = e.ry * Math.sin(t);
+          const u = ctr.x + ex * Math.cos(e.rotation) - ey * Math.sin(e.rotation);
+          const v = ctr.y + ex * Math.sin(e.rotation) + ey * Math.cos(e.rotation);
+          pts.push(this.worldPt(plane, u, v));
+        }
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(e.construction));
+        dashed(line, e.construction); add(line);
+      }
+    }
   }
 
   private renderSketch(sk: Sketch, plane: WorkPlane, data: ViewData) {

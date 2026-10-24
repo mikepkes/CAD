@@ -7,6 +7,10 @@ import { ContextMenu } from "./ContextMenu";
 
 function buildView(s: AppState): ViewData {
   const sketch = s.renderSketch();
+  // Every sketch except the active one stays visible, dimmed, on its own plane.
+  const ghostSketches = Object.values(s.session.doc.sketches)
+    .filter((sk) => sk.id !== s.activeSketchId)
+    .map((sk) => ({ sketch: sk, plane: resolveSketchPlane(sk) }));
   const solids = Object.values(s.solids)
     .filter((sol) => sol.mesh)
     .map((sol) => ({
@@ -34,6 +38,7 @@ function buildView(s: AppState): ViewData {
           ? "full"
           : "under",
     solids,
+    ghostSketches,
   };
 }
 
