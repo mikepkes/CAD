@@ -7,6 +7,8 @@ import { ParametersPanel } from "./ParametersPanel";
 import { InspectorPanel } from "./InspectorPanel";
 import { TimelinePanel } from "./TimelinePanel";
 import { StatusBar } from "./StatusBar";
+import { SettingsPanel } from "./SettingsPanel";
+import { AgentPanel } from "./AgentPanel";
 import { useStore } from "../model/store";
 
 function Toast() {
@@ -53,6 +55,7 @@ export function App() {
         <main className="center">
           <Viewport />
           <Toast />
+          <AgentPanel />
         </main>
 
         <button className="side-toggle right" onClick={() => setRightOpen((v) => !v)}>
@@ -63,6 +66,7 @@ export function App() {
         </aside>
       </div>
       <StatusBar />
+      <SettingsPanel />
     </div>
   );
 }

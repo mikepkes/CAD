@@ -69,6 +69,8 @@ export function Toolbar() {
         <span className="logo">◆</span> Chisel<span className="brand-dim">CAD</span>
       </div>
       <FileMenu />
+      <button className="btn ghost" title="Claude agent — sketch by describing it" onClick={() => useStore.getState().toggleAgent()}>✦ Agent</button>
+      <button className="btn ghost" title="Settings" onClick={() => useStore.getState().setSettingsOpen(true)}>⚙</button>
 
       {mode === "sketch" ? (
         <>

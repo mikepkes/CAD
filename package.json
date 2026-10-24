@@ -13,6 +13,7 @@
     "mcp": "npm run mcp:build && node dist-mcp/server.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@salusoft89/planegcs": "^1.3.0",
     "react": "^18.3.1",

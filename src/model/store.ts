@@ -9,6 +9,12 @@ import { PlaneGCSSolver } from "../core/solver/planegcs";
 import { Evaluations } from "../core/recompute";
 import { resolveParameters } from "./parameters";
 import { availableOps } from "./selectionOps";
+import type AnthropicNS from "@anthropic-ai/sdk";
+import { ChatEntry, describeDocument, runAgent } from "./agent";
+
+const AGENT_KEY_LS = "chisel.anthropic.key";
+const AGENT_MODEL_LS = "chisel.anthropic.model";
+const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
 import { Sketch } from "../sketch/types";
 import { initKernel } from "../core/occ/kernel";
@@ -20,6 +26,11 @@ import { serializeDocument, deserializeDocument } from "../core/persistence";
 
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Agent conversation state lives outside the store (not React-reactive): the full
+// Anthropic message history (for multi-turn) and the in-flight request's aborter.
+let agentHistory: AnthropicNS.MessageParam[] = [];
+let agentAbort: AbortController | null = null;
 
 export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim" | "extend" | "polygon" | "slot" | "ellipse";
 
@@ -79,6 +90,14 @@ export interface AppState {
 
   toast: Toast | null;
   lastMessage: string;
+
+  // embedded agent (BYO Claude API key, stored in the browser only)
+  settingsOpen: boolean;
+  agentOpen: boolean;
+  apiKey: string;
+  agentModel: string;
+  agentChat: ChatEntry[];
+  agentRunning: boolean;
 
   // generic command dispatch (used by the constraint/dimension bar)
   dispatch: (type: string, params: Record<string, unknown>, opts?: { rejectOnConflict?: boolean }) => Promise<DispatchResult>;
@@ -168,6 +187,15 @@ export interface AppState {
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step") => Promise<void>;
 
+  // agent
+  setSettingsOpen: (open: boolean) => void;
+  toggleAgent: () => void;
+  setApiKey: (key: string) => void;
+  setAgentModel: (model: string) => void;
+  sendAgentMessage: (text: string) => Promise<void>;
+  stopAgent: () => void;
+  clearAgentChat: () => void;
+
   // persistence
   initApp: () => Promise<void>;
   newDocument: () => Promise<void>;
@@ -236,6 +264,12 @@ export const useStore = create<AppState>((set, get) => {
     kernelLoading: false,
     toast: null,
     lastMessage: "Pick an origin plane to start a sketch.",
+    settingsOpen: false,
+    agentOpen: false,
+    apiKey: readLS(AGENT_KEY_LS),
+    agentModel: readLS(AGENT_MODEL_LS, "claude-opus-5-5"),
+    agentChat: [],
+    agentRunning: false,
 
     dispatch: (type, params, opts) => runDispatch(type, params, opts),
 
@@ -431,6 +465,48 @@ export const useStore = create<AppState>((set, get) => {
 
     openContextMenu: (x, y) => set({ contextMenu: { x, y } }),
     closeContextMenu: () => set({ contextMenu: null }),
+
+    setSettingsOpen: (open) => set({ settingsOpen: open }),
+    toggleAgent: () => set((s) => ({ agentOpen: !s.agentOpen })),
+    setApiKey: (key) => { try { localStorage.setItem(AGENT_KEY_LS, key); } catch { /* ignore */ } set({ apiKey: key }); },
+    setAgentModel: (model) => { try { localStorage.setItem(AGENT_MODEL_LS, model); } catch { /* ignore */ } set({ agentModel: model }); },
+    stopAgent: () => { agentAbort?.abort(); },
+    clearAgentChat: () => { agentHistory = []; set({ agentChat: [] }); },
+    sendAgentMessage: async (text) => {
+      const s = get();
+      if (!s.apiKey) { set({ settingsOpen: true }); return; }
+      if (s.agentRunning || !text.trim()) return;
+      const push = (e: ChatEntry) => set((st) => ({ agentChat: [...st.agentChat, e] }));
+      push({ role: "user", text });
+      agentHistory.push({ role: "user", content: text });
+      agentAbort = new AbortController();
+      set({ agentRunning: true, agentOpen: true });
+      try {
+        agentHistory = await runAgent({
+          apiKey: s.apiKey,
+          model: s.agentModel,
+          history: agentHistory,
+          registry,
+          signal: agentAbort.signal,
+          ctx: {
+            describe: () => describeDocument(get().session.doc, get().mode, get().activeSketchId),
+            runCommand: async (type, params) => {
+              const r = await runDispatch(type, params);
+              if (r.ok && type === "sketch.create") set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
+              if (r.ok && type === "feature.extrude") set({ mode: "model" });
+              return { ok: r.ok, createdIds: r.createdIds, message: r.message, error: r.error };
+            },
+          },
+          onText: (t) => push({ role: "assistant", text: t }),
+          onTool: (name, ok, detail) => push({ role: "tool", name: name.replace(/__/g, "."), ok, detail }),
+        });
+      } catch (e) {
+        if (!agentAbort.signal.aborted) push({ role: "error", text: (e as Error).message || String(e) });
+      } finally {
+        set({ agentRunning: false });
+        agentAbort = null;
+      }
+    },
 
     createTimelineGroup: (opIds, name) => {
       const doc = get().session.doc;

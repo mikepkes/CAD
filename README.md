@@ -43,6 +43,10 @@ on.
 - **Persistence:** autosave to the browser, plus save/open `.chisel.json`.
 - **MCP server** (`npm run mcp`) exposes every command to an LLM/agent — see
   [`mcp/README.md`](mcp/README.md).
+- **Embedded Claude agent** (✦ Agent): bring your own Anthropic API key
+  (stored only in your browser, sent only to Anthropic) and describe what to
+  sketch — the agent drives the same commands through a tool-use loop and you
+  watch the geometry build live.
 
 See [`docs/SKETCHING.md`](docs/SKETCHING.md) for the Fusion-parity sketching
 roadmap and what's done vs. planned.
