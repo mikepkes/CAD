@@ -40,15 +40,19 @@ export interface ViewData {
   solids?: SolidView[];
   /** Other sketches to show dimmed on their planes (every sketch but the active one). */
   ghostSketches?: { sketch: Sketch; plane: WorkPlane }[];
+  /** Pickable region fills for the active extrude session (click to choose a region). */
+  extrudeRegions?: { plane: WorkPlane; regions: { interior: { x: number; y: number }; outer: { x: number; y: number }[]; holes: { x: number; y: number }[][]; selected: boolean }[] };
 }
 
 export interface PickResult {
-  type: "plane" | "entity" | "face" | "empty";
+  type: "plane" | "entity" | "face" | "region" | "empty";
   id?: string;
   entityKind?: string;
   world?: THREE.Vector3;
   /** World-space normal of a picked solid face. */
   normal?: { x: number; y: number; z: number };
+  /** Interior (u,v) of a picked extrude region. */
+  interior?: { x: number; y: number };
 }
 
 const COLORS = {
@@ -88,6 +92,7 @@ export class SceneManager {
 
   private planeMeshes = new Map<string, THREE.Mesh>();
   private ghostGroup = new THREE.Group();
+  private regionGroup = new THREE.Group();
   private planeGroup = new THREE.Group();
   private grid: THREE.GridHelper;
   private sketchGroup = new THREE.Group();
@@ -146,6 +151,7 @@ export class SceneManager {
     this.buildAxes();
     this.buildPlanes();
     this.scene.add(this.ghostGroup);
+    this.scene.add(this.regionGroup);
     this.scene.add(this.planeGroup);
     this.scene.add(this.sketchGroup);
     this.scene.add(this.previewGroup);
@@ -377,7 +383,15 @@ export class SceneManager {
       }
       return { type: "empty", world: hits[0]?.point };
     } else {
-      // Prefer a solid face (for sketch-on-face), else an origin plane.
+      // During an extrude session, region fills take priority (click to choose).
+      if (this.regionGroup.children.length) {
+        const regionHits = this.raycaster.intersectObjects(this.regionGroup.children, false);
+        if (regionHits[0]) {
+          const interior = regionHits[0].object.userData?.interior as { x: number; y: number } | undefined;
+          return { type: "region", world: regionHits[0].point, interior };
+        }
+      }
+      // Prefer a solid face (for sketch-on-face / face extrude), else an origin plane.
       const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh);
       const faceHits = this.raycaster.intersectObjects(solidMeshes, false);
       const planeHits = this.raycaster.intersectObjects([...this.planeMeshes.values()], false);
@@ -550,9 +564,13 @@ export class SceneManager {
     this.clearGroup(this.previewGroup);
     this.clearGroup(this.solidsGroup);
     this.clearGroup(this.ghostGroup);
+    this.clearGroup(this.regionGroup);
 
     // Other sketches stay visible on their planes, dimmed (Fusion-style).
     for (const g of data.ghostSketches ?? []) this.renderGhostSketch(g.sketch, g.plane);
+
+    // Extrude session: pickable, highlightable region fills.
+    if (data.extrudeRegions) this.renderExtrudeRegions(data.extrudeRegions);
 
     // Solids render in model mode (and faded while sketching).
     this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
@@ -654,6 +672,37 @@ export class SceneManager {
         }
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(e.construction));
         dashed(line, e.construction); add(line);
+      }
+    }
+  }
+
+  /** Filled, pickable region overlays for the extrude session. */
+  private renderExtrudeRegions(data: NonNullable<ViewData["extrudeRegions"]>) {
+    for (let i = 0; i < data.regions.length; i++) {
+      const reg = data.regions[i];
+      try {
+        const contour = reg.outer.map((p) => new THREE.Vector2(p.x, p.y));
+        const holeContours = reg.holes.map((h) => h.map((p) => new THREE.Vector2(p.x, p.y)));
+        const faces = THREE.ShapeUtils.triangulateShape(contour, holeContours);
+        const all = [...contour, ...holeContours.flat()];
+        const positions: number[] = [];
+        for (const v of all) { const w = this.worldPt(data.plane, v.x, v.y); positions.push(w.x, w.y, w.z); }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geo.setIndex(faces.flat());
+        const mat = new THREE.MeshBasicMaterial({
+          color: reg.selected ? 0x5bbf84 : 0x4a7bd6,
+          transparent: true,
+          opacity: reg.selected ? 0.42 : 0.2,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.renderOrder = 3;
+        mesh.userData = { kind: "region", interior: reg.interior };
+        this.regionGroup.add(mesh);
+      } catch {
+        /* triangulation failed for this region — skip its fill */
       }
     }
   }

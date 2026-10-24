@@ -3,7 +3,17 @@ import { SceneManager, ViewData } from "../viewport/SceneManager";
 import { Interactions } from "../viewport/interactions";
 import { AppState, useStore } from "../model/store";
 import { resolveSketchPlane } from "../geometry/plane";
+import { extractRegions, loopPolygon } from "../core/geometry/profile";
 import { ContextMenu } from "./ContextMenu";
+
+function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
 
 function buildView(s: AppState): ViewData {
   const sketch = s.renderSketch();
@@ -39,7 +49,23 @@ function buildView(s: AppState): ViewData {
           : "under",
     solids,
     ghostSketches,
+    extrudeRegions: buildExtrudeRegions(s),
   };
+}
+
+function buildExtrudeRegions(s: AppState): ViewData["extrudeRegions"] {
+  if (!s.extrudeActive || !s.extrudeTarget) return undefined;
+  const sk = s.session.doc.sketches[s.extrudeTarget];
+  if (!sk) return undefined;
+  const sel = s.extrudeRegion;
+  const regions = extractRegions(sk).map((r) => {
+    const outer = loopPolygon(r.outer);
+    const holes = r.holes.map(loopPolygon);
+    const selected = sel ? pointInPoly(sel, outer) && !holes.some((h) => pointInPoly(sel, h)) : true;
+    return { interior: r.interior, outer, holes, selected };
+  });
+  if (!regions.length) return undefined;
+  return { plane: resolveSketchPlane(sk), regions };
 }
 
 export function Viewport() {

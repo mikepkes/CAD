@@ -332,7 +332,13 @@ export class Interactions {
     if (st.mode === "model") {
       if (!this.moved && this.downPt && this.base) {
         const pick = this.scene.pick(e.clientX, e.clientY, this.base);
-        if (pick.type === "plane" && pick.id) st.startSketch(pick.id);
+        if (st.extrudeActive) {
+          // Extrude session: pick a region or a face to extrude.
+          if (pick.type === "region") st.setExtrudeRegion(pick.interior ?? null);
+          else if (pick.type === "face" && pick.world && pick.normal) {
+            void st.startFaceExtrude({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);
+          }
+        } else if (pick.type === "plane" && pick.id) st.startSketch(pick.id);
         else if (pick.type === "face" && pick.world && pick.normal) {
           st.startSketchOnFace({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);
         }

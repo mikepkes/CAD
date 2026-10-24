@@ -22,7 +22,7 @@ import { Sketch } from "../sketch/types";
 import { initKernel } from "../core/occ/kernel";
 import { evaluateFeatures, exportFeatureBlob, featureEdges, SolidEval } from "../core/features";
 import { projectEdges } from "../core/geometry/project";
-import { resolveSketchPlane } from "../geometry/plane";
+import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
 import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
 
@@ -192,10 +192,15 @@ export interface AppState {
   ensureKernel: () => Promise<void>;
   rebuildSolids: () => Promise<void>;
   extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut"; symmetric?: boolean; region?: { x: number; y: number } }) => Promise<void>;
-  /** The sketch currently targeted by the Extrude panel (model mode), or null. */
+  /** Extrude session (model mode): active flag, target profile sketch, chosen region. */
+  extrudeActive: boolean;
   extrudeTarget: string | null;
+  extrudeRegion: { x: number; y: number } | null;
   openExtrude: (sketchId?: string) => void;
   closeExtrude: () => void;
+  setExtrudeRegion: (p: { x: number; y: number } | null) => void;
+  /** Extrude a planar face directly: project its boundary into a new sketch and target it. */
+  startFaceExtrude: (hit: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => Promise<void>;
   editFeatureDistance: (featureId: string, expr: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step") => Promise<void>;
@@ -294,7 +299,9 @@ export const useStore = create<AppState>((set, get) => {
     lastMessage: "Pick an origin plane to start a sketch.",
     settingsOpen: false,
     hotkeysOpen: false,
+    extrudeActive: false,
     extrudeTarget: null,
+    extrudeRegion: null,
     agentOpen: false,
     apiKey: readLS(AGENT_KEY_LS),
     agentModel: readLS(AGENT_MODEL_LS, "claude-opus-5-5"),
@@ -615,13 +622,38 @@ export const useStore = create<AppState>((set, get) => {
     },
     openExtrude: (sketchId) => {
       const s = get();
-      // target: explicit, else the active/last sketch in the document
       const sketches = Object.values(s.session.doc.sketches);
+      const hasBody = Object.keys(s.session.doc.features).length > 0;
       const target = sketchId ?? s.activeSketchId ?? (sketches.length ? sketches[sketches.length - 1].id : null);
-      if (!target) { set({ toast: { kind: "info", text: "Draw a sketch first, then extrude." } }); return; }
-      set({ extrudeTarget: target, mode: "model", activeSketchId: null });
+      if (!target && !hasBody) { set({ toast: { kind: "info", text: "Draw a sketch first, then extrude." } }); return; }
+      // Enter an extrude session: click a profile region or a face to pick what to extrude.
+      set({ extrudeActive: true, extrudeTarget: target, extrudeRegion: null, mode: "model", activeSketchId: null, selection: [] });
     },
-    closeExtrude: () => set({ extrudeTarget: null }),
+    closeExtrude: () => set({ extrudeActive: false, extrudeTarget: null, extrudeRegion: null }),
+    setExtrudeRegion: (p) => set({ extrudeRegion: p }),
+    startFaceExtrude: async (hit, normal) => {
+      await get().ensureKernel();
+      if (!get().kernelReady) return;
+      const doc = get().session.doc;
+      const sc = scope();
+      // Stable origin: foot of the perpendicular from world (0,0,0) to the face plane.
+      const d = hit.x * normal.x + hit.y * normal.y + hit.z * normal.z;
+      const origin = { x: normal.x * d, y: normal.y * d, z: normal.z * d };
+      const plane = makePlaneFromNormal(origin, normal);
+      // Edges of every body, kept only where they lie in the picked face's plane.
+      const all = Object.keys(doc.features).flatMap((fid) => featureEdges(doc, sc, fid));
+      const tol = 0.02;
+      const onPlane = all.filter((e) => e.pts.every((p) => Math.abs((p.x - origin.x) * normal.x + (p.y - origin.y) * normal.y + (p.z - origin.z) * normal.z) < tol));
+      const curves = projectEdges(onPlane, plane);
+      if (!curves.length) { bump({ toast: { kind: "info", text: "Couldn't read that face's boundary." } }); return; }
+      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, name: "Face" });
+      if (!r.ok) return;
+      const sid = r.createdIds[0];
+      await runDispatch("sketch.projectCurves", { sketch: sid, curves });
+      // Pre-select the region under the click.
+      const uv = to2d(plane, hit);
+      set({ extrudeActive: true, extrudeTarget: sid, extrudeRegion: { x: uv.u, y: uv.v }, mode: "model", activeSketchId: null });
+    },
     editFeatureDistance: async (featureId, expr) => {
       const op = get().session.timeline.find((o) => o.type === "feature.extrude" && o.createdIds.includes(featureId));
       if (op) await get().editOperation(op.opId, { ...op.params, distance: expr });

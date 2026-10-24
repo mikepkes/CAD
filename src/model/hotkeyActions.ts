@@ -30,6 +30,7 @@ const ACTIONS: HotkeyAction[] = [
     run: () => {
       const s = st();
       if (s.contextMenu) { s.closeContextMenu(); return; }
+      if (s.extrudeActive) { s.closeExtrude(); return; }
       if (s.constraintTool) { s.setConstraintTool(null); return; }
       fire("chisel:cancel");
     },

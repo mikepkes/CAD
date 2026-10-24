@@ -158,7 +158,7 @@ function collectLoops(sk: Sketch): Loop[] {
 }
 
 /** Sample a loop's boundary as a polygon (for containment / interior tests). */
-function loopPolygon(loop: Loop): Pt[] {
+export function loopPolygon(loop: Loop): Pt[] {
   if (loop.circle) {
     const { center, r } = loop.circle;
     return Array.from({ length: 48 }, (_, i) => {
