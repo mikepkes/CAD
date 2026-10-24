@@ -16,6 +16,14 @@ export interface SolidMesh {
   triangleCount: number;
 }
 
+/** A B-rep edge, classified and sampled in 3D world space (for projection). */
+export interface Edge3D {
+  type: "line" | "circle" | "arc" | "other";
+  /** Sampled points along the edge (line = [start,end]; curves = many). */
+  pts: { x: number; y: number; z: number }[];
+  closed: boolean;
+}
+
 export interface KernelInitOptions {
   /** Browser: URL of replicad_single.wasm (Vite ?url import). */
   wasmUrl?: string;
@@ -89,6 +97,40 @@ export function extrudeToMesh(wp: WorkPlane, profile: Profile, distance: number)
       edges: Float32Array.from(e.lines),
       triangleCount: m.triangles.length / 3,
     };
+  } finally {
+    solid.delete();
+  }
+}
+
+/** Extrude a profile and return its B-rep edges, classified + sampled. Frees the shape. */
+export function extrudeToEdges(wp: WorkPlane, profile: Profile, distance: number): Edge3D[] {
+  const solid = buildSolid(wp, profile, distance);
+  try {
+    const out: Edge3D[] = [];
+    const edges = (solid as unknown as { edges: unknown[] }).edges;
+    for (const e of edges as {
+      geomType: string;
+      startPoint: { x: number; y: number; z: number };
+      endPoint: { x: number; y: number; z: number };
+      pointAt: (t: number) => { x: number; y: number; z: number };
+    }[]) {
+      const type = String(e.geomType).toUpperCase();
+      const sp = e.startPoint, ep = e.endPoint;
+      const closed = Math.hypot(sp.x - ep.x, sp.y - ep.y, sp.z - ep.z) < 1e-6;
+      if (type === "LINE") {
+        out.push({ type: "line", pts: [{ x: sp.x, y: sp.y, z: sp.z }, { x: ep.x, y: ep.y, z: ep.z }], closed: false });
+        continue;
+      }
+      const n = type === "CIRCLE" ? 24 : 40;
+      const pts: { x: number; y: number; z: number }[] = [];
+      for (let i = 0; i <= n; i++) {
+        const p = e.pointAt(i / n);
+        pts.push({ x: p.x, y: p.y, z: p.z });
+      }
+      const kind: Edge3D["type"] = type === "CIRCLE" ? (closed ? "circle" : "arc") : "other";
+      out.push({ type: kind, pts, closed });
+    }
+    return out;
   } finally {
     solid.delete();
   }

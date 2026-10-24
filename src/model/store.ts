@@ -11,7 +11,9 @@ import { resolveParameters } from "./parameters";
 import { solveDrag } from "../core/drag";
 import { Sketch } from "../sketch/types";
 import { initKernel } from "../core/occ/kernel";
-import { evaluateFeatures, exportFeatureBlob, SolidEval } from "../core/features";
+import { evaluateFeatures, exportFeatureBlob, featureEdges, SolidEval } from "../core/features";
+import { projectEdges } from "../core/geometry/project";
+import { planeById } from "../geometry/plane";
 import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
 
@@ -89,6 +91,7 @@ export interface AppState {
   placeCircle: (center: GeoRef, radius: number) => Promise<DispatchResult>;
   placeArc: (center: GeoRef, start: GeoRef, end: GeoRef, ccw: boolean) => Promise<DispatchResult>;
   placePolygon: (center: { x: number; y: number }, vertex: { x: number; y: number }, sides?: number) => Promise<DispatchResult>;
+  projectBodies: (construction?: boolean) => Promise<void>;
   deleteSelected: () => Promise<void>;
 
   // drag
@@ -224,6 +227,21 @@ export const useStore = create<AppState>((set, get) => {
     placeCircle: (center, radius) => runDispatch("sketch.addCircle", { sketch: activeId(), center, radius }),
     placeArc: (center, start, end, ccw) => runDispatch("sketch.addArc", { sketch: activeId(), center, start, end, ccw }),
     placePolygon: (center, vertex, sides = 6) => runDispatch("sketch.addPolygon", { sketch: activeId(), center, vertex, sides }),
+    projectBodies: async (construction = false) => {
+      const sid = activeId();
+      if (!sid) return;
+      await get().ensureKernel();
+      if (!get().kernelReady) return;
+      const doc = get().session.doc;
+      const sk = doc.sketches[sid];
+      if (!sk) return;
+      const sc = scope();
+      const edges = Object.keys(doc.features).flatMap((fid) => featureEdges(doc, sc, fid));
+      if (!edges.length) { bump({ toast: { kind: "info", text: "No body to project — extrude a sketch first." } }); return; }
+      const curves = projectEdges(edges, planeById(sk.planeId));
+      if (!curves.length) { bump({ toast: { kind: "info", text: "Nothing projects onto this plane." } }); return; }
+      await runDispatch("sketch.projectCurves", { sketch: sid, curves, construction });
+    },
     deleteSelected: async () => {
       const s = get();
       if (!s.activeSketchId || s.selection.length === 0) return;

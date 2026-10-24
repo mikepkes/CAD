@@ -36,8 +36,11 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
 - [ ] Rectangle: center, 3-point · Circle: 2-point, 3-point, tangent · Arc: 3-point, tangent (draw-tool flyouts)
 - [ ] Ellipse, slot, spline (new entity kinds; PlaneGCS supports ellipse + b-spline)
 
-## Later (needs 3D)
-- [ ] Sketch on a body face; construction / offset planes; project / intersect edges
+## Milestone 4 — 3D workflow
+- [x] **Project body edges** onto the active sketch (OCC edge extraction → fit lines/circles/arcs, dedupe, merge split circles). Snapshot (non-associative) for now; associative re-projection needs a dependency-ordered rebuild.
+- [ ] Sketch on a body face (face pick → work plane)
+- [ ] Construction / offset planes
+- [ ] Intersect edges; revolve; 3D fillet / shell; components
 
 ## Deviations from Fusion (intentional)
 - Agent-first: every tool is a documented MCP command.

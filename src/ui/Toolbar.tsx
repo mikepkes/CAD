@@ -83,6 +83,13 @@ export function Toolbar() {
           <div className="spacer" />
           <button
             className="btn ghost"
+            title="Project existing body edges onto this sketch plane"
+            onClick={() => useStore.getState().projectBodies(false)}
+          >
+            ⧉ Project
+          </button>
+          <button
+            className="btn ghost"
             title="Look at the sketch plane (orient normal-to)"
             onClick={() => window.dispatchEvent(new CustomEvent("chisel:lookAt"))}
           >

@@ -13,6 +13,7 @@ import {
 import { CommandRegistry } from "./registry";
 import { CommandApplyInfo, CommandContext, CommandDef, JSONSchema } from "./types";
 import { ICurve, intersect, paramOf, pointAt } from "../geometry/intersect";
+import { ProjectedCurve } from "../geometry/project";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 
@@ -318,6 +319,53 @@ export const BUILTINS: CommandDef<any>[] = [
       for (const vid of verts) con({ id: ctx.alloc("c"), type: "pointOnCircle", point: vid, circle: circleId });
       for (let i = 0; i < N - 1; i++) con({ id: ctx.alloc("c"), type: "equal", e1: lines[i], e2: lines[i + 1] });
       return { createdIds: [circleId, ...verts, ...lines], affectedSketchId: sk.id, message: `${N}-gon` };
+    },
+  },
+  {
+    type: "sketch.projectCurves",
+    title: "Project",
+    summary: "Create sketch geometry from projected body edges.",
+    description:
+      "Materializes a list of 2D curves (as produced by projecting a body's edges onto this sketch's plane) into sketch entities. Each curve is line {a,b}, circle {cx,cy,r}, arc {cx,cy,r,a,b,ccw}, or poly {pts}. Set `construction` to make them reference geometry. Returns the created ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "curves"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        curves: { type: "array" },
+        construction: { type: "boolean" },
+      },
+    },
+    apply(draft, p: { sketch: string; curves: ProjectedCurve[]; construction?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const cn = !!p.construction;
+      const mk = (x: number, y: number): string => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x, y, construction: cn }; return id; };
+      const created: string[] = [];
+      for (const c of p.curves) {
+        if (c.kind === "line") {
+          const a = mk(c.a.x, c.a.y), b = mk(c.b.x, c.b.y), id = ctx.alloc("ln");
+          sk.entities[id] = { id, kind: "line", p1: a, p2: b, construction: cn };
+          created.push(id);
+        } else if (c.kind === "circle") {
+          const ctr = mk(c.cx, c.cy), id = ctx.alloc("ci");
+          sk.entities[id] = { id, kind: "circle", center: ctr, r: c.r, construction: cn };
+          created.push(id);
+        } else if (c.kind === "arc") {
+          const ctr = mk(c.cx, c.cy), a = mk(c.a.x, c.a.y), b = mk(c.b.x, c.b.y), id = ctx.alloc("ar");
+          sk.entities[id] = { id, kind: "arc", center: ctr, p1: a, p2: b, r: c.r, ccw: c.ccw, construction: cn };
+          created.push(id);
+        } else if (c.kind === "poly") {
+          let prev = c.pts.length ? mk(c.pts[0].x, c.pts[0].y) : null;
+          for (let i = 1; i < c.pts.length; i++) {
+            const next = mk(c.pts[i].x, c.pts[i].y), id = ctx.alloc("ln");
+            sk.entities[id] = { id, kind: "line", p1: prev!, p2: next, construction: cn };
+            created.push(id);
+            prev = next;
+          }
+        }
+      }
+      return { createdIds: created, affectedSketchId: sk.id, message: `Projected ${p.curves.length} curve${p.curves.length === 1 ? "" : "s"}` };
     },
   },
   {

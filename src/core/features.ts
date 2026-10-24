@@ -7,7 +7,7 @@ import { compileExpr, Scope } from "../math/expr";
 import { CadDocument, ExtrudeFeature } from "./document";
 import { planeById, WorkPlane } from "../geometry/plane";
 import { extractProfiles } from "./geometry/profile";
-import { extrudeToMesh, extrudeToBlob, isKernelReady, SolidMesh } from "./occ/kernel";
+import { Edge3D, extrudeToEdges, extrudeToMesh, extrudeToBlob, isKernelReady, SolidMesh } from "./occ/kernel";
 
 export interface SolidEval {
   featureId: string;
@@ -60,6 +60,24 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope): Record<string,
     }
   }
   return out;
+}
+
+/** B-rep edges of a feature's solid, in world space (for projection into a sketch). */
+export function featureEdges(doc: CadDocument, scope: Scope, featureId: string): Edge3D[] {
+  const f = doc.features[featureId];
+  if (!f || f.kind !== "extrude" || !isKernelReady()) return [];
+  const sketch = doc.sketches[f.sketchId];
+  if (!sketch) return [];
+  const profile = extractProfiles(sketch);
+  if (!profile) return [];
+  const distance = resolveDistance(f, scope);
+  const d = Math.abs(distance) < 1e-9 ? 1e-6 : distance;
+  const wp = f.symmetric ? offsetPlane(planeById(sketch.planeId), -d / 2) : planeById(sketch.planeId);
+  try {
+    return extrudeToEdges(wp, profile, d);
+  } catch {
+    return [];
+  }
 }
 
 export function exportFeatureBlob(
