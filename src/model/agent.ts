@@ -19,6 +19,7 @@ export type ChatEntry =
 export interface AgentContext {
   describe: () => unknown;
   runCommand: (type: string, params: Record<string, unknown>) => Promise<{ ok: boolean; createdIds?: string[]; message?: string; error?: string }>;
+  render: (opts: { view?: string; width?: number; height?: number }) => Promise<{ base64: string; width: number; height: number; view: string }>;
 }
 
 const SYSTEM = `You are the embedded assistant inside ChiselCAD, a browser-based parametric 2D sketch CAD app (an OpenCASCADE/PlaneGCS modeler). You build and edit sketches for the user by calling tools, which are the app's own commands — the user watches the geometry appear as you work.
@@ -45,6 +46,19 @@ export function buildTools(registry: CommandRegistry): Anthropic.Tool[] {
     description:
       "Inspect the current document: editing mode, the active sketch id, every sketch (id, plane, solve status, entities with ids/kinds/coordinates, constraints), features, and parameters. Call this before referencing any id.",
     input_schema: { type: "object", properties: {} },
+  });
+  tools.push({
+    name: "render_view",
+    description:
+      "Render the current model and return a PNG image to look at. `view` is one of iso (default), front, back, top, bottom, left, right; optional `width`/`height` (px, max 1920). Call it to check what you've built.",
+    input_schema: {
+      type: "object",
+      properties: {
+        view: { type: "string", enum: ["iso", "front", "back", "top", "bottom", "left", "right"] },
+        width: { type: "number" },
+        height: { type: "number" },
+      },
+    },
   });
   tools.push({
     name: "get_hotkeys",
@@ -121,6 +135,19 @@ export async function runAgent(opts: {
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const b of resp.content) {
       if (b.type !== "tool_use") continue;
+      // render_view returns an image block, not JSON.
+      if (b.name === "render_view") {
+        try {
+          const a = b.input as { view?: string; width?: number; height?: number };
+          const img = await opts.ctx.render({ view: a.view, width: a.width, height: a.height });
+          opts.onTool("render_view", true, `rendered ${img.view}`);
+          results.push({ type: "tool_result", tool_use_id: b.id, content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: img.base64 } }] });
+        } catch (e) {
+          opts.onTool("render_view", false, (e as Error).message);
+          results.push({ type: "tool_result", tool_use_id: b.id, content: JSON.stringify({ ok: false, error: (e as Error).message }), is_error: true });
+        }
+        continue;
+      }
       let result: { ok: boolean; createdIds?: string[]; message?: string; error?: string } | unknown;
       const readOnly = b.name === "get_state" || b.name === "get_hotkeys";
       try {

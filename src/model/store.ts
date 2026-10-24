@@ -12,6 +12,7 @@ import { availableOps } from "./selectionOps";
 import type AnthropicNS from "@anthropic-ai/sdk";
 import { ChatEntry, describeDocument, runAgent } from "./agent";
 import { enableWebMcp, disableWebMcp } from "./webmcp";
+import { getActiveScene } from "../viewport/sceneRef";
 
 const AGENT_KEY_LS = "chisel.anthropic.key";
 const AGENT_MODEL_LS = "chisel.anthropic.model";
@@ -280,6 +281,13 @@ export const useStore = create<AppState>((set, get) => {
       if (r.ok && type === "sketch.create") set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
       if (r.ok && type === "feature.extrude") set({ mode: "model" });
       return { ok: r.ok, createdIds: r.createdIds, message: r.message, error: r.error };
+    },
+    render: async (opts: { view?: string; width?: number; height?: number }) => {
+      // Make sure solids are current before capturing (agents call this after editing).
+      if (Object.keys(get().session.doc.features).length && !Object.keys(get().solids).length) await get().rebuildSolids();
+      const scene = getActiveScene();
+      if (!scene) throw new Error("viewport not ready");
+      return scene.renderView(opts);
     },
   });
 

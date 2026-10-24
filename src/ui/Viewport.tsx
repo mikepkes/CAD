@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SceneManager, ViewData } from "../viewport/SceneManager";
 import { Interactions } from "../viewport/interactions";
+import { setActiveScene } from "../viewport/sceneRef";
 import { AppState, useStore } from "../model/store";
 import { resolveSketchPlane, to3d } from "../geometry/plane";
 import { extractRegions, loopPolygon, Region } from "../core/geometry/profile";
@@ -132,6 +133,7 @@ export function Viewport() {
     const container = containerRef.current!;
     const scene = new SceneManager(container);
     const controller = new Interactions(scene, scene.renderer.domElement);
+    setActiveScene(scene);
     if (import.meta.env?.DEV) (window as unknown as { __scene?: unknown }).__scene = scene;
 
     let prevMode = useStore.getState().mode;
@@ -158,6 +160,7 @@ export function Viewport() {
 
     return () => {
       unsub();
+      setActiveScene(null);
       controller.dispose();
       scene.dispose();
     };

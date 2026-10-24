@@ -439,6 +439,62 @@ export class SceneManager {
     };
   }
 
+  /**
+   * Render the scene from a named view into an offscreen buffer and return a
+   * PNG (base64). Used by the agent / WebMCP render_view tool; does not disturb
+   * the user's camera.
+   */
+  renderView(opts: { view?: string; width?: number; height?: number } = {}): { base64: string; width: number; height: number; view: string } {
+    const width = Math.max(64, Math.min(Math.round(opts.width ?? 960), 1920));
+    const height = Math.max(64, Math.min(Math.round(opts.height ?? 720), 1920));
+
+    const box = new THREE.Box3();
+    for (const g of [this.solidsGroup, this.sketchGroup, this.ghostGroup]) {
+      const b = new THREE.Box3().setFromObject(g);
+      if (!b.isEmpty()) box.union(b);
+    }
+    if (box.isEmpty()) box.set(new THREE.Vector3(-20, -20, -20), new THREE.Vector3(20, 20, 20));
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
+
+    const DIRS: Record<string, [number, number, number]> = {
+      iso: [1, -1, 0.8], front: [0, -1, 0], back: [0, 1, 0],
+      top: [0, 0, 1], bottom: [0, 0, -1], right: [1, 0, 0], left: [-1, 0, 0],
+    };
+    const view = opts.view && DIRS[opts.view] ? opts.view : "iso";
+    const dir = new THREE.Vector3(...DIRS[view]).normalize();
+    const cam = new THREE.PerspectiveCamera(45, width / height, 0.1, 1e6);
+    cam.up.set(0, 0, 1);
+    if (view === "top" || view === "bottom") cam.up.set(0, 1, 0);
+    const dist = (radius / Math.sin(((45 * Math.PI) / 180) / 2)) * 1.15;
+    cam.position.copy(center).addScaledVector(dir, dist);
+    cam.lookAt(center);
+    cam.updateProjectionMatrix();
+
+    const rt = new THREE.WebGLRenderTarget(width, height);
+    // Hide the big origin-plane overlays for a clean capture (keep grid + axes).
+    const planesVisible = this.planeGroup.visible;
+    this.planeGroup.visible = false;
+    this.renderer.setRenderTarget(rt);
+    this.renderer.render(this.scene, cam);
+    const buf = new Uint8Array(width * height * 4);
+    this.renderer.readRenderTargetPixels(rt, 0, 0, width, height, buf);
+    this.renderer.setRenderTarget(null);
+    this.planeGroup.visible = planesVisible;
+    rt.dispose();
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext("2d")!;
+    const img = ctx.createImageData(width, height);
+    for (let y = 0; y < height; y++) {
+      const src = (height - 1 - y) * width * 4; // readPixels is bottom-up
+      img.data.set(buf.subarray(src, src + width * 4), y * width * 4);
+    }
+    ctx.putImageData(img, 0, 0);
+    return { base64: canvas.toDataURL("image/png").split(",")[1], width, height, view };
+  }
+
   /** Project a world point to client (screen) coordinates. */
   worldToScreen(p: { x: number; y: number; z: number }): { x: number; y: number } {
     const ndc = new THREE.Vector3(p.x, p.y, p.z).project(this.camera);

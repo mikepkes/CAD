@@ -10,7 +10,7 @@ import { CommandRegistry } from "../core/command/registry";
 import { hotkeys } from "../core/hotkeys";
 
 export interface WebMcpResult {
-  content: { type: "text"; text: string }[];
+  content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
   isError?: boolean;
 }
 
@@ -25,6 +25,7 @@ export interface WebMcpHost {
   registry: CommandRegistry;
   runCommand: (type: string, params: Record<string, unknown>) => Promise<{ ok: boolean; createdIds?: string[]; message?: string; error?: string }>;
   describe: () => unknown;
+  render: (opts: { view?: string; width?: number; height?: number }) => Promise<{ base64: string; width: number; height: number; view: string }>;
 }
 
 const INFO = {
@@ -57,6 +58,27 @@ function buildTools(host: WebMcpHost): WebMcpTool[] {
     description: "Inspect the current document: mode, active sketch id, every sketch (entities with ids/kinds/coordinates, constraints), features and parameters. Call before referencing any id.",
     inputSchema: { type: "object", properties: {} },
     execute: async () => ok(host.describe()),
+  });
+  tools.push({
+    name: "render_view",
+    description: "Render the current model and return a PNG image. `view` is one of iso (default), front, back, top, bottom, left, right. Optional `width`/`height` in pixels (max 1920). Use it to see what you've built.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        view: { type: "string", enum: ["iso", "front", "back", "top", "bottom", "left", "right"] },
+        width: { type: "number" },
+        height: { type: "number" },
+      },
+    },
+    execute: async (args) => {
+      try {
+        const a = args as { view?: string; width?: number; height?: number };
+        const r = await host.render({ view: a.view, width: a.width, height: a.height });
+        return { content: [{ type: "image", data: r.base64, mimeType: "image/png" }] };
+      } catch (e) {
+        return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+      }
+    },
   });
   tools.push({
     name: "get_hotkeys",
