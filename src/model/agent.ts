@@ -8,6 +8,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { CommandRegistry } from "../core/command/registry";
 import { CadDocument } from "../core/document";
+import { hotkeys } from "../core/hotkeys";
 
 export type ChatEntry =
   | { role: "user"; text: string }
@@ -44,6 +45,26 @@ export function buildTools(registry: CommandRegistry): Anthropic.Tool[] {
     description:
       "Inspect the current document: editing mode, the active sketch id, every sketch (id, plane, solve status, entities with ids/kinds/coordinates, constraints), features, and parameters. Call this before referencing any id.",
     input_schema: { type: "object", properties: {} },
+  });
+  tools.push({
+    name: "get_hotkeys",
+    description:
+      "List keyboard shortcuts: contexts (stack order, active flagged), each action's id/label/primary/secondary binding, and any within-context conflicts.",
+    input_schema: { type: "object", properties: {} },
+  });
+  tools.push({
+    name: "set_hotkey",
+    description:
+      "Bind or clear a keyboard shortcut. `action` is an action id from get_hotkeys. `key` is a canonical binding like \"f\", \"mod+z\", \"shift+d\" (mod = Ctrl/Cmd), or null to clear. `slot` is \"primary\" (default) or \"secondary\".",
+    input_schema: {
+      type: "object",
+      required: ["action", "key"],
+      properties: {
+        action: { type: "string" },
+        key: { type: ["string", "null"] },
+        slot: { type: "string", enum: ["primary", "secondary"] },
+      },
+    },
   });
   return tools;
 }
@@ -101,16 +122,23 @@ export async function runAgent(opts: {
     for (const b of resp.content) {
       if (b.type !== "tool_use") continue;
       let result: { ok: boolean; createdIds?: string[]; message?: string; error?: string } | unknown;
+      const readOnly = b.name === "get_state" || b.name === "get_hotkeys";
       try {
-        result = b.name === "get_state"
-          ? opts.ctx.describe()
-          : await opts.ctx.runCommand(desanitize(b.name), b.input as Record<string, unknown>);
+        if (b.name === "get_state") result = opts.ctx.describe();
+        else if (b.name === "get_hotkeys") result = hotkeys.describe();
+        else if (b.name === "set_hotkey") {
+          const a = b.input as { action?: string; key?: string | null; slot?: "primary" | "secondary" };
+          hotkeys.setBinding(String(a.action), a.slot === "secondary" ? "secondary" : "primary", a.key == null ? null : String(a.key));
+          result = { ok: true, hotkeys: hotkeys.describe() };
+        } else {
+          result = await opts.ctx.runCommand(desanitize(b.name), b.input as Record<string, unknown>);
+        }
       } catch (e) {
         result = { ok: false, error: (e as Error).message };
       }
-      const ok = b.name === "get_state" ? true : !!(result as { ok?: boolean }).ok;
-      const detail = b.name === "get_state"
-        ? "read state"
+      const ok = readOnly ? true : !!(result as { ok?: boolean }).ok;
+      const detail = readOnly
+        ? (b.name === "get_hotkeys" ? "read hotkeys" : "read state")
         : (result as { message?: string; error?: string }).error ?? (result as { message?: string }).message ?? "ok";
       opts.onTool(b.name, ok, detail);
       results.push({ type: "tool_result", tool_use_id: b.id, content: JSON.stringify(result) });

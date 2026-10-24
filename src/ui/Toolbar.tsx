@@ -72,6 +72,7 @@ export function Toolbar() {
       </div>
       <FileMenu />
       <button className="btn ghost" title="Claude agent — sketch by describing it" onClick={() => useStore.getState().toggleAgent()}>✦ Agent</button>
+      <button className="btn ghost" title="Keyboard shortcuts" onClick={() => useStore.getState().setHotkeysOpen(true)}>⌨</button>
       <button className="btn ghost" title="Settings" onClick={() => useStore.getState().setSettingsOpen(true)}>⚙</button>
 
       {mode === "sketch" ? (

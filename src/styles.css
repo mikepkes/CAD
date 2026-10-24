@@ -1044,3 +1044,31 @@ body {
 .field-toggle input { accent-color: var(--accent); }
 .field-note code { background: var(--panel-2); border-radius: 3px; padding: 0 3px; font-size: 11px; }
 .ok-dot { color: var(--accent-2); font-weight: 600; }
+
+/* ---------- Hotkey manager ---------- */
+.hk-modal { width: 560px; }
+.hk-modal .modal-body { max-height: 70vh; overflow: auto; }
+.hk-modal .modal-foot { justify-content: space-between; }
+.hk-warn { font-size: 12px; color: #e9b949; margin: 6px 0; }
+.hk-context { margin-top: 14px; }
+.hk-context-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.hk-ctx-name { font-weight: 600; text-transform: capitalize; color: var(--text-dim); }
+.hk-ctx-name.active { color: var(--text); }
+.hk-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: #0a0c10; }
+.hk-badge.off { background: var(--panel-2); color: var(--text-dim); }
+.hk-rows { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.hk-row { display: grid; grid-template-columns: 1fr 120px 120px; align-items: center; gap: 8px; padding: 5px 10px; }
+.hk-row:nth-child(odd) { background: rgba(255, 255, 255, 0.02); }
+.hk-row-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); background: var(--panel-2) !important; }
+.hk-label { font-size: 12.5px; }
+.hk-custom { color: var(--accent); font-style: normal; }
+.hk-cell { display: inline-flex; align-items: center; gap: 4px; }
+.hk-key {
+  min-width: 42px; padding: 3px 8px; font-size: 12px; font-family: ui-monospace, monospace;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); cursor: pointer;
+}
+.hk-key:hover { border-color: var(--accent); }
+.hk-key.capturing { border-color: var(--accent); color: var(--accent); }
+.hk-key.conflict { border-color: #e4564e; color: #ff8a82; }
+.hk-clear { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+.hk-clear:hover { color: #ff8a82; }

@@ -29,8 +29,15 @@ on.
   Linear / Grid / Circular patterns — backed by a curve–curve intersection
   module.
 - **Selection & UX:** window/crossing box-select, right-click context menu,
-  `X` → construction, Look At (normal-to-plane), a selection-aware
-  constraint/dimension/modify bar.
+  a **Construction** toggle (draw reference geometry, or convert a selection —
+  dashed, excluded from filled profiles), Look At (normal-to-plane), a
+  selection-aware constraint/dimension/modify bar.
+- **Hotkey manager** (⌨): commands register themselves in a *context*; contexts
+  stack (sketch on top of global) and resolve top-down, so one key can mean
+  different things per context (e.g. `F` = frame selection globally, Look At
+  while sketching). Primary + secondary bindings, rebind in the UI, per-context
+  conflict detection; bindings persist in the browser and are readable/settable
+  over the agent and WebMCP (`get_hotkeys` / `set_hotkey`).
 - **PlaneGCS** (FreeCAD's constraint solver, via WebAssembly) solves the sketch
   and reports **degrees of freedom**, a **fully-constrained** state, and on
   over-constraint **which constraints conflict** — surfaced as a toast and
@@ -79,7 +86,12 @@ npm run mcp          # build + run the MCP server over stdio
 | Zoom | Wheel | Pinch |
 | Draw / select / drag | Left-click / drag | One-finger |
 | Tools | `L` line · `R` rect · `C` circle · `A` arc · `P` point · `S` select | — |
+| Frame / Look At | `F` (fit in model · align to plane in sketch) | — |
+| Construction | `X` (toggle mode, or convert selection) | — |
 | Undo / redo | `Ctrl/Cmd+Z` / `Ctrl/Cmd+Shift+Z` | — |
+
+All shortcuts are customizable in the hotkey manager (⌨ in the toolbar). On a
+trackpad, two-finger scroll pans and pinch zooms; a mouse wheel zooms.
 
 Select geometry, then apply constraints/dimensions from the context bar.
 

@@ -97,6 +97,7 @@ export interface AppState {
 
   // embedded agent (BYO Claude API key, stored in the browser only)
   settingsOpen: boolean;
+  hotkeysOpen: boolean;
   agentOpen: boolean;
   apiKey: string;
   agentModel: string;
@@ -197,6 +198,7 @@ export interface AppState {
 
   // agent
   setSettingsOpen: (open: boolean) => void;
+  setHotkeysOpen: (open: boolean) => void;
   toggleAgent: () => void;
   setApiKey: (key: string) => void;
   setAgentModel: (model: string) => void;
@@ -287,6 +289,7 @@ export const useStore = create<AppState>((set, get) => {
     toast: null,
     lastMessage: "Pick an origin plane to start a sketch.",
     settingsOpen: false,
+    hotkeysOpen: false,
     agentOpen: false,
     apiKey: readLS(AGENT_KEY_LS),
     agentModel: readLS(AGENT_MODEL_LS, "claude-opus-5-5"),
@@ -503,6 +506,7 @@ export const useStore = create<AppState>((set, get) => {
     closeContextMenu: () => set({ contextMenu: null }),
 
     setSettingsOpen: (open) => set({ settingsOpen: open }),
+    setHotkeysOpen: (open) => set({ hotkeysOpen: open }),
     toggleAgent: () => set((s) => ({ agentOpen: !s.agentOpen })),
     setApiKey: (key) => { try { localStorage.setItem(AGENT_KEY_LS, key); } catch { /* ignore */ } set({ apiKey: key }); },
     setAgentModel: (model) => { try { localStorage.setItem(AGENT_MODEL_LS, model); } catch { /* ignore */ } set({ agentModel: model }); },

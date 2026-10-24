@@ -463,6 +463,47 @@ export class SceneManager {
     this.controls.update();
   }
 
+  /** Zoom-to-fit a set of sketch (u,v) points, keeping the current view direction. */
+  frameSketchPoints(plane: WorkPlane, pts: { x: number; y: number }[]) {
+    if (!pts.length) return;
+    this.frameWorld(pts.map((p) => this.worldPt(plane, p.x, p.y)));
+  }
+
+  /** Zoom-to-fit all rendered solids (used by Frame in model mode). */
+  frameModel() {
+    const box = new THREE.Box3().setFromObject(this.solidsGroup);
+    if (box.isEmpty()) return;
+    const c = [box.min, box.max];
+    const corners: THREE.Vector3[] = [];
+    for (const x of [0, 1]) for (const y of [0, 1]) for (const z of [0, 1]) {
+      corners.push(new THREE.Vector3(c[x].x, c[y].y, c[z].z));
+    }
+    this.frameWorld(corners);
+  }
+
+  /** Reframe (animated) so the given world points fit, without rotating the view. */
+  private frameWorld(pts: THREE.Vector3[]) {
+    const box = new THREE.Box3().setFromPoints(pts);
+    if (box.isEmpty()) return;
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
+    const margin = 1.3;
+    let dir = this.camOff().normalize();
+    if (dir.lengthSq() < 1e-9) dir = new THREE.Vector3(0, 0, 1);
+    const up = this.camera.up.clone();
+    const from = { off: this.camOff(), target: this.controls.target.clone(), up, zoom: (this.camera as THREE.OrthographicCamera).zoom ?? 1 };
+    const oc = this.camera as THREE.OrthographicCamera;
+    if (oc.isOrthographicCamera) {
+      const halfH = (oc.top - oc.bottom) / 2;
+      const len = Math.max(50, this.camOff().length());
+      this.beginTween({ from, to: { off: dir.clone().multiplyScalar(len), target: center, up, zoom: halfH / (radius * margin) } });
+    } else {
+      const pc = this.perspCam;
+      const dist = (radius * margin) / Math.tan(((pc.fov * Math.PI) / 180) / 2);
+      this.beginTween({ from, to: { off: dir.clone().multiplyScalar(dist), target: center, up, zoom: pc.zoom } });
+    }
+  }
+
   private beginTween(spec: {
     from: { off: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; zoom: number };
     to: { off: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; zoom: number };

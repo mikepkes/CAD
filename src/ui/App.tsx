@@ -9,7 +9,9 @@ import { TimelinePanel } from "./TimelinePanel";
 import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
 import { AgentPanel } from "./AgentPanel";
+import { HotkeyPanel } from "./HotkeyPanel";
 import { useStore } from "../model/store";
+import { installHotkeys } from "../model/hotkeyActions";
 
 function Toast() {
   const toast = useStore((s) => s.toast);
@@ -37,6 +39,8 @@ export function App() {
   useEffect(() => {
     void initApp();
   }, [initApp]);
+
+  useEffect(() => installHotkeys(), []);
 
   return (
     <div className="app">
@@ -67,6 +71,7 @@ export function App() {
       </div>
       <StatusBar />
       <SettingsPanel />
+      <HotkeyPanel />
     </div>
   );
 }

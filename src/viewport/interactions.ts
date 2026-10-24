@@ -45,8 +45,12 @@ export class Interactions {
     window.addEventListener("pointerup", this.onUp);
     dom.addEventListener("dblclick", this.onDblClick);
     dom.addEventListener("contextmenu", this.onContext);
-    window.addEventListener("keydown", this.onKey);
+    // Keyboard shortcuts are routed through the HotkeyManager (attached at app
+    // init). Interactions only listens for the view-level events those actions
+    // fire, because resetting the in-progress draw stage is interaction-local.
     window.addEventListener("chisel:lookAt", this.onLookAt as EventListener);
+    window.addEventListener("chisel:frame", this.onFrame as EventListener);
+    window.addEventListener("chisel:cancel", this.onCancel as EventListener);
   }
 
   dispose() {
@@ -55,8 +59,9 @@ export class Interactions {
     window.removeEventListener("pointerup", this.onUp);
     this.dom.removeEventListener("dblclick", this.onDblClick);
     this.dom.removeEventListener("contextmenu", this.onContext);
-    window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("chisel:lookAt", this.onLookAt as EventListener);
+    window.removeEventListener("chisel:frame", this.onFrame as EventListener);
+    window.removeEventListener("chisel:cancel", this.onCancel as EventListener);
   }
 
   private onLookAt = () => {
@@ -65,6 +70,50 @@ export class Interactions {
       const sk = st.session.doc.sketches[st.activeSketchId];
       if (sk) this.scene.transitionToSketchView(resolveSketchPlane(sk));
     }
+  };
+
+  /** Frame (zoom-to-fit): the selection if any, else everything in view. */
+  private onFrame = () => {
+    const st = this.st();
+    if (st.mode === "sketch" && st.activeSketchId) {
+      const sk = st.session.doc.sketches[st.activeSketchId];
+      if (!sk) return;
+      const sel = new Set(st.selection);
+      const pts: { x: number; y: number }[] = [];
+      const pushPoint = (id: string) => {
+        const e = sk.entities[id];
+        if (e && e.kind === "point") pts.push({ x: e.x, y: e.y });
+      };
+      // Collect the points of the selected entities (or all points if nothing selected).
+      for (const e of Object.values(sk.entities)) {
+        if (e.kind !== "point") continue;
+        if (sel.size === 0) { pts.push({ x: e.x, y: e.y }); continue; }
+      }
+      if (sel.size) {
+        for (const id of sel) {
+          const e = sk.entities[id];
+          if (!e) continue;
+          if (e.kind === "point") pushPoint(id);
+          else if (e.kind === "line") { pushPoint(e.p1); pushPoint(e.p2); }
+          else if (e.kind === "arc") { pushPoint(e.p1); pushPoint(e.p2); pushPoint(e.center); }
+          else if (e.kind === "circle") {
+            const c = sk.entities[e.center]; if (c && c.kind === "point") { pts.push({ x: c.x - e.r, y: c.y - e.r }, { x: c.x + e.r, y: c.y + e.r }); }
+          } else if (e.kind === "ellipse") {
+            const c = sk.entities[e.center]; if (c && c.kind === "point") { const r = Math.max(e.rx, e.ry); pts.push({ x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y + r }); }
+          }
+        }
+      }
+      this.scene.frameSketchPoints(resolveSketchPlane(sk), pts);
+    } else {
+      this.scene.frameModel();
+    }
+  };
+
+  /** Escape cascade's interaction-local tail: reset the draw stage, else the tool. */
+  private onCancel = () => {
+    const st = this.st();
+    if (this.stage.kind !== "idle") { this.stage = { kind: "idle" }; this.setPreview(null); }
+    else if (st.tool !== "select") st.setTool("select");
   };
 
   configureControls(controls: OrbitControls, mode: "model" | "sketch") {
@@ -749,34 +798,6 @@ export class Interactions {
     }
   };
 
-  private onKey = (e: KeyboardEvent) => {
-    const st = this.st();
-    const tag = (e.target as HTMLElement)?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
-    if (e.key === "Escape") {
-      if (st.contextMenu) { st.closeContextMenu(); return; }
-      if (st.constraintTool) { st.setConstraintTool(null); return; }
-      if (this.stage.kind !== "idle") { this.stage = { kind: "idle" }; this.setPreview(null); }
-      else if (st.tool !== "select") st.setTool("select");
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-      e.preventDefault();
-      if (e.shiftKey) st.redo(); else st.undo();
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); st.redo(); return; }
-    if (st.mode !== "sketch") return;
-    // X converts the selection to/from construction, or (with nothing selected)
-    // arms construction draw mode so new geometry comes in as reference.
-    if (e.key.toLowerCase() === "x" && st.activeSketchId) {
-      st.toggleConstruction();
-      return;
-    }
-    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", g: "polygon", o: "slot", p: "point", s: "select", d: "dimension", t: "trim", e: "extend", i: "ellipse" };
-    if (map[e.key.toLowerCase()]) st.setTool(map[e.key.toLowerCase()]);
-    if ((e.key === "Delete" || e.key === "Backspace") && st.selection.length) st.deleteSelected();
-  };
 }
 
 type Pt = { x: number; y: number };
