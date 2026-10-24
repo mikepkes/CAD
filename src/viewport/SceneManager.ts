@@ -92,6 +92,7 @@ export class SceneManager {
   private raycaster = new THREE.Raycaster();
   private disposed = false;
   private resizeObs?: ResizeObserver;
+  private lastPixelScale = 0;
   private container: HTMLElement;
   private lastData: ViewData | null = null;
 
@@ -264,8 +265,28 @@ export class SceneManager {
     const dt = this.clock.getDelta();
     if (this.tween) this.stepTween(dt);
     else this.controls.update();
+    // Dimension annotations and constraint badges are sized in world units from
+    // the on-screen pixel scale, computed when the sketch is built. That scale
+    // changes with zoom but not with a document edit, so re-render the sketch
+    // layer whenever the zoom (pixels-per-world) shifts — keeps labels/arrows a
+    // constant screen size instead of ballooning until the next edit.
+    const scale = this.worldThreshold(1);
+    if (this.lastPixelScale && Math.abs(scale - this.lastPixelScale) > this.lastPixelScale * 0.002) {
+      this.rerenderSketchLayer();
+    }
+    this.lastPixelScale = scale;
     this.renderer.render(this.scene, this.camera);
   };
+
+  /** Rebuild only the sketch + preview groups (cheap; leaves solids alone). */
+  private rerenderSketchLayer() {
+    const d = this.lastData;
+    if (!d || !d.sketch || !d.plane) return;
+    this.clearGroup(this.sketchGroup);
+    this.clearGroup(this.previewGroup);
+    this.renderSketch(d.sketch, d.plane, d);
+    if (d.preview) this.renderPreview(d.preview, d.plane);
+  }
 
   /** Advance the active-camera animation one frame (slerp orientation, lerp dolly). */
   private stepTween(dt: number) {
@@ -680,7 +701,9 @@ export class SceneManager {
             : pt.fixed
               ? COLORS.point
               : baseColor;
-      const geo = new THREE.SphereGeometry(isOrigin ? 1.8 : 1.3, 10, 10);
+      // Pixel-sized so markers stay constant on screen (the sketch layer
+      // re-renders on zoom), rather than ballooning with the geometry.
+      const geo = new THREE.SphereGeometry(this.pixelToWorld(isOrigin ? 5 : 4), 10, 10);
       const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color }));
       const w = this.worldPt(plane, pt.x, pt.y);
       mesh.position.copy(w);
