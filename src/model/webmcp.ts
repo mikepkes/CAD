@@ -47,7 +47,7 @@ function buildTools(host: WebMcpHost): WebMcpTool[] {
         const r = await host.runCommand(t.name, args ?? {});
         return { ...ok(r), isError: !r.ok };
       } catch (e) {
-        return { content: [{ type: "text", text: (e as Error).message }], isError: true };
+        return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
       }
     },
   }));
@@ -74,7 +74,7 @@ export function enableWebMcp(host: WebMcpHost): void {
     listTools: () => tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
     callTool: async (name: string, args: Record<string, unknown>): Promise<WebMcpResult> => {
       const t = tools.find((x) => x.name === name);
-      if (!t) return { content: [{ type: "text", text: `Unknown tool "${name}"` }], isError: true };
+      if (!t) return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: `Unknown tool "${name}"` }) }], isError: true };
       return t.execute(args ?? {});
     },
   };
