@@ -11,9 +11,11 @@ import { resolveParameters } from "./parameters";
 import { availableOps } from "./selectionOps";
 import type AnthropicNS from "@anthropic-ai/sdk";
 import { ChatEntry, describeDocument, runAgent } from "./agent";
+import { enableWebMcp, disableWebMcp } from "./webmcp";
 
 const AGENT_KEY_LS = "chisel.anthropic.key";
 const AGENT_MODEL_LS = "chisel.anthropic.model";
+const WEBMCP_LS = "chisel.webmcp.enabled";
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
 import { Sketch } from "../sketch/types";
@@ -98,6 +100,8 @@ export interface AppState {
   agentModel: string;
   agentChat: ChatEntry[];
   agentRunning: boolean;
+  /** Expose the app's commands to in-browser external agents via WebMCP. */
+  webMcpEnabled: boolean;
 
   // generic command dispatch (used by the constraint/dimension bar)
   dispatch: (type: string, params: Record<string, unknown>, opts?: { rejectOnConflict?: boolean }) => Promise<DispatchResult>;
@@ -195,6 +199,7 @@ export interface AppState {
   sendAgentMessage: (text: string) => Promise<void>;
   stopAgent: () => void;
   clearAgentChat: () => void;
+  setWebMcpEnabled: (on: boolean) => void;
 
   // persistence
   initApp: () => Promise<void>;
@@ -239,6 +244,18 @@ export const useStore = create<AppState>((set, get) => {
   const activeId = () => get().activeSketchId;
   const scope = () => resolveParameters(get().session.doc.parameters).scope;
 
+  // Shared command host for both the in-app agent and WebMCP: dispatch a command
+  // and keep the viewport in sync (activate a new sketch, switch to model on extrude).
+  const commandHost = () => ({
+    describe: () => describeDocument(get().session.doc, get().mode, get().activeSketchId),
+    runCommand: async (type: string, params: Record<string, unknown>) => {
+      const r = await runDispatch(type, params);
+      if (r.ok && type === "sketch.create") set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
+      if (r.ok && type === "feature.extrude") set({ mode: "model" });
+      return { ok: r.ok, createdIds: r.createdIds, message: r.message, error: r.error };
+    },
+  });
+
   return {
     session,
     rev: 0,
@@ -270,6 +287,7 @@ export const useStore = create<AppState>((set, get) => {
     agentModel: readLS(AGENT_MODEL_LS, "claude-opus-5-5"),
     agentChat: [],
     agentRunning: false,
+    webMcpEnabled: readLS(WEBMCP_LS) === "1",
 
     dispatch: (type, params, opts) => runDispatch(type, params, opts),
 
@@ -472,6 +490,12 @@ export const useStore = create<AppState>((set, get) => {
     setAgentModel: (model) => { try { localStorage.setItem(AGENT_MODEL_LS, model); } catch { /* ignore */ } set({ agentModel: model }); },
     stopAgent: () => { agentAbort?.abort(); },
     clearAgentChat: () => { agentHistory = []; set({ agentChat: [] }); },
+    setWebMcpEnabled: (on) => {
+      try { localStorage.setItem(WEBMCP_LS, on ? "1" : "0"); } catch { /* ignore */ }
+      if (on) enableWebMcp({ registry, ...commandHost() });
+      else disableWebMcp();
+      set({ webMcpEnabled: on });
+    },
     sendAgentMessage: async (text) => {
       const s = get();
       if (!s.apiKey) { set({ settingsOpen: true }); return; }
@@ -488,15 +512,7 @@ export const useStore = create<AppState>((set, get) => {
           history: agentHistory,
           registry,
           signal: agentAbort.signal,
-          ctx: {
-            describe: () => describeDocument(get().session.doc, get().mode, get().activeSketchId),
-            runCommand: async (type, params) => {
-              const r = await runDispatch(type, params);
-              if (r.ok && type === "sketch.create") set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
-              if (r.ok && type === "feature.extrude") set({ mode: "model" });
-              return { ok: r.ok, createdIds: r.createdIds, message: r.message, error: r.error };
-            },
-          },
+          ctx: commandHost(),
           onText: (t) => push({ role: "assistant", text: t }),
           onTool: (name, ok, detail) => push({ role: "tool", name: name.replace(/__/g, "."), ok, detail }),
         });
@@ -589,6 +605,7 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     initApp: async () => {
+      if (get().webMcpEnabled) enableWebMcp({ registry, ...commandHost() });
       let saved: string | null = null;
       try {
         saved = localStorage.getItem(AUTOSAVE_KEY);

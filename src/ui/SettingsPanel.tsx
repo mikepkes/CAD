@@ -14,6 +14,8 @@ export function SettingsPanel() {
   const setApiKey = useStore((s) => s.setApiKey);
   const model = useStore((s) => s.agentModel);
   const setAgentModel = useStore((s) => s.setAgentModel);
+  const webMcp = useStore((s) => s.webMcpEnabled);
+  const setWebMcp = useStore((s) => s.setWebMcpEnabled);
   const [draft, setDraft] = useState(apiKey);
 
   if (!open) return null;
@@ -47,6 +49,20 @@ export function SettingsPanel() {
             {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
           <p className="field-note">The agent drives the same commands you use by hand — ask it to sketch, constrain, dimension, or extrude.</p>
+
+          <div className="field-divider" />
+          <label className="field-toggle">
+            <input type="checkbox" checked={webMcp} onChange={(e) => setWebMcp(e.target.checked)} />
+            <span>Expose tools to browser agents (WebMCP)</span>
+          </label>
+          <p className="field-note">
+            Lets an external agent in your browser (an AI browser, a Chrome extension, Claude-in-Chrome)
+            discover and call ChiselCAD’s {" "}
+            <strong>commands as MCP tools</strong> to control this page directly — no server. Registers with
+            <code> navigator.modelContext</code> when available, and always publishes
+            <code> window.chiselWebMCP</code> (<code>.listTools()</code> / <code>.callTool(name, args)</code>).
+            {webMcp && <> <span className="ok-dot">● live</span></>}
+          </p>
         </div>
         <div className="modal-foot">
           <button className="btn primary" onClick={() => { setApiKey(draft.trim()); close(); }}>Save</button>

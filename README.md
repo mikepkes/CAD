@@ -47,6 +47,11 @@ on.
   (stored only in your browser, sent only to Anthropic) and describe what to
   sketch — the agent drives the same commands through a tool-use loop and you
   watch the geometry build live.
+- **WebMCP** (Settings → *Expose tools to browser agents*): registers the same
+  commands as MCP tools for external in-browser agents (an AI browser, a Chrome
+  extension, Claude-in-Chrome) via `navigator.modelContext`, and always
+  publishes `window.chiselWebMCP` (`.listTools()` / `.callTool(name, args)`) —
+  no server, the page stays static.
 
 See [`docs/SKETCHING.md`](docs/SKETCHING.md) for the Fusion-parity sketching
 roadmap and what's done vs. planned.
