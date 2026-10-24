@@ -32,6 +32,7 @@ export class Interactions {
 
   private downPt: { x: number; y: number } | null = null;
   private dragging = false;
+  private dimDragging = false;
   private moved = false;
   private boxStart: { x: number; y: number } | null = null;
   private boxDiv: HTMLDivElement | null = null;
@@ -209,6 +210,12 @@ export class Interactions {
 
     if (st.tool === "select" && this.base) {
       const pick = this.scene.pick(e.clientX, e.clientY, this.base);
+      if (pick.type === "entity" && pick.id && pick.entityKind === "dimension") {
+        this.dimDragging = true;
+        st.beginDimDrag(pick.id);
+        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        return;
+      }
       if (pick.type === "entity" && pick.id) {
         const sk = st.session.doc.sketches[st.activeSketchId!];
         const ent = sk.entities[pick.id];
@@ -239,6 +246,12 @@ export class Interactions {
       // use raw uv (don't snap to the dragged point itself)
       const uv = this.scene.pointerToUV(e.clientX, e.clientY, resolveSketchPlane(st.session.doc.sketches[st.activeSketchId!]));
       if (uv) st.dragTo(uv.u, uv.v);
+      return;
+    }
+
+    if (this.dimDragging) {
+      const uv = this.scene.pointerToUV(e.clientX, e.clientY, resolveSketchPlane(st.session.doc.sketches[st.activeSketchId!]));
+      if (uv) st.dimDragTo(uv.u, uv.v);
       return;
     }
 
@@ -278,6 +291,12 @@ export class Interactions {
       this.dragging = false;
       this.downPt = null;
       st.endDrag();
+      return;
+    }
+    if (this.dimDragging) {
+      this.dimDragging = false;
+      this.downPt = null;
+      st.endDimDrag();
       return;
     }
     if (this.boxStart) {

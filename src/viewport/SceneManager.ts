@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLANES, WorkPlane, to3d } from "../geometry/plane";
-import { Sketch, SketchArc, SketchCircle, SketchEllipse, SketchLine, SketchPoint } from "../sketch/types";
+import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchEllipse, SketchLine, SketchPoint } from "../sketch/types";
 import { isDimension } from "../sketch/types";
 import { extractProfiles, Loop } from "../core/geometry/profile";
 
@@ -485,14 +485,7 @@ export class SceneManager {
     // dimension labels (always) + geometric constraint glyphs (toggleable)
     for (const c of Object.values(sk.constraints)) {
       if (isDimension(c)) {
-        const label = this.dimensionLabel(c.type, c.value);
-        const pos = this.dimensionAnchor(sk, plane, c);
-        if (pos) {
-          const sprite = this.makeTextSprite(label, "#7bd88f");
-          sprite.position.copy(pos);
-          sprite.userData = { id: c.id, kind: "dimension" };
-          this.sketchGroup.add(sprite);
-        }
+        this.renderDimension(sk, plane, c as DimensionConstraint);
       } else if (data.showConstraints) {
         const badge = this.constraintBadge(sk, plane, c as unknown as Record<string, string>);
         if (badge) {
@@ -634,23 +627,118 @@ export class SceneManager {
     return null;
   }
 
-  private dimensionAnchor(sk: Sketch, plane: WorkPlane, c: any): THREE.Vector3 | null {
-    const P = (id: string) => sk.entities[id] as SketchPoint;
-    const mid = (a: SketchPoint, b: SketchPoint) => this.worldPt(plane, (a.x + b.x) / 2, (a.y + b.y) / 2);
+  /** Render a dimension's full annotation: extension lines, dimension line,
+   *  arrowheads and value, offset by the dimension's stored label position. */
+  private renderDimension(sk: Sketch, plane: WorkPlane, c: DimensionConstraint) {
+    const layout = this.dimLayout(sk, c);
+    if (!layout) return;
+    const color = 0x5bbf84;
+    if (layout.lines.length) {
+      const pts: THREE.Vector3[] = [];
+      for (const [u1, v1, u2, v2] of layout.lines) pts.push(this.worldPt(plane, u1, v1), this.worldPt(plane, u2, v2));
+      const seg = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color }));
+      seg.userData = { id: c.id, kind: "dimension" };
+      seg.renderOrder = 4;
+      this.sketchGroup.add(seg);
+    }
+    const sprite = this.makeTextSprite(this.dimensionLabel(c.type, c.value), "#8fe3ad");
+    sprite.position.copy(this.worldPt(plane, layout.text.x, layout.text.y));
+    sprite.userData = { id: c.id, kind: "dimension" };
+    this.sketchGroup.add(sprite);
+  }
+
+  /** Compute a dimension's annotation geometry in sketch (u,v) space. */
+  private dimLayout(sk: Sketch, c: DimensionConstraint): { lines: number[][]; text: { x: number; y: number } } | null {
+    const P = (id?: string) => (id ? (sk.entities[id] as SketchPoint) : undefined);
+    const px = (p: number) => this.pixelToWorld(p);
+    const arrow = px(7), gap = px(4), ext = px(7);
+    const lines: number[][] = [];
+    const pushArrow = (tx: number, ty: number, pointAng: number) => {
+      for (const s of [0.4, -0.4]) {
+        const a = pointAng + Math.PI + s;
+        lines.push([tx, ty, tx + Math.cos(a) * arrow, ty + Math.sin(a) * arrow]);
+      }
+    };
     try {
-      if (c.a && c.b) return mid(P(c.a), P(c.b));
-      if (c.circle) {
-        const e = sk.entities[c.circle] as SketchCircle;
-        const ctr = P(e.center);
-        return this.worldPt(plane, ctr.x + e.r, ctr.y);
+      if ((c.type === "distance" || c.type === "distanceX" || c.type === "distanceY") && c.a && c.b) {
+        const A = P(c.a)!, B = P(c.b)!;
+        let du: number, dv: number;
+        if (c.type === "distanceX") { du = 1; dv = 0; }
+        else if (c.type === "distanceY") { du = 0; dv = 1; }
+        else { du = B.x - A.x; dv = B.y - A.y; const L = Math.hypot(du, dv) || 1; du /= L; dv /= L; }
+        const pu = -dv, pv = du;
+        const midx = (A.x + B.x) / 2, midy = (A.y + B.y) / 2;
+        const lab = c.label ?? { x: midx + pu * px(24), y: midy + pv * px(24) };
+        const off = (lab.x - A.x) * pu + (lab.y - A.y) * pv;
+        const A2x = A.x + pu * off, A2y = A.y + pv * off;
+        const B2x = B.x + pu * off, B2y = B.y + pv * off;
+        const sgn = off >= 0 ? 1 : -1;
+        lines.push([A.x + pu * gap * sgn, A.y + pv * gap * sgn, A2x + pu * ext * sgn, A2y + pv * ext * sgn]);
+        lines.push([B.x + pu * gap * sgn, B.y + pv * gap * sgn, B2x + pu * ext * sgn, B2y + pv * ext * sgn]);
+        lines.push([A2x, A2y, B2x, B2y]);
+        const ang = Math.atan2(B2y - A2y, B2x - A2x);
+        pushArrow(A2x, A2y, ang + Math.PI);
+        pushArrow(B2x, B2y, ang);
+        return { lines, text: { x: (A2x + B2x) / 2 + pu * px(5), y: (A2y + B2y) / 2 + pv * px(5) } };
       }
-      if (c.line && c.point) {
-        const p = P(c.point);
-        return this.worldPt(plane, p.x, p.y);
+      if ((c.type === "radius" || c.type === "diameter") && c.circle) {
+        const e = sk.entities[c.circle] as SketchCircle | SketchArc;
+        const C = P(e.center)!;
+        const lab = c.label ?? { x: C.x + e.r * 0.7, y: C.y + e.r * 0.7 };
+        let du = lab.x - C.x, dv = lab.y - C.y; const L = Math.hypot(du, dv) || 1; du /= L; dv /= L;
+        const ex = C.x + du * e.r, ey = C.y + dv * e.r;
+        if (c.type === "radius") {
+          lines.push([C.x, C.y, ex, ey]);
+          pushArrow(ex, ey, Math.atan2(dv, du));
+          return { lines, text: { x: C.x + du * e.r * 0.55, y: C.y + dv * e.r * 0.55 } };
+        }
+        const x0 = C.x - du * e.r, y0 = C.y - dv * e.r;
+        lines.push([x0, y0, ex, ey]);
+        pushArrow(ex, ey, Math.atan2(dv, du));
+        pushArrow(x0, y0, Math.atan2(-dv, -du));
+        return { lines, text: { x: C.x + du * e.r * 0.5, y: C.y + dv * e.r * 0.5 } };
       }
-      if (c.l1 && c.l2) {
-        const l = sk.entities[c.l1] as SketchLine;
-        return mid(P(l.p1), P(l.p2));
+      if (c.type === "pointLineDistance" && c.point && c.line) {
+        const Pp = P(c.point)!; const l = sk.entities[c.line] as SketchLine;
+        const A = P(l.p1)!, B = P(l.p2)!;
+        let du = B.x - A.x, dv = B.y - A.y; const L = Math.hypot(du, dv) || 1; du /= L; dv /= L;
+        const t = (Pp.x - A.x) * du + (Pp.y - A.y) * dv;
+        const Fx = A.x + du * t, Fy = A.y + dv * t;
+        lines.push([Fx, Fy, Pp.x, Pp.y]);
+        const ang = Math.atan2(Pp.y - Fy, Pp.x - Fx);
+        pushArrow(Pp.x, Pp.y, ang);
+        pushArrow(Fx, Fy, ang + Math.PI);
+        return { lines, text: { x: (Fx + Pp.x) / 2, y: (Fy + Pp.y) / 2 } };
+      }
+      if (c.type === "angle" && c.l1 && c.l2) {
+        const l1 = sk.entities[c.l1] as SketchLine, l2 = sk.entities[c.l2] as SketchLine;
+        const A1 = P(l1.p1)!, B1 = P(l1.p2)!, A2 = P(l2.p1)!, B2 = P(l2.p2)!;
+        let d1x = B1.x - A1.x, d1y = B1.y - A1.y;
+        let d2x = B2.x - A2.x, d2y = B2.y - A2.y;
+        const denom = d1x * d2y - d1y * d2x;
+        if (Math.abs(denom) < 1e-9) return null;
+        const tt = ((A2.x - A1.x) * d2y - (A2.y - A1.y) * d2x) / denom;
+        const Vx = A1.x + d1x * tt, Vy = A1.y + d1y * tt;
+        const lab = c.label ?? { x: Vx + px(30), y: Vy + px(30) };
+        if ((lab.x - Vx) * d1x + (lab.y - Vy) * d1y < 0) { d1x = -d1x; d1y = -d1y; }
+        if ((lab.x - Vx) * d2x + (lab.y - Vy) * d2y < 0) { d2x = -d2x; d2y = -d2y; }
+        const n1 = Math.hypot(d1x, d1y) || 1, n2 = Math.hypot(d2x, d2y) || 1;
+        const a1 = Math.atan2(d1y, d1x), a2 = Math.atan2(d2y, d2x);
+        const R = Math.max(px(18), Math.min(Math.hypot(lab.x - Vx, lab.y - Vy), px(140)));
+        let span = a2 - a1; while (span <= -Math.PI) span += 2 * Math.PI; while (span > Math.PI) span -= 2 * Math.PI;
+        let prev: [number, number] | null = null;
+        for (let i = 0; i <= 24; i++) {
+          const a = a1 + span * (i / 24);
+          const pu = Vx + Math.cos(a) * R, pv = Vy + Math.sin(a) * R;
+          if (prev) lines.push([prev[0], prev[1], pu, pv]);
+          prev = [pu, pv];
+        }
+        lines.push([Vx, Vy, Vx + (d1x / n1) * R, Vy + (d1y / n1) * R]);
+        lines.push([Vx, Vy, Vx + (d2x / n2) * R, Vy + (d2y / n2) * R]);
+        pushArrow(Vx + Math.cos(a1) * R, Vy + Math.sin(a1) * R, a1 + (span > 0 ? Math.PI / 2 : -Math.PI / 2));
+        pushArrow(Vx + Math.cos(a2) * R, Vy + Math.sin(a2) * R, a2 + (span > 0 ? -Math.PI / 2 : Math.PI / 2));
+        const mid = a1 + span / 2;
+        return { lines, text: { x: Vx + Math.cos(mid) * (R + px(9)), y: Vy + Math.sin(mid) * (R + px(9)) } };
       }
     } catch {
       return null;

@@ -64,6 +64,8 @@ export interface AppState {
 
   dragging: { pointId: string } | null;
   transient: Record<string, { x: number; y: number }> | null;
+  draggingDim: { cid: string } | null;
+  transientDimLabel: { cid: string; x: number; y: number } | null;
   inlineEdit: InlineEdit | null;
   contextMenu: { x: number; y: number } | null;
 
@@ -113,6 +115,10 @@ export interface AppState {
   beginDrag: (pointId: string) => void;
   dragTo: (x: number, y: number) => Promise<void>;
   endDrag: () => Promise<void>;
+  // dimension annotation drag (repositioning)
+  beginDimDrag: (cid: string) => void;
+  dimDragTo: (x: number, y: number) => void;
+  endDimDrag: () => Promise<void>;
   renderSketch: () => Sketch | null;
 
   // parameters
@@ -209,6 +215,8 @@ export const useStore = create<AppState>((set, get) => {
     showConstraints: true,
     dragging: null,
     transient: null,
+    draggingDim: null,
+    transientDimLabel: null,
     inlineEdit: null,
     contextMenu: null,
     solids: {},
@@ -301,18 +309,35 @@ export const useStore = create<AppState>((set, get) => {
       }
       if (Object.keys(seeds).length > 0) await runDispatch("sketch.moveGeometry", { sketch: sid, seeds });
     },
+
+    beginDimDrag: (cid) => set({ draggingDim: { cid } }),
+    dimDragTo: (x, y) => { const d = get().draggingDim; if (d) bump({ transientDimLabel: { cid: d.cid, x, y } }); },
+    endDimDrag: async () => {
+      const t = get().transientDimLabel;
+      set({ draggingDim: null, transientDimLabel: null });
+      if (!t) return;
+      const op = get().session.timeline.find((o) => o.type === "sketch.addDimension" && o.createdIds.includes(t.cid));
+      if (op) await get().editOperation(op.opId, { ...op.params, label: { x: t.x, y: t.y } });
+    },
+
     renderSketch: () => {
       const s = get();
       if (!s.activeSketchId) return null;
       const sk = s.session.doc.sketches[s.activeSketchId];
       if (!sk) return null;
-      if (!s.transient) return sk;
+      if (!s.transient && !s.transientDimLabel) return sk;
       const entities = { ...sk.entities };
-      for (const [id, pos] of Object.entries(s.transient)) {
+      for (const [id, pos] of Object.entries(s.transient ?? {})) {
         const e = entities[id];
         if (e && e.kind === "point") entities[id] = { ...e, x: pos.x, y: pos.y };
       }
-      return { ...sk, entities };
+      let constraints = sk.constraints;
+      if (s.transientDimLabel) {
+        const t = s.transientDimLabel;
+        const c = constraints[t.cid];
+        if (c && "expr" in c) constraints = { ...constraints, [t.cid]: { ...(c as import("../sketch/types").DimensionConstraint), label: { x: t.x, y: t.y } } };
+      }
+      return { ...sk, entities, constraints };
     },
 
     addParameter: async (name, expr) => {

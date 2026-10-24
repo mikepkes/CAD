@@ -617,6 +617,7 @@ export const BUILTINS: CommandDef<any>[] = [
         },
         expression: { type: "string" },
         driven: { type: "boolean", description: "Reference dimension: measures without constraining." },
+        label: { type: "object", description: "Annotation offset position in sketch (u,v).", properties: { x: { type: "number" }, y: { type: "number" } } },
         a: { type: "string" }, b: { type: "string" },
         circle: { type: "string" }, point: { type: "string" }, line: { type: "string" },
         l1: { type: "string" }, l2: { type: "string" },

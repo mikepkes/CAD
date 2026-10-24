@@ -19,6 +19,7 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
   - [x] modal Dimension tool (`D`), smart by selection (reuses availableOps)
   - [x] inline value input on placement (number or parameter expression)
   - [x] double-click a dimension in the viewport to edit
+  - [x] Fusion-style annotations: extension lines + dimension line + arrowheads + value (distance/X/Y, radius, diameter, angle, point-line), with a **draggable offset** stored per dimension (undoable)
 
 ## Sprint B — editing
 - [x] Sketch-corner **Fillet** (tangent arc) / **Chamfer** (bevel) — trims both edges, rehomes corner constraints
