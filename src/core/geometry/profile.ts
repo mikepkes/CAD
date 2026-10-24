@@ -19,6 +19,7 @@ export interface Loop {
   start: Pt;
   segments: LoopSegment[];
   circle?: { center: Pt; r: number }; // set when the loop is a full circle
+  ellipse?: { center: Pt; rx: number; ry: number; rotation: number }; // set when the loop is an ellipse
   area: number; // signed area (CCW positive)
 }
 
@@ -57,7 +58,7 @@ function arcVia(center: Pt, from: Pt, to: Pt, ccw: boolean): Pt {
 export function extractProfiles(sk: Sketch): Profile | null {
   const loops: Loop[] = [];
 
-  // Full circles are standalone loops.
+  // Full circles and ellipses are standalone loops.
   for (const e of Object.values(sk.entities)) {
     if (e.kind === "circle" && !e.construction) {
       const c = P(sk, e.center);
@@ -66,6 +67,14 @@ export function extractProfiles(sk: Sketch): Profile | null {
         segments: [],
         circle: { center: { x: c.x, y: c.y }, r: e.r },
         area: Math.PI * e.r * e.r,
+      });
+    } else if (e.kind === "ellipse" && !e.construction) {
+      const c = P(sk, e.center);
+      loops.push({
+        start: { x: c.x + e.rx * Math.cos(e.rotation), y: c.y + e.rx * Math.sin(e.rotation) },
+        segments: [],
+        ellipse: { center: { x: c.x, y: c.y }, rx: e.rx, ry: e.ry, rotation: e.rotation },
+        area: Math.PI * e.rx * e.ry,
       });
     }
   }

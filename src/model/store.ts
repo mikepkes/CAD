@@ -20,7 +20,7 @@ import { serializeDocument, deserializeDocument } from "../core/persistence";
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim" | "extend" | "polygon" | "slot";
+export type Tool = "select" | "line" | "rectangle" | "circle" | "arc" | "point" | "dimension" | "trim" | "extend" | "polygon" | "slot" | "ellipse";
 
 /** Default variant per shape tool, and the choices the UI offers. */
 export const TOOL_VARIANTS: Partial<Record<Tool, { id: string; label: string }[]>> = {
@@ -105,6 +105,7 @@ export interface AppState {
   placePolygon: (center: { x: number; y: number }, vertex: { x: number; y: number }, sides?: number) => Promise<DispatchResult>;
   placeRectangle3: (p1: { x: number; y: number }, p2: { x: number; y: number }, p3: { x: number; y: number }) => Promise<DispatchResult>;
   placeSlot: (p1: { x: number; y: number }, p2: { x: number; y: number }, width: number) => Promise<DispatchResult>;
+  placeEllipse: (center: { x: number; y: number }, rx: number, ry: number, rotation: number) => Promise<DispatchResult>;
   projectBodies: (construction?: boolean) => Promise<void>;
   deleteSelected: () => Promise<void>;
 
@@ -252,6 +253,7 @@ export const useStore = create<AppState>((set, get) => {
     placePolygon: (center, vertex, sides = 6) => runDispatch("sketch.addPolygon", { sketch: activeId(), center, vertex, sides }),
     placeRectangle3: (p1, p2, p3) => runDispatch("sketch.addRectangle3", { sketch: activeId(), p1, p2, p3 }),
     placeSlot: (p1, p2, width) => runDispatch("sketch.addSlot", { sketch: activeId(), p1, p2, width }),
+    placeEllipse: (center, rx, ry, rotation) => runDispatch("sketch.addEllipse", { sketch: activeId(), center, rx, ry, rotation }),
     projectBodies: async (construction = false) => {
       const sid = activeId();
       if (!sid) return;

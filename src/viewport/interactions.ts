@@ -302,7 +302,7 @@ export class Interactions {
     return (tool === "circle" && variant !== "center") ||
       (tool === "rectangle" && variant !== "corner") ||
       (tool === "arc" && variant !== "center") ||
-      tool === "slot";
+      tool === "slot" || tool === "ellipse";
   }
 
   private async onClick(snap: Snap, e: PointerEvent) {
@@ -347,6 +347,7 @@ export class Interactions {
     if (tool === "rectangle") return variant === "center" ? 2 : 3;
     if (tool === "arc") return 3; // 3-point
     if (tool === "slot") return 3;
+    if (tool === "ellipse") return 3;
     return 2;
   }
 
@@ -392,6 +393,12 @@ export class Interactions {
       const dx = p2.x - p1.x, dy = p2.y - p1.y, m = Math.hypot(dx, dy) || 1;
       const width = 2 * Math.abs((-dy * (p3.x - p1.x) + dx * (p3.y - p1.y)) / m);
       if (width > 1e-3) await st.placeSlot(p1, p2, width);
+    } else if (tool === "ellipse") {
+      const c = P(0), major = P(1), minor = P(2);
+      const rx = Math.hypot(major.x - c.x, major.y - c.y);
+      const rotation = Math.atan2(major.y - c.y, major.x - c.x);
+      const ry = Math.abs(-Math.sin(rotation) * (minor.x - c.x) + Math.cos(rotation) * (minor.y - c.y));
+      if (rx > 1e-3 && ry > 1e-3) await st.placeEllipse(c, rx, ry, rotation);
     }
   }
 
@@ -443,6 +450,12 @@ export class Interactions {
         { cu: p2.u, cv: p2.v, r, a1: Math.atan2(B.v - p2.v, B.u - p2.u), a2: Math.atan2(C.v - p2.v, C.u - p2.u), ccw: true },
         { cu: p1.u, cv: p1.v, r, a1: Math.atan2(D.v - p1.v, D.u - p1.u), a2: Math.atan2(A.v - p1.v, A.u - p1.u), ccw: true },
       ];
+    } else if (st.tool === "ellipse" && all.length >= 2) {
+      const c = all[0], major = all[1];
+      const rx = Math.hypot(major.u - c.u, major.v - c.v);
+      const rotation = Math.atan2(major.v - c.v, major.u - c.u);
+      const ry = all.length >= 3 ? Math.abs(-Math.sin(rotation) * (all[2].u - c.u) + Math.cos(rotation) * (all[2].v - c.v)) : rx * 0.6;
+      preview.ellipses = [{ cu: c.u, cv: c.v, rx, ry, rotation }];
     } else if (all.length >= 1) {
       preview.segments = [seg(all[0], all[all.length - 1])];
     }
@@ -730,7 +743,7 @@ export class Interactions {
       const op = availableOps(sk, st.selection).modify.find((o) => o.id === "construction");
       if (op) { void st.dispatch(op.command.type, op.command.params); return; }
     }
-    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", g: "polygon", o: "slot", p: "point", s: "select", d: "dimension", t: "trim", e: "extend" };
+    const map: Record<string, any> = { l: "line", r: "rectangle", c: "circle", a: "arc", g: "polygon", o: "slot", p: "point", s: "select", d: "dimension", t: "trim", e: "extend", i: "ellipse" };
     if (map[e.key.toLowerCase()]) st.setTool(map[e.key.toLowerCase()]);
     if ((e.key === "Delete" || e.key === "Backspace") && st.selection.length) st.deleteSelected();
   };

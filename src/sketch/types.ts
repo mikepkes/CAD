@@ -45,8 +45,18 @@ export interface SketchArc {
   construction?: boolean;
 }
 
-export type SketchEntity = SketchPoint | SketchLine | SketchCircle | SketchArc;
-export type CurveEntity = SketchLine | SketchCircle | SketchArc;
+export interface SketchEllipse {
+  id: EntityId;
+  kind: "ellipse";
+  center: EntityId;
+  rx: number; // major (horizontal before rotation) radius
+  ry: number; // minor radius
+  rotation: number; // radians, CCW
+  construction?: boolean;
+}
+
+export type SketchEntity = SketchPoint | SketchLine | SketchCircle | SketchArc | SketchEllipse;
+export type CurveEntity = SketchLine | SketchCircle | SketchArc | SketchEllipse;
 
 // ---- Constraints -----------------------------------------------------------
 

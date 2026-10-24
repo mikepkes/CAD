@@ -35,8 +35,9 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
 - [x] **Polygon** (G) — regular N-gon via center + vertex, held regular by a construction circle (point-on-circle) + equal edges; sides editable in the timeline
 - [x] Draw-tool variants via a variant selector: **Circle** center / 2-point / 3-point · **Rectangle** 2-corner / center / 3-point (rotated) · **Arc** center / 3-point
 - [x] **Slot** tool (two centers + width → 2 lines + 2 tangent arcs, equal + parallel)
+- [x] **Ellipse** (I) — center + major-axis + minor-extent; renders, shades, and extrudes (OCC drawEllipse). Center is a solver point; shape (rx/ry/rotation) is set at draw time and editable in the timeline. Solver-driven ellipse shape (PlaneGCS ellipse/arc-of-ellipse) is a follow-up.
 - [ ] Circle/arc tangent variants
-- [ ] Ellipse, spline (new entity kinds; PlaneGCS supports ellipse + b-spline)
+- [ ] Spline (b-spline entity: model + solver + OCC + profile) — larger, deferred
 
 ## Milestone 4 — 3D workflow
 - [x] **Project body edges** onto the active sketch (OCC edge extraction → fit lines/circles/arcs, dedupe, merge split circles). Snapshot (non-associative) for now; associative re-projection needs a dependency-ordered rebuild.

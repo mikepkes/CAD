@@ -31,6 +31,7 @@ const TOOLS: { id: Tool; label: string; key: string; glyph: string }[] = [
   { id: "arc", label: "Arc", key: "A", glyph: "◜" },
   { id: "polygon", label: "Polygon", key: "G", glyph: "⬡" },
   { id: "slot", label: "Slot", key: "O", glyph: "⬭" },
+  { id: "ellipse", label: "Ellipse", key: "I", glyph: "⬯" },
   { id: "point", label: "Point", key: "P", glyph: "•" },
   { id: "dimension", label: "Dimension", key: "D", glyph: "↦" },
   { id: "trim", label: "Trim", key: "T", glyph: "✂" },

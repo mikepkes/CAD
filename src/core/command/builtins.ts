@@ -250,6 +250,32 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
   {
+    type: "sketch.addEllipse",
+    title: "Add ellipse",
+    summary: "Add an ellipse by center, radii and rotation.",
+    description:
+      "Creates an ellipse. Center may be {x,y} or {ref}. `rx`/`ry` are the major/minor radii, `rotation` (radians) rotates it CCW. The center is a solver point (constrainable); the shape is set here and editable in the timeline. Returns [ellipseId, centerId].",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "center", "rx", "ry"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        center: POINT_REF_SCHEMA,
+        rx: { type: "number", minimum: 0 },
+        ry: { type: "number", minimum: 0 },
+        rotation: { type: "number" },
+      },
+    },
+    apply(draft, p: { sketch: string; center: PointRef; rx: number; ry: number; rotation?: number }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const c = resolvePoint(sk, p.center, ctx);
+      const id = ctx.alloc("el");
+      sk.entities[id] = { id, kind: "ellipse", center: c, rx: p.rx, ry: p.ry, rotation: p.rotation ?? 0 };
+      return { createdIds: [id, c], affectedSketchId: sk.id };
+    },
+  },
+  {
     type: "sketch.addRectangle",
     title: "Add rectangle",
     summary: "Add a rectangle (4 lines) with horizontal/vertical constraints applied.",
@@ -1214,8 +1240,9 @@ function offsetCurve(sk: Sketch, targetId: string, d: number, ctx: CommandContex
     return { createdIds: [id, ctr], affectedSketchId: sk.id, message: "Offset circle" };
   }
   // arc
+  if (tgt.kind !== "arc") throw new Error("offset supports lines, circles and arcs");
   const c = P(tgt.center), s = P(tgt.p1), e = P(tgt.p2);
-  const r = (tgt as any).r + d;
+  const r = tgt.r + d;
   if (r <= 1e-6) throw new Error("offset distance collapses the arc");
   const a0 = Math.atan2(s.y - c.y, s.x - c.x);
   const a1 = Math.atan2(e.y - c.y, e.x - c.x);

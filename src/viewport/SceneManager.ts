@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLANES, WorkPlane, to3d } from "../geometry/plane";
-import { Sketch, SketchArc, SketchCircle, SketchLine, SketchPoint } from "../sketch/types";
+import { Sketch, SketchArc, SketchCircle, SketchEllipse, SketchLine, SketchPoint } from "../sketch/types";
 import { isDimension } from "../sketch/types";
 import { extractProfiles, Loop } from "../core/geometry/profile";
 
@@ -9,6 +9,7 @@ export interface PreviewGeom {
   segments?: { u1: number; v1: number; u2: number; v2: number }[];
   circles?: { cu: number; cv: number; r: number }[];
   arcs?: { cu: number; cv: number; r: number; a1: number; a2: number; ccw: boolean }[];
+  ellipses?: { cu: number; cv: number; rx: number; ry: number; rotation: number }[];
   snap?: { u: number; v: number; kind: string } | null;
   cursor?: { u: number; v: number } | null;
   /** Inference glyphs (H/V, ∥, ⊥, on-line, …) shown beside the cursor. */
@@ -436,6 +437,26 @@ export class SceneManager {
           this.colorFor(ar.id, data, baseColor, ar.construction));
         line.userData = { id: ar.id, kind: "arc" };
         this.sketchGroup.add(line);
+      } else if (e.kind === "ellipse") {
+        const el = e as SketchEllipse;
+        const ctr = getPt(el.center);
+        if (!ctr) continue;
+        const pts: THREE.Vector3[] = [];
+        for (let i = 0; i <= 72; i++) {
+          const t = (i / 72) * Math.PI * 2;
+          const ex = el.rx * Math.cos(t), ey = el.ry * Math.sin(t);
+          const u = ctr.x + ex * Math.cos(el.rotation) - ey * Math.sin(el.rotation);
+          const v = ctr.y + ex * Math.sin(el.rotation) + ey * Math.cos(el.rotation);
+          pts.push(this.worldPt(plane, u, v));
+        }
+        const color = this.colorFor(el.id, data, baseColor, el.construction);
+        const mat = el.construction
+          ? new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.6 })
+          : new THREE.LineBasicMaterial({ color });
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
+        if (el.construction) line.computeLineDistances();
+        line.userData = { id: el.id, kind: "ellipse" };
+        this.sketchGroup.add(line);
       }
     }
 
@@ -533,6 +554,16 @@ export class SceneManager {
       for (let i = 0; i < 48; i++) {
         const a = (i / 48) * Math.PI * 2;
         out.push({ x: center.x + r * Math.cos(a), y: center.y + r * Math.sin(a) });
+      }
+      return out;
+    }
+    if (loop.ellipse) {
+      const { center, rx, ry, rotation } = loop.ellipse;
+      const out: { x: number; y: number }[] = [];
+      for (let i = 0; i < 64; i++) {
+        const t = (i / 64) * Math.PI * 2;
+        const ex = rx * Math.cos(t), ey = ry * Math.sin(t);
+        out.push({ x: center.x + ex * Math.cos(rotation) - ey * Math.sin(rotation), y: center.y + ex * Math.sin(rotation) + ey * Math.cos(rotation) });
       }
       return out;
     }
@@ -679,6 +710,15 @@ export class SceneManager {
     (preview.arcs ?? []).forEach((a) => {
       const line = this.makeArcLine(plane, a.cu, a.cv, a.r, a.a1, a.a2, a.ccw, 0x9aa7bd);
       this.previewGroup.add(line);
+    });
+    (preview.ellipses ?? []).forEach((e) => {
+      const pts: THREE.Vector3[] = [];
+      for (let i = 0; i <= 72; i++) {
+        const t = (i / 72) * Math.PI * 2;
+        const ex = e.rx * Math.cos(t), ey = e.ry * Math.sin(t);
+        pts.push(this.worldPt(plane, e.cu + ex * Math.cos(e.rotation) - ey * Math.sin(e.rotation), e.cv + ex * Math.sin(e.rotation) + ey * Math.cos(e.rotation)));
+      }
+      this.previewGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x9aa7bd })));
     });
     if (preview.snap) {
       // A flat ring on the sketch plane reads as a snap marker, not a floating sphere.

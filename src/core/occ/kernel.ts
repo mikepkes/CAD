@@ -4,7 +4,7 @@
 // display, and STL/STEP blobs for CNC / 3D-print output.
 
 import opencascade from "replicad-opencascadejs";
-import { setOC, draw, drawCircle, Plane, type Drawing, type Shape3D } from "replicad";
+import { setOC, draw, drawCircle, drawEllipse, Plane, type Drawing, type Shape3D } from "replicad";
 import { WorkPlane } from "../../geometry/plane";
 import { Loop, Profile } from "../geometry/profile";
 
@@ -61,6 +61,12 @@ function planeFor(wp: WorkPlane): Plane {
 function loopToDrawing(loop: Loop): Drawing {
   if (loop.circle) {
     return drawCircle(loop.circle.r).translate(loop.circle.center.x, loop.circle.center.y) as Drawing;
+  }
+  if (loop.ellipse) {
+    const e = loop.ellipse;
+    let d = drawEllipse(e.rx, e.ry) as Drawing;
+    if (Math.abs(e.rotation) > 1e-9) d = d.rotate((e.rotation * 180) / Math.PI, [0, 0]) as Drawing;
+    return d.translate(e.center.x, e.center.y) as Drawing;
   }
   let pen = draw([loop.start.x, loop.start.y]);
   const segs = loop.segments;
