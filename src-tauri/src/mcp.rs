@@ -157,7 +157,17 @@ async fn mcp_endpoint(State(ctx): State<Ctx>, method: axum::http::Method, header
         }
     }
     match method {
-        axum::http::Method::POST => handle_post(&ctx, body).await,
+        axum::http::Method::POST => {
+            // Require JSON. A cross-origin POST can only set a non-JSON (simple)
+            // content type without a CORS preflight, so insisting on
+            // application/json forces a preflight that this server never answers
+            // — closing the simple-request path to driving the document.
+            let ct = headers.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+            if !ct.to_ascii_lowercase().contains("application/json") {
+                return (StatusCode::UNSUPPORTED_MEDIA_TYPE, "content-type must be application/json").into_response();
+            }
+            handle_post(&ctx, body).await
+        }
         // No server-initiated stream (stateless server): tell the client so.
         axum::http::Method::GET => StatusCode::METHOD_NOT_ALLOWED.into_response(),
         // Session termination: nothing to terminate.
@@ -166,16 +176,28 @@ async fn mcp_endpoint(State(ctx): State<Ctx>, method: axum::http::Method, header
     }
 }
 
+/// Is this a request from the local machine (the DNS-rebinding guard)?
+///
+/// The host must match *exactly* — a prefix test would let `localhost.evil.com`
+/// (an attacker domain DNS-rebound to 127.0.0.1) pass and defeat the guard. So
+/// parse off the scheme and any port and compare the bare host.
 fn is_local_origin(origin: &str) -> bool {
-    let o = origin.to_ascii_lowercase();
-    o == "null"
-        || o.starts_with("http://localhost")
-        || o.starts_with("http://127.0.0.1")
-        || o.starts_with("http://[::1]")
-        || o.starts_with("https://localhost")
-        || o.starts_with("tauri://")
-        || o.starts_with("http://tauri.localhost")
-        || o.starts_with("https://tauri.localhost")
+    let o = origin.trim().to_ascii_lowercase();
+    if o == "null" || o.starts_with("tauri://") {
+        return true; // Tauri's own webview origins
+    }
+    let rest = match o.strip_prefix("http://").or_else(|| o.strip_prefix("https://")) {
+        Some(r) => r,
+        None => return false, // only http(s) and tauri:// are local transports
+    };
+    // Host is everything before the path/query, minus a trailing :port. Keep
+    // IPv6 brackets intact ("[::1]:5173" → "[::1]"; "[::1]" has no port to strip).
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = match host.rfind(':') {
+        Some(idx) if !host[idx..].contains(']') => &host[..idx],
+        _ => host,
+    };
+    matches!(host, "localhost" | "127.0.0.1" | "[::1]" | "tauri.localhost")
 }
 
 async fn handle_post(ctx: &Ctx, body: Bytes) -> Response {
@@ -325,6 +347,60 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn is_local_origin_matches_host_exactly() {
+        // Genuinely local.
+        assert!(is_local_origin("http://localhost:5173"));
+        assert!(is_local_origin("http://127.0.0.1:4673"));
+        assert!(is_local_origin("http://[::1]:5173"));
+        assert!(is_local_origin("http://[::1]"));
+        assert!(is_local_origin("https://localhost"));
+        assert!(is_local_origin("tauri://localhost"));
+        assert!(is_local_origin("http://tauri.localhost"));
+        assert!(is_local_origin("null"));
+        // Prefix-bypass attempts the old starts_with() check let through.
+        assert!(!is_local_origin("http://localhost.evil.com"));
+        assert!(!is_local_origin("http://127.0.0.1.evil.com"));
+        assert!(!is_local_origin("http://localhostx"));
+        assert!(!is_local_origin("http://127.0.0.1.example.com:5173"));
+        assert!(!is_local_origin("https://evil.example"));
+        assert!(!is_local_origin("ftp://localhost"));
+    }
+
+    #[tokio::test]
+    async fn localhost_subdomain_origin_is_rejected() {
+        let (bridge, forward) = echo_bridge();
+        let resp = router(bridge, forward)
+            .oneshot(
+                Request::post("/mcp")
+                    .header("origin", "http://localhost.evil.com")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn non_json_content_type_is_rejected() {
+        // A browser can send text/plain cross-origin without a CORS preflight; it
+        // must not reach the document even from an allowed-looking origin.
+        let (bridge, forward) = echo_bridge();
+        let resp = router(bridge, forward)
+            .oneshot(
+                Request::post("/mcp")
+                    .header("origin", "http://localhost:5173")
+                    .header("content-type", "text/plain")
+                    .body(Body::from(r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
     }
 
     #[tokio::test]
