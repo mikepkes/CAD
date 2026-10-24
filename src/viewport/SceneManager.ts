@@ -91,6 +91,7 @@ export class SceneManager {
   private solidsGroup = new THREE.Group();
   private raycaster = new THREE.Raycaster();
   private disposed = false;
+  private resizeObs?: ResizeObserver;
   private container: HTMLElement;
   private lastData: ViewData | null = null;
 
@@ -101,6 +102,9 @@ export class SceneManager {
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.touchAction = "none";
+    // Trackpad-aware navigation: two-finger scroll pans, pinch zooms (handled
+    // in capture phase so we can suppress OrbitControls' wheel-dolly for pans).
+    this.renderer.domElement.addEventListener("wheel", this.onWheel, { passive: false, capture: true });
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(COLORS.bg);
@@ -118,6 +122,7 @@ export class SceneManager {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.12;
     this.controls.screenSpacePanning = true;
+    this.controls.zoomToCursor = true; // pinch / wheel zoom toward the cursor
     this.controls.target.set(0, 0, 0);
 
     // lights
@@ -141,6 +146,12 @@ export class SceneManager {
     this.scene.add(this.solidsGroup);
 
     window.addEventListener("resize", this.onResize);
+    // The viewport also resizes when side panels toggle (Agent drawer, inspector)
+    // or when the layout settles after mount — none of which fire window.resize.
+    // Observe the container directly so the renderer and both camera frustums
+    // always match the real canvas size (otherwise aspect goes anisotropic).
+    this.resizeObs = new ResizeObserver(() => this.onResize());
+    this.resizeObs.observe(container);
     this.animate();
   }
 
@@ -199,9 +210,44 @@ export class SceneManager {
     obj.position.copy(center);
   }
 
+  // Once we have seen a wheel event that could only come from a trackpad
+  // (a horizontal component, or fine/fractional vertical deltas), we treat
+  // subsequent plain scrolls as two-finger pans rather than zoom.
+  private trackpadSeen = false;
+
+  private onWheel = (e: WheelEvent) => {
+    // Pinch-zoom on a trackpad (and ctrl+wheel on a mouse) arrives with
+    // ctrlKey set — let OrbitControls dolly it (zoomToCursor is on).
+    if (e.ctrlKey) return;
+    const pixelMode = e.deltaMode === 0;
+    if (pixelMode && (e.deltaX !== 0 || Math.abs(e.deltaY) < 40 || !Number.isInteger(e.deltaY))) {
+      this.trackpadSeen = true;
+    }
+    if (this.trackpadSeen && pixelMode) {
+      // Two-finger scroll → pan. Suppress OrbitControls' wheel-dolly.
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.panByPixels(e.deltaX, e.deltaY);
+      return;
+    }
+    // Otherwise it's a classic mouse wheel → let OrbitControls zoom.
+  };
+
+  /** Pan the view by a screen-pixel delta (trackpad two-finger scroll). */
+  private panByPixels(dx: number, dy: number) {
+    const cam = this.camera;
+    const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
+    // Content follows the fingers: scroll right/down slides the view that way.
+    const move = right.multiplyScalar(this.pixelToWorld(dx)).add(up.multiplyScalar(-this.pixelToWorld(dy)));
+    cam.position.add(move);
+    this.controls.target.add(move);
+  }
+
   private onResize = () => {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
+    if (w === 0 || h === 0) return; // container not laid out / hidden
     const aspect = w / h;
     this.perspCam.aspect = aspect;
     this.perspCam.updateProjectionMatrix();
@@ -252,6 +298,8 @@ export class SceneManager {
 
   dispose() {
     this.disposed = true;
+    this.resizeObs?.disconnect();
+    this.renderer.domElement.removeEventListener("wheel", this.onWheel, { capture: true } as EventListenerOptions);
     window.removeEventListener("resize", this.onResize);
     this.controls.dispose();
     this.renderer.dispose();
@@ -606,7 +654,7 @@ export class SceneManager {
       } else if (data.showConstraints) {
         const badge = this.constraintBadge(sk, plane, c as unknown as Record<string, string>);
         if (badge) {
-          const sprite = this.makeTextSprite(badge.glyph, "#9ab0e8", 0.03);
+          const sprite = this.makeTextSprite(badge.glyph, "#9ab0e8", 18);
           sprite.position.copy(badge.pos);
           this.sketchGroup.add(sprite);
         }
@@ -764,6 +812,15 @@ export class SceneManager {
     this.sketchGroup.add(sprite);
   }
 
+  /** Mean of a sketch's point entities (used to push dimensions outward). */
+  private sketchCentroid(sk: Sketch): { x: number; y: number } {
+    let sx = 0, sy = 0, n = 0;
+    for (const e of Object.values(sk.entities)) {
+      if (e.kind === "point") { sx += (e as SketchPoint).x; sy += (e as SketchPoint).y; n++; }
+    }
+    return n ? { x: sx / n, y: sy / n } : { x: 0, y: 0 };
+  }
+
   /** Compute a dimension's annotation geometry in sketch (u,v) space. */
   private dimLayout(sk: Sketch, c: DimensionConstraint): { lines: number[][]; text: { x: number; y: number } } | null {
     const P = (id?: string) => (id ? (sk.entities[id] as SketchPoint) : undefined);
@@ -783,9 +840,16 @@ export class SceneManager {
         if (c.type === "distanceX") { du = 1; dv = 0; }
         else if (c.type === "distanceY") { du = 0; dv = 1; }
         else { du = B.x - A.x; dv = B.y - A.y; const L = Math.hypot(du, dv) || 1; du /= L; dv /= L; }
-        const pu = -dv, pv = du;
+        let pu = -dv, pv = du;
         const midx = (A.x + B.x) / 2, midy = (A.y + B.y) / 2;
-        const lab = c.label ?? { x: midx + pu * px(24), y: midy + pv * px(24) };
+        // Default: offset the dimension line outward (away from the sketch
+        // centroid), so it clears the geometry like Fusion rather than sitting
+        // on top of it. A dragged dimension (c.label set) overrides this.
+        if (!c.label) {
+          const ctr = this.sketchCentroid(sk);
+          if ((ctr.x - midx) * pu + (ctr.y - midy) * pv > 0) { pu = -pu; pv = -pv; }
+        }
+        const lab = c.label ?? { x: midx + pu * px(28), y: midy + pv * px(28) };
         const off = (lab.x - A.x) * pu + (lab.y - A.y) * pv;
         const A2x = A.x + pu * off, A2y = A.y + pv * off;
         const B2x = B.x + pu * off, B2y = B.y + pv * off;
@@ -935,14 +999,14 @@ export class SceneManager {
       const anchor = preview.snap ?? preview.cursor ?? null;
       if (anchor) {
         const off = this.pixelToWorld(14);
-        const sprite = this.makeTextSprite(preview.markers.join(" "), "#ffd166", 0.03);
+        const sprite = this.makeTextSprite(preview.markers.join(" "), "#ffd166", 18);
         sprite.position.copy(this.worldPt(plane, anchor.u + off, anchor.v + off));
         this.previewGroup.add(sprite);
       }
     }
   }
 
-  private makeTextSprite(text: string, color: string, heightFrac = 0.04): THREE.Sprite {
+  private makeTextSprite(text: string, color: string, pxHeight = 22): THREE.Sprite {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d")!;
     const font = 48;
@@ -959,15 +1023,19 @@ export class SceneManager {
     const tex = new THREE.CanvasTexture(canvas);
     tex.minFilter = THREE.LinearFilter;
     tex.anisotropy = 4;
+    // sizeAttenuation must stay ON: three.js only compensates disabled
+    // attenuation for perspective cameras, so under the orthographic sketch
+    // camera a non-attenuated sprite collapses to nothing. We instead size the
+    // sprite in world units from the target pixel height, which pixelToWorld
+    // derives correctly for whichever camera is active.
     const mat = new THREE.SpriteMaterial({
       map: tex,
       depthTest: false,
       transparent: true,
-      sizeAttenuation: false,
+      sizeAttenuation: true,
     });
     const sprite = new THREE.Sprite(mat);
-    // With sizeAttenuation disabled, scale is a fraction of viewport height.
-    const h = heightFrac;
+    const h = this.pixelToWorld(pxHeight);
     sprite.scale.set(h * (canvas.width / canvas.height), h, 1);
     sprite.renderOrder = 999;
     return sprite;
