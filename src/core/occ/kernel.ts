@@ -90,6 +90,41 @@ function buildSolid(wp: WorkPlane, profile: Profile, distance: number): Shape3D 
   return sketch.extrude(distance);
 }
 
+/** Extrude one or more regions on a plane and fuse them into a single solid. */
+export function buildRegionsSolid(wp: WorkPlane, regions: Profile[], distance: number): Shape3D {
+  let result: Shape3D | null = null;
+  for (const region of regions) {
+    const s = buildSolid(wp, region, distance);
+    if (!result) { result = s; continue; }
+    const fused = (result as unknown as { fuse: (o: Shape3D) => Shape3D }).fuse(s);
+    result.delete(); s.delete();
+    result = fused;
+  }
+  if (!result) throw new Error("no regions to extrude");
+  return result;
+}
+
+/** Boolean-combine two solids. Consumes neither operand (caller frees them). */
+export function fuseShapes(a: Shape3D, b: Shape3D): Shape3D {
+  return (a as unknown as { fuse: (o: Shape3D, opts?: unknown) => Shape3D }).fuse(b);
+}
+export function cutShapes(base: Shape3D, tool: Shape3D): Shape3D {
+  return (base as unknown as { cut: (o: Shape3D, opts?: unknown) => Shape3D }).cut(tool);
+}
+
+/** Tessellate a solid into a display mesh. Does NOT free the shape. */
+export function meshShape(solid: Shape3D): SolidMesh {
+  const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 });
+  const e = solid.meshEdges();
+  return {
+    positions: Float32Array.from(m.vertices),
+    normals: Float32Array.from(m.normals),
+    indices: Uint32Array.from(m.triangles),
+    edges: Float32Array.from(e.lines),
+    triangleCount: m.triangles.length / 3,
+  };
+}
+
 /** Extrude a profile and return a display mesh. Frees the OCC shape. */
 export function extrudeToMesh(wp: WorkPlane, profile: Profile, distance: number): SolidMesh {
   const solid = buildSolid(wp, profile, distance);
@@ -108,10 +143,9 @@ export function extrudeToMesh(wp: WorkPlane, profile: Profile, distance: number)
   }
 }
 
-/** Extrude a profile and return its B-rep edges, classified + sampled. Frees the shape. */
-export function extrudeToEdges(wp: WorkPlane, profile: Profile, distance: number): Edge3D[] {
-  const solid = buildSolid(wp, profile, distance);
-  try {
+/** Classify + sample a solid's B-rep edges. Does NOT free the shape. */
+export function edgesOfShape(solid: Shape3D): Edge3D[] {
+  {
     const out: Edge3D[] = [];
     const edges = (solid as unknown as { edges: unknown[] }).edges;
     for (const e of edges as {
@@ -137,17 +171,22 @@ export function extrudeToEdges(wp: WorkPlane, profile: Profile, distance: number
       out.push({ type: kind, pts, closed });
     }
     return out;
-  } finally {
-    solid.delete();
   }
+}
+
+/** Extrude a profile and return its B-rep edges. Frees the shape. */
+export function extrudeToEdges(wp: WorkPlane, profile: Profile, distance: number): Edge3D[] {
+  const solid = buildSolid(wp, profile, distance);
+  try { return edgesOfShape(solid); } finally { solid.delete(); }
+}
+
+/** STL/STEP blob for a solid. Does NOT free the shape. */
+export function blobOfShape(solid: Shape3D, format: "stl" | "step"): Blob {
+  return format === "stl" ? (solid as unknown as { blobSTL: (o: unknown) => Blob }).blobSTL({ binary: true }) : (solid as unknown as { blobSTEP: () => Blob }).blobSTEP();
 }
 
 /** Extrude a profile and return an STL or STEP blob. Frees the OCC shape. */
 export function extrudeToBlob(wp: WorkPlane, profile: Profile, distance: number, format: "stl" | "step"): Blob {
   const solid = buildSolid(wp, profile, distance);
-  try {
-    return format === "stl" ? solid.blobSTL({ binary: true }) : solid.blobSTEP();
-  } finally {
-    solid.delete();
-  }
+  try { return blobOfShape(solid, format); } finally { solid.delete(); }
 }

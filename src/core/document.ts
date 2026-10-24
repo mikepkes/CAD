@@ -35,6 +35,10 @@ export interface ExtrudeFeature {
   distanceExpr: string;
   distanceValue: number;
   symmetric?: boolean;
+  /** How this solid combines with existing bodies (Fusion-style). Default "new". */
+  operation?: "new" | "join" | "cut";
+  /** Interior point (sketch u,v) selecting one region; omitted = every region. */
+  regionPoint?: { x: number; y: number };
 }
 export type FeatureDef = ExtrudeFeature;
 

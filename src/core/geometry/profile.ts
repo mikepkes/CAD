@@ -28,6 +28,11 @@ export interface Profile {
   holes: Loop[];
 }
 
+/** A closed region (outer boundary + holes) plus a point guaranteed inside it. */
+export interface Region extends Profile {
+  interior: Pt;
+}
+
 const P = (sk: Sketch, id: string): SketchPoint => sk.entities[id] as SketchPoint;
 
 function signedArea(pts: Pt[]): number {
@@ -56,6 +61,14 @@ function arcVia(center: Pt, from: Pt, to: Pt, ccw: boolean): Pt {
 
 /** Extract all closed profiles from a sketch. Returns null if none found. */
 export function extractProfiles(sk: Sketch): Profile | null {
+  const loops = collectLoops(sk);
+  if (loops.length === 0) return null;
+  loops.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
+  return { outer: loops[0], holes: loops.slice(1) };
+}
+
+/** Collect every closed loop in a sketch (circles, ellipses, line/arc cycles). */
+function collectLoops(sk: Sketch): Loop[] {
   const loops: Loop[] = [];
 
   // Full circles and ellipses are standalone loops.
@@ -141,7 +154,113 @@ export function extractProfiles(sk: Sketch): Profile | null {
     }
   }
 
-  if (loops.length === 0) return null;
-  loops.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
-  return { outer: loops[0], holes: loops.slice(1) };
+  return loops;
+}
+
+/** Sample a loop's boundary as a polygon (for containment / interior tests). */
+function loopPolygon(loop: Loop): Pt[] {
+  if (loop.circle) {
+    const { center, r } = loop.circle;
+    return Array.from({ length: 48 }, (_, i) => {
+      const a = (i / 48) * Math.PI * 2;
+      return { x: center.x + r * Math.cos(a), y: center.y + r * Math.sin(a) };
+    });
+  }
+  if (loop.ellipse) {
+    const { center, rx, ry, rotation } = loop.ellipse;
+    return Array.from({ length: 64 }, (_, i) => {
+      const t = (i / 64) * Math.PI * 2;
+      const ex = rx * Math.cos(t), ey = ry * Math.sin(t);
+      return { x: center.x + ex * Math.cos(rotation) - ey * Math.sin(rotation), y: center.y + ex * Math.sin(rotation) + ey * Math.cos(rotation) };
+    });
+  }
+  const pts: Pt[] = [{ x: loop.start.x, y: loop.start.y }];
+  for (const s of loop.segments) {
+    if (s.kind === "arc") {
+      const prev = pts[pts.length - 1];
+      const c = circleFrom3(prev, s.via, s.to);
+      if (c) {
+        const a0 = Math.atan2(prev.y - c.y, prev.x - c.x);
+        const am = Math.atan2(s.via.y - c.y, s.via.x - c.x);
+        const a1 = Math.atan2(s.to.y - c.y, s.to.x - c.x);
+        const norm = (a: number) => { while (a < -Math.PI) a += 2 * Math.PI; while (a > Math.PI) a -= 2 * Math.PI; return a; };
+        const ccw = norm(am - a0) > 0;
+        let span = a1 - a0; if (ccw && span < 0) span += 2 * Math.PI; if (!ccw && span > 0) span -= 2 * Math.PI;
+        for (let i = 1; i <= 10; i++) pts.push({ x: c.x + c.r * Math.cos(a0 + span * (i / 10)), y: c.y + c.r * Math.sin(a0 + span * (i / 10)) });
+        continue;
+      }
+    }
+    pts.push({ x: s.to.x, y: s.to.y });
+  }
+  return pts;
+}
+
+function circleFrom3(a: Pt, b: Pt, c: Pt): { x: number; y: number; r: number } | null {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-9) return null;
+  const a2 = a.x * a.x + a.y * a.y, b2 = b.x * b.x + b.y * b.y, c2 = c.x * c.x + c.y * c.y;
+  const ux = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d;
+  const uy = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
+  return { x: ux, y: uy, r: Math.hypot(a.x - ux, a.y - uy) };
+}
+
+function pointInPolygon(p: Pt, poly: Pt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/** A point guaranteed inside `outer` but outside every `hole`. */
+function interiorPoint(outer: Pt[], holes: Pt[][]): Pt {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of outer) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const ok = (p: Pt) => pointInPolygon(p, outer) && !holes.some((h) => pointInPolygon(p, h));
+  if (ok({ x: cx, y: cy })) return { x: cx, y: cy };
+  for (let gy = 1; gy < 12; gy++) for (let gx = 1; gx < 12; gx++) {
+    const p = { x: minX + ((maxX - minX) * gx) / 12, y: minY + ((maxY - minY) * gy) / 12 };
+    if (ok(p)) return p;
+  }
+  return { x: cx, y: cy };
+}
+
+/**
+ * Decompose a sketch into independent closed regions. Disjoint boundaries
+ * become separate regions; a loop nested (odd depth) inside another is a hole
+ * of the region it sits in. Each region carries a point guaranteed inside it.
+ */
+export function extractRegions(sk: Sketch): Region[] {
+  const loops = collectLoops(sk);
+  if (loops.length === 0) return [];
+  const polys = loops.map(loopPolygon);
+  const depth = loops.map((_, i) => {
+    let d = 0;
+    for (let j = 0; j < loops.length; j++) {
+      if (i === j) continue;
+      if (Math.abs(loops[j].area) > Math.abs(loops[i].area) && pointInPolygon(polys[i][0], polys[j])) d++;
+    }
+    return d;
+  });
+  const regions: Region[] = [];
+  for (let i = 0; i < loops.length; i++) {
+    if (depth[i] % 2 !== 0) continue; // odd depth => hole
+    const holeIdx = loops
+      .map((_, j) => j)
+      .filter((j) => j !== i && depth[j] === depth[i] + 1 && pointInPolygon(polys[j][0], polys[i]));
+    regions.push({ outer: loops[i], holes: holeIdx.map((j) => loops[j]), interior: interiorPoint(polys[i], holeIdx.map((j) => polys[j])) });
+  }
+  regions.sort((a, b) => Math.abs(b.outer.area) - Math.abs(a.outer.area));
+  return regions;
+}
+
+/** The region whose interior contains `p` (for click-to-select). */
+export function regionAt(sk: Sketch, p: Pt): Region | null {
+  const regions = extractRegions(sk);
+  for (const r of regions) {
+    if (pointInPolygon(p, loopPolygon(r.outer)) && !r.holes.some((h) => pointInPolygon(p, loopPolygon(h)))) return r;
+  }
+  return null;
 }

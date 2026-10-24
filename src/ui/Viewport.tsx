@@ -49,6 +49,7 @@ export function Viewport() {
     const container = containerRef.current!;
     const scene = new SceneManager(container);
     const controller = new Interactions(scene, scene.renderer.domElement);
+    if (import.meta.env?.DEV) (window as unknown as { __scene?: unknown }).__scene = scene;
 
     let prevMode = useStore.getState().mode;
     let prevSketch = useStore.getState().activeSketchId;

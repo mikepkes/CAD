@@ -656,9 +656,12 @@ export const BUILTINS: CommandDef<any>[] = [
   {
     type: "feature.extrude",
     title: "Extrude",
-    summary: "Extrude a sketch's closed profile into a solid.",
+    summary: "Extrude a sketch region into a solid (optionally joined/cut with existing bodies).",
     description:
-      "Creates an extruded solid from the closed profile of a sketch, along the sketch plane normal. `distance` is an expression (parametric), e.g. \"10\" or \"height*2\". The largest closed loop is the outer boundary; inner loops become holes. Returns the feature id.",
+      "Creates an extruded solid from a sketch along its plane normal. `distance` is an expression (parametric), e.g. \"10\" or \"height*2\". " +
+      "A sketch is split into closed regions (disjoint boundaries are separate regions; nested loops are holes). " +
+      "Omit `region` to extrude every region; pass `region` {x,y} (a point inside one region, in sketch u,v) to extrude just that one. " +
+      "`operation` combines the result with existing bodies, Fusion-style: \"new\" (default) makes a separate body, \"join\" fuses it into the most recent body, \"cut\" subtracts it. Returns the feature id.",
     paramsSchema: {
       type: "object",
       required: ["sketch", "distance"],
@@ -667,11 +670,21 @@ export const BUILTINS: CommandDef<any>[] = [
         sketch: { type: "string" },
         distance: { type: "string", description: "Distance expression, e.g. '10' or 'height*2'." },
         symmetric: { type: "boolean", description: "Extrude symmetrically about the plane." },
+        operation: { type: "string", enum: ["new", "join", "cut"], description: "Combine with existing bodies: new (default), join, or cut." },
+        region: {
+          type: "object",
+          description: "A point inside the region to extrude (sketch u,v). Omit to extrude every region.",
+          required: ["x", "y"],
+          properties: { x: { type: "number" }, y: { type: "number" } },
+        },
         name: { type: "string" },
       },
     },
-    examples: [{ note: "Extrude sketch1 by the `height` parameter", params: { sketch: "sketch1", distance: "height" } }],
-    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; name?: string }, ctx) {
+    examples: [
+      { note: "Extrude sketch1 by the `height` parameter", params: { sketch: "sketch1", distance: "height" } },
+      { note: "Join a boss onto the current body", params: { sketch: "sketch3", distance: "6", operation: "join" } },
+    ],
+    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; operation?: "new" | "join" | "cut"; region?: { x: number; y: number }; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("ext");
       draft.features[id] = {
@@ -682,6 +695,8 @@ export const BUILTINS: CommandDef<any>[] = [
         distanceExpr: String(p.distance),
         distanceValue: 0,
         symmetric: !!p.symmetric,
+        operation: p.operation ?? "new",
+        regionPoint: p.region,
       };
       return { createdIds: [id], message: `Extrude ${p.sketch}` };
     },
