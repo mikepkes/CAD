@@ -1104,3 +1104,12 @@ body {
 .extrude-row.checkbox { justify-content: flex-start; gap: 6px; }
 .extrude-row.checkbox span { color: var(--text); }
 .extrude-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+
+/* ---------- Timeline sketch groups ---------- */
+.sketch-group { margin: 1px 0; }
+.sketch-group .group-head { display: flex; align-items: center; gap: 4px; padding: 3px 6px; cursor: default; border-radius: 5px; }
+.sketch-group .group-head.on .group-name { color: var(--text); }
+.sketch-group .group-head.off .group-name { color: var(--text-dim); }
+.group-glyph { font-size: 11px; color: var(--accent); }
+.group-sub { color: var(--text-dim); font-size: 11px; }
+.sketch-group .op-row.grouped { padding-left: 20px; }

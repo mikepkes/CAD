@@ -1,47 +1,50 @@
 import { useState } from "react";
 import { useStore } from "../model/store";
+import { OperationRecord } from "../core/command/types";
+
+// Which sketch an operation belongs to (for context grouping). Features and
+// parameters stay top-level; a sketch.create heads its own group, and the
+// geometry/constraint/dimension ops that target a sketch nest under it.
+function ownerSketch(op: OperationRecord): string | null {
+  if (op.type.startsWith("feature.") || op.type.startsWith("parameter.")) return null;
+  if (op.type === "sketch.create") return op.createdIds[0] ?? null;
+  const s = op.params?.sketch;
+  return typeof s === "string" ? s : null;
+}
 
 export function TimelinePanel() {
   const session = useStore((s) => s.session);
   useStore((s) => s.rev);
+  const activeSketchId = useStore((s) => s.activeSketchId);
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
   const suppressOperation = useStore((s) => s.suppressOperation);
   const deleteOperation = useStore((s) => s.deleteOperation);
   const moveRollback = useStore((s) => s.moveRollback);
-  const createTimelineGroup = useStore((s) => s.createTimelineGroup);
-  const renameTimelineGroup = useStore((s) => s.renameTimelineGroup);
-  const toggleTimelineGroup = useStore((s) => s.toggleTimelineGroup);
-  const ungroupTimeline = useStore((s) => s.ungroupTimeline);
-
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-  const toggleCheck = (id: string) =>
-    setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const ops = session.timeline;
   const rollback = session.rollbackIndex;
-  const groups = session.doc.timelineGroups;
-  const groupOf = new Map<string, (typeof groups)[number]>();
-  for (const g of groups) for (const id of g.opIds) groupOf.set(id, g);
-  const headerShown = new Set<string>();
 
-  const makeGroup = () => {
-    createTimelineGroup([...checked]);
-    setChecked(new Set());
-  };
+  // Explicit open/closed overrides; by default the active sketch is open, others closed.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const isOpen = (sid: string) => open[sid] ?? sid === activeSketchId;
+  const toggle = (sid: string) => setOpen((o) => ({ ...o, [sid]: !isOpen(sid) }));
 
-  const opRow = (op: (typeof ops)[number], i: number, inGroup: boolean) => {
+  // Group a sketch's member ops (kept in timeline order), and number sketches.
+  const members = new Map<string, { op: OperationRecord; i: number }[]>();
+  const sketchNum = new Map<string, number>();
+  ops.forEach((op, i) => {
+    const sid = ownerSketch(op);
+    if (!sid) return;
+    if (!members.has(sid)) { members.set(sid, []); sketchNum.set(sid, sketchNum.size + 1); }
+    members.get(sid)!.push({ op, i });
+  });
+
+  const opRow = (op: OperationRecord, i: number, nested: boolean) => {
     const active = i < rollback && !op.suppressed;
     const cls = op.error ? "err" : op.suppressed ? "sup" : active ? "on" : "off";
     return (
-      <div className={`op-row ${cls} ${inGroup ? "grouped" : ""}`} key={op.opId}>
-        <input
-          type="checkbox"
-          className="op-check"
-          checked={checked.has(op.opId)}
-          onChange={() => toggleCheck(op.opId)}
-          title="Select for grouping"
-        />
+      <div className={`op-row ${cls} ${nested ? "grouped" : ""}`} key={op.opId}>
         <span className="op-idx">{i + 1}</span>
         <span className="op-dot" />
         <span className="op-label" title={`${op.type} — click to roll back to here`} onClick={() => moveRollback(i + 1)}>
@@ -56,16 +59,13 @@ export function TimelinePanel() {
     );
   };
 
+  const renderedSketch = new Set<string>();
+
   return (
     <div className="panel timeline">
       <div className="panel-head">
         <span>Timeline</span>
         <div className="hist-btns">
-          {checked.size > 0 && (
-            <button className="btn small" title="Group the selected operations" onClick={makeGroup}>
-              ⊞ Group ({checked.size})
-            </button>
-          )}
           <button className="icon-btn" title="Undo (Ctrl+Z)" disabled={!session.canUndo()} onClick={undo}>↶</button>
           <button className="icon-btn" title="Redo (Ctrl+Shift+Z)" disabled={!session.canRedo()} onClick={redo}>↷</button>
         </div>
@@ -73,30 +73,34 @@ export function TimelinePanel() {
       <div className="timeline-list">
         {ops.length === 0 && <div className="muted">No operations yet.</div>}
         {ops.map((op, i) => {
-          const g = groupOf.get(op.opId);
-          if (!g) return opRow(op, i, false);
-          const nodes = [];
-          if (!headerShown.has(g.id)) {
-            headerShown.add(g.id);
-            nodes.push(
-              <div className="group-head" key={`h-${g.id}`}>
-                <button className="group-caret" onClick={() => toggleTimelineGroup(g.id)} title={g.collapsed ? "Expand" : "Collapse"}>
-                  {g.collapsed ? "▸" : "▾"}
+          const sid = ownerSketch(op);
+          if (!sid) return opRow(op, i, false);
+          if (renderedSketch.has(sid)) return null; // already drawn under its header
+          renderedSketch.add(sid);
+
+          const group = members.get(sid)!;
+          const sk = session.doc.sketches[sid];
+          const planeLabel = sk ? (sk.planeId === "custom" ? "face" : sk.planeId) : "—";
+          const anyErr = group.some((m) => m.op.error);
+          const anyActive = group.some((m) => m.i < rollback && !m.op.suppressed);
+          const openNow = isOpen(sid);
+
+          return (
+            <div key={`sk-${sid}`} className="sketch-group">
+              <div className={`group-head ${anyErr ? "err" : anyActive ? "on" : "off"}`}>
+                <button className="group-caret" onClick={() => toggle(sid)} title={openNow ? "Collapse" : "Expand"}>
+                  {openNow ? "▾" : "▸"}
                 </button>
-                <span
-                  className="group-name"
-                  title="Double-click to rename"
-                  onDoubleClick={() => { const n = prompt("Group name", g.name); if (n != null && n.trim()) renameTimelineGroup(g.id, n.trim()); }}
-                >
-                  {g.name}
+                <span className="group-glyph">✎</span>
+                <span className="group-name" onClick={() => toggle(sid)}>
+                  Sketch {sketchNum.get(sid)} <span className="group-sub">· {planeLabel}</span>
+                  {anyErr && <span className="op-err"> ⚠</span>}
                 </span>
-                <span className="group-count">{g.opIds.length}</span>
-                <button className="op-mini" title="Ungroup" onClick={() => ungroupTimeline(g.id)}>⊟</button>
+                <span className="group-count">{group.length}</span>
               </div>
-            );
-          }
-          if (!g.collapsed) nodes.push(opRow(op, i, true));
-          return <div key={`w-${op.opId}`}>{nodes}</div>;
+              {openNow && group.map((m) => opRow(m.op, m.i, true))}
+            </div>
+          );
         })}
         {rollback < ops.length && (
           <button className="rollback-tip" onClick={() => moveRollback(ops.length)}>▸ roll forward to latest</button>
