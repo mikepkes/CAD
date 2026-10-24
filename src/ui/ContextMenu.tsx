@@ -1,5 +1,6 @@
 import { useStore, activeSketch } from "../model/store";
 import { availableOps, Op } from "../model/selectionOps";
+import { isDimension } from "../sketch/types";
 
 // Right-click context menu: surfaces the same selection-aware operations as the
 // ConstraintBar (geometric, dimensions, modify) plus Delete, at the cursor.
@@ -41,10 +42,25 @@ export function ContextMenu() {
 
   const empty = !geometric.length && !dimensions.length && !modify.length;
 
+  // A single selected dimension can be promoted to a named parameter.
+  const soleDim =
+    selection.length === 1 && sk.constraints[selection[0]] && isDimension(sk.constraints[selection[0]])
+      ? selection[0]
+      : null;
+
   return (
     <>
       <div className="ctx-backdrop" onPointerDown={close} onContextMenu={(e) => { e.preventDefault(); close(); }} />
       <div className="ctx-menu" style={{ left: menu.x, top: menu.y }}>
+        {soleDim && (
+          <>
+            <div className="ctx-title">Parameter</div>
+            <button className="ctx-item" title="Create a parameter with this dimension's value and drive the dimension by it"
+              onClick={() => { void useStore.getState().promoteDimension(soleDim); close(); }}>
+              <span className="ctx-glyph">ƒ</span> Promote to parameter
+            </button>
+          </>
+        )}
         {section("Constrain", geometric, run)}
         {section("Dimension", dimensions, runDim)}
         {section("Modify", modify, run)}

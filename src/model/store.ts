@@ -18,7 +18,7 @@ const AGENT_MODEL_LS = "chisel.anthropic.model";
 const WEBMCP_LS = "chisel.webmcp.enabled";
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
-import { Sketch } from "../sketch/types";
+import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
 import { initKernel } from "../core/occ/kernel";
 import { evaluateFeatures, exportFeatureBlob, featureEdges, SolidEval } from "../core/features";
 import { projectEdges } from "../core/geometry/project";
@@ -159,6 +159,8 @@ export interface AppState {
 
   // parameters
   addParameter: (name?: string, expr?: string) => Promise<void>;
+  /** Create a parameter from a dimension's current value and point the dimension at it. */
+  promoteDimension: (cid: string) => Promise<void>;
   setParameterExpr: (name: string, expr: string) => Promise<void>;
   renameParameter: (name: string, newName: string) => Promise<void>;
   deleteParameter: (name: string) => Promise<void>;
@@ -477,6 +479,26 @@ export const useStore = create<AppState>((set, get) => {
       let n = base, i = 1;
       while (names.has(n)) n = `${base}${i++}`;
       await runDispatch("parameter.add", { name: n, expression: expr ?? "10" });
+    },
+    promoteDimension: async (cid) => {
+      const sk = activeSketch(get());
+      if (!sk) return;
+      const c = sk.constraints[cid];
+      if (!c || !isDimension(c)) return;
+      const dim = c as DimensionConstraint;
+      // Parameter base name by dimension type; value = the dimension's current value.
+      const base = dim.type === "radius" ? "r" : dim.type === "diameter" ? "dia" : dim.type === "angle" ? "ang" : "d";
+      const names = new Set(get().session.doc.parameters.map((p) => p.name));
+      let name = base, i = 1;
+      while (names.has(name)) name = `${base}${i++}`;
+      const v = dim.value;
+      const valueStr = Number.isInteger(v) ? String(v) : String(Math.round(v * 1000) / 1000);
+      const r = await runDispatch("parameter.add", { name, expression: valueStr });
+      if (!r.ok) return;
+      // Point the dimension's expression at the new parameter.
+      const op = get().session.timeline.find((o) => o.type === "sketch.addDimension" && o.createdIds.includes(cid));
+      if (op) await get().editOperation(op.opId, { ...op.params, expression: name });
+      set({ lastMessage: `Promoted dimension to parameter "${name}".` });
     },
     setParameterExpr: async (name, expr) => {
       const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
