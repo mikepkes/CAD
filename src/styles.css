@@ -1072,3 +1072,35 @@ body {
 .hk-key.conflict { border-color: #e4564e; color: #ff8a82; }
 .hk-clear { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
 .hk-clear:hover { color: #ff8a82; }
+
+/* ---------- Extrude panel ---------- */
+.extrude-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 60;
+  width: 300px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  padding: 12px 14px;
+}
+.extrude-head { font-weight: 600; margin-bottom: 8px; }
+.extrude-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 7px 0; font-size: 12.5px; }
+.extrude-row > span { color: var(--text-dim); }
+.extrude-row select, .extrude-row input[type="text"], .extrude-row input:not([type]) {
+  flex: 1;
+  max-width: 170px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: ui-monospace, monospace;
+}
+.extrude-row.checkbox { justify-content: flex-start; gap: 6px; }
+.extrude-row.checkbox span { color: var(--text); }
+.extrude-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }

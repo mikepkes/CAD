@@ -9,6 +9,7 @@ import { TimelinePanel } from "./TimelinePanel";
 import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
 import { AgentPanel } from "./AgentPanel";
+import { ExtrudePanel } from "./ExtrudePanel";
 import { HotkeyPanel } from "./HotkeyPanel";
 import { useStore } from "../model/store";
 import { installHotkeys } from "../model/hotkeyActions";
@@ -59,6 +60,7 @@ export function App() {
         <main className="center">
           <Viewport />
           <Toast />
+          <ExtrudePanel />
           <AgentPanel />
         </main>
 

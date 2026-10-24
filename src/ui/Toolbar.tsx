@@ -56,7 +56,6 @@ export function Toolbar() {
   const hasSelection = useStore((s) => s.selection.length > 0);
   const session = useStore((s) => s.session);
   useStore((s) => s.rev);
-  const extrudeSketch = useStore((s) => s.extrudeSketch);
   const exportSolid = useStore((s) => s.exportSolid);
   const kernelLoading = useStore((s) => s.kernelLoading);
   const hasSolids = useStore((s) => Object.keys(s.solids).length > 0);
@@ -166,8 +165,8 @@ export function Toolbar() {
             <button
               className="btn"
               disabled={!lastSketch || kernelLoading}
-              title={lastSketch ? "Extrude the most recent sketch into a solid" : "Create a sketch first"}
-              onClick={() => lastSketch && extrudeSketch(lastSketch, "10")}
+              title={lastSketch ? "Extrude a sketch region into a solid (new / join / cut)" : "Create a sketch first"}
+              onClick={() => useStore.getState().openExtrude()}
             >
               {kernelLoading ? "⏳ Loading 3D…" : "⬆ Extrude"}
             </button>

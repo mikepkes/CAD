@@ -191,7 +191,11 @@ export interface AppState {
   // features (3D)
   ensureKernel: () => Promise<void>;
   rebuildSolids: () => Promise<void>;
-  extrudeSketch: (sketchId: string, distanceExpr?: string) => Promise<void>;
+  extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut"; symmetric?: boolean; region?: { x: number; y: number } }) => Promise<void>;
+  /** The sketch currently targeted by the Extrude panel (model mode), or null. */
+  extrudeTarget: string | null;
+  openExtrude: (sketchId?: string) => void;
+  closeExtrude: () => void;
   editFeatureDistance: (featureId: string, expr: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step") => Promise<void>;
@@ -290,6 +294,7 @@ export const useStore = create<AppState>((set, get) => {
     lastMessage: "Pick an origin plane to start a sketch.",
     settingsOpen: false,
     hotkeysOpen: false,
+    extrudeTarget: null,
     agentOpen: false,
     apiKey: readLS(AGENT_KEY_LS),
     agentModel: readLS(AGENT_MODEL_LS, "claude-opus-5-5"),
@@ -598,10 +603,25 @@ export const useStore = create<AppState>((set, get) => {
       const solids = evaluateFeatures(get().session.doc, scope());
       bump({ solids });
     },
-    extrudeSketch: async (sketchId, distanceExpr) => {
+    extrudeSketch: async (sketchId, distanceExpr, opts) => {
       await get().ensureKernel();
-      await runDispatch("feature.extrude", { sketch: sketchId, distance: distanceExpr ?? "10" });
+      await runDispatch("feature.extrude", {
+        sketch: sketchId,
+        distance: distanceExpr ?? "10",
+        ...(opts?.operation ? { operation: opts.operation } : {}),
+        ...(opts?.symmetric ? { symmetric: true } : {}),
+        ...(opts?.region ? { region: opts.region } : {}),
+      });
     },
+    openExtrude: (sketchId) => {
+      const s = get();
+      // target: explicit, else the active/last sketch in the document
+      const sketches = Object.values(s.session.doc.sketches);
+      const target = sketchId ?? s.activeSketchId ?? (sketches.length ? sketches[sketches.length - 1].id : null);
+      if (!target) { set({ toast: { kind: "info", text: "Draw a sketch first, then extrude." } }); return; }
+      set({ extrudeTarget: target, mode: "model", activeSketchId: null });
+    },
+    closeExtrude: () => set({ extrudeTarget: null }),
     editFeatureDistance: async (featureId, expr) => {
       const op = get().session.timeline.find((o) => o.type === "feature.extrude" && o.createdIds.includes(featureId));
       if (op) await get().editOperation(op.opId, { ...op.params, distance: expr });
