@@ -86,7 +86,9 @@ export function Toolbar() {
 
   const [offset, setOffset] = useState(0);
   const [datumBase, setDatumBase] = useState("XY");
+  const [mirrorPlane, setMirrorPlane] = useState("YZ");
   const createDatumPlane = useStore((s) => s.createDatumPlane);
+  const mirrorModel = useStore((s) => s.mirrorModel);
   const datumPlanes = Object.values(session.doc.planes);
   const root = session.doc.components[session.doc.rootComponentId];
   const lastSketch = root?.sketches[root.sketches.length - 1];
@@ -238,6 +240,18 @@ export function Toolbar() {
             </button>
             {hasSolids && (
               <>
+                <select
+                  className="offset-input"
+                  value={mirrorPlane}
+                  title="Plane to mirror the model across"
+                  onChange={(e) => setMirrorPlane(e.target.value)}
+                >
+                  {PLANES.map((p) => <option key={p.id} value={p.id}>{p.id}</option>)}
+                  {datumPlanes.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+                <button className="btn" title="Mirror the model across the chosen plane (symmetry)" onClick={() => mirrorModel(mirrorPlane)}>
+                  ⟷ Mirror
+                </button>
                 <button className="btn" title="Export STEP (CAD/CNC)" onClick={() => exportSolid("step")}>⬇ STEP</button>
                 <button className="btn" title="Export STL (3D print)" onClick={() => exportSolid("stl")}>⬇ STL</button>
               </>

@@ -103,7 +103,11 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
     mode,
     activeSketchId,
     sketches,
-    features: Object.values(doc.features).map((f) => ({ id: f.id, kind: f.kind, sketchId: f.sketchId, distance: f.distanceExpr })),
+    features: Object.values(doc.features).map((f) =>
+      f.kind === "extrude"
+        ? { id: f.id, kind: f.kind, sketchId: f.sketchId, distance: f.distanceExpr }
+        : { id: f.id, kind: f.kind, plane: f.plane }
+    ),
     parameters: doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value })),
   };
 }

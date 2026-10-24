@@ -41,7 +41,19 @@ export interface ExtrudeFeature {
   /** Interior point (sketch u,v) selecting one region; omitted = every region. */
   regionPoint?: { x: number; y: number };
 }
-export type FeatureDef = ExtrudeFeature;
+/**
+ * Mirror feature: reflects the running bodies across a plane and fuses each
+ * reflection into its source body. The first solid transform — the primitive
+ * that patterns and (later) component placement build on.
+ */
+export interface MirrorFeature {
+  id: string;
+  kind: "mirror";
+  name: string;
+  /** Plane to mirror across: "XY"/"XZ"/"YZ" or a datum plane id. */
+  plane: string;
+}
+export type FeatureDef = ExtrudeFeature | MirrorFeature;
 
 /**
  * A datum/reference plane — a reusable, parametric coordinate frame (the first

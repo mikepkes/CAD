@@ -33,6 +33,17 @@ function ModelInspector() {
         )}
         {features.map((f) => {
           const sol = solids[f.id];
+          if (f.kind !== "extrude") {
+            // Non-parametric-distance features (mirror, …): name + status only.
+            return (
+              <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "1fr 1fr 60px 22px" }}>
+                <span className="dim-type" title={`Mirror across ${f.plane}`}>{f.name}</span>
+                <span className="muted-inline">⟷ {f.plane}</span>
+                <span className="dim-val" title={sol?.error}>{sol?.error ? "⚠" : "✓"}</span>
+                <button className="icon-btn danger" onClick={() => deleteFeature(f.id)}>✕</button>
+              </div>
+            );
+          }
           return (
             <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "1fr 1fr 60px 22px" }}>
               <span className="dim-type" title={`Extrude of ${f.sketchId}`}>{f.name}</span>

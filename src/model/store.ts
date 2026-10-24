@@ -212,6 +212,7 @@ export interface AppState {
   extrudeOperation: "new" | "join" | "cut";
   extrudeSymmetric: boolean;
   openExtrude: (sketchId?: string) => void;
+  mirrorModel: (plane: string) => Promise<void>;
   closeExtrude: () => void;
   setExtrudeRegion: (p: { x: number; y: number } | null) => void;
   setExtrudeDistanceExpr: (expr: string) => void;
@@ -687,6 +688,13 @@ export const useStore = create<AppState>((set, get) => {
         ...(opts?.region ? { region: opts.region } : {}),
       });
     },
+    mirrorModel: async (plane) => {
+      await get().ensureKernel();
+      if (!Object.keys(get().session.doc.features).length) { set({ toast: { kind: "info", text: "Make a body first, then mirror it." } }); return; }
+      const r = await runDispatch("feature.mirror", { plane });
+      if (r.ok) { await get().rebuildSolids(); set({ lastMessage: `Mirrored across ${plane}.` }); }
+      else set({ toast: { kind: "error", text: r.error ?? "Mirror failed." } });
+    },
     openExtrude: (sketchId) => {
       const s = get();
       const sketches = Object.values(s.session.doc.sketches);
@@ -749,7 +757,7 @@ export const useStore = create<AppState>((set, get) => {
       if (op) await get().editOperation(op.opId, { ...op.params, distance: expr });
     },
     deleteFeature: async (featureId) => {
-      const op = get().session.timeline.find((o) => o.type === "feature.extrude" && o.createdIds.includes(featureId));
+      const op = get().session.timeline.find((o) => o.type.startsWith("feature.") && o.createdIds.includes(featureId));
       if (op) await get().deleteOperation(op.opId);
     },
     exportSolid: async (format) => {

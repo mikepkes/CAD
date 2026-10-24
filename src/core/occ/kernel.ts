@@ -112,6 +112,14 @@ export function cutShapes(base: Shape3D, tool: Shape3D): Shape3D {
   return (base as unknown as { cut: (o: Shape3D, opts?: unknown) => Shape3D }).cut(tool);
 }
 
+/** Reflect a solid across a work plane, returning a NEW shape (operand untouched). */
+export function mirrorShape(shape: Shape3D, wp: WorkPlane): Shape3D {
+  // mirror() consumes the shape it is called on, so mirror a clone to keep `shape`.
+  const clone = (shape as unknown as { clone: () => Shape3D }).clone();
+  const plane = planeFor(wp);
+  return (clone as unknown as { mirror: (p: Plane) => Shape3D }).mirror(plane);
+}
+
 /** Tessellate a solid into a display mesh. Does NOT free the shape. */
 export function meshShape(solid: Shape3D): SolidMesh {
   const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 });

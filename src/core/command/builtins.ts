@@ -741,6 +741,29 @@ export const BUILTINS: CommandDef<any>[] = [
       return { createdIds: [id], message: `Extrude ${p.sketch}` };
     },
   },
+  {
+    type: "feature.mirror",
+    title: "Mirror bodies",
+    summary: "Reflect the model across a plane and fuse the reflection in (symmetry).",
+    description:
+      "Reflects every existing body across a plane and fuses each reflection into its source body, giving a symmetric result. `plane` is an origin plane (XY/XZ/YZ) or a datum plane id (from plane.create). Parametric: editing the upstream geometry re-mirrors. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["plane"],
+      additionalProperties: false,
+      properties: {
+        plane: { type: "string", description: "Mirror plane: XY/XZ/YZ or a datum plane id." },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Mirror the model across the YZ plane", params: { plane: "YZ" } }],
+    apply(draft, p: { plane: string; name?: string }, ctx) {
+      if (!["XY", "XZ", "YZ"].includes(p.plane) && !draft.planes[p.plane]) throw new Error(`No mirror plane "${p.plane}"`);
+      const id = ctx.alloc("mir");
+      draft.features[id] = { id, kind: "mirror", name: p.name ?? "Mirror", plane: p.plane };
+      return { createdIds: [id], message: `Mirror across ${p.plane}` };
+    },
+  },
 
   // ---- modify (mirror / pattern / construction) ----
   {
