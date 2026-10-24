@@ -111,6 +111,18 @@ export class PlaneGCSSolver implements ConstraintSolver {
       if (mapped) objects.push(mapped);
     }
 
+    // Transient drag anchor: a fixed point at the cursor + a coincidence pulling
+    // the dragged point to it. With the point's own constraints also present,
+    // PlaneGCS's least-squares settles the point as near the cursor as they
+    // allow (sliding on a circle/line), rather than moving other geometry.
+    if (model.dragAnchor) {
+      objects.push({ id: "__drag_target", type: "point", x: model.dragAnchor.x, y: model.dragAnchor.y, fixed: true });
+      // Low scale => a soft guide: hard geometric/dimensional constraints win, so
+      // a pinned point slides along its circle/line to the nearest spot toward the
+      // cursor, while a free point follows the cursor outright.
+      objects.push({ id: "__drag_coincident", type: "p2p_coincident", p1_id: model.dragAnchor.pointId, p2_id: "__drag_target", scale: 0.1 });
+    }
+
     // push_primitives_and_params resolves ids in array order, so geometry must
     // precede the constraints that reference it (it does, above).
     w.push_primitives_and_params(objects as never);

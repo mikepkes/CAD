@@ -385,6 +385,10 @@ export class SceneManager {
 
     if (data.mode === "sketch") {
       const hits = this.raycaster.intersectObjects(this.sketchGroup.children, true);
+      // A dimension label the ray hits wins over geometry at the same depth, so
+      // grabbing/editing the label is reliable (it's an overlay you reach for).
+      const label = hits.find((h) => h.object.userData?.dimLabel);
+      if (label) return { type: "entity", id: label.object.userData.id as string, entityKind: "dimension", world: label.point };
       for (const h of hits) {
         const id = h.object.userData?.id as string | undefined;
         if (id) return { type: "entity", id, entityKind: h.object.userData?.kind, world: h.point };
@@ -1045,10 +1049,19 @@ export class SceneManager {
       seg.renderOrder = 4;
       this.sketchGroup.add(seg);
     }
+    const labelPos = this.worldPt(plane, layout.text.x, layout.text.y);
     const sprite = this.makeTextSprite(this.dimensionLabel(c.type, c.value), "#8fe3ad");
-    sprite.position.copy(this.worldPt(plane, layout.text.x, layout.text.y));
-    sprite.userData = { id: c.id, kind: "dimension" };
+    sprite.position.copy(labelPos);
+    sprite.userData = { id: c.id, kind: "dimension", dimLabel: true };
     this.sketchGroup.add(sprite);
+    // A larger invisible sprite makes the label a reliable grab target (the
+    // visible label alone is small and competes with nearby geometry).
+    const hit = new THREE.Sprite(new THREE.SpriteMaterial({ opacity: 0, transparent: true, depthWrite: false, depthTest: false }));
+    hit.scale.set(sprite.scale.x * 1.5 + this.pixelToWorld(14), sprite.scale.y * 1.6, 1);
+    hit.position.copy(labelPos);
+    hit.userData = { id: c.id, kind: "dimension", dimLabel: true };
+    hit.renderOrder = 999;
+    this.sketchGroup.add(hit);
   }
 
   /** Mean of a sketch's point entities (used to push dimensions outward). */

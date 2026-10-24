@@ -63,6 +63,13 @@ export interface SolverModel {
   circles: SolverCircle[];
   arcs: SolverArc[];
   constraints: SolverConstraint[];
+  /**
+   * Transient drag target: pull `pointId` toward (x,y) with a temporary anchor
+   * so the dragged point tracks the cursor as closely as its own constraints
+   * allow (slides along a circle/line it's on), instead of the solver spending
+   * the drag on other free DOF. Not persisted — set only for live drag solves.
+   */
+  dragAnchor?: { pointId: string; x: number; y: number };
 }
 
 export type SolveStatusCode = "ok" | "failed" | "invalid" | "empty";

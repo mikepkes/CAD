@@ -41,6 +41,10 @@ export async function solveDrag(
   if (p && !p.fixed) {
     p.x = x;
     p.y = y;
+    // Anchor the dragged point to the cursor so it tracks it as closely as its
+    // own constraints allow (sliding on a circle/line), instead of the solver
+    // spending the motion on other free DOF.
+    model.dragAnchor = { pointId: dragPointId, x, y };
   }
   const res = await solver.solve(model);
   return {
