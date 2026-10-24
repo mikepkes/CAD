@@ -317,9 +317,16 @@ export const useStore = create<AppState>((set, get) => {
       if (r.ok && type === "feature.extrude") set({ mode: "model" });
       return { ok: r.ok, createdIds: r.createdIds, message: r.message, error: r.error };
     },
-    render: async (opts: { view?: string; width?: number; height?: number }) => {
-      // Make sure solids are current before capturing (agents call this after editing).
-      if (Object.keys(get().session.doc.features).length && !Object.keys(get().solids).length) await get().rebuildSolids();
+    newDocument: () => get().newDocument(),
+    undo: () => get().undo(),
+    redo: () => get().redo(),
+    deleteOperation: (opId: string) => get().deleteOperation(opId),
+    render: async (opts: { view?: string; width?: number; height?: number; hideSketches?: boolean }) => {
+      // Make sure solids are current before capturing (agents call this right
+      // after editing, and the worker-backed rebuild is asynchronous): always
+      // evaluate the live doc, so the capture never shows a stale body.
+      if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
+      else if (Object.keys(get().solids).length) bump({ solids: {} });
       const scene = getActiveScene();
       if (!scene) throw new Error("viewport not ready");
       return scene.renderView(opts);

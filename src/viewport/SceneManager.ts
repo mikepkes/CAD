@@ -515,12 +515,14 @@ export class SceneManager {
    * PNG (base64). Used by the agent / WebMCP render_view tool; does not disturb
    * the user's camera.
    */
-  renderView(opts: { view?: string; width?: number; height?: number } = {}): { base64: string; width: number; height: number; view: string } {
+  renderView(opts: { view?: string; width?: number; height?: number; hideSketches?: boolean } = {}): { base64: string; width: number; height: number; view: string } {
     const width = Math.max(64, Math.min(Math.round(opts.width ?? 960), 1920));
     const height = Math.max(64, Math.min(Math.round(opts.height ?? 720), 1920));
+    // Only honour hideSketches when there is a solid to show; otherwise the capture would be empty.
+    const hideSketches = !!opts.hideSketches && this.solidsGroup.children.length > 0;
 
     const box = new THREE.Box3();
-    for (const g of [this.solidsGroup, this.sketchGroup, this.ghostGroup]) {
+    for (const g of hideSketches ? [this.solidsGroup] : [this.solidsGroup, this.sketchGroup, this.ghostGroup]) {
       const b = new THREE.Box3().setFromObject(g);
       if (!b.isEmpty()) box.union(b);
     }
@@ -545,13 +547,16 @@ export class SceneManager {
     const rt = new THREE.WebGLRenderTarget(width, height);
     // Hide the big origin-plane overlays for a clean capture (keep grid + axes).
     const planesVisible = this.planeGroup.visible;
+    const sketchVisible = this.sketchGroup.visible;
     this.planeGroup.visible = false;
+    if (hideSketches) this.sketchGroup.visible = false;
     this.renderer.setRenderTarget(rt);
     this.renderer.render(this.scene, cam);
     const buf = new Uint8Array(width * height * 4);
     this.renderer.readRenderTargetPixels(rt, 0, 0, width, height, buf);
     this.renderer.setRenderTarget(null);
     this.planeGroup.visible = planesVisible;
+    this.sketchGroup.visible = sketchVisible;
     rt.dispose();
 
     const canvas = document.createElement("canvas");
