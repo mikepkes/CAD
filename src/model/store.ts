@@ -312,7 +312,9 @@ export const useStore = create<AppState>((set, get) => {
       if (!s.dragging || !s.activeSketchId) return;
       const sk = s.session.doc.sketches[s.activeSketchId];
       if (!sk) return;
-      const res = await solveDrag(sk, scope(), solver, s.dragging.pointId, x, y);
+      // Seed from the previous frame's solve so under-constrained geometry
+      // slides smoothly instead of popping between solution branches.
+      const res = await solveDrag(sk, scope(), solver, s.dragging.pointId, x, y, s.transient ?? undefined);
       bump({ transient: res.points });
     },
     endDrag: async () => {

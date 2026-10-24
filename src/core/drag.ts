@@ -20,9 +20,23 @@ export async function solveDrag(
   solver: ConstraintSolver,
   dragPointId: string,
   x: number,
-  y: number
+  y: number,
+  /**
+   * Previous-frame solved positions. Seeding the solver from these (rather than
+   * the committed positions) gives the free DOF temporal coherence, so an
+   * under-constrained sketch slides smoothly instead of popping between the
+   * solver's solution branches each frame.
+   */
+  seed?: Record<string, { x: number; y: number }>
 ): Promise<DragSolveResult> {
   const { model } = compileSketch(sketch, scope);
+  if (seed) {
+    for (const pt of model.points) {
+      if (pt.fixed) continue;
+      const s = seed[pt.id];
+      if (s) { pt.x = s.x; pt.y = s.y; }
+    }
+  }
   const p = model.points.find((pt) => pt.id === dragPointId);
   if (p && !p.fixed) {
     p.x = x;
