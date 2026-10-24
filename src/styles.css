@@ -33,6 +33,20 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Re-enable text selection on readable content so it can be copied. The
+   app-wide default is none (to keep canvas drags from selecting UI); opt the
+   agent chat and other prose/value text back in. */
+.agent-chat,
+.agent-msg,
+.agent-tool,
+.agent-hello,
+.status-msg,
+.muted,
+.muted-inline {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .app {
   display: flex;
   flex-direction: column;
