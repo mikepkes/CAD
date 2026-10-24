@@ -218,9 +218,32 @@ body {
 .chip.mod .chip-glyph {
   color: var(--warn);
 }
+.chip.armed {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.chip.armed .chip-glyph {
+  color: #fff;
+}
+.chip.ready {
+  border-color: var(--accent);
+  background: #2b3340;
+}
 .cb-hint {
   color: var(--text-dim);
   font-size: 12.5px;
+}
+.active-hint {
+  color: var(--text);
+}
+.active-hint kbd {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
 }
 
 /* ---------- Workspace ---------- */

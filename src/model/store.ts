@@ -8,6 +8,7 @@ import { createDocument } from "../core/document";
 import { PlaneGCSSolver } from "../core/solver/planegcs";
 import { Evaluations } from "../core/recompute";
 import { resolveParameters } from "./parameters";
+import { availableOps } from "./selectionOps";
 import { solveDrag } from "../core/drag";
 import { Sketch } from "../sketch/types";
 import { initKernel } from "../core/occ/kernel";
@@ -56,6 +57,8 @@ export interface AppState {
   tool: Tool;
   /** Variant of the active shape tool (e.g. circle "center"|"2point"|"3point"). */
   toolVariant: string;
+  /** Active explicit constraint tool (e.g. "coincident"); clicks pick its entities. */
+  constraintTool: string | null;
   selection: string[];
   hover: string | null;
   showPlanes: boolean;
@@ -83,6 +86,8 @@ export interface AppState {
   // ui
   setTool: (t: Tool) => void;
   setToolVariant: (v: string) => void;
+  setConstraintTool: (type: string | null) => void;
+  pickForConstraint: (id: string) => Promise<void>;
   select: (ids: string[], additive?: boolean) => void;
   toggleSelect: (id: string) => void;
   clearSelection: () => void;
@@ -208,6 +213,7 @@ export const useStore = create<AppState>((set, get) => {
     activeSketchId: null,
     tool: "select",
     toolVariant: "",
+    constraintTool: null,
     selection: [],
     hover: null,
     showPlanes: true,
@@ -227,8 +233,24 @@ export const useStore = create<AppState>((set, get) => {
 
     dispatch: (type, params, opts) => runDispatch(type, params, opts),
 
-    setTool: (t) => set({ tool: t, toolVariant: DEFAULT_VARIANT[t] ?? "" }),
+    setTool: (t) => set({ tool: t, toolVariant: DEFAULT_VARIANT[t] ?? "", constraintTool: null }),
     setToolVariant: (v) => set({ toolVariant: v }),
+    setConstraintTool: (type) => set({ constraintTool: type, tool: "select", selection: [] }),
+    pickForConstraint: async (id) => {
+      const type = get().constraintTool;
+      const sk = activeSketch(get());
+      if (!type || !sk) return;
+      let picks = get().selection.includes(id) ? get().selection : [...get().selection, id];
+      const op = availableOps(sk, picks).geometric.find((o) => (o.command.params as { type?: string }).type === type);
+      if (op) {
+        await runDispatch(op.command.type, op.command.params, { rejectOnConflict: true });
+        set({ selection: [] });
+      } else {
+        // No match yet — keep accumulating; restart if we've overshot the max arity.
+        if (picks.length >= 3) picks = [id];
+        set({ selection: picks });
+      }
+    },
     select: (ids, additive) => set((s) => ({ selection: additive ? [...new Set([...s.selection, ...ids])] : ids })),
     toggleSelect: (id) =>
       set((s) => ({ selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id] })),

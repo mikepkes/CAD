@@ -27,6 +27,7 @@ local-first). Everything stays command-driven (undoable, MCP-exposed).
 - [x] **Extend** (E) — lengthens a line/arc to the next curve it meets along its own path.
 - [x] **Offset** — parallel copy of a single line/circle/arc at a signed distance (editable in timeline). Chain/loop offset is a follow-up.
 - [x] Window/box select (window = solid, crossing = dashed), right-click context menu, `X` toggles construction, Look At (normal-to)
+- [x] **Explicit constraint palette** (Fusion-style): always-visible Constrain row — click a constraint (Coincident, Parallel, …), then click the entities; or with a selection that already fits, it applies on click. Armed tool stays active for repeated use; Esc exits.
 
 ## Sprint C — breadth
 - [x] **Collinear** constraint (parallel + point-on-line)

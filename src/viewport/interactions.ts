@@ -208,6 +208,10 @@ export class Interactions {
     const st = this.st();
     if (st.mode !== "sketch") return;
 
+    // While an explicit constraint tool is active, clicks pick entities for it
+    // (no dragging / box-select) — handled in onUp → handleSelectClick.
+    if (st.constraintTool) return;
+
     if (st.tool === "select" && this.base) {
       const pick = this.scene.pick(e.clientX, e.clientY, this.base);
       if (pick.type === "entity" && pick.id && pick.entityKind === "dimension") {
@@ -498,6 +502,12 @@ export class Interactions {
     const st = this.st();
     if (!this.base) return;
     const pick = this.scene.pick(e.clientX, e.clientY, this.base);
+    // Explicit constraint tool: clicking geometry feeds it; empty click cancels.
+    if (st.constraintTool) {
+      if (pick.type === "entity" && pick.id && pick.entityKind !== "dimension") void st.pickForConstraint(pick.id);
+      else st.setConstraintTool(null);
+      return;
+    }
     if (pick.type === "entity" && pick.id) {
       if (e.shiftKey) st.toggleSelect(pick.id);
       else st.select([pick.id]);
@@ -745,6 +755,7 @@ export class Interactions {
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (e.key === "Escape") {
       if (st.contextMenu) { st.closeContextMenu(); return; }
+      if (st.constraintTool) { st.setConstraintTool(null); return; }
       if (this.stage.kind !== "idle") { this.stage = { kind: "idle" }; this.setPreview(null); }
       else if (st.tool !== "select") st.setTool("select");
       return;
