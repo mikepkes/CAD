@@ -7,13 +7,13 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, SketchFeature,
+  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SketchFeature,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, regionAt, Region } from "./geometry/profile";
 import { FaceRef } from "../sketch/types";
 import {
-  Edge3D, buildRegionsSolid, buildRegionsRevolved, fuseShapes, cutShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
+  Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, fuseShapes, cutShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, Bounds3,
 } from "./occ/kernel";
@@ -194,6 +194,36 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
 
 function safeBounds(shape: Shape3D): Bounds3 | undefined {
   try { return boundsOfShape(shape); } catch { return undefined; }
+}
+
+/** Loft a solid through the feature's ordered profile sketches, then combine it. */
+function applyLoft(doc: CadDocument, f: LoftFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  let shape: Shape3D;
+  try {
+    const profiles = f.sketchIds.map((sid) => {
+      const sk = doc.sketches[sid];
+      if (!sk) throw new Error(`loft: no sketch "${sid}"`);
+      const regions = extractRegions(sk);
+      if (!regions.length) throw new Error(`loft: sketch "${sk.name}" has no closed region`);
+      return { wp: resolveSketchPlane(sk), region: regions[0] };
+    });
+    if (profiles.length < 2) throw new Error("loft needs at least two profile sketches");
+    shape = buildLoftSolid(profiles, !!f.ruled);
+  } catch (e) {
+    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+    return;
+  }
+  const op = f.operation ?? "new";
+  const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
+  if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
+  try {
+    const combined = op === "cut" ? cutShapes(target.shape, shape) : fuseShapes(target.shape, shape);
+    shape.delete();
+    replaceShape(target, combined);
+  } catch (e) {
+    shape.delete();
+    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+  }
 }
 
 /** Fillet or chamfer the selected edges of the most recent body. */
@@ -400,6 +430,7 @@ function evaluateBodies(doc: CadDocument, scope: Scope): { bodies: Body[]; out: 
     switch (f.kind) {
       case "extrude":
       case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
+      case "loft": applyLoft(doc, f, bodies, out); break;
       case "mirror": applyMirror(doc, f, bodies, out); break;
       case "fillet":
       case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;

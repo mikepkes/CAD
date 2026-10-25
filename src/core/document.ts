@@ -153,8 +153,21 @@ export interface MirrorFeature {
   /** Which bodies to reflect: every body (default) or only the most recent one. */
   bodies?: "all" | "last";
 }
-export type FeatureDef = ExtrudeFeature | RevolveFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
-/** Features that own a sketch (the profile-driven ones). */
+/** A solid lofted through an ordered list of profile sketches (one region each). */
+export interface LoftFeature {
+  id: string;
+  kind: "loft";
+  name: string;
+  /** Ordered profile sketches; the first closed region of each is used. */
+  sketchIds: string[];
+  /** Straight (ruled) sections between profiles vs. a smooth blend. */
+  ruled?: boolean;
+  /** How the loft combines with existing bodies. Default "new". */
+  operation?: BooleanOp;
+}
+
+export type FeatureDef = ExtrudeFeature | RevolveFeature | LoftFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
+/** Features that own a single sketch (the profile-driven ones). */
 export type SketchFeature = ExtrudeFeature | RevolveFeature;
 
 /**

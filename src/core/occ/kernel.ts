@@ -123,6 +123,18 @@ export function buildRegionsSolid(wp: WorkPlane, regions: Profile[], distance: n
   return result;
 }
 
+/** Loft a solid through an ordered list of planar profiles (each on its own plane). */
+export function buildLoftSolid(profiles: { wp: WorkPlane; region: Profile }[], ruled: boolean): Shape3D {
+  if (profiles.length < 2) throw new Error("loft needs at least two profiles");
+  const sketches = profiles.map((p) => {
+    let d = loopToDrawing(p.region.outer);
+    for (const hole of p.region.holes) d = d.cut(loopToDrawing(hole));
+    return d.sketchOnPlane(planeFor(p.wp)) as unknown as { loftWith: (o: unknown, cfg: { ruled: boolean }) => Shape3D };
+  });
+  const [first, ...rest] = sketches;
+  return first.loftWith(rest, { ruled });
+}
+
 /** Boolean-combine two solids. Consumes neither operand (caller frees them). */
 export function fuseShapes(a: Shape3D, b: Shape3D): Shape3D {
   return (a as unknown as { fuse: (o: Shape3D, opts?: unknown) => Shape3D }).fuse(b);

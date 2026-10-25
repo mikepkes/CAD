@@ -1182,6 +1182,39 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
   {
+    type: "feature.loft",
+    title: "Loft",
+    summary: "Loft a solid through an ordered list of profile sketches.",
+    description:
+      "Builds a solid that passes through each profile sketch in `sketches` order (the first closed region of each — typically on different planes or datum/offset planes). `ruled` makes straight sections between profiles instead of a smooth blend. `operation` combines it with existing bodies (new/join/cut). Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketches"],
+      additionalProperties: false,
+      properties: {
+        sketches: { type: "array", items: { type: "string" }, description: "Ordered profile sketch ids (at least two)." },
+        ruled: { type: "boolean", description: "Straight sections between profiles (default false = smooth)." },
+        operation: { type: "string", enum: ["new", "join", "cut"], description: "Combine with existing bodies." },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Loft through two profiles", params: { sketches: ["sketch1", "sketch3"] } }],
+    apply(draft, p: { sketches: string[]; ruled?: boolean; operation?: "new" | "join" | "cut"; name?: string }, ctx) {
+      if (!Array.isArray(p.sketches) || p.sketches.length < 2) throw new Error("loft needs at least two sketches");
+      for (const sid of p.sketches) if (!draft.sketches[sid]) throw new Error(`No sketch "${sid}"`);
+      const id = ctx.alloc("loft");
+      draft.features[id] = {
+        id,
+        kind: "loft",
+        name: p.name ?? "Loft",
+        sketchIds: [...p.sketches],
+        ruled: !!p.ruled,
+        operation: p.operation ?? "new",
+      };
+      return { createdIds: [id], message: `Loft ${p.sketches.length} profiles` };
+    },
+  },
+  {
     type: "feature.fillet",
     title: "Fillet edges",
     summary: "Round selected edges of the most recent body.",
