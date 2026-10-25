@@ -119,21 +119,28 @@ export async function recompute(
 
 const DEG = Math.PI / 180;
 
-/** The world rigid transform a joint gives its `moved` component. */
+/** The world rigid transform a joint gives its `moved` component.
+ *  Built in the BASE's local frame (seat the connectors, apply the joint motion
+ *  about the base-local connector/axis) and then mapped out by `baseWorld`, so
+ *  `moved` inherits the base's full pose — position AND orientation. Composing
+ *  only a translation here would leave a child of a rotated base un-rotated, so
+ *  its connector (the bearing) would drift off its mate. */
 function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope): Rigid {
   let value = j.valueValue;
   try { const v = compileExpr(j.valueExpr).eval(scope); if (Number.isFinite(v)) value = v; } catch { /* keep last */ }
   j.valueValue = value;
-  const conn = applyPoint(baseWorld, j.baseOrigin);          // base connector in world
-  const axis = applyVec(baseWorld, j.axis);                  // joint axis in world
-  // Place `moved` so its connector coincides with the base connector (no rotation).
-  const seat = translation({ x: conn.x - j.movedOrigin.x, y: conn.y - j.movedOrigin.y, z: conn.z - j.movedOrigin.z });
-  if (j.kind === "revolute") return compose(rotationAbout(axis, value * DEG, conn), seat);
-  if (j.kind === "slider") {
-    const m = Math.hypot(axis.x, axis.y, axis.z) || 1;
-    return compose(translation({ x: (axis.x / m) * value, y: (axis.y / m) * value, z: (axis.z / m) * value }), seat);
+  // Seat `moved` so its connector coincides with the base connector (base-local).
+  const seat = translation({ x: j.baseOrigin.x - j.movedOrigin.x, y: j.baseOrigin.y - j.movedOrigin.y, z: j.baseOrigin.z - j.movedOrigin.z });
+  let motion: Rigid;
+  if (j.kind === "revolute") {
+    motion = rotationAbout(j.axis, value * DEG, j.baseOrigin); // about the base-local connector
+  } else if (j.kind === "slider") {
+    const m = Math.hypot(j.axis.x, j.axis.y, j.axis.z) || 1;
+    motion = translation({ x: (j.axis.x / m) * value, y: (j.axis.y / m) * value, z: (j.axis.z / m) * value });
+  } else {
+    motion = IDENTITY; // rigid
   }
-  return seat; // rigid
+  return compose(baseWorld, compose(motion, seat));
 }
 
 /** Resolve every component's world frame — from its joint if it has one, else

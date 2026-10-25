@@ -74,6 +74,20 @@ describe("assembly joints", () => {
     expect(range(body(s), 2).lo).toBeCloseTo(40, 1);
   });
 
+  it("a chained joint inherits the base component's orientation", async () => {
+    const s = realSession();
+    // A: an empty frame rotated 90° about +Z.
+    const a = (await s.dispatch("component.create", {})).createdIds[0];
+    await s.dispatch("joint.create", { kind: "revolute", moved: a, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "90" });
+    // B: a box (local x∈[20,40]) jointed onto A at a shared origin — it must pick
+    // up A's rotation, so (30,0)→(0,30): x→[-10,10], y→[20,40].
+    const b = await componentWithBox(s, 30);
+    await s.dispatch("joint.create", { kind: "rigid", base: a, moved: b, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 } });
+    const bd = body(s);
+    expect(range(bd, 0)).toMatchObject({ lo: expect.closeTo(-10, 1), hi: expect.closeTo(10, 1) });
+    expect(range(bd, 1)).toMatchObject({ lo: expect.closeTo(20, 1), hi: expect.closeTo(40, 1) });
+  });
+
   it("flags a joint to a missing component without breaking the build", async () => {
     const s = realSession();
     const c = await componentWithBox(s, 0);
