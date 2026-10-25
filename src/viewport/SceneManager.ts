@@ -6,6 +6,8 @@ import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchEllipse, Sk
 import { isDimension } from "../sketch/types";
 import { extractProfiles, Loop } from "../core/geometry/profile";
 import { HandleManager } from "./handles";
+import { makeThreadNormalMap } from "./threadTexture";
+import type { ThreadDecal } from "../core/document";
 
 export interface PreviewGeom {
   segments?: { u1: number; v1: number; u2: number; v2: number }[];
@@ -23,6 +25,8 @@ export interface SolidView {
   normals: Float32Array;
   indices: Uint32Array;
   edges: Float32Array;
+  /** Cosmetic thread regions drawn as a shaded normal-mapped sleeve. */
+  threadDecals?: ThreadDecal[];
 }
 
 export interface ViewData {
@@ -146,6 +150,9 @@ export class SceneManager {
   private lastData: ViewData | null = null;
   /** Active section cut plane (null when sectioning is off). Applied to solids. */
   private clipPlane: THREE.Plane | null = null;
+  /** Procedural thread normal maps, cached by their parameters (they are costly
+   *  to build and re-used across re-renders). */
+  private threadTexCache = new Map<string, THREE.DataTexture>();
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -437,6 +444,8 @@ export class SceneManager {
 
   dispose() {
     this.disposed = true;
+    for (const t of this.threadTexCache.values()) t.dispose();
+    this.threadTexCache.clear();
     this.resizeObs?.disconnect();
     this.renderer.domElement.removeEventListener("wheel", this.onWheel, { capture: true } as EventListenerOptions);
     window.removeEventListener("resize", this.onResize);
@@ -837,6 +846,37 @@ export class SceneManager {
       );
       this.solidsGroup.add(eseg);
     }
+
+    for (const d of s.threadDecals ?? []) this.renderThreadSleeve(d, color, faded);
+  }
+
+  /** Draw a cosmetic thread: a cylindrical sleeve on the body's surface shaded by
+   *  a procedural thread normal map (so the solid itself stays a plain cylinder). */
+  private renderThreadSleeve(d: ThreadDecal, color: number, faded: boolean) {
+    const axis = new THREE.Vector3(d.axis.x, d.axis.y, d.axis.z);
+    if (axis.lengthSq() < 1e-9) return;
+    axis.normalize();
+    const eps = 0.02;
+    const r = d.internal ? Math.max(0.05, d.radius - eps) : d.radius + eps;
+    const geo = new THREE.CylinderGeometry(r, r, d.length, 96, 1, true);
+    geo.translate(0, d.length / 2, 0); // base at y=0
+
+    const key = `${d.form}|${d.pitch}|${d.radius}|${d.length}|${d.starts ?? 1}|${d.leftHand ? "L" : "R"}|${d.internal ? "I" : "E"}`;
+    let tex = this.threadTexCache.get(key);
+    if (!tex) { tex = makeThreadNormalMap(d); this.threadTexCache.set(key, tex); }
+    const k = Math.min(2.2, Math.max(0.7, ((tex.userData.depth as number) / d.pitch) * 4));
+    const mat = new THREE.MeshStandardMaterial({
+      color, metalness: 0.2, roughness: 0.55,
+      normalMap: tex, normalScale: new THREE.Vector2(k, k),
+      side: d.internal ? THREE.BackSide : THREE.FrontSide,
+      transparent: faded, opacity: faded ? 0.25 : 1,
+      clippingPlanes: this.clipPlane ? [this.clipPlane] : undefined,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+    mesh.position.set(d.at.x, d.at.y, d.at.z);
+    mesh.renderOrder = 1;
+    this.solidsGroup.add(mesh);
   }
 
   /** A filled quad over one body's cut, visible only where that body's stencil

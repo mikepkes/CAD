@@ -84,7 +84,7 @@ const THREAD_SPEC_SCHEMA: JSONSchema = {
     leftHand: { type: "boolean" },
     starts: { type: "integer", description: "Number of starts (multi-start). Default 1." },
     depth: { type: "number", description: "Radial thread height override (mm)." },
-    representation: { type: "string", enum: ["cosmetic", "modeled"], description: "cosmetic = cheap low-poly hint (default); modeled = real helical geometry." },
+    representation: { type: "string", enum: ["cosmetic", "modeled"], description: "cosmetic (default) = a plain cylinder shaded as a thread by a normal-map texture (cheap, exports as a plain cylinder); modeled = real helical geometry." },
     profilePoints: { type: "array", items: { type: "object", required: ["x", "y"], additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" } } }, description: "custom form only: axial section points (x = radial height, y = axial)." },
   },
 };
@@ -1484,7 +1484,7 @@ export const BUILTINS: CommandDef<any>[] = [
     description:
       "Builds a thread at `at` along `axis` (default +Z, the threaded length running from the point). `spec` gives the form, pitch, (major) diameter and length. " +
       "`spec.internal` cuts the thread into a body as a tap (the body should already have a tap-drill bore at the minor diameter); otherwise it is external — `operation` \"new\" makes a standalone threaded rod, \"join\" adds the threads onto an existing shaft (`body` picks which). " +
-      "`spec.representation` \"cosmetic\" (default) is a cheap low-poly visual hint; \"modeled\" is real helical geometry (heavier — several seconds — and it automatically falls back to cosmetic with a warning if the kernel can't form it cleanly). " +
+      "`spec.representation` \"cosmetic\" (default) keeps the solid a plain cylinder and shades the thread with a procedural normal-map texture (cheap, and it exports as a plain cylinder); \"modeled\" is real helical geometry (heavier — several seconds — and it automatically falls back to cosmetic with a warning if the kernel can't form it cleanly). " +
       "`spec.leftHand`, `spec.starts` (multi-start), `spec.depth` (radial height override) and a `spec.profilePoints` custom section are supported. Returns the feature id.",
     paramsSchema: {
       type: "object",

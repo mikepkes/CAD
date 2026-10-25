@@ -436,7 +436,6 @@ export interface ThreadBuildSpec {
   leftHand?: boolean;
   starts?: number;
   depth?: number;                              // radial thread height override
-  representation?: "cosmetic" | "modeled";     // default cosmetic
   custom?: { x: number; y: number }[];
 }
 
@@ -448,8 +447,6 @@ export function buildThread(s: ThreadBuildSpec): Shape3D {
   const rMin = Math.max(0.1, rMaj - sec.depth);
   const len = s.length;
   if (!(len > 0)) throw new Error("thread length must be positive");
-
-  if ((s.representation ?? "cosmetic") === "cosmetic") return buildThreadCosmetic(rMaj, sec.depth, s.pitch, len);
 
   const coreVol = Math.PI * rMin * rMin * len, majorVol = Math.PI * rMaj * rMaj * len;
   // OCC's helical sweep degenerates (silently drops the ribs) for some
@@ -518,23 +515,6 @@ function trimRod(shape: Shape3D, rMaj: number, len: number): Shape3D {
   const out = intersectShapes(shape, clip);
   shape.delete(); clip.delete();
   return out;
-}
-
-/** A cheap cosmetic thread: a plain major cylinder with shallow revolved V-ring
- *  hints at the pitch spacing (robust and low-poly; a visual cue, not a mating
- *  thread — a true shaded/bump-mapped thread needs the material system). */
-function buildThreadCosmetic(rMaj: number, depth: number, pitch: number, len: number): Shape3D {
-  let rod = makeCylinder(rMaj, len) as Shape3D;
-  const rings = Math.min(60, Math.max(1, Math.floor(len / pitch)));
-  const spacing = len / rings;
-  const ringDepth = Math.min(depth * 0.55, rMaj * 0.6);
-  const ah = pitch * 0.28;
-  for (let i = 0; i < rings; i++) {
-    const z = (i + 0.5) * spacing;
-    const groove = revolveProfileZ([[rMaj + 0.01, z - ah], [rMaj - ringDepth, z], [rMaj + 0.01, z + ah]]);
-    const cut = cutShapes(rod, groove); rod.delete(); groove.delete(); rod = cut;
-  }
-  return rod;
 }
 
 /** A parametric primitive solid (no sketch): built centred on `at`. */

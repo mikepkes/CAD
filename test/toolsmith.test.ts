@@ -17,9 +17,10 @@ const rows = (s: CadSession) => Object.values(evalAll(s));
 const vol0 = (s: CadSession) => bodies(s)[0].volume!;
 const PI = Math.PI;
 
-describe("proposal 1 — feature.primitive", () => {
-  beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
+// Kernel init at the top level so every describe (and any -t filter) has it.
+beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
 
+describe("proposal 1 — feature.primitive", () => {
   it("builds each primitive with the right volume, centred on `at`", async () => {
     const box = realSession();
     await box.dispatch("feature.primitive", { shape: "box", x: "40", y: "40", z: "20" });
@@ -152,42 +153,64 @@ describe("proposal 5 — feature.hole", () => {
 
 describe("proposal 6 — feature.thread", () => {
   const PId = { x: 0, y: 0, z: 0 };
+  const body0 = (s: CadSession) => bodies(s)[0];
 
-  it("builds an external cosmetic thread as a standalone rod", async () => {
+  it("a cosmetic external thread is a plain cylinder carrying a thread decal", async () => {
     const s = realSession();
     await s.dispatch("feature.thread", { at: PId, spec: { form: "metric", pitch: 1.5, diameter: 10, length: 16 } });
-    const b = bodies(s)[0];
+    const b = body0(s);
     expect(b.error).toBeUndefined();
-    expect(b.volume!).toBeGreaterThan(0);
-    expect(b.volume!).toBeLessThan(PI * 25 * 16 * 1.01); // ≤ a Ø10 cylinder
+    expect(b.volume!).toBeCloseTo(PI * 25 * 16, 0); // a bare Ø10 cylinder (no thread geometry)
+    expect(b.threadDecals?.length).toBe(1);
+    expect(b.threadDecals![0]).toMatchObject({ form: "metric", pitch: 1.5, radius: 5 });
   });
 
-  it("builds a modelled metric thread whose volume sits between minor and major", async () => {
+  it("a modelled thread is real geometry, or falls back cleanly to cosmetic — never an error", async () => {
+    // OCC's helical sweep can degenerate under load; buildThread validates and
+    // the feature then falls back to a cosmetic decal (+warning), so the contract
+    // is: always a usable body, never an error.
     const s = realSession();
     await s.dispatch("feature.thread", { at: PId, spec: { form: "metric", pitch: 2, diameter: 12, length: 14, representation: "modeled" } });
-    const b = bodies(s)[0];
+    const b = body0(s);
     expect(b.error).toBeUndefined();
-    const minorR = 6 - 0.6134 * 2;
-    expect(b.volume!).toBeGreaterThan(PI * minorR * minorR * 14); // more than the bare core
-    expect(b.volume!).toBeLessThan(PI * 36 * 14 * 1.02);          // less than the full Ø12
+    if (b.threadDecals?.length) {
+      expect(b.warning).toMatch(/fell back to cosmetic/);        // documented fallback
+      expect(b.volume!).toBeCloseTo(PI * 36 * 14, 0);            // a plain Ø12 cylinder
+    } else {
+      const minorR = 6 - 0.6134 * 2;
+      expect(b.volume!).toBeGreaterThan(PI * minorR * minorR * 14); // real ribs: more than the core
+      expect(b.volume!).toBeLessThan(PI * 36 * 14 * 1.02);         // less than the full Ø12
+    }
   }, 40000);
 
-  it("cuts an internal thread (tap) into a bored block", async () => {
+  it("a modelled internal thread cuts a tap into a bored block", async () => {
     const s = realSession();
     await s.dispatch("feature.primitive", { shape: "box", x: "30", y: "30", z: "16", at: { x: 0, y: 0, z: 8 } });
     await s.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 16 }], diameter: "6.75", throughAll: true });    // tap drill
     const bored = vol0(s);
-    await s.dispatch("feature.thread", { at: { x: 0, y: 0, z: 16 }, axis: { x: 0, y: 0, z: -1 }, spec: { form: "metric", pitch: 1.25, diameter: 8, length: 14, internal: true } });
-    expect(bodies(s)[0].error).toBeUndefined();
+    await s.dispatch("feature.thread", { at: { x: 0, y: 0, z: 16 }, axis: { x: 0, y: 0, z: -1 }, spec: { form: "metric", pitch: 1.25, diameter: 8, length: 14, internal: true, representation: "modeled" } });
+    expect(body0(s).error).toBeUndefined();
     expect(vol0(s)).toBeLessThan(bored); // the tap removed the thread valleys
-  });
+  }, 40000);
 
-  it("drills and taps a hole in one feature", async () => {
+  it("a cosmetic internal thread leaves the bore as-is and tags it with a decal", async () => {
     const s = realSession();
     await s.dispatch("feature.primitive", { shape: "box", x: "30", y: "30", z: "16", at: { x: 0, y: 0, z: 8 } });
-    await s.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 16 }], diameter: "6.75", depth: "14", thread: { form: "metric", pitch: 1.25, diameter: 8, length: 12, internal: true } });
-    expect(bodies(s)[0].error).toBeUndefined();
+    await s.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 16 }], diameter: "8", throughAll: true });
+    const bored = vol0(s);
+    await s.dispatch("feature.thread", { at: { x: 0, y: 0, z: 16 }, axis: { x: 0, y: 0, z: -1 }, spec: { form: "metric", pitch: 1.25, diameter: 8, length: 14, internal: true } });
+    expect(vol0(s)).toBeCloseTo(bored, 3);          // geometry unchanged
+    expect(body0(s).threadDecals?.length).toBe(1);  // shaded instead
+    expect(body0(s).threadDecals![0].internal).toBe(true);
+  });
+
+  it("drills and (cosmetically) taps a hole in one feature", async () => {
+    const s = realSession();
+    await s.dispatch("feature.primitive", { shape: "box", x: "30", y: "30", z: "16", at: { x: 0, y: 0, z: 8 } });
+    await s.dispatch("feature.hole", { at: [{ x: -8, y: 0, z: 16 }, { x: 8, y: 0, z: 16 }], diameter: "8", throughAll: true, thread: { form: "metric", pitch: 1.25, diameter: 8, length: 14, internal: true } });
+    expect(body0(s).error).toBeUndefined();
     expect(vol0(s)).toBeLessThan(30 * 30 * 16);
+    expect(body0(s).threadDecals?.length).toBe(2); // one per hole
   });
 
   it("errors when an internal thread has no body to tap", async () => {

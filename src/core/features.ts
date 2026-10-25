@@ -7,7 +7,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, BooleanOp,
+  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, regionAt, Region } from "./geometry/profile";
@@ -15,7 +15,7 @@ import { FaceRef } from "../sketch/types";
 import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
-  boundsOfShape, volumeOfShape, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread, ThreadBuildSpec,
+  boundsOfShape, volumeOfShape, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
 } from "./occ/kernel";
 import type { Shape3D } from "replicad";
 import { Vec3 } from "../math/vec";
@@ -33,6 +33,8 @@ export interface SolidEval {
   bounds?: Bounds3;
   /** Enclosed volume in mm³ (set for body rows). */
   volume?: number;
+  /** Cosmetic thread regions on this body (rendered as a shaded texture). */
+  threadDecals?: ThreadDecal[];
 }
 
 /** Evaluate a parametric expression, writing the value back onto `holder[key]Value`. */
@@ -97,7 +99,7 @@ function buildFeatureSolid(doc: CadDocument, scope: Scope, f: SketchFeature, tar
   return buildRegionsSolid(wp, regions, d);
 }
 
-interface Body { id: string; name: string; sketchId: string; distance: number; shape: Shape3D }
+interface Body { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; decals?: ThreadDecal[] }
 
 /** Row for a feature that modifies bodies but makes none (listed in the inspector/timeline, not rendered). */
 const modifierRow = (f: FeatureDef): SolidEval => ({ featureId: f.id, name: f.name, sketchId: "", distance: 0 });
@@ -275,37 +277,53 @@ function placeAlong(base: Shape3D, from: Vec3, axis: Vec3, p: Vec3): Shape3D {
 /** A −Z cutter (mouth at origin) oriented to drill along `axis` from point `p`. */
 const orientCutter = (base: Shape3D, axis: Vec3, p: Vec3): Shape3D => placeAlong(base, { x: 0, y: 0, z: -1 }, axis, p);
 
-/** Build a thread solid (a +Z rod) for a spec, falling back to cosmetic if the
- *  modelled helical sweep degenerates in the kernel. Returns {shape, note}. */
-function buildThreadSolid(spec: ThreadSpec, clearance: number): { shape: Shape3D; note?: string } {
-  const b: ThreadBuildSpec = {
+/** A modelled thread rod (+Z) for a spec; throws if the helical sweep degenerates. */
+function buildThreadRod(spec: ThreadSpec, clearance: number): Shape3D {
+  return buildThread({
     form: spec.form, pitch: spec.pitch, majorDiameter: spec.diameter + clearance, length: spec.length,
-    leftHand: spec.leftHand, starts: spec.starts, depth: spec.depth, representation: spec.representation ?? "cosmetic", custom: spec.profilePoints,
-  };
-  if (b.representation !== "modeled") return { shape: buildThread(b) };
-  try {
-    return { shape: buildThread(b) };
-  } catch (e) {
-    return { shape: buildThread({ ...b, representation: "cosmetic" }), note: `modelled thread fell back to cosmetic: ${(e as Error).message}` };
-  }
+    leftHand: spec.leftHand, starts: spec.starts, depth: spec.depth, custom: spec.profilePoints,
+  });
 }
 
-/** A thread at a point: external (added as a new rod / joined to a shaft) or
- *  internal (cut as a tap). */
+/** The cosmetic-thread decal for a spec at a placement. */
+function threadDecalOf(spec: ThreadSpec, at: ThreadDecal["at"], axis: ThreadDecal["axis"], internal: boolean): ThreadDecal {
+  return { at, axis, radius: spec.diameter / 2, length: spec.length, form: spec.form, pitch: spec.pitch, starts: spec.starts, leftHand: spec.leftHand, internal, profilePoints: spec.profilePoints };
+}
+
+/** A thread at a point: external (a new rod / joined to a shaft) or internal
+ *  (cut as a tap). Cosmetic threads are a plain cylinder + a shaded decal; a
+ *  modelled thread is real geometry that falls back to a cosmetic decal if the
+ *  kernel can't form it. */
 function applyThread(f: ThreadFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
+  const axis = f.axis ?? { x: 0, y: 0, z: 1 };
+  const internal = !!f.spec.internal;
+  const modeled = f.spec.representation === "modeled";
+
+  // Cosmetic: no thread geometry — a decal on the relevant body (and a plain
+  // cylinder for a standalone external thread).
+  const cosmetic = (warn?: string) => {
+    if (warn) out[f.id].warning = out[f.id].warning ? `${out[f.id].warning}; ${warn}` : warn;
+    const decal = threadDecalOf(f.spec, f.at, axis, internal);
+    const op = internal ? "cut" : (f.operation ?? "new");
+    if (!internal && (op === "new" || !bodies.length)) {
+      const cyl = placeAlong(buildPrimitive({ shape: "cylinder", at: { x: 0, y: 0, z: f.spec.length / 2 }, radius: f.spec.diameter / 2, height: f.spec.length }), { x: 0, y: 0, z: 1 }, axis, f.at);
+      bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape: cyl, decals: [decal] });
+      return;
+    }
+    try { (pickBody(bodies, f.body, "thread").decals ??= []).push(decal); }
+    catch (e) { out[f.id].error = (e as Error).message; }
+  };
+
+  if (!modeled) { cosmetic(); return; }
+
   try {
-    const internal = !!f.spec.internal;
-    const { shape, note } = buildThreadSolid(f.spec, internal ? 0.1 : 0); // small clearance for a cut tap
-    if (note) out[f.id].warning = note;
-    const rod = placeAlong(shape, { x: 0, y: 0, z: 1 }, f.axis ?? { x: 0, y: 0, z: 1 }, f.at);
-    shape.delete();
+    const rod = placeAlong(buildThreadRod(f.spec, internal ? 0.1 : 0), { x: 0, y: 0, z: 1 }, axis, f.at);
     const op = internal ? "cut" : (f.operation ?? "new");
     if (op !== "cut" && (op === "new" || !bodies.length)) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape: rod }); return; }
-    const target = pickBody(bodies, f.body, "thread");
-    combineBody(op, target, rod, f, "thread", out);
+    combineBody(op, pickBody(bodies, f.body, "thread"), rod, f, "thread", out);
   } catch (e) {
-    out[f.id].error = (e as Error).message;
+    cosmetic(`modelled thread fell back to cosmetic: ${(e as Error).message}`); // kernel couldn't form it
   }
 }
 
@@ -335,18 +353,29 @@ function applyHole(scope: Scope, f: HoleFeature, bodies: Body[], out: Record<str
         finally { cutter.delete(); }
       }
     } finally { base.delete(); }
-    // Threaded hole: cut a tap (a thread rod at the nominal/major diameter) from
-    // each bore, so the hole should be drilled at the tap-drill (minor) diameter.
+    // Threaded hole: cosmetic = a decal per bore; modelled = cut a tap (a thread
+    // rod at the nominal/major diameter) from each bore, so the hole should be
+    // drilled at the tap-drill (minor) diameter.
     if (f.thread) {
-      const { shape, note } = buildThreadSolid(f.thread, 0.1);
-      if (note) out[f.id].warning = out[f.id].warning ? `${out[f.id].warning}; ${note}` : note;
-      try {
-        for (const p of pts) {
-          const tap = placeAlong(shape, { x: 0, y: 0, z: 1 }, axis, p);
-          try { const cut = cutShapes(target.shape, tap); replaceShape(target, cut); }
-          finally { tap.delete(); }
-        }
-      } finally { shape.delete(); }
+      const addDecals = (warn?: string) => {
+        if (warn) out[f.id].warning = out[f.id].warning ? `${out[f.id].warning}; ${warn}` : warn;
+        target.decals ??= [];
+        for (const p of pts) target.decals.push(threadDecalOf(f.thread!, p, axis, true));
+      };
+      if (f.thread.representation === "modeled") {
+        try {
+          const shape = buildThreadRod(f.thread, 0.1);
+          try {
+            for (const p of pts) {
+              const tap = placeAlong(shape, { x: 0, y: 0, z: 1 }, axis, p);
+              try { const cut = cutShapes(target.shape, tap); replaceShape(target, cut); }
+              finally { tap.delete(); }
+            }
+          } finally { shape.delete(); }
+        } catch (e) { addDecals(`modelled thread fell back to cosmetic: ${(e as Error).message}`); }
+      } else {
+        addDecals();
+      }
     }
     const after = volumeOfShape(target.shape);
     if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, before)) {
@@ -660,6 +689,7 @@ function evaluateFull(doc: CadDocument, scope: Scope): Record<string, SolidEval>
   const { bodies, out } = evaluateBodies(doc, scope);
   for (const body of bodies) {
     const row: SolidEval = { ...(out[body.id] ?? {}), featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance };
+    if (body.decals?.length) row.threadDecals = body.decals;
     try {
       row.mesh = meshShape(body.shape);
       row.bounds = safeBounds(body.shape);

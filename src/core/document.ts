@@ -288,6 +288,22 @@ export interface ThreadFeature {
   requireEffect?: boolean;
 }
 
+/** A cosmetic-thread appearance region on a body: a plain cylinder shaded as a
+ *  thread by the renderer (a normal map), carrying the parameters that texture
+ *  needs. Plain data — it crosses the geometry worker and never holds geometry. */
+export interface ThreadDecal {
+  at: { x: number; y: number; z: number };     // base of the threaded length
+  axis: { x: number; y: number; z: number };   // thread axis
+  radius: number;                               // major radius (external) / bore radius (internal)
+  length: number;
+  form: "metric" | "unified" | "acme" | "trapezoidal" | "square" | "buttress" | "ballscrew" | "custom";
+  pitch: number;
+  starts?: number;
+  leftHand?: boolean;
+  internal?: boolean;
+  profilePoints?: { x: number; y: number }[];
+}
+
 export type FeatureDef = ExtrudeFeature | RevolveFeature | PrimitiveFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
 /** Features that own a single sketch (the profile-driven ones). */
 export type SketchFeature = ExtrudeFeature | RevolveFeature;
