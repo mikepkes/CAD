@@ -44,6 +44,19 @@ on.
   inline highlight. Closed profiles are shaded (what's extrudable).
 - **3D:** extrude a sketch profile into a solid on the **OpenCASCADE** kernel
   (replicad/OCCT WASM); export **STEP** (CAD/CNC) and **STL** (3D print).
+  Extrude has new/join/cut, symmetric, **reverse direction** and
+  **through-all** extents; plus **revolve**, edge **fillet / chamfer** (edge
+  selectors: parallel to an axis, in a plane, near a point, in a box),
+  **shell**, body **patterns** (linear / circular) and **mirror** (all bodies or
+  just the last). Sketches can be started **on a body face** by picking a point
+  (`sketch_on_face`), and every feature reports kernel errors and warnings
+  (e.g. a cut that removed nothing).
+- **Splines & involute gears:** an interpolating **spline** entity (exported
+  as true cubic curves), and `sketch.addGear` — **external spur gears,
+  internal ring gears and racks** generated the way they are cut: true involute
+  flanks, trochoidal root fillets from the rack cutter's tip radius (with real
+  undercut on small tooth counts), exact basic-rack conjugates with tangent
+  root fillets, reference circles, backlash. See `docs/images/gear-*.png`.
 - **Command-driven, with a parametric timeline separate from undo/redo.** Edit
   an earlier operation and it propagates downstream (Fusion-style), and that
   edit is undoable. Drag a point for live preview; release commits one step.

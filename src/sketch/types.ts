@@ -63,8 +63,17 @@ export interface SketchEllipse {
   construction?: boolean;
 }
 
-export type SketchEntity = SketchPoint | SketchLine | SketchCircle | SketchArc | SketchEllipse;
-export type CurveEntity = SketchLine | SketchCircle | SketchArc | SketchEllipse;
+/** An interpolating spline through ordered sketch points (C1 cubic; see core/geometry/spline.ts). */
+export interface SketchSpline {
+  id: EntityId;
+  kind: "spline";
+  /** Through-points in order (at least 2). The first/last are the curve's ends. */
+  points: EntityId[];
+  construction?: boolean;
+}
+
+export type SketchEntity = SketchPoint | SketchLine | SketchCircle | SketchArc | SketchEllipse | SketchSpline;
+export type CurveEntity = SketchLine | SketchCircle | SketchArc | SketchEllipse | SketchSpline;
 
 // ---- Constraints -----------------------------------------------------------
 

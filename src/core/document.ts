@@ -37,7 +37,10 @@ export interface Component {
   transform: ComponentTransform;
 }
 
-/** A solid feature (currently extrude). Geometry is derived by the OCC kernel. */
+/** How a feature combines with the running bodies (Fusion-style). */
+export type BooleanOp = "new" | "join" | "cut";
+
+/** A solid feature built by extruding sketch regions. Geometry is derived by the OCC kernel. */
 export interface ExtrudeFeature {
   id: string;
   kind: "extrude";
@@ -47,10 +50,94 @@ export interface ExtrudeFeature {
   distanceExpr: string;
   distanceValue: number;
   symmetric?: boolean;
+  /** Extrude against the sketch normal (equivalent to a negative distance). */
+  direction?: "normal" | "reverse";
+  /** "blind" (default): `distance`. "throughAll": far past every existing body in the chosen direction(s) — for cuts/joins that must go all the way through. */
+  extent?: "blind" | "throughAll";
   /** How this solid combines with existing bodies (Fusion-style). Default "new". */
-  operation?: "new" | "join" | "cut";
+  operation?: BooleanOp;
   /** Interior point (sketch u,v) selecting one region; omitted = every region. */
   regionPoint?: { x: number; y: number };
+}
+
+/** A solid feature built by revolving sketch regions about an axis in the sketch plane. */
+export interface RevolveFeature {
+  id: string;
+  kind: "revolve";
+  name: string;
+  sketchId: string;
+  /** Axis in sketch (u,v) coordinates: through p1 and p2. */
+  axis: { p1: { x: number; y: number }; p2: { x: number; y: number } };
+  /** Sweep angle expression in degrees (360 = full). */
+  angleExpr: string;
+  angleValue: number;
+  operation?: BooleanOp;
+  regionPoint?: { x: number; y: number };
+}
+
+/**
+ * Selects B-rep edges of a body for fillet/chamfer. Every set field narrows the
+ * selection (AND); an empty selector means every edge.
+ */
+export interface EdgeSelector {
+  /** Edges whose direction is parallel to a world axis. */
+  parallelTo?: "X" | "Y" | "Z";
+  /** Edges lying in an origin plane offset along its normal (e.g. the top face's outline: {plane:"XY", offset: height}). */
+  inPlane?: { plane: "XY" | "XZ" | "YZ"; offset?: number };
+  /** Only straight / only circular edges. */
+  curveType?: "line" | "circle";
+  minLength?: number;
+  maxLength?: number;
+  /** Edges that pass through (within tolerance of) a world point. */
+  nearPoint?: { x: number; y: number; z: number };
+  /** Edges entirely inside an axis-aligned world box. */
+  inBox?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+}
+
+/** Selects B-rep faces of a body (shell openings). Empty = no faces. */
+export interface FaceSelector {
+  /** Faces parallel to an origin plane (planar faces only). */
+  parallelTo?: "XY" | "XZ" | "YZ";
+  /** Faces lying in an origin plane offset along its normal. */
+  inPlane?: { plane: "XY" | "XZ" | "YZ"; offset?: number };
+  /** The face containing (within tolerance of) a world point. */
+  nearPoint?: { x: number; y: number; z: number };
+}
+
+/** Round or bevel selected edges of the most recent body. */
+export interface EdgeBlendFeature {
+  id: string;
+  kind: "fillet" | "chamfer";
+  name: string;
+  /** Radius (fillet) / setback (chamfer) expression. */
+  sizeExpr: string;
+  sizeValue: number;
+  edges: EdgeSelector;
+}
+
+/** Hollow the most recent body to a wall thickness, opening the selected faces. */
+export interface ShellFeature {
+  id: string;
+  kind: "shell";
+  name: string;
+  thicknessExpr: string;
+  thicknessValue: number;
+  openFaces: FaceSelector;
+}
+
+/** Repeat the most recent body along a vector or around an axis, fusing the copies in. */
+export interface PatternFeature {
+  id: string;
+  kind: "pattern";
+  name: string;
+  mode: "linear" | "circular";
+  /** Total instances including the original. */
+  count: number;
+  /** linear: offset between instances (world). */
+  step?: { x: number; y: number; z: number };
+  /** circular: axis origin + direction (world) and angle between instances (degrees). */
+  axis?: { origin: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number } };
+  angle?: number;
 }
 /**
  * Mirror feature: reflects the running bodies across a plane and fuses each
@@ -63,8 +150,12 @@ export interface MirrorFeature {
   name: string;
   /** Plane to mirror across: "XY"/"XZ"/"YZ" or a datum plane id. */
   plane: string;
+  /** Which bodies to reflect: every body (default) or only the most recent one. */
+  bodies?: "all" | "last";
 }
-export type FeatureDef = ExtrudeFeature | MirrorFeature;
+export type FeatureDef = ExtrudeFeature | RevolveFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
+/** Features that own a sketch (the profile-driven ones). */
+export type SketchFeature = ExtrudeFeature | RevolveFeature;
 
 /**
  * A datum/reference plane — a reusable, parametric coordinate frame (the first

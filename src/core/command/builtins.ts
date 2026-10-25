@@ -16,6 +16,7 @@ import { makePlaneFromNormal, offsetPlane, planeById, WorkPlane } from "../../ge
 import { Vec3 } from "../../math/vec";
 import { ICurve, intersect, paramOf, pointAt } from "../geometry/intersect";
 import { ProjectedCurve } from "../geometry/project";
+import { gearOutline, GearType } from "../geometry/gear";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 
@@ -35,6 +36,83 @@ const CONSTRUCTION_SCHEMA: JSONSchema = {
 };
 
 type PointRef = { x: number; y: number } | { ref: string };
+type EdgeSelectorParams = import("../document").EdgeSelector;
+type FaceSelectorParams = import("../document").FaceSelector;
+
+const V3_SCHEMA: JSONSchema = { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } };
+const IN_PLANE_SCHEMA: JSONSchema = {
+  type: "object",
+  required: ["plane"],
+  properties: { plane: { type: "string", enum: PLANE_ENUM }, offset: { type: "number", description: "Offset along the plane normal (mm)." } },
+};
+const EDGE_SELECTOR_SCHEMA: JSONSchema = {
+  type: "object",
+  description: "Which edges (AND of every set field; empty = all edges).",
+  additionalProperties: false,
+  properties: {
+    parallelTo: { type: "string", enum: ["X", "Y", "Z"], description: "Edge direction parallel to a world axis." },
+    inPlane: { ...IN_PLANE_SCHEMA, description: "Edges lying in an origin plane offset along its normal (a face outline)." },
+    curveType: { type: "string", enum: ["line", "circle"] },
+    minLength: { type: "number" },
+    maxLength: { type: "number" },
+    nearPoint: { ...V3_SCHEMA, description: "Edges passing through this world point." },
+    inBox: { type: "object", required: ["min", "max"], properties: { min: V3_SCHEMA, max: V3_SCHEMA }, description: "Edges entirely inside this world box." },
+  },
+};
+const FACE_SELECTOR_SCHEMA: JSONSchema = {
+  type: "object",
+  description: "Which faces (AND of every set field).",
+  additionalProperties: false,
+  properties: {
+    parallelTo: { type: "string", enum: PLANE_ENUM, description: "Planar faces parallel to an origin plane." },
+    inPlane: { ...IN_PLANE_SCHEMA, description: "Faces lying in an origin plane offset along its normal." },
+    nearPoint: { ...V3_SCHEMA, description: "The face containing this world point." },
+  },
+};
+
+const norm2 = (v: Vec): Vec => { const m = Math.hypot(v.x, v.y) || 1; return { x: v.x / m, y: v.y / m }; };
+
+/** Ids of the (non-construction) lines that end at point `pid`. */
+function linesAt(sk: Sketch, pid: string): string[] {
+  return Object.values(sk.entities).filter((e) => e.kind === "line" && !e.construction && (e.p1 === pid || e.p2 === pid)).map((e) => e.id);
+}
+
+/** The two lines of a corner: given explicitly, or the pair meeting at `point`. */
+function cornerLines(sk: Sketch, p: { line1?: string; line2?: string; point?: string }): [string, string] {
+  if (p.line1 && p.line2) return [p.line1, p.line2];
+  if (!p.point) throw new Error("give line1 + line2, or a corner point");
+  const ls = linesAt(sk, p.point);
+  if (ls.length !== 2) throw new Error(`point ${p.point} is shared by ${ls.length} lines; need exactly 2`);
+  return [ls[0], ls[1]];
+}
+
+/** Order a set of lines into one closed loop, returning its point ids in walk order. */
+function orderLoop(sk: Sketch, lineIds: string[]): string[] {
+  const lines = lineIds.map((id) => {
+    const e = sk.entities[id];
+    if (!e || e.kind !== "line") throw new Error(`"${id}" is not a line`);
+    return e;
+  });
+  if (lines.length < 3) throw new Error("a loop needs at least 3 lines");
+  const adj = new Map<string, string[]>();
+  for (const l of lines) {
+    adj.set(l.p1, [...(adj.get(l.p1) ?? []), l.p2]);
+    adj.set(l.p2, [...(adj.get(l.p2) ?? []), l.p1]);
+  }
+  for (const [pid, nb] of adj) if (nb.length !== 2) throw new Error(`point ${pid} is not shared by exactly two of the given lines — not a single closed loop`);
+  const start = lines[0].p1;
+  const order = [start];
+  let prev = "", cur = start;
+  while (true) {
+    const [a, b] = adj.get(cur)!;
+    const next = a === prev ? b : a;
+    if (next === start) break;
+    if (order.includes(next)) throw new Error("lines do not form a single closed loop");
+    order.push(next); prev = cur; cur = next;
+  }
+  if (order.length !== lines.length) throw new Error("lines do not form a single closed loop");
+  return order;
+}
 
 function sketchOf(doc: CadDocument, id: unknown): Sketch {
   const sk = doc.sketches[String(id)];
@@ -381,7 +459,7 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Add rectangle",
     summary: "Add a rectangle (4 lines) with horizontal/vertical constraints applied.",
     description:
-      "Creates a rectangle between two opposite corners, as 4 coincident lines, and applies 2 horizontal + 2 vertical constraints so it stays rectangular. Returns the 4 corner point ids.",
+      "Creates a rectangle between two opposite corners, as 4 coincident lines, and applies 2 horizontal + 2 vertical constraints so it stays rectangular. Returns the 4 corner point ids followed by the 4 line ids (bottom, right, top, left); with `cornerRadius` the fillet arcs/points follow.",
     paramsSchema: {
       type: "object",
       required: ["sketch", "corner", "opposite"],
@@ -391,11 +469,12 @@ export const BUILTINS: CommandDef<any>[] = [
         corner: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
         opposite: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
         construction: CONSTRUCTION_SCHEMA,
+        cornerRadius: { type: "number", minimum: 0, description: "Round all four corners with this radius (a rounded rectangle)." },
       },
     },
     apply(
       draft,
-      p: { sketch: string; corner: { x: number; y: number }; opposite: { x: number; y: number }; construction?: boolean },
+      p: { sketch: string; corner: { x: number; y: number }; opposite: { x: number; y: number }; construction?: boolean; cornerRadius?: number },
       ctx
     ) {
       const sk = sketchOf(draft, p.sketch);
@@ -412,20 +491,235 @@ export const BUILTINS: CommandDef<any>[] = [
       const line = (a: string, b: string) => {
         const id = ctx.alloc("ln");
         sk.entities[id] = { id, kind: "line", p1: a, p2: b, construction: cn };
+        return id;
       };
-      line(p00, p10);
-      line(p10, p11);
-      line(p11, p01);
-      line(p01, p00);
+      const l0 = line(p00, p10);
+      const l1 = line(p10, p11);
+      const l2 = line(p11, p01);
+      const l3 = line(p01, p00);
       const con = (c: GeometricConstraint) => (sk.constraints[c.id] = c);
       con({ id: ctx.alloc("c"), type: "horizontal", a: p00, b: p10 });
       con({ id: ctx.alloc("c"), type: "horizontal", a: p01, b: p11 });
       con({ id: ctx.alloc("c"), type: "vertical", a: p00, b: p01 });
       con({ id: ctx.alloc("c"), type: "vertical", a: p10, b: p11 });
-      return { createdIds: [p00, p10, p11, p01], affectedSketchId: sk.id };
+      const created = [p00, p10, p11, p01, l0, l1, l2, l3];
+      if (p.cornerRadius && p.cornerRadius > 0) {
+        // Round every corner; each blend replaces the corner point with an arc + 2 tangent points.
+        for (const [a, b] of [[l0, l1], [l1, l2], [l2, l3], [l3, l0]] as [string, string][]) {
+          created.push(...(blendCorner(sk, a, b, p.cornerRadius, ctx, "fillet").createdIds ?? []));
+        }
+      }
+      return { createdIds: created, affectedSketchId: sk.id };
     },
   },
 
+  {
+    type: "sketch.addPolyline",
+    title: "Polyline",
+    summary: "Add a chain of lines through a list of points (optionally closed) — a whole profile in one call.",
+    description:
+      "Creates consecutive lines through `points` (each {x,y} or {ref}), sharing the corner points so the chain is coincident. `closed` (default true) adds the closing line back to the first point. Returns the line ids followed by the point ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "points"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        points: { type: "array", items: POINT_REF_SCHEMA, description: "At least 2 points (3 for a closed profile)." },
+        closed: { type: "boolean", description: "Close the loop (default true)." },
+        construction: CONSTRUCTION_SCHEMA,
+      },
+    },
+    examples: [{ note: "An L-shaped profile", params: { sketch: "sketch1", points: [{ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 40, y: 10 }, { x: 10, y: 10 }, { x: 10, y: 30 }, { x: 0, y: 30 }] } }],
+    apply(draft, p: { sketch: string; points: PointRef[]; closed?: boolean; construction?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const closed = p.closed !== false;
+      if (p.points.length < (closed ? 3 : 2)) throw new Error(`polyline needs at least ${closed ? 3 : 2} points`);
+      const ids = p.points.map((pt) => resolvePoint(sk, pt, ctx));
+      const lines: string[] = [];
+      const count = closed ? ids.length : ids.length - 1;
+      for (let i = 0; i < count; i++) {
+        const id = ctx.alloc("ln");
+        sk.entities[id] = { id, kind: "line", p1: ids[i], p2: ids[(i + 1) % ids.length], construction: !!p.construction };
+        lines.push(id);
+      }
+      return { createdIds: [...lines, ...ids], affectedSketchId: sk.id, message: `Polyline (${lines.length} lines)` };
+    },
+  },
+  {
+    type: "sketch.addBar",
+    title: "Bar",
+    summary: "Add a rectangular bar of a given width centred on the segment p1→p2 (a rotated rectangle without the trigonometry).",
+    description:
+      "Creates a 4-line rectangle whose centreline runs from p1 to p2 with total `width` across it. Perpendicular constraints keep it rectangular. Returns the 4 corner point ids followed by the 4 line ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "p1", "p2", "width"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        p1: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+        p2: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+        width: { type: "number", minimum: 0 },
+        construction: CONSTRUCTION_SCHEMA,
+      },
+    },
+    examples: [{ note: "A 3mm-wide diagonal brace", params: { sketch: "sketch1", p1: { x: -20, y: 10 }, p2: { x: 20, y: 50 }, width: 3 } }],
+    apply(draft, p: { sketch: string; p1: Vec; p2: Vec; width: number; construction?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const d = norm2({ x: p.p2.x - p.p1.x, y: p.p2.y - p.p1.y });
+      const nx = -d.y * p.width / 2, ny = d.x * p.width / 2;
+      const mk = (x: number, y: number) => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x, y }; return id; };
+      const c0 = mk(p.p1.x + nx, p.p1.y + ny), c1 = mk(p.p2.x + nx, p.p2.y + ny), c2 = mk(p.p2.x - nx, p.p2.y - ny), c3 = mk(p.p1.x - nx, p.p1.y - ny);
+      const ln = (a: string, b: string) => { const id = ctx.alloc("ln"); sk.entities[id] = { id, kind: "line", p1: a, p2: b, construction: !!p.construction }; return id; };
+      const e0 = ln(c0, c1), e1 = ln(c1, c2), e2 = ln(c2, c3), e3 = ln(c3, c0);
+      const addP = (l1: string, l2: string) => { const id = ctx.alloc("c"); sk.constraints[id] = { id, type: "perpendicular", l1, l2 }; };
+      addP(e0, e1); addP(e1, e2); addP(e2, e3);
+      return { createdIds: [c0, c1, c2, c3, e0, e1, e2, e3], affectedSketchId: sk.id, message: "Bar" };
+    },
+  },
+  {
+    type: "sketch.addRing",
+    title: "Ring",
+    summary: "Add two concentric circles (an annulus region — extrude it for a tube, hoop or flange).",
+    description:
+      "Creates an outer and an inner circle sharing one centre point, so the region between them extrudes as a ring. Returns [outerCircleId, innerCircleId, centerId].",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "center", "outerRadius", "innerRadius"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        center: POINT_REF_SCHEMA,
+        outerRadius: { type: "number", minimum: 0 },
+        innerRadius: { type: "number", minimum: 0 },
+        construction: CONSTRUCTION_SCHEMA,
+      },
+    },
+    examples: [{ note: "A pipe wall", params: { sketch: "sketch1", center: { x: 0, y: 0 }, outerRadius: 15, innerRadius: 12 } }],
+    apply(draft, p: { sketch: string; center: PointRef; outerRadius: number; innerRadius: number; construction?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      if (!(p.innerRadius < p.outerRadius)) throw new Error("innerRadius must be smaller than outerRadius");
+      const c = resolvePoint(sk, p.center, ctx);
+      const outer = ctx.alloc("ci"); sk.entities[outer] = { id: outer, kind: "circle", center: c, r: p.outerRadius, construction: !!p.construction };
+      const inner = ctx.alloc("ci"); sk.entities[inner] = { id: inner, kind: "circle", center: c, r: p.innerRadius, construction: !!p.construction };
+      return { createdIds: [outer, inner, c], affectedSketchId: sk.id, message: "Ring" };
+    },
+  },
+  {
+    type: "sketch.addSpline",
+    title: "Spline",
+    summary: "Add a smooth curve through a list of points (an interpolating cubic spline).",
+    description:
+      "Creates a C1 cubic spline passing through `points` in order (each {x,y} or {ref}); the first and last are its ends and join lines/arcs/other splines into closed profiles. Use it for free-form flanks, cams, airfoils, involutes. Returns [splineId, ...pointIds].",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "points"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        points: { type: "array", items: POINT_REF_SCHEMA, description: "At least 2 through-points, in order." },
+        construction: CONSTRUCTION_SCHEMA,
+      },
+    },
+    examples: [{ note: "A gentle S-curve", params: { sketch: "sketch1", points: [{ x: 0, y: 0 }, { x: 10, y: 8 }, { x: 20, y: 2 }, { x: 30, y: 10 }] } }],
+    apply(draft, p: { sketch: string; points: PointRef[]; construction?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      if (p.points.length < 2) throw new Error("a spline needs at least 2 points");
+      const ids = p.points.map((pt) => resolvePoint(sk, pt, ctx));
+      // Interior through-points are part of the curve, not standalone nodes.
+      for (const id of ids.slice(1, -1)) (sk.entities[id] as SketchPoint).implicit = true;
+      const id = ctx.alloc("sp");
+      sk.entities[id] = { id, kind: "spline", points: ids, construction: !!p.construction };
+      return { createdIds: [id, ...ids], affectedSketchId: sk.id, message: `Spline through ${ids.length} points` };
+    },
+  },
+  {
+    type: "sketch.addGear",
+    title: "Involute gear",
+    summary: "Add an involute gear profile — external spur gear, internal ring gear, or rack — generated the way it is cut, ready to extrude.",
+    description:
+      "Generates a closed involute gear profile. `type`: \"external\" (default) spur gear, \"internal\" ring gear (toothed bore + rim circle: extrude the annulus), or \"rack\" (straight-flank basic rack, the exact conjugate of the involute). " +
+      "Standard proportions: pitch diameter = module × teeth (rack pitch = π·module), `pressureAngle` 20°, addendum 1 and dedendum 1.25 × module, optional `backlash`. " +
+      "Flanks are true involutes (interpolating splines). External root fillets are the trochoid swept by the generating rack's rounded tip (`rootFillet` × module, 0.38 standard; 0 = sharp) — small tooth counts get the real undercut. Racks get tangent root fillets. Reference circles (pitch/base/tip/root) are added as construction geometry. " +
+      "Geometry is centred at `center` (gear axis, or the rack's pitch-line midpoint with teeth pointing +v); `rotation` turns it (degrees). To mesh two external gears put centres module×(N1+N2)/2 apart and turn one by 180/N degrees; a rack meshes with a gear whose centre sits at (0, pitch radius) above it. " +
+      "Add a bore with a circle in the same sketch (nested loop = hole). Returns [centerId, ...curveIds]; the message lists the radii.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "module", "teeth"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        type: { type: "string", enum: ["external", "internal", "rack"], description: "Spur gear (default), ring gear, or rack." },
+        center: POINT_REF_SCHEMA,
+        module: { type: "number", minimum: 0, description: "Module in mm (tooth size)." },
+        teeth: { type: "integer", minimum: 3, description: "Tooth count (rack: teeth along its length)." },
+        pressureAngle: { type: "number", description: "Degrees; 20 standard, 14.5 legacy." },
+        addendum: { type: "number", description: "× module (default 1)." },
+        dedendum: { type: "number", description: "× module (default 1.25)." },
+        backlash: { type: "number", description: "Tooth thinning at the pitch circle/line, mm (default 0)." },
+        rootFillet: { type: "number", description: "Cutter tip radius × module (default 0.38; 0 = sharp root)." },
+        rimThickness: { type: "number", description: "internal: rim outside the root circle, × module (default 3)." },
+        rackHeight: { type: "number", description: "rack: body depth below the root line, mm (default 2 × module)." },
+        samples: { type: "integer", minimum: 3, description: "Through-points per flank/fillet spline (default 8)." },
+        rotation: { type: "number", description: "Rotate the profile by this angle in degrees." },
+        referenceCircles: { type: "boolean", description: "Add construction circles for pitch/base/tip/root (default true)." },
+      },
+    },
+    examples: [
+      { note: "A 20-tooth module-2 spur gear at the origin", params: { sketch: "sketch1", module: 2, teeth: 20 } },
+      { note: "A 12-tooth pinion meshing with it: centre distance 2·(20+12)/2 = 32, turned half a tooth", params: { sketch: "sketch1", center: { x: 32, y: 0 }, module: 2, teeth: 12, rotation: 15 } },
+      { note: "A 10-tooth rack below a gear of pitch radius 20 (gear centre at v=20)", params: { sketch: "sketch1", type: "rack", module: 2, teeth: 10 } },
+      { note: "A 40-tooth ring gear", params: { sketch: "sketch1", type: "internal", module: 2, teeth: 40 } },
+    ],
+    apply(draft, p: { sketch: string; type?: GearType; center?: PointRef; module: number; teeth: number; pressureAngle?: number; addendum?: number; dedendum?: number; backlash?: number; rootFillet?: number; rimThickness?: number; rackHeight?: number; samples?: number; rotation?: number; referenceCircles?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const g = gearOutline({ type: p.type, module: p.module, teeth: p.teeth, pressureAngle: p.pressureAngle, addendum: p.addendum, dedendum: p.dedendum, backlash: p.backlash, rootFillet: p.rootFillet, rimThickness: p.rimThickness, rackHeight: p.rackHeight, samples: p.samples });
+      const cId = resolvePoint(sk, p.center ?? { x: 0, y: 0 }, ctx);
+      const C = sk.entities[cId] as SketchPoint;
+      const rot = ((p.rotation ?? 0) * Math.PI) / 180;
+      const place = (q: Vec): Vec => ({ x: C.x + q.x * Math.cos(rot) - q.y * Math.sin(rot), y: C.y + q.x * Math.sin(rot) + q.y * Math.cos(rot) });
+      // Generated profile points are fixed: the gear is edited through its parameters (edit_operation),
+      // and a thousand free points would only burden the constraint solver.
+      const mk = (q: Vec, implicit = true) => { const id = ctx.alloc("pt"); const w = place(q); sk.entities[id] = { id, kind: "point", x: w.x, y: w.y, implicit, fixed: true }; return id; };
+      const curves: string[] = [];
+      // Walk the outline, sharing every junction point so each joint is coincident; close back onto the start.
+      const startId = mk(g.start, false);
+      let cur = startId;
+      const pendingFillets: { point: string; r: number }[] = [];
+      for (let i = 0; i < g.edges.length; i++) {
+        const e = g.edges[i];
+        const isLast = i === g.edges.length - 1;
+        if (e.kind === "spline") {
+          const ids = [cur, ...e.through.map((q, k) => (isLast && k === e.through.length - 1 ? startId : mk(q)))];
+          const id = ctx.alloc("sp"); sk.entities[id] = { id, kind: "spline", points: ids }; curves.push(id);
+          cur = ids[ids.length - 1];
+        } else {
+          const to = isLast ? startId : mk(e.to);
+          if (e.kind === "line") {
+            const id = ctx.alloc("ln"); sk.entities[id] = { id, kind: "line", p1: cur, p2: to }; curves.push(id);
+            if (e.filletAtEnd) pendingFillets.push({ point: to, r: e.filletAtEnd });
+          } else {
+            const id = ctx.alloc("ar"); sk.entities[id] = { id, kind: "arc", center: cId, p1: cur, p2: to, r: e.r, ccw: e.ccw }; curves.push(id);
+          }
+          cur = to;
+        }
+      }
+      for (const f of pendingFillets) {
+        const ls = linesAt(sk, f.point);
+        if (ls.length === 2) curves.push(...(blendCorner(sk, ls[0], ls[1], f.r, ctx, "fillet").createdIds ?? []));
+      }
+      for (const c of g.circles) {
+        const id = ctx.alloc("ci"); sk.entities[id] = { id, kind: "circle", center: cId, r: c.r }; curves.push(id);
+      }
+      if (p.referenceCircles !== false) {
+        for (const c of g.reference) {
+          const id = ctx.alloc("ci"); sk.entities[id] = { id, kind: "circle", center: cId, r: c.r, construction: true };
+        }
+      }
+      return { createdIds: [cId, ...curves], affectedSketchId: sk.id, message: g.summary };
+    },
+  },
   {
     type: "sketch.addPolygon",
     title: "Add polygon",
@@ -526,7 +820,7 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Add rectangle (3-point)",
     summary: "Add a rotated rectangle from a base edge and a width point.",
     description:
-      "Creates a rectangle: p1→p2 is one edge; p3 sets the perpendicular width. Adds perpendicular constraints so it stays rectangular. Returns the 4 corner ids.",
+      "Creates a rectangle: p1→p2 is one edge; p3 sets the perpendicular width. Adds perpendicular constraints so it stays rectangular. Returns the 4 corner point ids followed by the 4 line ids.",
     paramsSchema: {
       type: "object",
       required: ["sketch", "p1", "p2", "p3"],
@@ -555,7 +849,7 @@ export const BUILTINS: CommandDef<any>[] = [
       const e0 = ln(c0, c1), e1 = ln(c1, c2), e2 = ln(c2, c3), e3 = ln(c3, c0);
       const addP = (l1: string, l2: string) => { const id = ctx.alloc("c"); sk.constraints[id] = { id, type: "perpendicular", l1, l2 }; };
       addP(e0, e1); addP(e1, e2); addP(e2, e3);
-      return { createdIds: [c0, c1, c2, c3], affectedSketchId: sk.id, message: "Rectangle" };
+      return { createdIds: [c0, c1, c2, c3, e0, e1, e2, e3], affectedSketchId: sk.id, message: "Rectangle" };
     },
   },
   {
@@ -754,7 +1048,8 @@ export const BUILTINS: CommandDef<any>[] = [
       "Creates an extruded solid from a sketch along its plane normal. `distance` is an expression (parametric), e.g. \"10\" or \"height*2\". " +
       "A sketch is split into closed regions (disjoint boundaries are separate regions; nested loops are holes). " +
       "Omit `region` to extrude every region; pass `region` {x,y} (a point inside one region, in sketch u,v) to extrude just that one. " +
-      "`operation` combines the result with existing bodies, Fusion-style: \"new\" (default) makes a separate body, \"join\" fuses it into the most recent body, \"cut\" subtracts it. Returns the feature id.",
+      "`operation` combines the result with existing bodies, Fusion-style: \"new\" (default) makes a separate body, \"join\" fuses it into the most recent body, \"cut\" subtracts it. " +
+      "`direction` \"reverse\" extrudes against the sketch normal (into a body when sketching on its face). `extent` \"throughAll\" ignores `distance` and goes past every existing body (with `symmetric`, both ways) — the right choice for through-holes. Returns the feature id.",
     paramsSchema: {
       type: "object",
       required: ["sketch", "distance"],
@@ -763,6 +1058,8 @@ export const BUILTINS: CommandDef<any>[] = [
         sketch: { type: "string" },
         distance: { type: "string", description: "Distance expression, e.g. '10' or 'height*2'." },
         symmetric: { type: "boolean", description: "Extrude symmetrically about the plane." },
+        direction: { type: "string", enum: ["normal", "reverse"], description: "Along the sketch normal (default) or against it." },
+        extent: { type: "string", enum: ["blind", "throughAll"], description: "blind (default): `distance`. throughAll: past every existing body." },
         operation: { type: "string", enum: ["new", "join", "cut"], description: "Combine with existing bodies: new (default), join, or cut." },
         region: {
           type: "object",
@@ -776,8 +1073,9 @@ export const BUILTINS: CommandDef<any>[] = [
     examples: [
       { note: "Extrude sketch1 by the `height` parameter", params: { sketch: "sketch1", distance: "height" } },
       { note: "Join a boss onto the current body", params: { sketch: "sketch3", distance: "6", operation: "join" } },
+      { note: "A through-hole from a face sketch", params: { sketch: "sketch4", distance: "0", operation: "cut", direction: "reverse", extent: "throughAll" } },
     ],
-    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; operation?: "new" | "join" | "cut"; region?: { x: number; y: number }; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; extent?: "blind" | "throughAll"; operation?: "new" | "join" | "cut"; region?: { x: number; y: number }; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("ext");
       draft.features[id] = {
@@ -788,6 +1086,8 @@ export const BUILTINS: CommandDef<any>[] = [
         distanceExpr: String(p.distance),
         distanceValue: 0,
         symmetric: !!p.symmetric,
+        ...(p.direction === "reverse" ? { direction: "reverse" as const } : {}),
+        ...(p.extent === "throughAll" ? { extent: "throughAll" as const } : {}),
         operation: p.operation ?? "new",
         regionPoint: p.region,
       };
@@ -795,25 +1095,184 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
   {
+    type: "feature.revolve",
+    title: "Revolve",
+    summary: "Revolve a sketch region about an axis in its plane into a solid (cylinders, domes, hoops, turned parts in one feature).",
+    description:
+      "Revolves the sketch's closed region(s) about the line through `axis.p1`→`axis.p2` (sketch u,v coordinates; e.g. the v axis is {p1:{x:0,y:0},p2:{x:0,y:1}}) by `angle` degrees (expression; default 360). The profile must lie on one side of the axis. `operation` and `region` behave as in feature.extrude. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "axis"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        axis: {
+          type: "object",
+          required: ["p1", "p2"],
+          description: "Axis through two sketch points (u,v).",
+          properties: {
+            p1: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+            p2: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+          },
+        },
+        angle: { type: "string", description: "Sweep angle in degrees (expression). Default 360." },
+        operation: { type: "string", enum: ["new", "join", "cut"] },
+        region: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A drum from its half profile sketched on XZ, revolved about the sketch v (world Z) axis", params: { sketch: "sketch2", axis: { p1: { x: 0, y: 0 }, p2: { x: 0, y: 1 } } } },
+      { note: "A quarter-turn boss joined to the body", params: { sketch: "sketch5", axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "90", operation: "join" } },
+    ],
+    apply(draft, p: { sketch: string; axis: { p1: Vec; p2: Vec }; angle?: string | number; operation?: "new" | "join" | "cut"; region?: Vec; name?: string }, ctx) {
+      if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
+      const id = ctx.alloc("rev");
+      draft.features[id] = {
+        id, kind: "revolve", name: p.name ?? "Revolve", sketchId: p.sketch, axis: p.axis,
+        angleExpr: String(p.angle ?? 360), angleValue: 360, operation: p.operation ?? "new", regionPoint: p.region,
+      };
+      return { createdIds: [id], message: `Revolve ${p.sketch}` };
+    },
+  },
+  {
+    type: "feature.fillet",
+    title: "Fillet edges",
+    summary: "Round selected edges of the most recent body.",
+    description:
+      "Rounds the body's edges matched by `edges` (an EdgeSelector; every field set narrows the match, empty = all edges) with `radius` (expression). " +
+      "Selector fields: parallelTo X/Y/Z (edge direction), inPlane {plane, offset} (e.g. the top-face outline of a 20-tall block on XY: {plane:\"XY\", offset:20}), curveType line/circle, minLength/maxLength, nearPoint {x,y,z}, inBox {min,max}. " +
+      "Applies to the most recent body. Fails if the radius does not fit — try a smaller radius or a narrower selection. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["radius"],
+      additionalProperties: false,
+      properties: {
+        radius: { type: "string", description: "Radius expression, e.g. '2' or 'r_edge'." },
+        edges: EDGE_SELECTOR_SCHEMA,
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "Round every edge by 1.5", params: { radius: "1.5" } },
+      { note: "Round only the vertical corner edges of a crate", params: { radius: "4", edges: { parallelTo: "Z" } } },
+      { note: "Round the top outline of a 30-tall block", params: { radius: "3", edges: { inPlane: { plane: "XY", offset: 30 } } } },
+    ],
+    apply(draft, p: { radius: string | number; edges?: EdgeSelectorParams; name?: string }, ctx) {
+      const id = ctx.alloc("fil");
+      draft.features[id] = { id, kind: "fillet", name: p.name ?? "Fillet", sizeExpr: String(p.radius), sizeValue: 0, edges: p.edges ?? {} };
+      return { createdIds: [id], message: "Fillet edges" };
+    },
+  },
+  {
+    type: "feature.chamfer",
+    title: "Chamfer edges",
+    summary: "Bevel selected edges of the most recent body.",
+    description:
+      "Bevels the body's edges matched by `edges` (same EdgeSelector as feature.fillet; empty = all edges) by `distance` (expression, the setback along each face). Applies to the most recent body. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["distance"],
+      additionalProperties: false,
+      properties: {
+        distance: { type: "string", description: "Setback expression." },
+        edges: EDGE_SELECTOR_SCHEMA,
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Bevel the crown of a bolt head (its top outline at z=38)", params: { distance: "1", edges: { inPlane: { plane: "XY", offset: 38 } } } }],
+    apply(draft, p: { distance: string | number; edges?: EdgeSelectorParams; name?: string }, ctx) {
+      const id = ctx.alloc("cha");
+      draft.features[id] = { id, kind: "chamfer", name: p.name ?? "Chamfer", sizeExpr: String(p.distance), sizeValue: 0, edges: p.edges ?? {} };
+      return { createdIds: [id], message: "Chamfer edges" };
+    },
+  },
+  {
+    type: "feature.shell",
+    title: "Shell",
+    summary: "Hollow the most recent body to a wall thickness, opening the selected faces.",
+    description:
+      "Turns the most recent body into a thin-walled shell of `thickness` (expression), removing the faces matched by `openFaces` (a FaceSelector: parallelTo XY/XZ/YZ, inPlane {plane, offset}, nearPoint {x,y,z}) as openings. At least one face must open. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["thickness", "openFaces"],
+      additionalProperties: false,
+      properties: {
+        thickness: { type: "string", description: "Wall thickness expression." },
+        openFaces: FACE_SELECTOR_SCHEMA,
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "An open-top box with 2mm walls from a 50-tall block", params: { thickness: "2", openFaces: { inPlane: { plane: "XY", offset: 50 } } } }],
+    apply(draft, p: { thickness: string | number; openFaces: FaceSelectorParams; name?: string }, ctx) {
+      const id = ctx.alloc("shl");
+      draft.features[id] = { id, kind: "shell", name: p.name ?? "Shell", thicknessExpr: String(p.thickness), thicknessValue: 0, openFaces: p.openFaces ?? {} };
+      return { createdIds: [id], message: "Shell" };
+    },
+  },
+  {
+    type: "feature.pattern",
+    title: "Pattern body",
+    summary: "Repeat the most recent body along a vector (linear) or around an axis (circular), fusing the copies in.",
+    description:
+      "Makes `count` instances of the most recent body (including the original) and fuses them into one body. linear: each instance is offset by `step` {x,y,z} (world mm). circular: instances are rotated about `axis` {origin, direction} by `angle` degrees each (default 360/count). " +
+      "Build the single element first (e.g. one picket, one tooth), then pattern it. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["mode", "count"],
+      additionalProperties: false,
+      properties: {
+        mode: { type: "string", enum: ["linear", "circular"] },
+        count: { type: "integer", minimum: 1 },
+        step: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "linear: offset between instances." },
+        axis: {
+          type: "object",
+          properties: {
+            origin: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+            direction: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+          },
+          description: "circular: axis origin + direction (world).",
+        },
+        angle: { type: "number", description: "circular: degrees between instances (default 360/count)." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "9 fence pickets 13mm apart along X", params: { mode: "linear", count: 9, step: { x: 13, y: 0, z: 0 } } },
+      { note: "16 gear teeth around Z", params: { mode: "circular", count: 16, axis: { origin: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 0, z: 1 } } } },
+    ],
+    apply(draft, p: { mode: "linear" | "circular"; count: number; step?: Vec3; axis?: { origin: Vec3; direction: Vec3 }; angle?: number; name?: string }, ctx) {
+      if (p.mode === "linear" && !p.step) throw new Error("linear pattern needs `step`");
+      if (p.mode === "circular" && !p.axis) throw new Error("circular pattern needs `axis`");
+      const id = ctx.alloc("pat");
+      draft.features[id] = { id, kind: "pattern", name: p.name ?? (p.mode === "linear" ? "Linear pattern" : "Circular pattern"), mode: p.mode, count: p.count, step: p.step, axis: p.axis, angle: p.angle };
+      return { createdIds: [id], message: `${p.mode} pattern × ${p.count}` };
+    },
+  },
+  {
     type: "feature.mirror",
     title: "Mirror bodies",
     summary: "Reflect the model across a plane and fuse the reflection in (symmetry).",
     description:
-      "Reflects every existing body across a plane and fuses each reflection into its source body, giving a symmetric result. `plane` is an origin plane (XY/XZ/YZ) or a datum plane id (from plane.create). Parametric: editing the upstream geometry re-mirrors. Returns the feature id.",
+      "Reflects bodies across a plane and fuses each reflection into its source body, giving a symmetric result. `bodies` \"all\" (default) reflects every body; \"last\" only the most recent one (mirror a wheel, not the whole dumpster). `plane` is an origin plane (XY/XZ/YZ) or a datum plane id (from plane.create). Parametric: editing the upstream geometry re-mirrors. Returns the feature id.",
     paramsSchema: {
       type: "object",
       required: ["plane"],
       additionalProperties: false,
       properties: {
         plane: { type: "string", description: "Mirror plane: XY/XZ/YZ or a datum plane id." },
+        bodies: { type: "string", enum: ["all", "last"], description: "Every body (default) or only the most recent one." },
         name: { type: "string" },
       },
     },
-    examples: [{ note: "Mirror the model across the YZ plane", params: { plane: "YZ" } }],
-    apply(draft, p: { plane: string; name?: string }, ctx) {
+    examples: [
+      { note: "Mirror the model across the YZ plane", params: { plane: "YZ" } },
+      { note: "Mirror just the last body (e.g. one wheel) across XZ", params: { plane: "XZ", bodies: "last" } },
+    ],
+    apply(draft, p: { plane: string; bodies?: "all" | "last"; name?: string }, ctx) {
       if (!["XY", "XZ", "YZ"].includes(p.plane) && !draft.planes[p.plane]) throw new Error(`No mirror plane "${p.plane}"`);
       const id = ctx.alloc("mir");
-      draft.features[id] = { id, kind: "mirror", name: p.name ?? "Mirror", plane: p.plane };
+      draft.features[id] = { id, kind: "mirror", name: p.name ?? "Mirror", plane: p.plane, ...(p.bodies === "last" ? { bodies: "last" as const } : {}) };
       return { createdIds: [id], message: `Mirror across ${p.plane}` };
     },
   },
@@ -1072,18 +1531,24 @@ export const BUILTINS: CommandDef<any>[] = [
       "Replaces the shared corner of two lines with a tangent arc of the given radius, trimming both lines back to the tangent points. Constraints on each trimmed edge are preserved. Returns [arcId, centerId, tangent1, tangent2].",
     paramsSchema: {
       type: "object",
-      required: ["sketch", "line1", "line2", "radius"],
+      required: ["sketch", "radius"],
       additionalProperties: false,
       properties: {
         sketch: { type: "string" },
         line1: { type: "string" },
         line2: { type: "string" },
+        point: { type: "string", description: "Alternative to line1/line2: the corner point id where exactly two lines meet." },
         radius: { type: "number", minimum: 0 },
       },
     },
-    examples: [{ note: "5mm round on a corner", params: { sketch: "sketch1", line1: "ln3", line2: "ln6", radius: 5 } }],
-    apply(draft, p: { sketch: string; line1: string; line2: string; radius: number }, ctx) {
-      return blendCorner(sketchOf(draft, p.sketch), p.line1, p.line2, p.radius, ctx, "fillet");
+    examples: [
+      { note: "5mm round on a corner", params: { sketch: "sketch1", line1: "ln3", line2: "ln6", radius: 5 } },
+      { note: "Same, by corner point", params: { sketch: "sketch1", point: "pt7", radius: 5 } },
+    ],
+    apply(draft, p: { sketch: string; line1?: string; line2?: string; point?: string; radius: number }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const [a, b] = cornerLines(sk, p);
+      return blendCorner(sk, a, b, p.radius, ctx, "fillet");
     },
   },
   {
@@ -1094,18 +1559,104 @@ export const BUILTINS: CommandDef<any>[] = [
       "Replaces the shared corner of two lines with a straight chamfer, setting back `distance` along each edge. Constraints on each trimmed edge are preserved. Returns [lineId, tangent1, tangent2].",
     paramsSchema: {
       type: "object",
-      required: ["sketch", "line1", "line2", "distance"],
+      required: ["sketch", "distance"],
       additionalProperties: false,
       properties: {
         sketch: { type: "string" },
         line1: { type: "string" },
         line2: { type: "string" },
+        point: { type: "string", description: "Alternative to line1/line2: the corner point id where exactly two lines meet." },
         distance: { type: "number", minimum: 0 },
       },
     },
     examples: [{ note: "3mm chamfer", params: { sketch: "sketch1", line1: "ln3", line2: "ln6", distance: 3 } }],
-    apply(draft, p: { sketch: string; line1: string; line2: string; distance: number }, ctx) {
-      return blendCorner(sketchOf(draft, p.sketch), p.line1, p.line2, p.distance, ctx, "chamfer");
+    apply(draft, p: { sketch: string; line1?: string; line2?: string; point?: string; distance: number }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const [a, b] = cornerLines(sk, p);
+      return blendCorner(sk, a, b, p.distance, ctx, "chamfer");
+    },
+  },
+  {
+    type: "sketch.filletCorners",
+    title: "Fillet corners",
+    summary: "Round (or bevel) many corners at once — by default every corner where exactly two lines meet.",
+    description:
+      "Applies a fillet (`mode` \"fillet\", default) or chamfer to each corner in `points`, or — when `points` is omitted — to every sketch point where exactly two non-construction lines meet. Corners the size does not fit are skipped and listed in the message. Returns the created arc/line and tangent point ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "size"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        points: { type: "array", items: { type: "string" }, description: "Corner point ids. Omit for every two-line corner." },
+        size: { type: "number", minimum: 0, description: "Fillet radius or chamfer setback." },
+        mode: { type: "string", enum: ["fillet", "chamfer"] },
+      },
+    },
+    examples: [{ note: "Round every corner of a plate outline by 4mm", params: { sketch: "sketch1", size: 4 } }],
+    apply(draft, p: { sketch: string; points?: string[]; size: number; mode?: "fillet" | "chamfer" }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const pts = p.points ?? Object.values(sk.entities).filter((e) => e.kind === "point" && linesAt(sk, e.id).length === 2).map((e) => e.id);
+      const created: string[] = [];
+      const skipped: string[] = [];
+      for (const pid of pts) {
+        const ls = linesAt(sk, pid);
+        if (ls.length !== 2) { skipped.push(pid); continue; }
+        try { created.push(...(blendCorner(sk, ls[0], ls[1], p.size, ctx, p.mode ?? "fillet").createdIds ?? [])); }
+        catch { skipped.push(pid); }
+      }
+      return { createdIds: created, affectedSketchId: sk.id, message: `Blended ${pts.length - skipped.length} corner(s)${skipped.length ? `; skipped ${skipped.join(", ")}` : ""}` };
+    },
+  },
+  {
+    type: "sketch.offsetLoop",
+    title: "Offset loop",
+    summary: "Offset a closed loop of lines inward or outward by a distance (an inset/outset copy of a profile).",
+    description:
+      "Takes the lines of one closed polygon (`lines`), orders them into a loop and creates a parallel copy offset by `distance`: positive = outward, negative = inward (inset). Corners are mitred. Lines only (no arcs). Returns the new point ids followed by the new line ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "lines", "distance"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        lines: { type: "array", items: { type: "string" }, description: "The line ids of one closed loop (any order)." },
+        distance: { type: "number", description: "Offset distance: > 0 outward, < 0 inward." },
+        construction: CONSTRUCTION_SCHEMA,
+      },
+    },
+    examples: [{ note: "An 8mm inset of a plate outline for a recess", params: { sketch: "sketch1", lines: ["ln5", "ln6", "ln7", "ln8"], distance: -8 } }],
+    apply(draft, p: { sketch: string; lines: string[]; distance: number; construction?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const loop = orderLoop(sk, p.lines);
+      const pts = loop.map((id) => sk.entities[id] as SketchPoint);
+      // Signed area → orientation, so "outward" is independent of winding.
+      let area = 0;
+      for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; area += a.x * b.y - b.x * a.y; }
+      const ccw = area > 0;
+      const d = ccw ? p.distance : -p.distance;
+      const n = pts.length;
+      const newPts: string[] = [];
+      for (let i = 0; i < n; i++) {
+        const prev = pts[(i - 1 + n) % n], cur = pts[i], next = pts[(i + 1) % n];
+        // Unit edge directions and their right-hand normals (outward for a CCW loop with d>0).
+        const e1 = norm2({ x: cur.x - prev.x, y: cur.y - prev.y });
+        const e2 = norm2({ x: next.x - cur.x, y: next.y - cur.y });
+        const n1 = { x: e1.y, y: -e1.x }, n2 = { x: e2.y, y: -e2.x };
+        const bis = norm2({ x: n1.x + n2.x, y: n1.y + n2.y });
+        const cosHalf = bis.x * n1.x + bis.y * n1.y;
+        const len = Math.abs(cosHalf) < 1e-6 ? d : d / cosHalf; // mitre length
+        const id = ctx.alloc("pt");
+        sk.entities[id] = { id, kind: "point", x: cur.x + bis.x * len, y: cur.y + bis.y * len };
+        newPts.push(id);
+      }
+      const newLines: string[] = [];
+      for (let i = 0; i < n; i++) {
+        const id = ctx.alloc("ln");
+        sk.entities[id] = { id, kind: "line", p1: newPts[i], p2: newPts[(i + 1) % n], construction: !!p.construction };
+        newLines.push(id);
+      }
+      return { createdIds: [...newPts, ...newLines], affectedSketchId: sk.id, message: `Offset loop by ${p.distance}` };
     },
   },
   {

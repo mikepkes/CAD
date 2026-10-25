@@ -6,13 +6,16 @@
 // recompute because it drives the heavier B-rep kernel.
 
 import { compileExpr, Scope } from "../math/expr";
-import { CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature } from "./document";
-import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, WorkPlane } from "../geometry/plane";
+import {
+  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, SketchFeature,
+} from "./document";
+import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, regionAt, Region } from "./geometry/profile";
 import { FaceRef } from "../sketch/types";
 import {
-  Edge3D, buildRegionsSolid, fuseShapes, cutShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
-  planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh,
+  Edge3D, buildRegionsSolid, buildRegionsRevolved, fuseShapes, cutShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
+  planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
+  boundsOfShape, volumeOfShape, Bounds3,
 } from "./occ/kernel";
 import type { Shape3D } from "replicad";
 
@@ -23,20 +26,39 @@ export interface SolidEval {
   distance: number;
   mesh?: SolidMesh;
   error?: string;
+  /** Non-fatal diagnostics, e.g. a cut that removed nothing. */
+  warning?: string;
+  /** World bounds of the body (set for body rows). */
+  bounds?: Bounds3;
+  /** Enclosed volume in mm³ (set for body rows). */
+  volume?: number;
 }
 
-function resolveDistance(f: ExtrudeFeature, scope: Scope): number {
+/** Evaluate a parametric expression, writing the value back onto `holder[key]Value`. */
+function resolveExpr(expr: string, last: number, scope: Scope): number {
   try {
-    const v = compileExpr(f.distanceExpr).eval(scope);
-    if (Number.isFinite(v)) { f.distanceValue = v; return v; }
+    const v = compileExpr(expr).eval(scope);
+    if (Number.isFinite(v)) return v;
   } catch {
     /* keep last value */
   }
+  return last;
+}
+
+function resolveDistance(f: ExtrudeFeature, scope: Scope): number {
+  f.distanceValue = resolveExpr(f.distanceExpr, f.distanceValue, scope);
   return f.distanceValue;
 }
 
+/** A length that is "through everything": past the far side of `bounds` from any point inside it. */
+function throughAllLength(bounds: Bounds3 | undefined): number {
+  if (!bounds) return 1e4;
+  const dx = bounds.max.x - bounds.min.x, dy = bounds.max.y - bounds.min.y, dz = bounds.max.z - bounds.min.z;
+  return Math.max(2 * Math.hypot(dx, dy, dz), 1);
+}
+
 /** Regions this feature extrudes: the one under regionPoint, or all of them. */
-function featureRegions(doc: CadDocument, f: ExtrudeFeature): Region[] {
+function featureRegions(doc: CadDocument, f: SketchFeature): Region[] {
   const sketch = doc.sketches[f.sketchId];
   if (!sketch) return [];
   if (f.regionPoint) {
@@ -46,19 +68,51 @@ function featureRegions(doc: CadDocument, f: ExtrudeFeature): Region[] {
   return extractRegions(sketch);
 }
 
-/** Build this feature's solid in isolation (regions extruded + fused). */
-function buildFeatureSolid(doc: CadDocument, scope: Scope, f: ExtrudeFeature): Shape3D {
+/**
+ * Build this feature's solid in isolation (regions extruded/revolved + fused).
+ * `targetBounds` sizes a through-all extrude against the body it will act on.
+ */
+function buildFeatureSolid(doc: CadDocument, scope: Scope, f: SketchFeature, targetBounds?: Bounds3): Shape3D {
   const sketch = doc.sketches[f.sketchId];
   if (!sketch) throw new Error("sketch not found");
   const regions = featureRegions(doc, f);
   if (regions.length === 0) throw new Error("no closed region in sketch");
-  const distance = resolveDistance(f, scope);
+  const wp0 = resolveSketchPlane(sketch);
+  if (f.kind === "revolve") {
+    const angle = resolveExpr(f.angleExpr, f.angleValue, scope);
+    f.angleValue = angle;
+    const o = to3d(wp0, f.axis.p1.x, f.axis.p1.y);
+    const q = to3d(wp0, f.axis.p2.x, f.axis.p2.y);
+    const dir = { x: q.x - o.x, y: q.y - o.y, z: q.z - o.z };
+    if (Math.hypot(dir.x, dir.y, dir.z) < 1e-9) throw new Error("revolve axis points coincide");
+    return buildRegionsRevolved(wp0, regions, o, dir, Math.abs(angle) < 1e-9 ? 360 : angle);
+  }
+  let distance = resolveDistance(f, scope);
+  // Through-all: a length that clears the target body from any face of it, both ways when symmetric.
+  if (f.extent === "throughAll") distance = throughAllLength(targetBounds) * (f.symmetric ? 2 : 1);
+  if (f.direction === "reverse") distance = -distance;
   const d = Math.abs(distance) < 1e-9 ? 1e-6 : distance;
-  const wp = f.symmetric ? offsetPlane(resolveSketchPlane(sketch), -d / 2) : resolveSketchPlane(sketch);
+  const wp = f.symmetric ? offsetPlane(wp0, -d / 2) : wp0;
   return buildRegionsSolid(wp, regions, d);
 }
 
 interface Body { id: string; name: string; sketchId: string; distance: number; shape: Shape3D }
+
+/** Row for a feature that modifies bodies but makes none (listed in the inspector/timeline, not rendered). */
+const modifierRow = (f: FeatureDef): SolidEval => ({ featureId: f.id, name: f.name, sketchId: "", distance: 0 });
+
+/** The body a modifier (cut/join/fillet/shell/pattern) acts on: the most recent one. */
+function lastBody(bodies: Body[], what: string): Body {
+  const b = bodies[bodies.length - 1];
+  if (!b) throw new Error(`${what}: no body to modify yet`);
+  return b;
+}
+
+/** Replace a body's shape, freeing the old one. */
+function replaceShape(body: Body, next: Shape3D) {
+  body.shape.delete();
+  body.shape = next;
+}
 
 const dot = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => a.x * b.x + a.y * b.y + a.z * b.z;
 
@@ -98,9 +152,9 @@ function mirrorPlane(doc: CadDocument, f: MirrorFeature): WorkPlane {
   return dp;
 }
 
-/** Fold an extrude into the running body list via its boolean op. */
-function applyExtrude(doc: CadDocument, scope: Scope, f: ExtrudeFeature, bodies: Body[], out: Record<string, SolidEval>) {
-  const distance = resolveDistance(f, scope);
+/** Fold an extrude/revolve into the running body list via its boolean op. */
+function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  const distance = f.kind === "extrude" ? resolveDistance(f, scope) : 0;
   // A sketch on a body face re-resolves to the face's CURRENT plane against the
   // bodies built so far, so it tracks the face when upstream geometry changes.
   const sketch = doc.sketches[f.sketchId];
@@ -108,27 +162,92 @@ function applyExtrude(doc: CadDocument, scope: Scope, f: ExtrudeFeature, bodies:
     const wp = resolveFacePlane(bodies, sketch.faceRef);
     if (wp) sketch.plane = wp; // also the frame the ghost render / next pass uses
   }
+  const op = f.operation ?? "new";
+  const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
   let shape: Shape3D;
   try {
-    shape = buildFeatureSolid(doc, scope, f);
+    shape = buildFeatureSolid(doc, scope, f, target ? safeBounds(target.shape) : undefined);
   } catch (e) {
     out[f.id] = { featureId: f.id, name: f.name, sketchId: f.sketchId, distance, error: (e as Error).message };
     return;
   }
-  const op = f.operation ?? "new";
-  if (op === "new" || bodies.length === 0) {
+  if (!target) {
     bodies.push({ id: f.id, name: f.name, sketchId: f.sketchId, distance, shape });
-  } else {
-    const target = bodies[bodies.length - 1];
-    try {
-      const combined = op === "cut" ? cutShapes(target.shape, shape) : fuseShapes(target.shape, shape);
-      target.shape.delete();
-      shape.delete();
-      target.shape = combined;
-    } catch (e) {
-      shape.delete();
-      out[f.id] = { featureId: f.id, name: f.name, sketchId: f.sketchId, distance, error: (e as Error).message };
+    return;
+  }
+  try {
+    const before = volumeOfShape(target.shape);
+    const combined = op === "cut" ? cutShapes(target.shape, shape) : fuseShapes(target.shape, shape);
+    shape.delete();
+    replaceShape(target, combined);
+    const after = volumeOfShape(target.shape);
+    // A boolean that changed nothing almost always means the tool missed the body
+    // (wrong plane offset / direction) — say so instead of failing silently.
+    if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, before)) {
+      out[f.id] = { ...modifierRow(f), sketchId: f.sketchId, distance, warning: `${op} changed nothing: the ${f.kind} does not intersect the body (check plane offset, direction, extent)` };
     }
+  } catch (e) {
+    shape.delete();
+    out[f.id] = { featureId: f.id, name: f.name, sketchId: f.sketchId, distance, error: (e as Error).message };
+  }
+}
+
+function safeBounds(shape: Shape3D): Bounds3 | undefined {
+  try { return boundsOfShape(shape); } catch { return undefined; }
+}
+
+/** Fillet or chamfer the selected edges of the most recent body. */
+function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = lastBody(bodies, f.kind);
+    const size = resolveExpr(f.sizeExpr, f.sizeValue, scope);
+    f.sizeValue = size;
+    if (!(size > 0)) throw new Error(`${f.kind} size must be positive`);
+    replaceShape(target, blendEdges(target.shape, f.kind, size, f.edges));
+  } catch (e) {
+    out[f.id].error = (e as Error).message;
+  }
+}
+
+/** Hollow the most recent body. */
+function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = lastBody(bodies, "shell");
+    const t = resolveExpr(f.thicknessExpr, f.thicknessValue, scope);
+    f.thicknessValue = t;
+    if (!(t > 0)) throw new Error("shell thickness must be positive");
+    replaceShape(target, shellShape(target.shape, t, f.openFaces));
+  } catch (e) {
+    out[f.id].error = (e as Error).message;
+  }
+}
+
+/** Repeat the most recent body (linear vector or circular axis), fusing the copies in. */
+function applyPattern(f: PatternFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = lastBody(bodies, "pattern");
+    const n = Math.max(1, Math.floor(f.count));
+    const original = target.shape;
+    let acc: Shape3D = (original as unknown as { clone: () => Shape3D }).clone();
+    for (let i = 1; i < n; i++) {
+      let copy: Shape3D;
+      if (f.mode === "linear") {
+        const s = f.step ?? { x: 0, y: 0, z: 0 };
+        copy = translateShape(original, { x: s.x * i, y: s.y * i, z: s.z * i });
+      } else {
+        const ax = f.axis ?? { origin: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 0, z: 1 } };
+        copy = rotateShape(original, (f.angle ?? 360 / n) * i, ax.origin, ax.direction);
+      }
+      const fused = fuseShapes(acc, copy);
+      acc.delete(); copy.delete();
+      acc = fused;
+    }
+    replaceShape(target, acc);
+  } catch (e) {
+    out[f.id].error = (e as Error).message;
   }
 }
 
@@ -143,7 +262,8 @@ function applyMirror(doc: CadDocument, f: MirrorFeature, bodies: Body[], out: Re
     out[f.id].error = (e as Error).message;
     return;
   }
-  for (const body of bodies) {
+  const targets = f.bodies === "last" ? bodies.slice(-1) : bodies;
+  for (const body of targets) {
     try {
       const reflected = mirrorShape(body.shape, wp); // new shape; body.shape untouched
       const fused = fuseShapes(body.shape, reflected);
@@ -197,7 +317,7 @@ function groupExtrudes(features: FeatureDef[]): ExtrudeGroup[] {
 function groupSignature(doc: CadDocument, scope: Scope, g: ExtrudeGroup): string {
   const parts: string[] = [];
   for (const f of g.features) {
-    parts.push(f.id, f.operation ?? "new", f.symmetric ? "s" : "", f.regionPoint ? `${f.regionPoint.x},${f.regionPoint.y}` : "", String(resolveDistance(f, scope)));
+    parts.push(f.id, f.operation ?? "new", f.symmetric ? "s" : "", f.direction ?? "", f.extent ?? "", f.regionPoint ? `${f.regionPoint.x},${f.regionPoint.y}` : "", String(resolveDistance(f, scope)));
     const sk = doc.sketches[f.sketchId];
     if (sk) parts.push(sketchSignature(sk));
   }
@@ -219,7 +339,7 @@ function buildGroupShape(doc: CadDocument, scope: Scope, g: ExtrudeGroup): Shape
   let shape = buildFeatureSolid(doc, scope, g.features[0]);
   for (let i = 1; i < g.features.length; i++) {
     const f = g.features[i];
-    const s = buildFeatureSolid(doc, scope, f);
+    const s = buildFeatureSolid(doc, scope, f, f.extent === "throughAll" ? safeBounds(shape) : undefined);
     const combined = (f.operation ?? "new") === "cut" ? cutShapes(shape, s) : fuseShapes(shape, s);
     shape.delete(); s.delete();
     shape = combined;
@@ -234,14 +354,14 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
     for (const f of features) {
       out[f.id] = f.kind === "extrude"
         ? { featureId: f.id, name: f.name, sketchId: f.sketchId, distance: resolveDistance(f, scope), error: "kernel not ready" }
-        : { featureId: f.id, name: f.name, sketchId: "", distance: 0, error: "kernel not ready" };
+        : { ...modifierRow(f), sketchId: f.kind === "revolve" ? f.sketchId : "", error: "kernel not ready" };
     }
     return out;
   }
-  // The cache only applies when every body is independent: no mirror (touches all
-  // bodies) and no face-referenced sketch (resolves against other bodies). Those
-  // cases take the full path — still correct, just not incremental.
-  const independent = !features.some((f) => f.kind === "mirror") && !Object.values(doc.sketches).some((s) => s.faceRef);
+  // The cache only applies when every body is independent: extrude-only models
+  // with no face-referenced sketch. Modifiers (mirror, fillet, shell, pattern,
+  // revolve) take the full path — still correct, just not incremental.
+  const independent = features.every((f) => f.kind === "extrude") && !Object.values(doc.sketches).some((s) => s.faceRef);
   if (cache && independent) return evaluateCached(doc, scope, cache);
   return evaluateFull(doc, scope);
 }
@@ -272,22 +392,40 @@ function evaluateCached(doc: CadDocument, scope: Scope, cache: GeometryCache): R
   return out;
 }
 
-/** Full evaluation: builds every feature in order (handles mirror + face refs). */
-function evaluateFull(doc: CadDocument, scope: Scope): Record<string, SolidEval> {
+/** Build every feature in order into live bodies (caller frees the shapes). */
+function evaluateBodies(doc: CadDocument, scope: Scope): { bodies: Body[]; out: Record<string, SolidEval> } {
   const out: Record<string, SolidEval> = {};
   const bodies: Body[] = [];
   for (const f of Object.values(doc.features)) {
-    if (f.kind === "extrude") applyExtrude(doc, scope, f, bodies, out);
-    else if (f.kind === "mirror") applyMirror(doc, f, bodies, out);
+    switch (f.kind) {
+      case "extrude":
+      case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
+      case "mirror": applyMirror(doc, f, bodies, out); break;
+      case "fillet":
+      case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;
+      case "shell": applyShell(scope, f, bodies, out); break;
+      case "pattern": applyPattern(f, bodies, out); break;
+    }
   }
+  return { bodies, out };
+}
+
+/** Full evaluation: builds every feature in order (handles modifiers + face refs). */
+function evaluateFull(doc: CadDocument, scope: Scope): Record<string, SolidEval> {
+  const { bodies, out } = evaluateBodies(doc, scope);
   for (const body of bodies) {
+    const row: SolidEval = { ...(out[body.id] ?? {}), featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance };
     try {
-      out[body.id] = { featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance, mesh: meshShape(body.shape) };
+      row.mesh = meshShape(body.shape);
+      row.bounds = safeBounds(body.shape);
+      const vol = volumeOfShape(body.shape);
+      if (Number.isFinite(vol)) row.volume = vol;
     } catch (e) {
-      out[body.id] = { featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance, error: (e as Error).message };
+      row.error = (e as Error).message;
     } finally {
       body.shape.delete();
     }
+    out[body.id] = row;
   }
   return out;
 }
@@ -295,7 +433,7 @@ function evaluateFull(doc: CadDocument, scope: Scope): Record<string, SolidEval>
 /** B-rep edges of a feature's own solid, in world space (for projection into a sketch). */
 export function featureEdges(doc: CadDocument, scope: Scope, featureId: string): Edge3D[] {
   const f = doc.features[featureId];
-  if (!f || f.kind !== "extrude" || !isKernelReady()) return [];
+  if (!f || (f.kind !== "extrude" && f.kind !== "revolve") || !isKernelReady()) return [];
   try {
     const solid = buildFeatureSolid(doc, scope, f);
     try { return edgesOfShape(solid); } finally { solid.delete(); }
@@ -304,14 +442,21 @@ export function featureEdges(doc: CadDocument, scope: Scope, featureId: string):
   }
 }
 
+/**
+ * Export the finished BODY that `featureId` starts (its joins, cuts, fillets,
+ * shells and patterns included) — not just that feature's own solid.
+ */
 export function exportFeatureBlob(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step"): Blob | null {
   const f = doc.features[featureId];
-  if (!f || f.kind !== "extrude" || !isKernelReady()) return null;
+  if (!f || !isKernelReady()) return null;
+  const { bodies } = evaluateBodies(doc, scope);
   try {
-    const solid = buildFeatureSolid(doc, scope, f);
-    try { return blobOfShape(solid, format); } finally { solid.delete(); }
+    const body = bodies.find((b) => b.id === featureId) ?? bodies[bodies.length - 1];
+    return body ? blobOfShape(body.shape, format) : null;
   } catch {
     return null;
+  } finally {
+    for (const b of bodies) b.shape.delete();
   }
 }
 

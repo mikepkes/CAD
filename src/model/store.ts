@@ -14,6 +14,7 @@ import { ChatEntry, describeDocument, runAgent } from "./agent";
 import { enableWebMcp, disableWebMcp } from "./webmcp";
 import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus, isTauri, startDesktopMcp, stopDesktopMcp } from "./desktopMcp";
 import { getActiveScene } from "../viewport/sceneRef";
+import { pickFace } from "../core/geometry/pick";
 
 const AGENT_KEY_LS = "chisel.anthropic.key";
 const AGENT_MODEL_LS = "chisel.anthropic.model";
@@ -310,12 +311,37 @@ export const useStore = create<AppState>((set, get) => {
   // Shared command host for both the in-app agent and WebMCP: dispatch a command
   // and keep the viewport in sync (activate a new sketch, switch to model on extrude).
   const commandHost = () => ({
-    describe: () => describeDocument(get().session.doc, get().mode, get().activeSketchId),
+    describe: () => describeDocument(get().session.doc, get().mode, get().activeSketchId, get().solids),
     runCommand: async (type: string, params: Record<string, unknown>) => {
       const r = await runDispatch(type, params);
       if (r.ok && type === "sketch.create") set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
-      if (r.ok && type === "feature.extrude") set({ mode: "model" });
-      return { ok: r.ok, createdIds: r.createdIds, message: r.message, error: r.error };
+      if (r.ok && (type === "feature.extrude" || type === "feature.revolve")) set({ mode: "model" });
+      const out: { ok: boolean; createdIds?: string[]; message?: string; error?: string; frame?: unknown; warning?: string } =
+        { ok: r.ok, createdIds: r.createdIds, message: r.message, error: r.error };
+      // A new sketch reports its world frame so callers know which way u/v/normal point.
+      if (r.ok && type === "sketch.create") {
+        const wp = resolveSketchPlane(get().session.doc.sketches[r.createdIds[0]]);
+        out.frame = { origin: wp.origin, u: wp.u, v: wp.v, normal: wp.normal };
+      }
+      // Feature commands: wait for the kernel so the caller sees failures/warnings in the same call.
+      if (r.ok && type.startsWith("feature.")) {
+        await get().rebuildSolids();
+        const sol = get().solids[r.createdIds[0]];
+        if (sol?.error) out.error = sol.error;
+        if (sol?.warning) out.warning = sol.warning;
+      }
+      return out;
+    },
+    sketchOnFace: async (point: { x: number; y: number; z: number }, name?: string) => {
+      if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
+      const meshes = Object.values(get().solids).filter((s) => s.mesh).map((s) => ({ featureId: s.featureId, mesh: s.mesh! }));
+      const hit = pickFace(meshes, point);
+      if (!hit) throw new Error("no body face found — build a solid first");
+      const r = await runDispatch("sketch.create", { planeDef: { origin: hit.origin, normal: hit.normal }, faceRef: { normal: hit.normal, point: hit.point }, ...(name ? { name } : {}), ...scopeComponent() });
+      if (!r.ok) throw new Error(r.error ?? "sketch.create failed");
+      set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
+      const wp = resolveSketchPlane(get().session.doc.sketches[r.createdIds[0]]);
+      return { sketchId: r.createdIds[0], originId: r.createdIds[1], featureId: hit.featureId, distanceToFace: hit.distance, frame: { origin: wp.origin, u: wp.u, v: wp.v, normal: wp.normal } };
     },
     newDocument: () => get().newDocument(),
     undo: () => get().undo(),

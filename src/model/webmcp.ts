@@ -23,7 +23,9 @@ export interface WebMcpTool {
 
 export interface WebMcpHost {
   registry: CommandRegistry;
-  runCommand: (type: string, params: Record<string, unknown>) => Promise<{ ok: boolean; createdIds?: string[]; message?: string; error?: string }>;
+  runCommand: (type: string, params: Record<string, unknown>) => Promise<{ ok: boolean; createdIds?: string[]; message?: string; error?: string; frame?: unknown; warning?: string }>;
+  /** Start a sketch on the body face nearest a world point (face picking without the mouse). */
+  sketchOnFace?: (point: { x: number; y: number; z: number }, name?: string) => Promise<unknown>;
   describe: () => unknown;
   render: (opts: { view?: string; width?: number; height?: number; hideSketches?: boolean }) => Promise<{ base64: string; width: number; height: number; view: string }>;
   /** Document-level actions (optional; the desktop/in-page hosts provide them). */
@@ -37,7 +39,7 @@ export const WEBMCP_INFO = {
   name: "ChiselCAD",
   version: 1,
   description:
-    "A browser-based parametric 2D sketch CAD app. Tools are its commands: create a sketch (sketch.create with a plane XY/XZ/YZ → returns [sketchId, originId]), add geometry (sketch.addLine/addCircle/addArc/addRectangle/addPolygon/addEllipse/addSlot), constrain (sketch.addConstraint), dimension (sketch.addDimension, expressions allowed), edit (sketch.trim/extend/offset/fillet/chamfer/mirror/*Pattern), and extrude (feature.extrude). Points are {x,y} or {ref:<pointId>}; reuse a point id to make endpoints coincident. Call get_state first and after creating geometry to read live ids — never guess them.",
+    "A parametric CAD app (sketch → solid, OpenCASCADE kernel). Tools are its commands: create a sketch (sketch.create with a plane XY/XZ/YZ/offset/datum/planeDef, or sketch_on_face at a world point → returns ids + the sketch frame), add geometry (sketch.addLine/addPolyline/addCircle/addRing/addArc/addRectangle{cornerRadius}/addBar/addPolygon/addEllipse/addSlot), constrain/dimension (sketch.addConstraint/addDimension, expressions allowed), edit (sketch.trim/extend/offset/offsetLoop/fillet/filletCorners/chamfer/mirror/*Pattern), then build solids: feature.extrude (new/join/cut, symmetric, direction reverse, extent throughAll), feature.revolve, feature.fillet/chamfer (EdgeSelector), feature.shell, feature.pattern (linear/circular bodies), feature.mirror. Modifiers act on the most recent body. Points are {x,y} or {ref:<pointId>}; reuse a point id to make endpoints coincident. Call get_state first and after creating geometry to read live ids and body bounds — never guess them. Feature results include kernel errors/warnings (e.g. a cut that removed nothing).",
 };
 
 let registered = false;
@@ -87,6 +89,25 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       }
     },
   });
+  if (host.sketchOnFace) {
+    tools.push({
+      name: "sketch_on_face",
+      description: "Start a sketch on the body face nearest to a world point {x,y,z} (pick a face without the mouse). The sketch tracks that face parametrically. Returns the sketch id, origin point id and the sketch's world frame (origin, u, v, normal) so you know which way sketch coordinates and extrudes go — extrude `direction: \"reverse\"` goes into the body, `extent: \"throughAll\"` cuts all the way through.",
+      inputSchema: {
+        type: "object",
+        required: ["point"],
+        properties: {
+          point: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "A world point on (or near) the face." },
+          name: { type: "string" },
+        },
+      },
+      execute: async (args) => {
+        const a = args as { point: { x: number; y: number; z: number }; name?: string };
+        try { return ok({ ok: true, ...(await host.sketchOnFace!(a.point, a.name) as object) }); }
+        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+      },
+    });
+  }
   if (host.newDocument) {
     tools.push({
       name: "new_document",

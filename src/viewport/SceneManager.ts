@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { sampleSpline } from "../core/geometry/spline";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLANES, WorkPlane, to3d } from "../geometry/plane";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchEllipse, SketchLine, SketchPoint } from "../sketch/types";
@@ -550,11 +551,20 @@ export class SceneManager {
     const sketchVisible = this.sketchGroup.visible;
     this.planeGroup.visible = false;
     if (hideSketches) this.sketchGroup.visible = false;
+    // Capture lighting: a key/fill pair from the camera side so faces read as
+    // distinct values in the PNG (the live viewport's soft ambient looks flat
+    // when reviewed as a still image).
+    const key = new THREE.DirectionalLight(0xffffff, 1.1);
+    key.position.copy(cam.position).add(new THREE.Vector3(radius, -radius * 0.5, radius * 1.5));
+    const fill = new THREE.DirectionalLight(0xbfd4ff, 0.45);
+    fill.position.copy(center).add(new THREE.Vector3(-radius * 2, radius, radius * 0.5));
+    this.scene.add(key, fill);
     this.renderer.setRenderTarget(rt);
     this.renderer.render(this.scene, cam);
     const buf = new Uint8Array(width * height * 4);
     this.renderer.readRenderTargetPixels(rt, 0, 0, width, height, buf);
     this.renderer.setRenderTarget(null);
+    this.scene.remove(key, fill);
     this.planeGroup.visible = planesVisible;
     this.sketchGroup.visible = sketchVisible;
     rt.dispose();
@@ -834,6 +844,12 @@ export class SceneManager {
         }
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(e.construction));
         dashed(line, e.construction); add(line);
+      } else if (e.kind === "spline") {
+        const through = e.points.map((id) => getPt(id)).filter((p) => !!p).map((p) => ({ x: p!.x, y: p!.y }));
+        if (through.length < 2) continue;
+        const pts = sampleSpline(through, 10).map((p) => this.worldPt(plane, p.x, p.y));
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(e.construction));
+        dashed(line, e.construction); add(line);
       }
     }
   }
@@ -998,6 +1014,18 @@ export class SceneManager {
         if (el.construction) line.computeLineDistances();
         line.userData = { id: el.id, kind: "ellipse" };
         this.sketchGroup.add(line);
+      } else if (e.kind === "spline") {
+        const through = e.points.map((id) => getPt(id)).filter((p) => !!p).map((p) => ({ x: p!.x, y: p!.y }));
+        if (through.length < 2) continue;
+        const pts = sampleSpline(through, 10).map((p) => this.worldPt(plane, p.x, p.y));
+        const color = this.colorFor(e.id, data, baseColor, e.construction);
+        const mat = e.construction
+          ? new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.6 })
+          : new THREE.LineBasicMaterial({ color });
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
+        if (e.construction) line.computeLineDistances();
+        line.userData = { id: e.id, kind: "spline" };
+        this.sketchGroup.add(line);
       }
     }
 
@@ -1107,6 +1135,7 @@ export class SceneManager {
     let cur = loop.start;
     for (const seg of loop.segments) {
       if (seg.kind === "line") out.push({ x: seg.to.x, y: seg.to.y });
+      else if (seg.kind === "spline") out.push(...sampleSpline(seg.through, 6).slice(1));
       else out.push(...this.sampleArcPoints(cur, seg.via, seg.to));
       cur = seg.to;
     }

@@ -103,6 +103,8 @@ export class Interactions {
             const c = sk.entities[e.center]; if (c && c.kind === "point") { pts.push({ x: c.x - e.r, y: c.y - e.r }, { x: c.x + e.r, y: c.y + e.r }); }
           } else if (e.kind === "ellipse") {
             const c = sk.entities[e.center]; if (c && c.kind === "point") { const r = Math.max(e.rx, e.ry); pts.push({ x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y + r }); }
+          } else if (e.kind === "spline") {
+            for (const pid of e.points) pushPoint(pid);
           }
         }
       }
