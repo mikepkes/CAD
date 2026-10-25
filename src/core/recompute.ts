@@ -30,24 +30,10 @@ export async function recompute(
   const { scope, resolved } = resolveParameters(doc.parameters);
   doc.parameters = resolved;
 
-  // Resolve datum planes (parametric frames), then push each resolved frame onto
-  // the sketches that live on it — so a sketch/feature built on a datum moves
-  // when the datum's offset changes.
-  resolveDatumPlanes(doc, scope);
-  const componentWorld = resolveComponentWorld(doc, scope);
-  for (const sk of Object.values(doc.sketches)) {
-    if (sk.datumId) sk.plane = doc.planes[sk.datumId]?.plane;
-    // Component placement: compose the owning component's world frame (static
-    // offset or joint-driven rigid transform) into the sketch frame. Rebuilt
-    // from an immutable base (datum frame or origin plane) every recompute, so
-    // it never accumulates. Face/offset ("custom") sketches already carry world
-    // position, so they are left as-is.
-    const W = sk.componentId ? componentWorld.get(sk.componentId) : undefined;
-    if (W && !isIdentity(W) && sk.planeId !== "custom") {
-      const base = sk.datumId ? doc.planes[sk.datumId]?.plane : planeById(sk.planeId);
-      if (base) sk.plane = transformPlane(W, base);
-    }
-  }
+  // Resolve datum planes (parametric frames) and place each sketch in its owning
+  // component's world frame, so geometry moves when a datum offset or a joint
+  // value changes.
+  placeComponentSketches(doc, scope);
 
   const evals: Evaluations = {};
 
@@ -115,6 +101,23 @@ export async function recompute(
   }
 
   return evals;
+}
+
+/** Resolve datum planes, then set every sketch's world plane from its owning
+ *  component's frame (static offset or joint-driven transform). Always rebuilt
+ *  from the immutable base plane, so it is correct for ANY pose (including when a
+ *  joint returns to 0 / identity) and never accumulates — which lets the motion
+ *  study re-place sketches for each sampled pose, not just during a recompute. */
+export function placeComponentSketches(doc: CadDocument, scope: Scope): void {
+  resolveDatumPlanes(doc, scope);
+  const componentWorld = resolveComponentWorld(doc, scope);
+  for (const sk of Object.values(doc.sketches)) {
+    if (sk.planeId === "custom") continue; // face/offset planes carry their own world position
+    const base = sk.datumId ? doc.planes[sk.datumId]?.plane : planeById(sk.planeId);
+    const W = sk.componentId ? componentWorld.get(sk.componentId) : undefined;
+    if (W && !isIdentity(W)) sk.plane = base ? transformPlane(W, base) : sk.plane;
+    else sk.plane = sk.datumId ? base : undefined; // origin-plane sketch → fall back to base
+  }
 }
 
 const DEG = Math.PI / 180;

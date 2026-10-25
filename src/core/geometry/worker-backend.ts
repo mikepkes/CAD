@@ -9,6 +9,7 @@
 
 import { GeometryBackend, GeometryRequest, GeometryRequestInit, GeometryResponse, ExportFormat, EvaluateResult } from "./backend";
 import { CadDocument } from "../document";
+import { CollisionResult } from "../features";
 import { KernelInitOptions, Edge3D } from "../occ/kernel";
 
 export class WorkerGeometryBackend implements GeometryBackend {
@@ -60,6 +61,11 @@ export class WorkerGeometryBackend implements GeometryBackend {
     const r = await this.send({ kind: "export", doc, featureId, format });
     if (r.kind === "export") return r.bytes;
     throw new Error(r.kind === "error" ? r.message : "export failed");
+  }
+  async collide(doc: CadDocument, overrides?: Record<string, string>): Promise<CollisionResult> {
+    const r = await this.send({ kind: "collide", doc, overrides });
+    if (r.kind === "collide") return r.result;
+    throw new Error(r.kind === "error" ? r.message : "collide failed");
   }
   dispose(): void { this.worker.terminate(); this.pending.clear(); }
 }

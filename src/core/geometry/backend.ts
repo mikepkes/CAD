@@ -9,7 +9,8 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../../model/parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
-import { evaluateFeatures, featureEdges, exportFeatureBytes, GeometryCache, SolidEval } from "../features";
+import { evaluateFeatures, featureEdges, exportFeatureBytes, collideFeatures, CollisionResult, GeometryCache, SolidEval } from "../features";
+import { placeComponentSketches } from "../recompute";
 
 export type ExportFormat = "stl" | "step";
 
@@ -40,23 +41,41 @@ export interface GeometryBackend {
   edges(doc: CadDocument, featureId: string): Promise<Edge3D[]>;
   /** STL/STEP bytes for one feature's solid. */
   exportBytes(doc: CadDocument, featureId: string, format: ExportFormat): Promise<Uint8Array | null>;
+  /** Measure body-body interpenetration at a configuration (param `overrides`
+   *  set the pose), for the motion study's pass/fail. */
+  collide(doc: CadDocument, overrides?: Record<string, string>): Promise<CollisionResult>;
   /** Release workers / native resources. */
   dispose(): void;
 }
 
 const scopeOf = (doc: CadDocument) => resolveParameters(doc.parameters).scope;
 
+/** A pose of `doc` for a collision check: parameter expressions overridden and
+ *  sketches re-placed in their components' frames for those values. Clones the
+ *  parameters and sketches so re-placing their planes never disturbs the caller's
+ *  live document (the worker gets a copy anyway; the inline backend does not). */
+function poseDoc(doc: CadDocument, overrides?: Record<string, string>): CadDocument {
+  const parameters = doc.parameters.map((p) => (overrides?.[p.name] != null ? { ...p, expr: overrides[p.name] } : p));
+  const sketches: CadDocument["sketches"] = {};
+  for (const [id, sk] of Object.entries(doc.sketches)) sketches[id] = { ...sk };
+  const posed = { ...doc, parameters, sketches };
+  placeComponentSketches(posed, resolveParameters(parameters).scope);
+  return posed;
+}
+
 // ---- shared job protocol (used by both worker adapters) --------------------
 
 export type GeometryRequest =
   | { id: number; kind: "evaluate"; doc: CadDocument }
   | { id: number; kind: "edges"; doc: CadDocument; featureId: string }
-  | { id: number; kind: "export"; doc: CadDocument; featureId: string; format: ExportFormat };
+  | { id: number; kind: "export"; doc: CadDocument; featureId: string; format: ExportFormat }
+  | { id: number; kind: "collide"; doc: CadDocument; overrides?: Record<string, string> };
 
 export type GeometryResponse =
   | { id: number; kind: "evaluate"; solids: Record<string, SolidEval>; facePlanes: Record<string, WorkPlane> }
   | { id: number; kind: "edges"; edges: Edge3D[] }
   | { id: number; kind: "export"; bytes: Uint8Array | null }
+  | { id: number; kind: "collide"; result: CollisionResult }
   | { id: number; kind: "error"; message: string };
 
 /** GeometryRequest without the id field, distributing over the union. */
@@ -93,6 +112,11 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       const edges = featureEdges(req.doc, scope, req.featureId);
       return { res: { id: req.id, kind: "edges", edges }, transfer: [] };
     }
+    if (req.kind === "collide") {
+      const doc = poseDoc(req.doc, req.overrides);
+      const result = collideFeatures(doc, scopeOf(doc));
+      return { res: { id: req.id, kind: "collide", result }, transfer: [] };
+    }
     const bytes = await exportFeatureBytes(req.doc, scope, req.featureId, req.format);
     return { res: { id: req.id, kind: "export", bytes }, transfer: bytes ? [bytes.buffer as ArrayBuffer] : [] };
   } catch (e) {
@@ -121,6 +145,10 @@ export class InlineGeometryBackend implements GeometryBackend {
   }
   async exportBytes(doc: CadDocument, featureId: string, format: ExportFormat): Promise<Uint8Array | null> {
     return exportFeatureBytes(doc, scopeOf(doc), featureId, format);
+  }
+  async collide(doc: CadDocument, overrides?: Record<string, string>): Promise<CollisionResult> {
+    const d = poseDoc(doc, overrides);
+    return collideFeatures(d, scopeOf(d));
   }
   dispose(): void {}
 }
