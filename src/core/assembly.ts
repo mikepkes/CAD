@@ -18,6 +18,10 @@
 import { CadDocument, Joint, RoleRef } from "./document";
 import { Scope, compileExpr } from "../math/expr";
 import { Sketch } from "../sketch/types";
+import { Rigid, IDENTITY, compose, invert, applyPoint, applyVec } from "../math/transform";
+import { resolveComponentWorld } from "./recompute";
+import type { SolidEval } from "./features";
+import type { SolidMesh, Bounds3 } from "./occ/kernel";
 
 type Vec3 = { x: number; y: number; z: number };
 
@@ -65,10 +69,14 @@ function substituteIndex(expr: string, i: number): string {
  * unchanged. Call `placeComponentSketches` on the result to position instance
  * sketches from the expanded joint graph before building geometry.
  */
-export function expandAssembly(doc: CadDocument, scope: Scope): CadDocument {
+export function expandAssembly(doc: CadDocument, scope: Scope, opts: { framesOnly?: boolean } = {}): CadDocument {
   const patterns = Object.values(doc.componentPatterns ?? {});
   if (!patterns.length) return doc;
 
+  // framesOnly: clone only components + joints (the kinematic frames), skipping
+  // the sketch/feature geometry clone. Enough for FK; the fast render path builds
+  // instance meshes by transforming the source mesh instead of rebuilding.
+  const framesOnly = !!opts.framesOnly;
   const components = { ...doc.components };
   const sketches = { ...doc.sketches };
   const features = { ...doc.features };
@@ -86,7 +94,7 @@ export function expandAssembly(doc: CadDocument, scope: Scope): CadDocument {
     const subFeatureSet = new Set(subFeatures.map((f) => f.id));
 
     // The template subtree is a stand-in; only its instances build.
-    for (const f of subFeatures) delete features[f.id];
+    if (!framesOnly) for (const f of subFeatures) delete features[f.id];
 
     const iid = (i: number, localId: string) => `${p.id}#${i}__${localId}`;
 
@@ -98,18 +106,20 @@ export function expandAssembly(doc: CadDocument, scope: Scope): CadDocument {
           id: iid(i, cid),
           parentId: c.parentId && subCompSet.has(c.parentId) ? iid(i, c.parentId) : doc.rootComponentId,
           children: c.children.filter((ch) => subCompSet.has(ch)).map((ch) => iid(i, ch)),
-          sketches: c.sketches.filter((s) => subSketchSet.has(s)).map((s) => iid(i, s)),
+          sketches: framesOnly ? [] : c.sketches.filter((s) => subSketchSet.has(s)).map((s) => iid(i, s)),
           connectors: c.connectors ? { ...c.connectors } : undefined,
         };
       }
-      for (const sk of subSketches) {
-        sketches[iid(i, sk.id)] = cloneSketch(sk, iid(i, sk.id), sk.componentId ? iid(i, sk.componentId) : undefined);
-      }
-      for (const f of subFeatures) {
-        const nf = { ...f, id: iid(i, f.id) } as typeof f & { sketchId?: string; body?: string };
-        if ("sketchId" in nf && nf.sketchId) nf.sketchId = iid(i, nf.sketchId);
-        if (nf.body && subFeatureSet.has(nf.body)) nf.body = iid(i, nf.body);
-        features[iid(i, f.id)] = nf;
+      if (!framesOnly) {
+        for (const sk of subSketches) {
+          sketches[iid(i, sk.id)] = cloneSketch(sk, iid(i, sk.id), sk.componentId ? iid(i, sk.componentId) : undefined);
+        }
+        for (const f of subFeatures) {
+          const nf = { ...f, id: iid(i, f.id) } as typeof f & { sketchId?: string; body?: string };
+          if ("sketchId" in nf && nf.sketchId) nf.sketchId = iid(i, nf.sketchId);
+          if (nf.body && subFeatureSet.has(nf.body)) nf.body = iid(i, nf.body);
+          features[iid(i, f.id)] = nf;
+        }
       }
     }
 
@@ -158,4 +168,77 @@ export function expandAssembly(doc: CadDocument, scope: Scope): CadDocument {
 /** Whether a doc carries any component pattern (cheap guard for callers). */
 export function hasAssemblyPatterns(doc: CadDocument): boolean {
   return Object.keys(doc.componentPatterns ?? {}).length > 0;
+}
+
+// ---- fast render path: instance by transforming the source mesh -------------
+
+function xformMesh(m: SolidMesh, T: Rigid): SolidMesh {
+  const positions = new Float32Array(m.positions.length);
+  const normals = new Float32Array(m.normals.length);
+  for (let i = 0; i < m.positions.length; i += 3) {
+    const p = applyPoint(T, { x: m.positions[i], y: m.positions[i + 1], z: m.positions[i + 2] });
+    positions[i] = p.x; positions[i + 1] = p.y; positions[i + 2] = p.z;
+    const v = applyVec(T, { x: m.normals[i], y: m.normals[i + 1], z: m.normals[i + 2] });
+    normals[i] = v.x; normals[i + 1] = v.y; normals[i + 2] = v.z;
+  }
+  const edges = new Float32Array(m.edges.length);
+  for (let i = 0; i < m.edges.length; i += 3) {
+    const p = applyPoint(T, { x: m.edges[i], y: m.edges[i + 1], z: m.edges[i + 2] });
+    edges[i] = p.x; edges[i + 1] = p.y; edges[i + 2] = p.z;
+  }
+  // indices are copied, not shared: each instance mesh owns its buffers so the
+  // worker can transfer them (a shared ArrayBuffer would be a duplicate transfer).
+  return { positions, normals, indices: m.indices.slice(), edges, triangleCount: m.triangleCount };
+}
+
+function boundsOf(pos: Float32Array): Bounds3 {
+  let nx = Infinity, ny = Infinity, nz = Infinity, xx = -Infinity, xy = -Infinity, xz = -Infinity;
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+    if (x < nx) nx = x; if (y < ny) ny = y; if (z < nz) nz = z;
+    if (x > xx) xx = x; if (y > xy) xy = y; if (z > xz) xz = z;
+  }
+  return { min: { x: nx, y: ny, z: nz }, max: { x: xx, y: xy, z: xz } };
+}
+
+/**
+ * Turn the SOURCE bodies into the pattern's instance bodies by transforming the
+ * baked mesh — no OCC rebuild. The source geometry is evaluated once (and stays
+ * cacheable, since it doesn't depend on the joint-drive params); only these cheap
+ * rigid transforms re-run as the mechanism articulates, so a slider drag or a
+ * motion sweep is O(instances) vertex math instead of O(instances) OCC builds.
+ *
+ * Bodies outside every pattern subtree pass through unchanged. A body is assumed
+ * to belong to one component (its sketch's) — the common case; a body fused
+ * across several components of the subtree would be placed by that one frame.
+ */
+export function instanceSolids(doc: CadDocument, scope: Scope, sourceSolids: Record<string, SolidEval>): Record<string, SolidEval> {
+  const patterns = Object.values(doc.componentPatterns ?? {});
+  if (!patterns.length) return sourceSolids;
+
+  const sourceWorlds = resolveComponentWorld(doc, scope);
+  const instWorlds = resolveComponentWorld(expandAssembly(doc, scope, { framesOnly: true }), scope);
+
+  const out: Record<string, SolidEval> = {};
+  const templated = new Set<string>();
+  for (const p of patterns) {
+    const subComps = new Set(collectSubtree(doc, p.source));
+    const n = evalCount(p.countExpr, scope, p.count);
+    const iid = (i: number, localId: string) => `${p.id}#${i}__${localId}`;
+    for (const [fid, sol] of Object.entries(sourceSolids)) {
+      const comp = sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined;
+      if (!comp || !subComps.has(comp)) continue;
+      templated.add(fid); // a template body — replaced by its instances
+      if (!sol.mesh) continue;
+      const sInv = invert(sourceWorlds.get(comp) ?? IDENTITY);
+      for (let i = 0; i < n; i++) {
+        const iW = instWorlds.get(iid(i, comp));
+        if (!iW) continue;
+        const mesh = xformMesh(sol.mesh, compose(iW, sInv));
+        out[iid(i, fid)] = { ...sol, featureId: iid(i, fid), name: `${sol.name} ${i + 1}`, mesh, bounds: boundsOf(mesh.positions), threadDecals: undefined };
+      }
+    }
+  }
+  for (const [fid, sol] of Object.entries(sourceSolids)) if (!templated.has(fid)) out[fid] = sol;
+  return out;
 }

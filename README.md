@@ -256,15 +256,30 @@ concrete instances and joints, with deterministic ids
 changes. Everything downstream — the tree-based assembly FK, the geometry
 pipeline, the motion study — then runs unchanged.
 
+**Fast render path.** The instance geometry is *not* rebuilt with the kernel
+per copy. The source body is evaluated once (and stays cacheable — it doesn't
+depend on the joint-drive parameters); each instance is produced by transforming
+that baked mesh by its joint-driven world. So articulating the mechanism or
+dragging the count is `O(instances)` vertex math, not `O(instances)` OCC builds —
+smooth even as the count climbs. (`collide`/`export` still expand-and-rebuild,
+since they need real B-reps.)
+
+**Authoring UI.** The Browser panel shows each component's connectors, the
+component patterns (with an editable count expression), and their joint
+templates (editable drive value and `appliesTo`), with inline forms to add a
+connector, pattern a component, or add a joint template — and delete buttons for
+each. Everything is also scriptable via the commands above.
+
 Closed loops (a scissor is one per stage) use the same trick the hand-built
 jointed models use: each joint's `value` is an expression of one driver, so the
 tree FK reproduces the loop without a loop solver. That covers regular,
 repeating mechanisms (the common case). A general loop-closure solver — for
 irregular linkages whose closure isn't expressible in closed form — is the
-natural next step and is not part of this prototype.
+natural next step.
 
-**Status: prototype.** Instances are derived (not individually selectable yet),
-authoring is via commands (no UI for connectors/templates yet), and patterned
-docs skip the incremental geometry cache (correctness over speed while the
-instances are small). See `test/assembly.test.ts` and
-`test/scissor_jointed.build.test.ts`.
+Current limits: instances are derived (not individually selectable yet), and a
+body fused across several components of the patterned subtree is placed by a
+single frame (single-component bodies — the common case — are exact). See
+`test/assembly.test.ts`, `test/backend_assembly.test.ts` and
+`test/scissor_jointed.build.test.ts` (which checks the fast path matches a full
+rebuild).

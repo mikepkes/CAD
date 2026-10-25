@@ -261,6 +261,16 @@ export interface AppState {
   editFeatureDistance: (featureId: string, expr: string) => Promise<void>;
   editJointValue: (jointId: string, expr: string) => Promise<void>;
   deleteJoint: (jointId: string) => Promise<void>;
+  // ---- parametric jointed assemblies ----
+  addConnector: (componentId: string, name: string, origin: { x: number; y: number; z: number }) => Promise<void>;
+  deleteConnector: (componentId: string, name: string) => Promise<void>;
+  createComponentPattern: (source: string, count: string, name?: string) => Promise<string | null>;
+  editPatternCount: (patternId: string, count: string) => Promise<void>;
+  deletePattern: (patternId: string) => Promise<void>;
+  createJointTemplate: (patternId: string, params: Record<string, unknown>) => Promise<void>;
+  editJointTemplateValue: (templateId: string, expr: string) => Promise<void>;
+  setJointTemplateAppliesTo: (templateId: string, appliesTo: "first" | "rest" | "all") => Promise<void>;
+  deleteJointTemplate: (templateId: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step") => Promise<void>;
   /** The whole model as one STL file, offered through the native share sheet on
@@ -900,6 +910,45 @@ export const useStore = create<AppState>((set, get) => {
     },
     deleteJoint: async (jointId) => {
       const op = get().session.timeline.find((o) => o.type === "joint.create" && o.createdIds.includes(jointId));
+      if (op) await get().deleteOperation(op.opId);
+    },
+
+    // ---- parametric jointed assemblies ----
+    addConnector: async (componentId, name, origin) => {
+      await runDispatch("component.connector", { component: componentId, name, origin });
+    },
+    deleteConnector: async (componentId, name) => {
+      const op = get().session.timeline.find((o) => o.type === "component.connector" && o.params.component === componentId && o.params.name === name);
+      if (op) await get().deleteOperation(op.opId);
+    },
+    createComponentPattern: async (source, count, name) => {
+      const r = await runDispatch("assembly.pattern", { source, count, ...(name ? { name } : {}) });
+      return r.ok ? r.createdIds[0] : null;
+    },
+    editPatternCount: async (patternId, count) => {
+      const op = get().session.timeline.find((o) => o.type === "assembly.pattern" && o.createdIds.includes(patternId));
+      if (op) await get().editOperation(op.opId, { ...op.params, count });
+    },
+    deletePattern: async (patternId) => {
+      // Remove the pattern's joint templates first (they reference it), then the pattern.
+      const tmpls = get().session.timeline.filter((o) => o.type === "joint.template" && o.params.pattern === patternId);
+      for (const t of tmpls) await get().deleteOperation(t.opId);
+      const op = get().session.timeline.find((o) => o.type === "assembly.pattern" && o.createdIds.includes(patternId));
+      if (op) await get().deleteOperation(op.opId);
+    },
+    createJointTemplate: async (patternId, params) => {
+      await runDispatch("joint.template", { pattern: patternId, ...params });
+    },
+    editJointTemplateValue: async (templateId, expr) => {
+      const op = get().session.timeline.find((o) => o.type === "joint.template" && o.createdIds.includes(templateId));
+      if (op) await get().editOperation(op.opId, { ...op.params, value: expr });
+    },
+    setJointTemplateAppliesTo: async (templateId, appliesTo) => {
+      const op = get().session.timeline.find((o) => o.type === "joint.template" && o.createdIds.includes(templateId));
+      if (op) await get().editOperation(op.opId, { ...op.params, appliesTo });
+    },
+    deleteJointTemplate: async (templateId) => {
+      const op = get().session.timeline.find((o) => o.type === "joint.template" && o.createdIds.includes(templateId));
       if (op) await get().deleteOperation(op.opId);
     },
     exportSolid: async (format) => {

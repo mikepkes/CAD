@@ -11,7 +11,7 @@ import { realSession } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { evaluateFeatures } from "../src/core/features";
-import { expandAssembly } from "../src/core/assembly";
+import { expandAssembly, instanceSolids } from "../src/core/assembly";
 import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/model/parameters";
 import type { CadSession } from "../src/core/command/session";
@@ -94,5 +94,35 @@ describe("jointed parametric scissor (geometry)", () => {
 
     await dis(s, "parameter.set", { name: "theta", expression: "40" });
     console.log(`jointed scissor: 3 stages → ${r3.bodies} bodies, topZ ${r3.topZ.toFixed(0)}mm; 6 stages → ${r6.bodies} bodies, topZ ${r6.topZ.toFixed(0)}mm`);
+  }, 120000);
+
+  it("the fast mesh-instancing path matches the rebuild path", async () => {
+    const s = realSession();
+    await buildScissor(s);
+    await s.recompute();
+    const scope = resolveParameters(s.doc.parameters).scope;
+
+    // Rebuild path: clone the subtree per instance and build each with OCC.
+    const expanded = expandAssembly(s.doc, scope);
+    placeComponentSketches(expanded, scope);
+    const rebuilt = Object.values(evaluateFeatures(expanded, scope)).filter((b) => b.mesh);
+
+    // Fast path: build the source once, transform its mesh per instance.
+    placeComponentSketches(s.doc, scope);
+    const source = evaluateFeatures(s.doc, scope);
+    const fast = Object.values(instanceSolids(s.doc, scope, source)).filter((b) => b.mesh);
+
+    expect(fast.length).toBe(rebuilt.length);
+    const span = (bs: typeof fast) => {
+      let lo = Infinity, hi = -Infinity;
+      for (const b of bs) for (let i = 2; i < b.mesh!.positions.length; i += 3) { lo = Math.min(lo, b.mesh!.positions[i]); hi = Math.max(hi, b.mesh!.positions[i]); }
+      return { lo, hi };
+    };
+    const a = span(rebuilt), c = span(fast);
+    expect(Math.abs(a.hi - c.hi)).toBeLessThan(0.05); // same apex
+    expect(Math.abs(a.lo - c.lo)).toBeLessThan(0.05); // same base
+    // vertex totals match (same topology, transformed)
+    const verts = (bs: typeof fast) => bs.reduce((n, b) => n + b.mesh!.positions.length, 0);
+    expect(verts(fast)).toBe(verts(rebuilt));
   }, 120000);
 });

@@ -11,7 +11,7 @@ import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
 import { evaluateFeatures, featureEdges, exportFeatureBytes, collideFeatures, CollisionResult, GeometryCache, SolidEval } from "../features";
 import { placeComponentSketches } from "../recompute";
-import { expandAssembly, hasAssemblyPatterns } from "../assembly";
+import { expandAssembly, hasAssemblyPatterns, instanceSolids } from "../assembly";
 import { Scope } from "../../math/expr";
 
 export type ExportFormat = "stl" | "step";
@@ -60,6 +60,16 @@ function geometryDoc(doc: CadDocument, scope: Scope): CadDocument {
   const d = expandAssembly(doc, scope);
   placeComponentSketches(d, scope);
   return d;
+}
+
+/** Build the solids to render. For a patterned doc, evaluate the SOURCE bodies
+ *  once (cacheable — they don't depend on the joint-drive params) and instance
+ *  them by transforming the mesh; otherwise the plain feature evaluation. */
+function evaluateForRender(doc: CadDocument, scope: Scope, cache?: GeometryCache): Record<string, SolidEval> {
+  if (!hasAssemblyPatterns(doc)) return evaluateFeatures(doc, scope, cache);
+  placeComponentSketches(doc, scope); // place the source sketches in their component frames
+  const source = evaluateFeatures(doc, scope, cache);
+  return instanceSolids(doc, scope, source);
 }
 
 /** A pose of `doc` for a collision check: parameter expressions overridden and
@@ -117,12 +127,8 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
   try {
     const scope = scopeOf(req.doc);
     if (req.kind === "evaluate") {
-      const doc = geometryDoc(req.doc, scope);
-      // Instance geometry is placed by joint-driven worlds that vary with the
-      // drive parameters; skip the incremental cache for patterned docs so a
-      // pose change always rebuilds (the instances are small — correctness first).
-      const solids = evaluateFeatures(doc, scope, hasAssemblyPatterns(req.doc) ? undefined : cache);
-      return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(doc) }, transfer: meshTransferables(solids) };
+      const solids = evaluateForRender(req.doc, scope, cache);
+      return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(req.doc) }, transfer: meshTransferables(solids) };
     }
     if (req.kind === "edges") {
       const edges = featureEdges(geometryDoc(req.doc, scope), scope, req.featureId);
@@ -154,10 +160,8 @@ export class InlineGeometryBackend implements GeometryBackend {
   }
   ready(): boolean { return this.isReady; }
   async evaluate(doc: CadDocument): Promise<EvaluateResult> {
-    const scope = scopeOf(doc);
-    const d = geometryDoc(doc, scope);
-    const solids = evaluateFeatures(d, scope, hasAssemblyPatterns(doc) ? undefined : this.cache);
-    return { solids, facePlanes: collectFacePlanes(d) };
+    const solids = evaluateForRender(doc, scopeOf(doc), this.cache);
+    return { solids, facePlanes: collectFacePlanes(doc) };
   }
   async edges(doc: CadDocument, featureId: string): Promise<Edge3D[]> {
     const scope = scopeOf(doc);
