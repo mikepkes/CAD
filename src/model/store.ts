@@ -11,13 +11,10 @@ import { resolveParameters } from "./parameters";
 import { availableOps } from "./selectionOps";
 import { ChatEntry, describeDocument } from "./agent";
 import { createAgentController, AGENT_KEY_LS, AGENT_MODEL_LS } from "./agentController";
-import { enableWebMcp, disableWebMcp } from "./webmcp";
-import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus, isTauri, startDesktopMcp, stopDesktopMcp } from "./desktopMcp";
+import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus } from "./desktopMcp";
+import { createMcpController, WEBMCP_LS, DESKTOP_MCP_LS, DESKTOP_MCP_PORT_LS } from "./mcpController";
 import { getActiveScene } from "../viewport/sceneRef";
 
-const WEBMCP_LS = "chisel.webmcp.enabled";
-const DESKTOP_MCP_LS = "chisel.desktopmcp.enabled";
-const DESKTOP_MCP_PORT_LS = "chisel.desktopmcp.port";
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
 import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
@@ -336,6 +333,13 @@ export const useStore = create<AppState>((set, get) => {
     commandHost,
   });
 
+  // The MCP surface actions (WebMCP + desktop server).
+  const mcpActions = createMcpController({
+    getState: get,
+    patch: set,
+    makeHost: () => ({ registry, ...commandHost() }),
+  });
+
   return {
     session,
     rev: 0,
@@ -639,33 +643,7 @@ export const useStore = create<AppState>((set, get) => {
     setSettingsOpen: (open) => set({ settingsOpen: open }),
     setHotkeysOpen: (open) => set({ hotkeysOpen: open }),
     ...agentActions,
-    setWebMcpEnabled: (on) => {
-      try { localStorage.setItem(WEBMCP_LS, on ? "1" : "0"); } catch { /* ignore */ }
-      if (on) enableWebMcp({ registry, ...commandHost() });
-      else disableWebMcp();
-      set({ webMcpEnabled: on });
-    },
-    setDesktopMcpEnabled: async (on) => {
-      try { localStorage.setItem(DESKTOP_MCP_LS, on ? "1" : "0"); } catch { /* ignore */ }
-      set({ desktopMcpEnabled: on });
-      if (!isTauri()) return;
-      try {
-        const status = on
-          ? await startDesktopMcp({ registry, ...commandHost() }, get().desktopMcpPort)
-          : await stopDesktopMcp();
-        set({ desktopMcp: status });
-      } catch (e) {
-        // e.g. port in use — leave the preference as set but report why it isn't live.
-        set({ desktopMcp: { running: false, error: (e as Error).message || String(e) } });
-      }
-    },
-    setDesktopMcpPort: (port) => {
-      const p = Math.min(65535, Math.max(1024, Math.round(port))) || DEFAULT_DESKTOP_MCP_PORT;
-      try { localStorage.setItem(DESKTOP_MCP_PORT_LS, String(p)); } catch { /* ignore */ }
-      set({ desktopMcpPort: p });
-      // Live server follows the port (mcp_start on a new port restarts it).
-      if (get().desktopMcpEnabled && isTauri()) void get().setDesktopMcpEnabled(true);
-    },
+    ...mcpActions,
     createTimelineGroup: (opIds, name) => {
       const doc = get().session.doc;
       const ids = opIds.filter((id) => doc.operations.some((o) => o.opId === id));
@@ -828,8 +806,7 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     initApp: async () => {
-      if (get().webMcpEnabled) enableWebMcp({ registry, ...commandHost() });
-      if (isTauri() && get().desktopMcpEnabled) void get().setDesktopMcpEnabled(true);
+      mcpActions.initMcp();
       let saved: string | null = null;
       try {
         saved = localStorage.getItem(AUTOSAVE_KEY);
