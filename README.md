@@ -2,6 +2,13 @@
 
 **Live demo: https://mikepkes.github.io/CAD/**
 
+**Try the parametric customize mode** (slider-only product tuning, with a live
+pass/fail motion study):
+**https://mikepkes.github.io/CAD/?mode=customize&example=gyroscope** — drag the
+sliders to resize the print-in-place gyroscope gimbal; after a short dwell it
+sweeps both rings through a full turn and tells you whether the chosen
+dimensions still rotate freely or jam.
+
 A **local-first, browser-based parametric CAD** app. It runs entirely in the
 browser (static, GitHub-Pages-servable) and is built so the geometry is
 **math-exact and CNC/3D-print ready**, not just a pretty picture. The long-term
@@ -171,6 +178,27 @@ mcp/             MCP server exposing the core to agents
   geometry — all command-based, so they're parametric and undoable.
 - **Save / Open** `.chisel.json` and **autosave** to the browser, so a reload
   restores your work. Files store just the operation recipe and rebuild on load.
+
+## Customize mode
+
+A slider-only view for tuning a parametric model to your dimensions, opened
+straight from a URL:
+
+```
+?mode=customize&example=gyroscope      # a bundled example (public/examples/<name>.json)
+?mode=customize&model=<url-to.json>    # any Chisel CAD model file
+```
+
+It shows just the 3D preview with the model's **bounded parameters** (those with
+a min/max range or a value list — see the `⋯` editor in the Parameters panel)
+as sliders and dropdowns, overlaid so the model stays visible — a floating card
+on desktop, a bottom sheet on phones. Every change redraws the preview
+immediately; after a short dwell a **motion study** runs on a dedicated worker
+and a badge reports whether the configuration still works: *checking…* (with
+progress) → *passes* or *fails*, naming what collides. The study sweeps each
+driven revolute joint through a full 360° turn and fails if any two bodies
+interpenetrate or the build errors — so a value that would jam or break the
+mechanism is flagged before you print it.
 
 ## Roadmap
 
