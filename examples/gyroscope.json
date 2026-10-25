@@ -1,0 +1,796 @@
+{
+  "format": "chisel-cad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 139,
+  "rollbackIndex": 33,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ"
+      },
+      "createdIds": [
+        "sketch2",
+        "pt3"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688286
+    },
+    {
+      "opId": "op4",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch2",
+        "points": [
+          {
+            "x": 45,
+            "y": -6
+          },
+          {
+            "x": 51,
+            "y": -6
+          },
+          {
+            "x": 51,
+            "y": 6
+          },
+          {
+            "x": 45,
+            "y": 6
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt5",
+        "pt6",
+        "pt7",
+        "pt8",
+        "ln9",
+        "ln10",
+        "ln11",
+        "ln12"
+      ],
+      "label": "Polyline",
+      "at": 1792894688494
+    },
+    {
+      "opId": "op13",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch2",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "angle": "360",
+        "name": "Ring 1 (frame)"
+      },
+      "createdIds": [
+        "rev14"
+      ],
+      "label": "Revolve",
+      "at": 1792894688555
+    },
+    {
+      "opId": "op15",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ"
+      },
+      "createdIds": [
+        "sketch16",
+        "pt17"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688561
+    },
+    {
+      "opId": "op18",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch16",
+        "points": [
+          {
+            "x": 46,
+            "y": 0
+          },
+          {
+            "x": 46,
+            "y": 2.2
+          },
+          {
+            "x": 42,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt19",
+        "pt20",
+        "pt21",
+        "ln22",
+        "ln23",
+        "ln24"
+      ],
+      "label": "Polyline",
+      "at": 1792894688572
+    },
+    {
+      "opId": "op25",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch16",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R1 cone +X"
+      },
+      "createdIds": [
+        "rev26"
+      ],
+      "label": "Revolve",
+      "at": 1792894688593
+    },
+    {
+      "opId": "op27",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ"
+      },
+      "createdIds": [
+        "sketch28",
+        "pt29"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688598
+    },
+    {
+      "opId": "op30",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch28",
+        "points": [
+          {
+            "x": -46,
+            "y": 0
+          },
+          {
+            "x": -46,
+            "y": 2.2
+          },
+          {
+            "x": -42,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt31",
+        "pt32",
+        "pt33",
+        "ln34",
+        "ln35",
+        "ln36"
+      ],
+      "label": "Polyline",
+      "at": 1792894688604
+    },
+    {
+      "opId": "op37",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch28",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R1 cone -X"
+      },
+      "createdIds": [
+        "rev38"
+      ],
+      "label": "Revolve",
+      "at": 1792894688622
+    },
+    {
+      "opId": "op39",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ"
+      },
+      "createdIds": [
+        "sketch40",
+        "pt41"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688626
+    },
+    {
+      "opId": "op42",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch40",
+        "points": [
+          {
+            "x": 33,
+            "y": -6
+          },
+          {
+            "x": 39,
+            "y": -6
+          },
+          {
+            "x": 39,
+            "y": 6
+          },
+          {
+            "x": 33,
+            "y": 6
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt43",
+        "pt44",
+        "pt45",
+        "pt46",
+        "ln47",
+        "ln48",
+        "ln49",
+        "ln50"
+      ],
+      "label": "Polyline",
+      "at": 1792894688634
+    },
+    {
+      "opId": "op51",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch40",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "angle": "360",
+        "name": "Ring 2 (middle)"
+      },
+      "createdIds": [
+        "rev52"
+      ],
+      "label": "Revolve",
+      "at": 1792894688657
+    },
+    {
+      "opId": "op53",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ"
+      },
+      "createdIds": [
+        "sketch54",
+        "pt55"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688662
+    },
+    {
+      "opId": "op56",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch54",
+        "points": [
+          {
+            "x": 38,
+            "y": 0
+          },
+          {
+            "x": 38,
+            "y": 2.2
+          },
+          {
+            "x": 41.4,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt57",
+        "pt58",
+        "pt59",
+        "ln60",
+        "ln61",
+        "ln62"
+      ],
+      "label": "Polyline",
+      "at": 1792894688671
+    },
+    {
+      "opId": "op63",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch54",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R2 cone +X"
+      },
+      "createdIds": [
+        "rev64"
+      ],
+      "label": "Revolve",
+      "at": 1792894688689
+    },
+    {
+      "opId": "op65",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ"
+      },
+      "createdIds": [
+        "sketch66",
+        "pt67"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688701
+    },
+    {
+      "opId": "op68",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch66",
+        "points": [
+          {
+            "x": -38,
+            "y": 0
+          },
+          {
+            "x": -38,
+            "y": 2.2
+          },
+          {
+            "x": -41.4,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt69",
+        "pt70",
+        "pt71",
+        "ln72",
+        "ln73",
+        "ln74"
+      ],
+      "label": "Polyline",
+      "at": 1792894688716
+    },
+    {
+      "opId": "op75",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch66",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R2 cone -X"
+      },
+      "createdIds": [
+        "rev76"
+      ],
+      "label": "Revolve",
+      "at": 1792894688739
+    },
+    {
+      "opId": "op77",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ"
+      },
+      "createdIds": [
+        "sketch78",
+        "pt79"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688744
+    },
+    {
+      "opId": "op80",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch78",
+        "points": [
+          {
+            "x": 34,
+            "y": 0
+          },
+          {
+            "x": 34,
+            "y": 2.2
+          },
+          {
+            "x": 30,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt81",
+        "pt82",
+        "pt83",
+        "ln84",
+        "ln85",
+        "ln86"
+      ],
+      "label": "Polyline",
+      "at": 1792894688766
+    },
+    {
+      "opId": "op87",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch78",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R2 cone +Y"
+      },
+      "createdIds": [
+        "rev88"
+      ],
+      "label": "Revolve",
+      "at": 1792894688797
+    },
+    {
+      "opId": "op89",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ"
+      },
+      "createdIds": [
+        "sketch90",
+        "pt91"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688803
+    },
+    {
+      "opId": "op92",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch90",
+        "points": [
+          {
+            "x": -34,
+            "y": 0
+          },
+          {
+            "x": -34,
+            "y": 2.2
+          },
+          {
+            "x": -30,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt93",
+        "pt94",
+        "pt95",
+        "ln96",
+        "ln97",
+        "ln98"
+      ],
+      "label": "Polyline",
+      "at": 1792894688820
+    },
+    {
+      "opId": "op99",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch90",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R2 cone -Y"
+      },
+      "createdIds": [
+        "rev100"
+      ],
+      "label": "Revolve",
+      "at": 1792894688848
+    },
+    {
+      "opId": "op101",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ"
+      },
+      "createdIds": [
+        "sketch102",
+        "pt103"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688855
+    },
+    {
+      "opId": "op104",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch102",
+        "points": [
+          {
+            "x": 21,
+            "y": -6
+          },
+          {
+            "x": 27,
+            "y": -6
+          },
+          {
+            "x": 27,
+            "y": 6
+          },
+          {
+            "x": 21,
+            "y": 6
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt105",
+        "pt106",
+        "pt107",
+        "pt108",
+        "ln109",
+        "ln110",
+        "ln111",
+        "ln112"
+      ],
+      "label": "Polyline",
+      "at": 1792894688867
+    },
+    {
+      "opId": "op113",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch102",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "angle": "360",
+        "name": "Ring 3 (inner)"
+      },
+      "createdIds": [
+        "rev114"
+      ],
+      "label": "Revolve",
+      "at": 1792894688937
+    },
+    {
+      "opId": "op115",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ"
+      },
+      "createdIds": [
+        "sketch116",
+        "pt117"
+      ],
+      "label": "Create sketch",
+      "at": 1792894688945
+    },
+    {
+      "opId": "op118",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch116",
+        "points": [
+          {
+            "x": 26,
+            "y": 0
+          },
+          {
+            "x": 26,
+            "y": 2.2
+          },
+          {
+            "x": 29.4,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt119",
+        "pt120",
+        "pt121",
+        "ln122",
+        "ln123",
+        "ln124"
+      ],
+      "label": "Polyline",
+      "at": 1792894688962
+    },
+    {
+      "opId": "op125",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch116",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R3 cone +Y"
+      },
+      "createdIds": [
+        "rev126"
+      ],
+      "label": "Revolve",
+      "at": 1792894688993
+    },
+    {
+      "opId": "op127",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ"
+      },
+      "createdIds": [
+        "sketch128",
+        "pt129"
+      ],
+      "label": "Create sketch",
+      "at": 1792894689003
+    },
+    {
+      "opId": "op130",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch128",
+        "points": [
+          {
+            "x": -26,
+            "y": 0
+          },
+          {
+            "x": -26,
+            "y": 2.2
+          },
+          {
+            "x": -29.4,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt131",
+        "pt132",
+        "pt133",
+        "ln134",
+        "ln135",
+        "ln136"
+      ],
+      "label": "Polyline",
+      "at": 1792894689016
+    },
+    {
+      "opId": "op137",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch128",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R3 cone -Y"
+      },
+      "createdIds": [
+        "rev138"
+      ],
+      "label": "Revolve",
+      "at": 1792894689044
+    }
+  ],
+  "timelineGroups": []
+}
