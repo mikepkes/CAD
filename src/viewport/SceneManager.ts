@@ -83,6 +83,19 @@ const COLORS = {
   sectionCap: 0xc7ccd6, // steel fill on cut faces (Fusion-style)
 };
 
+// Distinct per-object colors used in section view, so each body (and its cut
+// cap) reads as its own part. Picked to stay legible on the dark background.
+const BODY_PALETTE = [
+  0x6f8cff, 0x4fc3a1, 0xe0863e, 0xd4607a, 0xb074e0, 0xd9b84a, 0x4aa6d9, 0x8fbf5a,
+];
+const bodyColor = (i: number) => BODY_PALETTE[((i % BODY_PALETTE.length) + BODY_PALETTE.length) % BODY_PALETTE.length];
+/** A slightly lighter tint of a body's colour for its section cap. */
+function tint(hex: number, f = 0.4): number {
+  const r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255;
+  const m = (c: number) => Math.round(c + (255 - c) * f);
+  return (m(r) << 16) | (m(g) << 8) | m(b);
+}
+
 /** A THREE clip plane for a section cut. Keeps the half below the offset along
  *  the base-plane normal (Z for XY, Y for XZ, X for YZ); `flip` keeps the other. */
 function sectionPlane(sec: { plane: "XY" | "XZ" | "YZ"; offset: number; flip: boolean }): THREE.Plane {
@@ -767,8 +780,7 @@ export class SceneManager {
 
     // Solids render in model mode (and faded while sketching).
     this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
-    if (data.solids) for (const s of data.solids) this.renderSolid(s, data.mode === "sketch");
-    if (this.clipPlane && data.solids && data.solids.length) this.addSectionCap(this.clipPlane, data.solids);
+    if (data.solids) data.solids.forEach((s, i) => this.renderSolid(s, data.mode === "sketch", i));
 
     if (data.sketch && data.plane) {
       this.renderSketch(data.sketch, data.plane, data);
@@ -776,15 +788,18 @@ export class SceneManager {
     }
   }
 
-  private renderSolid(s: SolidView, faded: boolean) {
+  private renderSolid(s: SolidView, faded: boolean, index: number) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(s.positions, 3));
     if (s.normals.length === s.positions.length) geo.setAttribute("normal", new THREE.BufferAttribute(s.normals, 3));
     else geo.computeVertexNormals();
     geo.setIndex(new THREE.BufferAttribute(s.indices, 1));
     const clip = this.clipPlane ? [this.clipPlane] : null;
+    // In section view each body gets its own colour so parts read apart; the
+    // normal (un-sectioned) view keeps the uniform body colour.
+    const color = clip ? bodyColor(index) : 0x7b86e0;
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x7b86e0,
+      color,
       metalness: 0.15,
       roughness: 0.5,
       side: THREE.DoubleSide,
@@ -795,10 +810,11 @@ export class SceneManager {
     const mesh = new THREE.Mesh(geo, mat);
     this.solidsGroup.add(mesh);
 
-    // Stencil pass: mark where the clip plane passes through solid material so
-    // the shared cap quad can fill only those pixels. Back faces increment,
-    // front faces decrement; non-zero ⇒ inside the body at the cut.
+    // Section cap for THIS body: a stencil pass marks where the clip plane cuts
+    // its material (back faces increment, front decrement), then a coloured quad
+    // fills those pixels and resets the stencil so the next body starts clean.
     if (clip) {
+      const base = 10 + index * 3;
       for (const [side, op] of [[THREE.BackSide, THREE.IncrementWrapStencilOp], [THREE.FrontSide, THREE.DecrementWrapStencilOp]] as const) {
         const sm = new THREE.MeshBasicMaterial({ depthWrite: false, depthTest: false, colorWrite: false, clippingPlanes: clip });
         sm.stencilWrite = true;
@@ -806,9 +822,10 @@ export class SceneManager {
         sm.side = side;
         sm.stencilFail = op; sm.stencilZFail = op; sm.stencilZPass = op;
         const stencilMesh = new THREE.Mesh(geo, sm);
-        stencilMesh.renderOrder = 1;
+        stencilMesh.renderOrder = base;
         this.solidsGroup.add(stencilMesh);
       }
+      this.addSectionCap(this.clipPlane!, s, tint(color), base + 1);
     }
 
     if (s.edges.length) {
@@ -822,30 +839,27 @@ export class SceneManager {
     }
   }
 
-  /** A filled quad over the cut, visible only where the stencil marks solid
-   *  material (the section faces). Sized and placed to span the model. */
-  private addSectionCap(plane: THREE.Plane, solids: SolidView[]) {
-    let lo = new THREE.Vector3(Infinity, Infinity, Infinity), hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
-    for (const s of solids) {
-      const p = s.positions;
-      for (let i = 0; i < p.length; i += 3) {
-        lo.min(new THREE.Vector3(p[i], p[i + 1], p[i + 2]));
-        hi.max(new THREE.Vector3(p[i], p[i + 1], p[i + 2]));
-      }
+  /** A filled quad over one body's cut, visible only where that body's stencil
+   *  is non-zero. Sized to the body and coloured to match it; drawing it resets
+   *  the stencil to 0 so the next body's cap is independent. */
+  private addSectionCap(plane: THREE.Plane, s: SolidView, color: number, renderOrder: number) {
+    const lo = new THREE.Vector3(Infinity, Infinity, Infinity), hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+    const p = s.positions;
+    for (let i = 0; i < p.length; i += 3) {
+      lo.min(new THREE.Vector3(p[i], p[i + 1], p[i + 2]));
+      hi.max(new THREE.Vector3(p[i], p[i + 1], p[i + 2]));
     }
     const ctr = lo.clone().add(hi).multiplyScalar(0.5);
-    const size = lo.distanceTo(hi) * 1.5 || 200;
-    const capMat = new THREE.MeshStandardMaterial({ color: COLORS.sectionCap, metalness: 0.1, roughness: 0.8, side: THREE.DoubleSide });
+    const size = lo.distanceTo(hi) * 1.2 || 200;
+    const capMat = new THREE.MeshStandardMaterial({ color, metalness: 0.1, roughness: 0.75, side: THREE.DoubleSide });
     capMat.stencilWrite = true;
     capMat.stencilRef = 0;
     capMat.stencilFunc = THREE.NotEqualStencilFunc;
     capMat.stencilFail = THREE.ReplaceStencilOp; capMat.stencilZFail = THREE.ReplaceStencilOp; capMat.stencilZPass = THREE.ReplaceStencilOp;
     const cap = new THREE.Mesh(new THREE.PlaneGeometry(size, size), capMat);
-    // Orient the quad into the clip plane and sit it on that plane near the model.
     cap.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), plane.normal);
-    const onPlane = ctr.clone().sub(plane.normal.clone().multiplyScalar(plane.distanceToPoint(ctr)));
-    cap.position.copy(onPlane);
-    cap.renderOrder = 2;
+    cap.position.copy(ctr.clone().sub(plane.normal.clone().multiplyScalar(plane.distanceToPoint(ctr))));
+    cap.renderOrder = renderOrder;
     this.solidsGroup.add(cap);
   }
 
