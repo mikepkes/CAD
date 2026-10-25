@@ -99,6 +99,7 @@ function buildView(s: AppState): ViewData {
     datumPlanes,
     extrudeRegions: buildExtrudeRegions(s),
     extrudePreview: buildExtrudePreview(s),
+    section: s.section,
   };
 }
 

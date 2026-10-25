@@ -48,6 +48,47 @@ function GridControls() {
   );
 }
 
+function SectionControls() {
+  const section = useStore((s) => s.section);
+  const setSection = useStore((s) => s.setSection);
+  const hasSolids = useStore((s) => Object.keys(s.solids).length > 0);
+  if (!hasSolids) return null;
+  const on = !!section;
+  const cur = section ?? { plane: "XY" as const, offset: 0, flip: false };
+  return (
+    <div className="grid-controls" title="Cross-section: clip the model on a plane to see inside">
+      <label className="toggle">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => setSection(e.target.checked ? cur : null)}
+        /> Section
+      </label>
+      {on && (
+        <>
+          <select
+            className="offset-input"
+            value={cur.plane}
+            title="Section plane"
+            onChange={(e) => setSection({ ...cur, plane: e.target.value as "XY" | "XZ" | "YZ" })}
+          >
+            {PLANES.map((p) => <option key={p.id} value={p.id}>{p.id}</option>)}
+          </select>
+          <input
+            className="grid-size"
+            type="number"
+            step={1}
+            value={cur.offset}
+            title="Offset of the cut along the plane normal (mm)"
+            onChange={(e) => setSection({ ...cur, offset: Number(e.target.value) || 0 })}
+          />
+          <button className="icon-btn" title="Flip which side is kept" onClick={() => setSection({ ...cur, flip: !cur.flip })}>⇄</button>
+        </>
+      )}
+    </div>
+  );
+}
+
 const TOOLS: { id: Tool; label: string; key: string; glyph: string }[] = [
   { id: "select", label: "Select", key: "S", glyph: "⤢" },
   { id: "line", label: "Line", key: "L", glyph: "╱" },
@@ -277,6 +318,7 @@ export function Toolbar() {
             <input type="checkbox" checked={showPlanes} onChange={toggleShowPlanes} /> Planes
           </label>
           <GridControls />
+          <SectionControls />
         </>
       )}
     </div>

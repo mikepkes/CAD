@@ -86,6 +86,8 @@ export interface AppState {
   showPlanes: boolean;
   showGrid: boolean;
   showConstraints: boolean;
+  /** Cross-section view: clip the solids on a base plane at an offset (null = off). */
+  section: { plane: "XY" | "XZ" | "YZ"; offset: number; flip: boolean } | null;
   /** Grid cell size (mm) and whether drawing snaps to grid intersections. */
   gridSize: number;
   gridSnap: boolean;
@@ -136,6 +138,8 @@ export interface AppState {
   setHover: (id: string | null) => void;
   toggleShowPlanes: () => void;
   toggleShowGrid: () => void;
+  /** Turn the section view on/off, or update its plane/offset/flip. */
+  setSection: (section: { plane: "XY" | "XZ" | "YZ"; offset: number; flip: boolean } | null) => void;
   setGridSize: (n: number) => void;
   setGridSnap: (on: boolean) => void;
   toggleShowConstraints: () => void;
@@ -383,6 +387,7 @@ export const useStore = create<AppState>((set, get) => {
     hover: null,
     showPlanes: true,
     showGrid: true,
+    section: null,
     gridSize: 10,
     gridSnap: false,
     showConstraints: true,
@@ -456,6 +461,7 @@ export const useStore = create<AppState>((set, get) => {
     setHover: (id) => set({ hover: id }),
     toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
     toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+    setSection: (section) => set({ section }),
     setGridSize: (n) => set({ gridSize: Math.max(0.1, n) }),
     setGridSnap: (on) => set({ gridSnap: on }),
     toggleShowConstraints: () => set((s) => ({ showConstraints: !s.showConstraints })),
