@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 481,
-  "rollbackIndex": 103,
+  "nextId": 626,
+  "rollbackIndex": 133,
   "operations": [
     {
       "opId": "op1",
@@ -20,7 +20,7 @@
         "param2"
       ],
       "label": "Add parameter",
-      "at": 1792970086986
+      "at": 1792971334830
     },
     {
       "opId": "op3",
@@ -36,7 +36,7 @@
         "param4"
       ],
       "label": "Add parameter",
-      "at": 1792970086990
+      "at": 1792971334832
     },
     {
       "opId": "op5",
@@ -52,7 +52,7 @@
         "param6"
       ],
       "label": "Add parameter",
-      "at": 1792970086990
+      "at": 1792971334833
     },
     {
       "opId": "op7",
@@ -68,7 +68,7 @@
         "param8"
       ],
       "label": "Add parameter",
-      "at": 1792970086990
+      "at": 1792971334833
     },
     {
       "opId": "op9",
@@ -84,7 +84,7 @@
         "param10"
       ],
       "label": "Add parameter",
-      "at": 1792970086991
+      "at": 1792971334833
     },
     {
       "opId": "op11",
@@ -100,7 +100,7 @@
         "param12"
       ],
       "label": "Add parameter",
-      "at": 1792970086991
+      "at": 1792971334833
     },
     {
       "opId": "op13",
@@ -117,7 +117,7 @@
         "cmp14"
       ],
       "label": "New component",
-      "at": 1792970086992
+      "at": 1792971334834
     },
     {
       "opId": "op15",
@@ -131,7 +131,7 @@
         "pt17"
       ],
       "label": "Create sketch",
-      "at": 1792970086992
+      "at": 1792971334834
     },
     {
       "opId": "op18",
@@ -162,7 +162,7 @@
         "c30"
       ],
       "label": "Add rectangle",
-      "at": 1792970087024
+      "at": 1792971334875
     },
     {
       "opId": "op31",
@@ -175,7 +175,7 @@
         "ext32"
       ],
       "label": "Extrude",
-      "at": 1792970087028
+      "at": 1792971334879
     },
     {
       "opId": "op33",
@@ -192,7 +192,7 @@
         "cmp34"
       ],
       "label": "New component",
-      "at": 1792970087029
+      "at": 1792971334880
     },
     {
       "opId": "op35",
@@ -206,7 +206,7 @@
         "pt37"
       ],
       "label": "Create sketch",
-      "at": 1792970087030
+      "at": 1792971334881
     },
     {
       "opId": "op38",
@@ -237,7 +237,7 @@
         "c50"
       ],
       "label": "Add rectangle",
-      "at": 1792970087031
+      "at": 1792971334882
     },
     {
       "opId": "op51",
@@ -250,7 +250,7 @@
         "ext52"
       ],
       "label": "Extrude",
-      "at": 1792970087031
+      "at": 1792971334883
     },
     {
       "opId": "op53",
@@ -267,7 +267,7 @@
         "cmp54"
       ],
       "label": "New component",
-      "at": 1792970087032
+      "at": 1792971334884
     },
     {
       "opId": "op55",
@@ -281,7 +281,7 @@
         "pt57"
       ],
       "label": "Create sketch",
-      "at": 1792970087033
+      "at": 1792971334885
     },
     {
       "opId": "op58",
@@ -312,7 +312,7 @@
         "c70"
       ],
       "label": "Add rectangle",
-      "at": 1792970087033
+      "at": 1792971334885
     },
     {
       "opId": "op71",
@@ -325,7 +325,7 @@
         "ext72"
       ],
       "label": "Extrude",
-      "at": 1792970087034
+      "at": 1792971334886
     },
     {
       "opId": "op73",
@@ -342,7 +342,7 @@
         "cmp74"
       ],
       "label": "New component",
-      "at": 1792970087035
+      "at": 1792971334887
     },
     {
       "opId": "op75",
@@ -356,7 +356,7 @@
         "pt77"
       ],
       "label": "Create sketch",
-      "at": 1792970087036
+      "at": 1792971334888
     },
     {
       "opId": "op78",
@@ -387,7 +387,7 @@
         "c90"
       ],
       "label": "Add rectangle",
-      "at": 1792970087036
+      "at": 1792971334889
     },
     {
       "opId": "op91",
@@ -400,7 +400,7 @@
         "ext92"
       ],
       "label": "Extrude",
-      "at": 1792970087037
+      "at": 1792971334891
     },
     {
       "opId": "op93",
@@ -417,7 +417,7 @@
         "cmp94"
       ],
       "label": "New component",
-      "at": 1792970087037
+      "at": 1792971334892
     },
     {
       "opId": "op95",
@@ -431,7 +431,7 @@
         "pt97"
       ],
       "label": "Create sketch",
-      "at": 1792970087038
+      "at": 1792971334893
     },
     {
       "opId": "op98",
@@ -462,7 +462,7 @@
         "c110"
       ],
       "label": "Add rectangle",
-      "at": 1792970087039
+      "at": 1792971334894
     },
     {
       "opId": "op111",
@@ -475,7 +475,7 @@
         "ext112"
       ],
       "label": "Extrude",
-      "at": 1792970087039
+      "at": 1792971334894
     },
     {
       "opId": "op113",
@@ -489,7 +489,7 @@
         "pt115"
       ],
       "label": "Create sketch",
-      "at": 1792970087040
+      "at": 1792971334896
     },
     {
       "opId": "op116",
@@ -520,7 +520,7 @@
         "c128"
       ],
       "label": "Add rectangle",
-      "at": 1792970087041
+      "at": 1792971334897
     },
     {
       "opId": "op129",
@@ -534,7 +534,7 @@
         "ext130"
       ],
       "label": "Extrude",
-      "at": 1792970087042
+      "at": 1792971334899
     },
     {
       "opId": "op131",
@@ -548,7 +548,7 @@
         "pt133"
       ],
       "label": "Create sketch",
-      "at": 1792970087043
+      "at": 1792971334901
     },
     {
       "opId": "op134",
@@ -579,7 +579,7 @@
         "c146"
       ],
       "label": "Add rectangle",
-      "at": 1792970087044
+      "at": 1792971334903
     },
     {
       "opId": "op147",
@@ -595,7 +595,7 @@
         "ext148"
       ],
       "label": "Extrude",
-      "at": 1792970087045
+      "at": 1792971334905
     },
     {
       "opId": "op149",
@@ -612,7 +612,7 @@
         "cmp150"
       ],
       "label": "New component",
-      "at": 1792970087047
+      "at": 1792971334907
     },
     {
       "opId": "op151",
@@ -626,7 +626,7 @@
         "pt153"
       ],
       "label": "Create sketch",
-      "at": 1792970087048
+      "at": 1792971334909
     },
     {
       "opId": "op154",
@@ -657,7 +657,7 @@
         "c166"
       ],
       "label": "Add rectangle",
-      "at": 1792970087050
+      "at": 1792971334912
     },
     {
       "opId": "op167",
@@ -670,7 +670,7 @@
         "ext168"
       ],
       "label": "Extrude",
-      "at": 1792970087051
+      "at": 1792971334914
     },
     {
       "opId": "op169",
@@ -684,7 +684,7 @@
         "pt171"
       ],
       "label": "Create sketch",
-      "at": 1792970087052
+      "at": 1792971334916
     },
     {
       "opId": "op172",
@@ -715,7 +715,7 @@
         "c184"
       ],
       "label": "Add rectangle",
-      "at": 1792970087054
+      "at": 1792971334919
     },
     {
       "opId": "op185",
@@ -729,7 +729,7 @@
         "ext186"
       ],
       "label": "Extrude",
-      "at": 1792970087056
+      "at": 1792971334920
     },
     {
       "opId": "op187",
@@ -743,7 +743,7 @@
         "pt189"
       ],
       "label": "Create sketch",
-      "at": 1792970087058
+      "at": 1792971334922
     },
     {
       "opId": "op190",
@@ -774,7 +774,7 @@
         "c202"
       ],
       "label": "Add rectangle",
-      "at": 1792970087060
+      "at": 1792971334924
     },
     {
       "opId": "op203",
@@ -790,7 +790,7 @@
         "ext204"
       ],
       "label": "Extrude",
-      "at": 1792970087062
+      "at": 1792971334925
     },
     {
       "opId": "op205",
@@ -807,7 +807,7 @@
         "cmp206"
       ],
       "label": "New component",
-      "at": 1792970087064
+      "at": 1792971334927
     },
     {
       "opId": "op207",
@@ -821,7 +821,7 @@
         "pt209"
       ],
       "label": "Create sketch",
-      "at": 1792970087066
+      "at": 1792971334929
     },
     {
       "opId": "op210",
@@ -852,7 +852,7 @@
         "c222"
       ],
       "label": "Add rectangle",
-      "at": 1792970087067
+      "at": 1792971334930
     },
     {
       "opId": "op223",
@@ -865,7 +865,7 @@
         "ext224"
       ],
       "label": "Extrude",
-      "at": 1792970087069
+      "at": 1792971334932
     },
     {
       "opId": "op225",
@@ -879,7 +879,7 @@
         "pt227"
       ],
       "label": "Create sketch",
-      "at": 1792970087077
+      "at": 1792971334940
     },
     {
       "opId": "op228",
@@ -910,7 +910,7 @@
         "c240"
       ],
       "label": "Add rectangle",
-      "at": 1792970087079
+      "at": 1792971334942
     },
     {
       "opId": "op241",
@@ -924,7 +924,7 @@
         "ext242"
       ],
       "label": "Extrude",
-      "at": 1792970087081
+      "at": 1792971334944
     },
     {
       "opId": "op243",
@@ -938,7 +938,7 @@
         "pt245"
       ],
       "label": "Create sketch",
-      "at": 1792970087083
+      "at": 1792971334946
     },
     {
       "opId": "op246",
@@ -969,7 +969,7 @@
         "c258"
       ],
       "label": "Add rectangle",
-      "at": 1792970087085
+      "at": 1792971334949
     },
     {
       "opId": "op259",
@@ -985,7 +985,7 @@
         "ext260"
       ],
       "label": "Extrude",
-      "at": 1792970087087
+      "at": 1792971334951
     },
     {
       "opId": "op261",
@@ -1002,7 +1002,7 @@
         "cmp262"
       ],
       "label": "New component",
-      "at": 1792970087089
+      "at": 1792971334953
     },
     {
       "opId": "op263",
@@ -1016,7 +1016,7 @@
         "pt265"
       ],
       "label": "Create sketch",
-      "at": 1792970087092
+      "at": 1792971334954
     },
     {
       "opId": "op266",
@@ -1047,7 +1047,7 @@
         "c278"
       ],
       "label": "Add rectangle",
-      "at": 1792970087094
+      "at": 1792971334956
     },
     {
       "opId": "op279",
@@ -1060,7 +1060,7 @@
         "ext280"
       ],
       "label": "Extrude",
-      "at": 1792970087097
+      "at": 1792971334959
     },
     {
       "opId": "op281",
@@ -1074,7 +1074,7 @@
         "pt283"
       ],
       "label": "Create sketch",
-      "at": 1792970087099
+      "at": 1792971334962
     },
     {
       "opId": "op284",
@@ -1105,7 +1105,7 @@
         "c296"
       ],
       "label": "Add rectangle",
-      "at": 1792970087100
+      "at": 1792971334964
     },
     {
       "opId": "op297",
@@ -1119,7 +1119,7 @@
         "ext298"
       ],
       "label": "Extrude",
-      "at": 1792970087102
+      "at": 1792971334967
     },
     {
       "opId": "op299",
@@ -1133,7 +1133,7 @@
         "pt301"
       ],
       "label": "Create sketch",
-      "at": 1792970087104
+      "at": 1792971334970
     },
     {
       "opId": "op302",
@@ -1164,7 +1164,7 @@
         "c314"
       ],
       "label": "Add rectangle",
-      "at": 1792970087106
+      "at": 1792971334973
     },
     {
       "opId": "op315",
@@ -1180,7 +1180,7 @@
         "ext316"
       ],
       "label": "Extrude",
-      "at": 1792970087108
+      "at": 1792971334976
     },
     {
       "opId": "op317",
@@ -1197,7 +1197,7 @@
         "cmp318"
       ],
       "label": "New component",
-      "at": 1792970087110
+      "at": 1792971334978
     },
     {
       "opId": "op319",
@@ -1211,7 +1211,7 @@
         "pt321"
       ],
       "label": "Create sketch",
-      "at": 1792970087112
+      "at": 1792971334981
     },
     {
       "opId": "op322",
@@ -1242,7 +1242,7 @@
         "c334"
       ],
       "label": "Add rectangle",
-      "at": 1792970087115
+      "at": 1792971334984
     },
     {
       "opId": "op335",
@@ -1255,7 +1255,7 @@
         "ext336"
       ],
       "label": "Extrude",
-      "at": 1792970087116
+      "at": 1792971334987
     },
     {
       "opId": "op337",
@@ -1272,7 +1272,7 @@
         "cmp338"
       ],
       "label": "New component",
-      "at": 1792970087119
+      "at": 1792971334990
     },
     {
       "opId": "op339",
@@ -1286,7 +1286,7 @@
         "pt341"
       ],
       "label": "Create sketch",
-      "at": 1792970087125
+      "at": 1792971334997
     },
     {
       "opId": "op342",
@@ -1317,7 +1317,7 @@
         "c354"
       ],
       "label": "Add rectangle",
-      "at": 1792970087127
+      "at": 1792971335000
     },
     {
       "opId": "op355",
@@ -1330,7 +1330,7 @@
         "ext356"
       ],
       "label": "Extrude",
-      "at": 1792970087128
+      "at": 1792971335002
     },
     {
       "opId": "op357",
@@ -1347,7 +1347,7 @@
         "cmp358"
       ],
       "label": "New component",
-      "at": 1792970087130
+      "at": 1792971335005
     },
     {
       "opId": "op359",
@@ -1361,7 +1361,7 @@
         "pt361"
       ],
       "label": "Create sketch",
-      "at": 1792970087131
+      "at": 1792971335007
     },
     {
       "opId": "op362",
@@ -1392,7 +1392,7 @@
         "c374"
       ],
       "label": "Add rectangle",
-      "at": 1792970087133
+      "at": 1792971335011
     },
     {
       "opId": "op375",
@@ -1405,7 +1405,7 @@
         "ext376"
       ],
       "label": "Extrude",
-      "at": 1792970087135
+      "at": 1792971335014
     },
     {
       "opId": "op377",
@@ -1422,7 +1422,7 @@
         "cmp378"
       ],
       "label": "New component",
-      "at": 1792970087137
+      "at": 1792971335017
     },
     {
       "opId": "op379",
@@ -1436,7 +1436,7 @@
         "pt381"
       ],
       "label": "Create sketch",
-      "at": 1792970087139
+      "at": 1792971335020
     },
     {
       "opId": "op382",
@@ -1467,7 +1467,7 @@
         "c394"
       ],
       "label": "Add rectangle",
-      "at": 1792970087140
+      "at": 1792971335023
     },
     {
       "opId": "op395",
@@ -1480,7 +1480,7 @@
         "ext396"
       ],
       "label": "Extrude",
-      "at": 1792970087143
+      "at": 1792971335026
     },
     {
       "opId": "op397",
@@ -1492,7 +1492,7 @@
         "cmp398"
       ],
       "label": "New component",
-      "at": 1792970087145
+      "at": 1792971335028
     },
     {
       "opId": "op399",
@@ -1506,7 +1506,7 @@
         "pt401"
       ],
       "label": "Create sketch",
-      "at": 1792970087147
+      "at": 1792971335030
     },
     {
       "opId": "op402",
@@ -1537,7 +1537,7 @@
         "c414"
       ],
       "label": "Add rectangle",
-      "at": 1792970087149
+      "at": 1792971335033
     },
     {
       "opId": "op415",
@@ -1550,7 +1550,7 @@
         "ext416"
       ],
       "label": "Extrude",
-      "at": 1792970087151
+      "at": 1792971335036
     },
     {
       "opId": "op417",
@@ -1563,7 +1563,7 @@
         "cmp418"
       ],
       "label": "New component",
-      "at": 1792970087153
+      "at": 1792971335038
     },
     {
       "opId": "op419",
@@ -1577,7 +1577,7 @@
         "pt421"
       ],
       "label": "Create sketch",
-      "at": 1792970087155
+      "at": 1792971335039
     },
     {
       "opId": "op422",
@@ -1595,7 +1595,7 @@
         "ci424"
       ],
       "label": "Add circle",
-      "at": 1792970087157
+      "at": 1792971335042
     },
     {
       "opId": "op425",
@@ -1609,7 +1609,7 @@
         "ext426"
       ],
       "label": "Extrude",
-      "at": 1792970087162
+      "at": 1792971335048
     },
     {
       "opId": "op427",
@@ -1639,7 +1639,7 @@
         "jnt428"
       ],
       "label": "Joint",
-      "at": 1792970087164
+      "at": 1792971335051
     },
     {
       "opId": "op429",
@@ -1651,7 +1651,7 @@
         "cmp430"
       ],
       "label": "New component",
-      "at": 1792970087168
+      "at": 1792971335054
     },
     {
       "opId": "op431",
@@ -1665,7 +1665,7 @@
         "pt433"
       ],
       "label": "Create sketch",
-      "at": 1792970087170
+      "at": 1792971335057
     },
     {
       "opId": "op434",
@@ -1696,7 +1696,7 @@
         "c446"
       ],
       "label": "Add rectangle",
-      "at": 1792970087172
+      "at": 1792971335060
     },
     {
       "opId": "op447",
@@ -1709,7 +1709,7 @@
         "ext448"
       ],
       "label": "Extrude",
-      "at": 1792970087175
+      "at": 1792971335063
     },
     {
       "opId": "op449",
@@ -1739,7 +1739,7 @@
         "jnt450"
       ],
       "label": "Joint",
-      "at": 1792970087177
+      "at": 1792971335070
     },
     {
       "opId": "op451",
@@ -1751,7 +1751,7 @@
         "cmp452"
       ],
       "label": "New component",
-      "at": 1792970087180
+      "at": 1792971335073
     },
     {
       "opId": "op453",
@@ -1765,7 +1765,7 @@
         "pt455"
       ],
       "label": "Create sketch",
-      "at": 1792970087183
+      "at": 1792971335076
     },
     {
       "opId": "op456",
@@ -1796,7 +1796,7 @@
         "c468"
       ],
       "label": "Add rectangle",
-      "at": 1792970087185
+      "at": 1792971335079
     },
     {
       "opId": "op469",
@@ -1809,7 +1809,7 @@
         "ext470"
       ],
       "label": "Extrude",
-      "at": 1792970087187
+      "at": 1792971335081
     },
     {
       "opId": "op471",
@@ -1839,10 +1839,612 @@
         "jnt472"
       ],
       "label": "Joint",
-      "at": 1792970087189
+      "at": 1792971335084
     },
     {
       "opId": "op473",
+      "type": "component.create",
+      "params": {
+        "name": "Vise wheel",
+        "parent": "cmp398"
+      },
+      "createdIds": [
+        "cmp474"
+      ],
+      "label": "New component",
+      "at": 1792971335088
+    },
+    {
+      "opId": "op475",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp474"
+      },
+      "createdIds": [
+        "sketch476",
+        "pt477"
+      ],
+      "label": "Create sketch",
+      "at": 1792971335091
+    },
+    {
+      "opId": "op478",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch476",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 22
+      },
+      "createdIds": [
+        "pt479",
+        "ci480"
+      ],
+      "label": "Add circle",
+      "at": 1792971335097
+    },
+    {
+      "opId": "op481",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch476",
+        "distance": "48",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext482"
+      ],
+      "label": "Extrude",
+      "at": 1792971335100
+    },
+    {
+      "opId": "op483",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp474"
+      },
+      "createdIds": [
+        "sketch484",
+        "pt485"
+      ],
+      "label": "Create sketch",
+      "at": 1792971335103
+    },
+    {
+      "opId": "op486",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch484",
+        "corner": {
+          "x": -12,
+          "y": 97
+        },
+        "opposite": {
+          "x": 12,
+          "y": 112
+        }
+      },
+      "createdIds": [
+        "pt487",
+        "pt488",
+        "pt489",
+        "pt490",
+        "ln491",
+        "ln492",
+        "ln493",
+        "ln494",
+        "c495",
+        "c496",
+        "c497",
+        "c498"
+      ],
+      "label": "Add rectangle",
+      "at": 1792971335107
+    },
+    {
+      "opId": "op499",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch484",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360"
+      },
+      "createdIds": [
+        "rev500"
+      ],
+      "label": "Revolve",
+      "at": 1792971335110
+    },
+    {
+      "opId": "op501",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp474"
+      },
+      "createdIds": [
+        "sketch502",
+        "pt503"
+      ],
+      "label": "Create sketch",
+      "at": 1792971335114
+    },
+    {
+      "opId": "op504",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch502",
+        "corner": {
+          "x": 19,
+          "y": -9
+        },
+        "opposite": {
+          "x": 100,
+          "y": 9
+        }
+      },
+      "createdIds": [
+        "pt505",
+        "pt506",
+        "pt507",
+        "pt508",
+        "ln509",
+        "ln510",
+        "ln511",
+        "ln512",
+        "c513",
+        "c514",
+        "c515",
+        "c516"
+      ],
+      "label": "Add rectangle",
+      "at": 1792971335117
+    },
+    {
+      "opId": "op517",
+      "type": "sketch.circularPattern",
+      "params": {
+        "sketch": "sketch502",
+        "entities": [
+          "ln509",
+          "ln510",
+          "ln511",
+          "ln512"
+        ],
+        "cx": 0,
+        "cy": 0,
+        "count": 3,
+        "step": 120
+      },
+      "createdIds": [
+        "ln518",
+        "pt519",
+        "pt520",
+        "ln521",
+        "pt522",
+        "ln523",
+        "pt524",
+        "ln525",
+        "ln526",
+        "pt527",
+        "pt528",
+        "ln529",
+        "pt530",
+        "ln531",
+        "pt532",
+        "ln533"
+      ],
+      "label": "Circular pattern",
+      "at": 1792971335121
+    },
+    {
+      "opId": "op534",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch502",
+        "distance": "13",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext535"
+      ],
+      "label": "Extrude",
+      "at": 1792971335126
+    },
+    {
+      "opId": "op536",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "base": "cmp398",
+        "moved": "cmp474",
+        "baseOrigin": {
+          "x": 80,
+          "y": -34,
+          "z": 420
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "value": "viseGap*14.4",
+        "name": "Wheel spin"
+      },
+      "createdIds": [
+        "jnt537"
+      ],
+      "label": "Joint",
+      "at": 1792971335130
+    },
+    {
+      "opId": "op538",
+      "type": "component.create",
+      "params": {
+        "name": "Wheel handle 1",
+        "parent": "cmp474",
+        "position": {
+          "x": 92,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "createdIds": [
+        "cmp539"
+      ],
+      "label": "New component",
+      "at": 1792971335134
+    },
+    {
+      "opId": "op540",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp539"
+      },
+      "createdIds": [
+        "sketch541",
+        "pt542"
+      ],
+      "label": "Create sketch",
+      "at": 1792971335138
+    },
+    {
+      "opId": "op543",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch541",
+        "points": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 0,
+            "y": 11
+          },
+          {
+            "x": -5,
+            "y": 11
+          },
+          {
+            "x": -8,
+            "y": 8
+          },
+          {
+            "x": -24,
+            "y": 7
+          },
+          {
+            "x": -40,
+            "y": 13
+          },
+          {
+            "x": -52,
+            "y": 9
+          },
+          {
+            "x": -58,
+            "y": 0
+          }
+        ]
+      },
+      "createdIds": [
+        "pt544",
+        "pt545",
+        "pt546",
+        "pt547",
+        "pt548",
+        "pt549",
+        "pt550",
+        "pt551",
+        "ln552",
+        "ln553",
+        "ln554",
+        "ln555",
+        "ln556",
+        "ln557",
+        "ln558",
+        "ln559"
+      ],
+      "label": "Polyline",
+      "at": 1792971335142
+    },
+    {
+      "opId": "op560",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch541",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360"
+      },
+      "createdIds": [
+        "rev561"
+      ],
+      "label": "Revolve",
+      "at": 1792971335149
+    },
+    {
+      "opId": "op562",
+      "type": "component.create",
+      "params": {
+        "name": "Wheel handle 2",
+        "parent": "cmp474",
+        "position": {
+          "x": -45.99999999999998,
+          "y": 0,
+          "z": 79.67433714816836
+        }
+      },
+      "createdIds": [
+        "cmp563"
+      ],
+      "label": "New component",
+      "at": 1792971335153
+    },
+    {
+      "opId": "op564",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp563"
+      },
+      "createdIds": [
+        "sketch565",
+        "pt566"
+      ],
+      "label": "Create sketch",
+      "at": 1792971335157
+    },
+    {
+      "opId": "op567",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch565",
+        "points": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 0,
+            "y": 11
+          },
+          {
+            "x": -5,
+            "y": 11
+          },
+          {
+            "x": -8,
+            "y": 8
+          },
+          {
+            "x": -24,
+            "y": 7
+          },
+          {
+            "x": -40,
+            "y": 13
+          },
+          {
+            "x": -52,
+            "y": 9
+          },
+          {
+            "x": -58,
+            "y": 0
+          }
+        ]
+      },
+      "createdIds": [
+        "pt568",
+        "pt569",
+        "pt570",
+        "pt571",
+        "pt572",
+        "pt573",
+        "pt574",
+        "pt575",
+        "ln576",
+        "ln577",
+        "ln578",
+        "ln579",
+        "ln580",
+        "ln581",
+        "ln582",
+        "ln583"
+      ],
+      "label": "Polyline",
+      "at": 1792971335161
+    },
+    {
+      "opId": "op584",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch565",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360"
+      },
+      "createdIds": [
+        "rev585"
+      ],
+      "label": "Revolve",
+      "at": 1792971335165
+    },
+    {
+      "opId": "op586",
+      "type": "component.create",
+      "params": {
+        "name": "Wheel handle 3",
+        "parent": "cmp474",
+        "position": {
+          "x": -46.00000000000004,
+          "y": 0,
+          "z": -79.67433714816833
+        }
+      },
+      "createdIds": [
+        "cmp587"
+      ],
+      "label": "New component",
+      "at": 1792971335169
+    },
+    {
+      "opId": "op588",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp587"
+      },
+      "createdIds": [
+        "sketch589",
+        "pt590"
+      ],
+      "label": "Create sketch",
+      "at": 1792971335173
+    },
+    {
+      "opId": "op591",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch589",
+        "points": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 0,
+            "y": 11
+          },
+          {
+            "x": -5,
+            "y": 11
+          },
+          {
+            "x": -8,
+            "y": 8
+          },
+          {
+            "x": -24,
+            "y": 7
+          },
+          {
+            "x": -40,
+            "y": 13
+          },
+          {
+            "x": -52,
+            "y": 9
+          },
+          {
+            "x": -58,
+            "y": 0
+          }
+        ]
+      },
+      "createdIds": [
+        "pt592",
+        "pt593",
+        "pt594",
+        "pt595",
+        "pt596",
+        "pt597",
+        "pt598",
+        "pt599",
+        "ln600",
+        "ln601",
+        "ln602",
+        "ln603",
+        "ln604",
+        "ln605",
+        "ln606",
+        "ln607"
+      ],
+      "label": "Polyline",
+      "at": 1792971335178
+    },
+    {
+      "opId": "op608",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch589",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360"
+      },
+      "createdIds": [
+        "rev609"
+      ],
+      "label": "Revolve",
+      "at": 1792971335182
+    },
+    {
+      "opId": "op610",
       "type": "material.create",
       "params": {
         "name": "White Oak",
@@ -1850,13 +2452,13 @@
         "species": "white-oak"
       },
       "createdIds": [
-        "mat474"
+        "mat611"
       ],
       "label": "Create material",
-      "at": 1792970087192
+      "at": 1792971335186
     },
     {
-      "opId": "op475",
+      "opId": "op612",
       "type": "material.create",
       "params": {
         "name": "Steel",
@@ -1865,53 +2467,127 @@
         "color": "#8a8f96"
       },
       "createdIds": [
-        "mat476"
+        "mat613"
       ],
       "label": "Create material",
-      "at": 1792970087195
+      "at": 1792971335190
     },
     {
-      "opId": "op477",
+      "opId": "op614",
+      "type": "material.create",
+      "params": {
+        "name": "Cast Iron",
+        "kind": "metal",
+        "color": "#52555b",
+        "roughness": 0.6,
+        "metalness": 0.5
+      },
+      "createdIds": [
+        "mat615"
+      ],
+      "label": "Create material",
+      "at": 1792971335198
+    },
+    {
+      "opId": "op616",
+      "type": "material.create",
+      "params": {
+        "name": "Beech",
+        "kind": "wood",
+        "species": "beech"
+      },
+      "createdIds": [
+        "mat617"
+      ],
+      "label": "Create material",
+      "at": 1792971335202
+    },
+    {
+      "opId": "op618",
       "type": "material.assign",
       "params": {
-        "material": "mat474"
+        "material": "mat611"
       },
       "createdIds": [],
       "label": "Assign material",
-      "at": 1792970087200
+      "at": 1792971335206
     },
     {
-      "opId": "op478",
+      "opId": "op619",
       "type": "material.assign",
       "params": {
-        "material": "mat476",
+        "material": "mat613",
         "component": "cmp418"
       },
       "createdIds": [],
       "label": "Assign material",
-      "at": 1792970087203
+      "at": 1792971335211
     },
     {
-      "opId": "op479",
+      "opId": "op620",
       "type": "material.assign",
       "params": {
-        "material": "mat476",
+        "material": "mat613",
         "component": "cmp430"
       },
       "createdIds": [],
       "label": "Assign material",
-      "at": 1792970087206
+      "at": 1792971335215
     },
     {
-      "opId": "op480",
+      "opId": "op621",
       "type": "material.assign",
       "params": {
-        "material": "mat476",
+        "material": "mat613",
         "component": "cmp452"
       },
       "createdIds": [],
       "label": "Assign material",
-      "at": 1792970087208
+      "at": 1792971335219
+    },
+    {
+      "opId": "op622",
+      "type": "material.assign",
+      "params": {
+        "material": "mat615",
+        "component": "cmp474"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1792971335223
+    },
+    {
+      "opId": "op623",
+      "type": "material.assign",
+      "params": {
+        "material": "mat617",
+        "component": "cmp539"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1792971335226
+    },
+    {
+      "opId": "op624",
+      "type": "material.assign",
+      "params": {
+        "material": "mat617",
+        "component": "cmp563"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1792971335230
+    },
+    {
+      "opId": "op625",
+      "type": "material.assign",
+      "params": {
+        "material": "mat617",
+        "component": "cmp587"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1792971335234
     }
   ],
   "timelineGroups": []

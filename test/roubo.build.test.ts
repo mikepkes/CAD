@@ -150,12 +150,51 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
     armIds.push(arm);
   }
 
-  // ---- materials: white oak everywhere, steel hardware.
+  // ---- vise handwheel (cast iron) with turned wooden handles, on the screw front.
+  // Spins about the screw axis (Y) as the vise racks: angle ∝ viseGap.
+  const R = 112, hubR = 22, hubLen = 48, rimT = 15, rimW = 24, spokeW = 18, spokeT = 13;
+  const wheelCenter = { x: chopW / 2, y: -34, z: chopH - 150 }; // chop-local, on the screw axis, in front
+  const wheel = (await dis(s, "component.create", { name: "Vise wheel", parent: chop }))[0];
+  // hub: cylinder along Y
+  const hsk = (await dis(s, "sketch.create", { plane: "XZ", component: wheel }))[0];
+  await dis(s, "sketch.addCircle", { sketch: hsk, center: { x: 0, y: 0 }, radius: hubR });
+  await dis(s, "feature.extrude", { sketch: hsk, distance: String(hubLen), symmetric: true });
+  // rim: revolve a rectangular section about the Y axis → a ring
+  const rsk = (await dis(s, "sketch.create", { plane: "YZ", component: wheel }))[0];
+  await dis(s, "sketch.addRectangle", { sketch: rsk, corner: { x: -rimW / 2, y: R - rimT }, opposite: { x: rimW / 2, y: R } });
+  await dis(s, "feature.revolve", { sketch: rsk, axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "360" });
+  // spokes: a radial bar, circular-patterned ×3, extruded across Y
+  const ssk2 = (await dis(s, "sketch.create", { plane: "XZ", component: wheel }))[0];
+  const spokeRect = await dis(s, "sketch.addRectangle", { sketch: ssk2, corner: { x: hubR - 3, y: -spokeW / 2 }, opposite: { x: R - rimT + 3, y: spokeW / 2 } });
+  await dis(s, "sketch.circularPattern", { sketch: ssk2, entities: spokeRect.slice(4), cx: 0, cy: 0, count: 3, step: 120 });
+  await dis(s, "feature.extrude", { sketch: ssk2, distance: String(spokeT), symmetric: true });
+  await dis(s, "joint.create", { kind: "revolute", base: chop, moved: wheel, baseOrigin: wheelCenter, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 1, z: 0 }, value: "viseGap*14.4", name: "Wheel spin" });
+
+  // three turned wooden handles projecting toward the user (−Y), on the wheel face.
+  const handleIds: string[] = [];
+  const Rh = R - 20;
+  for (let i = 0; i < 3; i++) {
+    const th = (i * 120 * Math.PI) / 180;
+    const h = (await dis(s, "component.create", { name: `Wheel handle ${i + 1}`, parent: wheel, position: { x: Rh * Math.cos(th), y: 0, z: Rh * Math.sin(th) } }))[0];
+    const psk = (await dis(s, "sketch.create", { plane: "YZ", component: h }))[0];
+    // turned profile along −Y (u), radius v: collar → shaft → bulb → rounded tip.
+    await dis(s, "sketch.addPolyline", { sketch: psk, points: [
+      { x: 0, y: 0 }, { x: 0, y: 11 }, { x: -5, y: 11 }, { x: -8, y: 8 }, { x: -24, y: 7 }, { x: -40, y: 13 }, { x: -52, y: 9 }, { x: -58, y: 0 },
+    ] });
+    await dis(s, "feature.revolve", { sketch: psk, axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "360" });
+    handleIds.push(h);
+  }
+
+  // ---- materials: white oak bench, steel screw/criss-cross, cast-iron wheel, beech handles.
   const oak = (await dis(s, "material.create", { name: "White Oak", kind: "wood", species: "white-oak" }))[0];
   const steel = (await dis(s, "material.create", { name: "Steel", kind: "metal", finish: "satin", color: "#8a8f96" }))[0];
+  const iron = (await dis(s, "material.create", { name: "Cast Iron", kind: "metal", color: "#52555b", roughness: 0.6, metalness: 0.5 }))[0];
+  const beech = (await dis(s, "material.create", { name: "Beech", kind: "wood", species: "beech" }))[0];
   await dis(s, "material.assign", { material: oak });
   await dis(s, "material.assign", { material: steel, component: screw });
   for (const a of armIds) await dis(s, "material.assign", { material: steel, component: a });
+  await dis(s, "material.assign", { material: iron, component: wheel });
+  for (const h of handleIds) await dis(s, "material.assign", { material: beech, component: h });
 
   return { chop, armIds };
 }
@@ -170,8 +209,8 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     if (OUT) writeFileSync(`${OUT}/roubo.chisel.json`, serializeDocument(s.doc));
 
     const b0 = bodies(s);
-    // top(4) + legs(4) + rails(4) + chop + screw + 2 arms = 16 bodies
-    expect(b0.count).toBe(4 + 4 + 4 + 1 + 1 + 2);
+    // top(4)+legs(4)+rails(4)+chop+screw+2 arms + wheel(hub,rim,spokes) + 3 handles
+    expect(b0.count).toBe(4 + 4 + 4 + 1 + 1 + 2 + 3 + 3);
 
     const chopY = () => { const sc = resolveParameters(s.doc.parameters).scope; placeComponentSketches(s.doc, sc); let hi = -Infinity; for (const x of Object.values(evaluateFeatures(s.doc, sc))) { if (x.bounds && s.doc.sketches[x.sketchId]?.componentId === chop) hi = Math.max(hi, x.bounds.max.y); } return hi; };
     await dis(s, "parameter.set", { name: "viseGap", expression: "0" }); await s.recompute();
@@ -185,7 +224,7 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     await dis(s, "parameter.set", { name: "L", expression: "2100" });
     await dis(s, "parameter.set", { name: "H", expression: "900" });
     await s.recompute();
-    expect(bodies(s).count).toBe(16);
+    expect(bodies(s).count).toBe(b0.count);
     console.log(`roubo: ${b0.count} bodies; vise racks ${(closed - chopY()).toFixed(0)}mm; resizes cleanly`);
   }, 180000);
 });
