@@ -4,9 +4,12 @@
 // display, and STL/STEP blobs for CNC / 3D-print output.
 
 import opencascade from "replicad-opencascadejs";
-import { setOC, draw, drawCircle, drawEllipse, Plane, type Drawing, type Shape3D } from "replicad";
+import { setOC, draw, drawCircle, drawEllipse, Plane, measureVolume, type Drawing, type Shape3D, type EdgeFinder, type FaceFinder } from "replicad";
 import { WorkPlane } from "../../geometry/plane";
 import { Loop, Profile } from "../geometry/profile";
+import type { EdgeSelector, FaceSelector } from "../document";
+import { splineTangents } from "../geometry/spline";
+import { Vec3 } from "../../math/vec";
 
 export interface SolidMesh {
   positions: Float32Array; // flat xyz
@@ -70,14 +73,30 @@ function loopToDrawing(loop: Loop): Drawing {
   }
   let pen = draw([loop.start.x, loop.start.y]);
   const segs = loop.segments;
+  // A spline segment becomes one cubic per span: control points a third of the
+  // chord along the through-point tangents (replicad's default pole distance is
+  // a quarter chord, hence the 4/3 factor) — the same cubic sampleSpline draws.
+  const splineTo = (p: typeof pen, s: { through: { x: number; y: number }[] }) => {
+    const t = splineTangents(s.through);
+    let q = p;
+    for (let i = 0; i < s.through.length - 1; i++) {
+      q = (q as unknown as { smoothSplineTo: (e: [number, number], c: unknown) => typeof pen }).smoothSplineTo(
+        [s.through[i + 1].x, s.through[i + 1].y],
+        { startTangent: [t[i].x, t[i].y], endTangent: [t[i + 1].x, t[i + 1].y], startFactor: 4 / 3, endFactor: 4 / 3 }
+      );
+    }
+    return q;
+  };
   for (let i = 0; i < segs.length - 1; i++) {
     const s = segs[i];
     if (s.kind === "line") pen = pen.lineTo([s.to.x, s.to.y]);
+    else if (s.kind === "spline") pen = splineTo(pen, s);
     else pen = pen.threePointsArcTo([s.to.x, s.to.y], [s.via.x, s.via.y]);
   }
-  // Final segment closes the loop.
+  // Final segment closes the loop (a straight close needs no explicit segment).
   const last = segs[segs.length - 1];
   if (last && last.kind === "arc") pen = pen.threePointsArcTo([last.to.x, last.to.y], [last.via.x, last.via.y]);
+  else if (last && last.kind === "spline") pen = splineTo(pen, last);
   return pen.close();
 }
 
@@ -226,4 +245,117 @@ export function blobOfShape(solid: Shape3D, format: "stl" | "step"): Blob {
 export function extrudeToBlob(wp: WorkPlane, profile: Profile, distance: number, format: "stl" | "step"): Blob {
   const solid = buildSolid(wp, profile, distance);
   try { return blobOfShape(solid, format); } finally { solid.delete(); }
+}
+
+// ---- solid modifiers (fillet / chamfer / shell / revolve / transforms) ------
+
+type P3 = [number, number, number];
+const p3 = (v: Vec3): P3 => [v.x, v.y, v.z];
+const AXIS_DIR: Record<"X" | "Y" | "Z", P3> = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] };
+const PLANE_NORMAL: Record<"XY" | "XZ" | "YZ", P3> = { XY: [0, 0, 1], XZ: [0, 1, 0], YZ: [1, 0, 0] };
+
+/** The origin-plane an EdgeSelector/FaceSelector names, as a replicad Plane at `offset`. */
+function selectorPlane(name: "XY" | "XZ" | "YZ", offset = 0): Plane {
+  // replicad's named planes use +Y as XZ's normal; our XZ normal is -Y, so build
+  // the plane from the normal explicitly to keep "offset along the normal" exact.
+  const n = PLANE_NORMAL[name];
+  const xDir: P3 = name === "YZ" ? [0, 1, 0] : [1, 0, 0];
+  return new Plane([n[0] * offset, n[1] * offset, n[2] * offset], xDir, n);
+}
+
+/** Apply an EdgeSelector to a finder (chained AND filters). */
+function applyEdgeSelector(f: EdgeFinder, sel: EdgeSelector): EdgeFinder {
+  if (sel.parallelTo) f = f.inDirection(AXIS_DIR[sel.parallelTo]);
+  if (sel.inPlane) f = f.inPlane(selectorPlane(sel.inPlane.plane, sel.inPlane.offset ?? 0));
+  if (sel.curveType === "line") f = f.ofCurveType("LINE");
+  if (sel.curveType === "circle") f = f.ofCurveType("CIRCLE");
+  if (sel.minLength !== undefined || sel.maxLength !== undefined) {
+    const lo = sel.minLength ?? -Infinity, hi = sel.maxLength ?? Infinity;
+    f = f.ofLength((l) => l >= lo && l <= hi);
+  }
+  if (sel.nearPoint) f = f.atDistance(0, p3(sel.nearPoint), 1e-3);
+  if (sel.inBox) {
+    const { min, max } = sel.inBox;
+    const inside = (p: { x: number; y: number; z: number }) =>
+      p.x >= min.x - 1e-6 && p.x <= max.x + 1e-6 && p.y >= min.y - 1e-6 && p.y <= max.y + 1e-6 && p.z >= min.z - 1e-6 && p.z <= max.z + 1e-6;
+    f = f.when(({ element }) => {
+      const e = element as unknown as { startPoint: Vec3; endPoint: Vec3; pointAt: (t: number) => Vec3 };
+      return inside(e.startPoint) && inside(e.endPoint) && inside(e.pointAt(0.5));
+    });
+  }
+  return f;
+}
+
+function applyFaceSelector(f: FaceFinder, sel: FaceSelector): FaceFinder {
+  if (sel.parallelTo) f = f.parallelTo(selectorPlane(sel.parallelTo));
+  if (sel.inPlane) f = f.inPlane(selectorPlane(sel.inPlane.plane, sel.inPlane.offset ?? 0));
+  if (sel.nearPoint) f = f.atDistance(0, p3(sel.nearPoint), 1e-3);
+  return f;
+}
+
+const isEmptySelector = (sel: object) => Object.values(sel).every((v) => v === undefined);
+
+/** Fillet (round) or chamfer (bevel) the selected edges. Returns a NEW shape. */
+export function blendEdges(shape: Shape3D, mode: "fillet" | "chamfer", size: number, sel: EdgeSelector): Shape3D {
+  const s = shape as unknown as {
+    fillet: (r: number, f?: (e: EdgeFinder) => EdgeFinder) => Shape3D;
+    chamfer: (r: number, f?: (e: EdgeFinder) => EdgeFinder) => Shape3D;
+    clone: () => Shape3D;
+  };
+  // fillet()/chamfer() consume the receiver: operate on a clone so `shape` survives.
+  const clone = s.clone() as unknown as typeof s;
+  const filter = isEmptySelector(sel) ? undefined : (e: EdgeFinder) => applyEdgeSelector(e, sel);
+  return mode === "fillet" ? clone.fillet(size, filter) : clone.chamfer(size, filter);
+}
+
+/** Hollow a solid to `thickness`, removing the selected faces as openings. Returns a NEW shape. */
+export function shellShape(shape: Shape3D, thickness: number, open: FaceSelector): Shape3D {
+  if (isEmptySelector(open)) throw new Error("shell needs at least one face to open (openFaces)");
+  const clone = (shape as unknown as { clone: () => Shape3D }).clone();
+  return (clone as unknown as { shell: (t: number, f: (f: FaceFinder) => FaceFinder) => Shape3D })
+    .shell(thickness, (f) => applyFaceSelector(f, open));
+}
+
+/** Revolve regions on a plane about a world axis (origin + direction) by `angle` degrees; fused. */
+export function buildRegionsRevolved(wp: WorkPlane, regions: Profile[], axisOrigin: Vec3, axisDir: Vec3, angle: number): Shape3D {
+  let result: Shape3D | null = null;
+  for (const region of regions) {
+    let drawing = loopToDrawing(region.outer);
+    for (const hole of region.holes) drawing = drawing.cut(loopToDrawing(hole));
+    const sk = drawing.sketchOnPlane(planeFor(wp)) as unknown as { revolve: (dir: P3, o: { origin: P3; angle: number }) => Shape3D };
+    const s = sk.revolve(p3(axisDir), { origin: p3(axisOrigin), angle });
+    if (!result) { result = s; continue; }
+    const fused = fuseShapes(result, s);
+    result.delete(); s.delete();
+    result = fused;
+  }
+  if (!result) throw new Error("no regions to revolve");
+  return result;
+}
+
+/** Translated copy of a shape (operand untouched). */
+export function translateShape(shape: Shape3D, v: Vec3): Shape3D {
+  const clone = (shape as unknown as { clone: () => Shape3D }).clone();
+  return (clone as unknown as { translate: (x: number, y: number, z: number) => Shape3D }).translate(v.x, v.y, v.z);
+}
+
+/** Rotated copy of a shape about an axis (degrees; operand untouched). */
+export function rotateShape(shape: Shape3D, angleDeg: number, origin: Vec3, dir: Vec3): Shape3D {
+  const clone = (shape as unknown as { clone: () => Shape3D }).clone();
+  return (clone as unknown as { rotate: (a: number, o: P3, d: P3) => Shape3D }).rotate(angleDeg, p3(origin), p3(dir));
+}
+
+export interface Bounds3 { min: Vec3; max: Vec3 }
+
+/** Axis-aligned bounds of a shape (world). */
+export function boundsOfShape(shape: Shape3D): Bounds3 {
+  const bb = (shape as unknown as { boundingBox: { bounds: [P3, P3]; delete?: () => void } }).boundingBox;
+  const [lo, hi] = bb.bounds;
+  bb.delete?.();
+  return { min: { x: lo[0], y: lo[1], z: lo[2] }, max: { x: hi[0], y: hi[1], z: hi[2] } };
+}
+
+/** Enclosed volume of a solid (mm³). */
+export function volumeOfShape(shape: Shape3D): number {
+  try { return measureVolume(shape); } catch { return NaN; }
 }

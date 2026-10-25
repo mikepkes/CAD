@@ -21,6 +21,9 @@ import { JSONSchema } from "../src/core/command/types";
 import { initKernel, isKernelReady } from "../src/core/occ/kernel";
 import { evaluateFeatures, exportFeatureBlob } from "../src/core/features";
 import { resolveParameters } from "../src/model/parameters";
+import { pickFace } from "../src/core/geometry/pick";
+import { resolveSketchPlane } from "../src/geometry/plane";
+import { describeFeature } from "../src/model/agent";
 
 let kernelInit: Promise<void> | null = null;
 async function ensureKernel(): Promise<void> {
@@ -87,6 +90,7 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
       fullyConstrained: s.status.fullyConstrained,
       status: s.status.message,
     })),
+    features: Object.values(session.doc.features).map((f) => describeFeature(f)),
     timeline: session.timeline.map((o, i) => ({
       index: i,
       opId: o.opId,
@@ -118,7 +122,9 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
               ? { id: ent.id, kind: "circle", center: ent.center, r: round(ent.r) }
               : ent.kind === "arc"
                 ? { id: ent.id, kind: "arc", center: ent.center, start: ent.p1, end: ent.p2, r: round(ent.r) }
-                : { id: ent.id, kind: "ellipse", center: ent.center, rx: round(ent.rx), ry: round(ent.ry), rotation: round(ent.rotation) }
+                : ent.kind === "spline"
+                  ? { id: ent.id, kind: "spline", points: ent.points }
+                  : { id: ent.id, kind: "ellipse", center: ent.center, rx: round(ent.rx), ry: round(ent.ry), rotation: round(ent.rotation) }
       ),
       constraints: Object.values(s.constraints).map((c) => ({ ...c })),
     };
@@ -202,7 +208,7 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     },
     {
       name: "get_solids",
-      description: "Evaluate the 3D solid features (extrudes) with the OpenCASCADE kernel and return a summary per feature (triangle count, distance, or error).",
+      description: "Evaluate the 3D features with the OpenCASCADE kernel and return a summary per feature: bodies (triangle count, world bounds, volume) and modifier status, with any error or warning (e.g. a cut that removed nothing).",
       inputSchema: { type: "object", properties: {} },
       handler: async () => {
         await ensureKernel();
@@ -210,8 +216,32 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
         const solids = evaluateFeatures(session.doc, scope);
         return {
           kernelReady: isKernelReady(),
-          solids: Object.values(solids).map((s) => ({ featureId: s.featureId, name: s.name, sketch: s.sketchId, distance: s.distance, triangles: s.mesh?.triangleCount, error: s.error })),
+          solids: Object.values(solids).map((s) => ({ featureId: s.featureId, name: s.name, sketch: s.sketchId, distance: s.distance, triangles: s.mesh?.triangleCount, bounds: s.bounds, volume: s.volume, error: s.error, warning: s.warning })),
         };
+      },
+    },
+    {
+      name: "sketch_on_face",
+      description: "Start a sketch on the body face nearest to a world point {x,y,z}. The sketch tracks that face parametrically. Returns the sketch id, origin id and the sketch's world frame (origin, u, v, normal): extrude direction \"reverse\" goes into the body, extent \"throughAll\" cuts all the way through.",
+      inputSchema: {
+        type: "object",
+        required: ["point"],
+        properties: {
+          point: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+          name: { type: "string" },
+        },
+      },
+      handler: async (a) => {
+        await ensureKernel();
+        const scope = resolveParameters(session.doc.parameters).scope;
+        const solids = evaluateFeatures(session.doc, scope);
+        const meshes = Object.values(solids).filter((s) => s.mesh).map((s) => ({ featureId: s.featureId, mesh: s.mesh! }));
+        const hit = pickFace(meshes, a.point as { x: number; y: number; z: number });
+        if (!hit) return { ok: false, error: "no body face found — build a solid first" };
+        const r = await session.dispatch("sketch.create", { planeDef: { origin: hit.origin, normal: hit.normal }, faceRef: { normal: hit.normal, point: hit.point }, ...(a.name ? { name: a.name } : {}) });
+        if (!r.ok) return { ok: false, error: r.error };
+        const wp = resolveSketchPlane(session.doc.sketches[r.createdIds[0]]);
+        return { ok: true, sketchId: r.createdIds[0], originId: r.createdIds[1], featureId: hit.featureId, distanceToFace: hit.distance, frame: { origin: wp.origin, u: wp.u, v: wp.v, normal: wp.normal } };
       },
     },
     {

@@ -42,9 +42,25 @@ Every document command is a tool (dots become `__`, e.g. `sketch.addLine` →
 the agent has everything it needs to call it. Command tools:
 
 - `parameter__add`, `parameter__set`, `parameter__delete`
-- `sketch__create`, `sketch__addPoint`, `sketch__addLine`, `sketch__addCircle`,
-  `sketch__addRectangle`
-- `sketch__addConstraint`, `sketch__addDimension`, `sketch__deleteEntities`
+- `sketch__create` (plane / offset / datum / `planeDef`), `plane__create`,
+  `component__create`
+- geometry: `sketch__addPoint`, `addLine`, `addPolyline`, `addCircle`, `addRing`,
+  `addArc`, `addEllipse`, `addRectangle` (`cornerRadius`), `addRectangle3`,
+  `addBar`, `addSlot`, `addPolygon`, `addSpline`, **`addGear`** (external /
+  internal / rack involute gears)
+- edit: `sketch__trim`, `extend`, `offset`, `offsetLoop`, `fillet` (by lines or
+  corner point), `filletCorners`, `chamfer`, `mirror`, `linearPattern`,
+  `circularPattern`, `gridPattern`, `setConstruction`, `moveGeometry`,
+  `projectCurves`
+- `sketch__addConstraint`, `sketch__addDimension`, `sketch__deleteEntities`,
+  `sketch__deleteConstraints`
+- solids: `feature__extrude` (new/join/cut, `symmetric`, `direction` reverse,
+  `extent` throughAll), `feature__revolve`, `feature__fillet`,
+  `feature__chamfer` (EdgeSelector), `feature__shell` (FaceSelector),
+  `feature__pattern` (linear/circular bodies), `feature__mirror` (`bodies`
+  all/last)
+- `sketch_on_face` — start a sketch on the body face nearest a world point;
+  returns the sketch frame (origin, u, v, normal)
 
 Plus timeline / query / history tools:
 

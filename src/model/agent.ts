@@ -7,7 +7,9 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { CommandRegistry } from "../core/command/registry";
-import { CadDocument } from "../core/document";
+import { CadDocument, FeatureDef } from "../core/document";
+import { resolveSketchPlane } from "../geometry/plane";
+import type { SolidEval } from "../core/features";
 import { hotkeys } from "../core/hotkeys";
 
 export type ChatEntry =
@@ -83,19 +85,38 @@ export function buildTools(registry: CommandRegistry): Anthropic.Tool[] {
   return tools;
 }
 
+/** One feature row: its kind plus the parameters an agent would edit. */
+export function describeFeature(f: FeatureDef): Record<string, unknown> {
+  switch (f.kind) {
+    case "extrude": return { id: f.id, kind: f.kind, name: f.name, sketchId: f.sketchId, distance: f.distanceExpr, operation: f.operation ?? "new", ...(f.symmetric ? { symmetric: true } : {}), ...(f.direction ? { direction: f.direction } : {}), ...(f.extent ? { extent: f.extent } : {}) };
+    case "revolve": return { id: f.id, kind: f.kind, name: f.name, sketchId: f.sketchId, angle: f.angleExpr, axis: f.axis, operation: f.operation ?? "new" };
+    case "fillet":
+    case "chamfer": return { id: f.id, kind: f.kind, name: f.name, size: f.sizeExpr, edges: f.edges };
+    case "shell": return { id: f.id, kind: f.kind, name: f.name, thickness: f.thicknessExpr, openFaces: f.openFaces };
+    case "pattern": return { id: f.id, kind: f.kind, name: f.name, mode: f.mode, count: f.count, step: f.step, axis: f.axis, angle: f.angle };
+    case "mirror": return { id: f.id, kind: f.kind, name: f.name, plane: f.plane, bodies: f.bodies ?? "all" };
+  }
+}
+
 /** Compact, id-rich summary of the document for the agent. */
-export function describeDocument(doc: CadDocument, mode: string, activeSketchId: string | null): unknown {
+export function describeDocument(doc: CadDocument, mode: string, activeSketchId: string | null, solids?: Record<string, SolidEval>): unknown {
   const r = (n: number) => Math.round(n * 1000) / 1000;
+  const rv = (v: { x: number; y: number; z: number }) => ({ x: r(v.x), y: r(v.y), z: r(v.z) });
   const sketches = Object.values(doc.sketches).map((sk) => ({
     id: sk.id,
+    name: sk.name,
     plane: sk.planeId,
+    // The sketch's world frame: world = origin + u*U + v*V; extrudes go along `normal`.
+    frame: (() => { const wp = resolveSketchPlane(sk); return { origin: rv(wp.origin), u: rv(wp.u), v: rv(wp.v), normal: rv(wp.normal) }; })(),
+    ...(sk.faceRef ? { onFace: true } : {}),
     status: sk.status,
     entities: Object.values(sk.entities).map((e) =>
       e.kind === "point" ? { id: e.id, kind: "point", x: r(e.x), y: r(e.y), fixed: !!e.fixed }
         : e.kind === "line" ? { id: e.id, kind: "line", p1: e.p1, p2: e.p2 }
           : e.kind === "circle" ? { id: e.id, kind: "circle", center: e.center, r: r(e.r) }
             : e.kind === "arc" ? { id: e.id, kind: "arc", center: e.center, p1: e.p1, p2: e.p2, r: r(e.r) }
-              : { id: e.id, kind: "ellipse", center: (e as { center: string }).center }
+              : e.kind === "spline" ? { id: e.id, kind: "spline", points: e.points }
+                : { id: e.id, kind: "ellipse", center: (e as { center: string }).center }
     ),
     constraints: Object.values(sk.constraints).map((c) => ({ ...c })),
   }));
@@ -103,12 +124,18 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
     mode,
     activeSketchId,
     sketches,
-    features: Object.values(doc.features).map((f) =>
-      f.kind === "extrude"
-        ? { id: f.id, kind: f.kind, sketchId: f.sketchId, distance: f.distanceExpr }
-        : { id: f.id, kind: f.kind, plane: f.plane }
-    ),
+    features: Object.values(doc.features).map((f) => describeFeature(f)),
     parameters: doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value })),
+    // Evaluation results per feature (when the host has them): bodies with bounds/volume, modifier status, warnings.
+    ...(solids ? {
+      bodies: Object.values(solids).filter((s) => s.mesh).map((s) => ({
+        featureId: s.featureId, name: s.name, triangles: s.mesh!.triangleCount,
+        ...(s.bounds ? { bounds: { min: rv(s.bounds.min), max: rv(s.bounds.max) } } : {}),
+        ...(s.volume !== undefined ? { volume: r(s.volume) } : {}),
+        ...(s.error ? { error: s.error } : {}),
+      })),
+      featureStatus: Object.values(solids).filter((s) => s.error || s.warning).map((s) => ({ featureId: s.featureId, ...(s.error ? { error: s.error } : {}), ...(s.warning ? { warning: s.warning } : {}) })),
+    } : {}),
   };
 }
 

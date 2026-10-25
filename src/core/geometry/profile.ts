@@ -5,7 +5,8 @@
 // (a good default for typical parts). Output is in sketch (u,v) coordinates and
 // is renderer/kernel-agnostic — the OCC kernel turns it into B-rep faces.
 
-import { Sketch, SketchArc, SketchLine, SketchPoint } from "../../sketch/types";
+import { Sketch, SketchArc, SketchLine, SketchPoint, SketchSpline } from "../../sketch/types";
+import { sampleSpline } from "./spline";
 
 export interface Pt {
   x: number;
@@ -13,7 +14,8 @@ export interface Pt {
 }
 export type LoopSegment =
   | { kind: "line"; to: Pt }
-  | { kind: "arc"; to: Pt; via: Pt }; // `via` is a point on the arc (3-point arc)
+  | { kind: "arc"; to: Pt; via: Pt } // `via` is a point on the arc (3-point arc)
+  | { kind: "spline"; to: Pt; through: Pt[] }; // every through-point in traversal order, from the previous point to `to`
 
 export interface Loop {
   start: Pt;
@@ -92,13 +94,14 @@ function collectLoops(sk: Sketch): Loop[] {
     }
   }
 
-  // Build adjacency over line/arc edges.
-  interface Edge { id: string; a: string; b: string; ent: SketchLine | SketchArc; }
+  // Build adjacency over line/arc/spline edges.
+  interface Edge { id: string; a: string; b: string; ent: SketchLine | SketchArc | SketchSpline; }
   const edges: Edge[] = [];
   for (const e of Object.values(sk.entities)) {
     if (e.construction) continue;
     if (e.kind === "line") edges.push({ id: e.id, a: e.p1, b: e.p2, ent: e });
     else if (e.kind === "arc") edges.push({ id: e.id, a: e.p1, b: e.p2, ent: e });
+    else if (e.kind === "spline" && e.points.length >= 2) edges.push({ id: e.id, a: e.points[0], b: e.points[e.points.length - 1], ent: e });
   }
   const adj = new Map<string, Edge[]>();
   for (const ed of edges) {
@@ -110,6 +113,10 @@ function collectLoops(sk: Sketch): Loop[] {
   const segFor = (ed: Edge, fromId: string, toId: string): LoopSegment => {
     const to = { x: P(sk, toId).x, y: P(sk, toId).y };
     if (ed.ent.kind === "line") return { kind: "line", to };
+    if (ed.ent.kind === "spline") {
+      const ids = fromId === ed.ent.points[0] ? ed.ent.points : [...ed.ent.points].reverse();
+      return { kind: "spline", to, through: ids.map((id) => ({ x: P(sk, id).x, y: P(sk, id).y })) };
+    }
     const arc = ed.ent as SketchArc;
     const center = { x: P(sk, arc.center).x, y: P(sk, arc.center).y };
     const from = { x: P(sk, fromId).x, y: P(sk, fromId).y };
@@ -144,13 +151,11 @@ function collectLoops(sk: Sketch): Loop[] {
       cur = toId;
     }
     if (closed && segments.length >= 2) {
-      // last segment's `to` is `first` — drop the duplicate point for area calc
-      const ptsForArea = orderedPts.slice(0, -1);
-      loops.push({
-        start: { x: P(sk, startNode).x, y: P(sk, startNode).y },
-        segments,
-        area: signedArea(ptsForArea),
-      });
+      const loop: Loop = { start: { x: P(sk, startNode).x, y: P(sk, startNode).y }, segments, area: 0 };
+      // Signed area over the sampled boundary (curved segments included); the
+      // last sample repeats the start, so drop it.
+      loop.area = signedArea(loopPolygon(loop).slice(0, -1));
+      loops.push(loop);
     }
   }
 
@@ -176,6 +181,10 @@ export function loopPolygon(loop: Loop): Pt[] {
   }
   const pts: Pt[] = [{ x: loop.start.x, y: loop.start.y }];
   for (const s of loop.segments) {
+    if (s.kind === "spline") {
+      pts.push(...sampleSpline(s.through, 6).slice(1));
+      continue;
+    }
     if (s.kind === "arc") {
       const prev = pts[pts.length - 1];
       const c = circleFrom3(prev, s.via, s.to);
