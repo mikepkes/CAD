@@ -142,6 +142,10 @@ export function fuseShapes(a: Shape3D, b: Shape3D): Shape3D {
 export function cutShapes(base: Shape3D, tool: Shape3D): Shape3D {
   return (base as unknown as { cut: (o: Shape3D, opts?: unknown) => Shape3D }).cut(tool);
 }
+/** Intersection (common volume) of two solids. Consumes neither operand. */
+export function intersectShapes(a: Shape3D, b: Shape3D): Shape3D {
+  return (a as unknown as { intersect: (o: Shape3D) => Shape3D }).intersect(b);
+}
 
 /** Reflect a solid across a work plane, returning a NEW shape (operand untouched). */
 export function mirrorShape(shape: Shape3D, wp: WorkPlane): Shape3D {

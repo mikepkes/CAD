@@ -13,7 +13,7 @@ import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, 
 import { extractRegions, regionAt, Region } from "./geometry/profile";
 import { FaceRef } from "../sketch/types";
 import {
-  Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, fuseShapes, cutShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
+  Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, Bounds3,
 } from "./occ/kernel";
@@ -177,7 +177,7 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
   }
   try {
     const before = volumeOfShape(target.shape);
-    const combined = op === "cut" ? cutShapes(target.shape, shape) : fuseShapes(target.shape, shape);
+    const combined = op === "cut" ? cutShapes(target.shape, shape) : op === "intersect" ? intersectShapes(target.shape, shape) : fuseShapes(target.shape, shape);
     shape.delete();
     replaceShape(target, combined);
     const after = volumeOfShape(target.shape);
@@ -217,7 +217,7 @@ function applyLoft(doc: CadDocument, f: LoftFeature, bodies: Body[], out: Record
   const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
   if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
   try {
-    const combined = op === "cut" ? cutShapes(target.shape, shape) : fuseShapes(target.shape, shape);
+    const combined = op === "cut" ? cutShapes(target.shape, shape) : op === "intersect" ? intersectShapes(target.shape, shape) : fuseShapes(target.shape, shape);
     shape.delete();
     replaceShape(target, combined);
   } catch (e) {

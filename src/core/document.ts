@@ -38,7 +38,7 @@ export interface Component {
 }
 
 /** How a feature combines with the running bodies (Fusion-style). */
-export type BooleanOp = "new" | "join" | "cut";
+export type BooleanOp = "new" | "join" | "cut" | "intersect";
 
 /** A solid feature built by extruding sketch regions. Geometry is derived by the OCC kernel. */
 export interface ExtrudeFeature {

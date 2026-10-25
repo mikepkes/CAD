@@ -216,20 +216,20 @@ export interface AppState {
   // features (3D)
   ensureKernel: () => Promise<void>;
   rebuildSolids: () => Promise<void>;
-  extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut"; symmetric?: boolean; region?: { x: number; y: number } }) => Promise<void>;
+  extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut" | "intersect"; symmetric?: boolean; region?: { x: number; y: number } }) => Promise<void>;
   /** Extrude session (model mode): active flag, target profile sketch, chosen region, live params. */
   extrudeActive: boolean;
   extrudeTarget: string | null;
   extrudeRegion: { x: number; y: number } | null;
   extrudeDistanceExpr: string;
-  extrudeOperation: "new" | "join" | "cut";
+  extrudeOperation: "new" | "join" | "cut" | "intersect";
   extrudeSymmetric: boolean;
   openExtrude: (sketchId?: string) => void;
   mirrorModel: (plane: string) => Promise<void>;
   closeExtrude: () => void;
   setExtrudeRegion: (p: { x: number; y: number } | null) => void;
   setExtrudeDistanceExpr: (expr: string) => void;
-  setExtrudeOperation: (op: "new" | "join" | "cut") => void;
+  setExtrudeOperation: (op: "new" | "join" | "cut" | "intersect") => void;
   setExtrudeSymmetric: (on: boolean) => void;
   commitExtrude: () => Promise<void>;
   /** Extrude a planar face directly: project its boundary into a new sketch and target it. */

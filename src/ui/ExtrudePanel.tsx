@@ -49,10 +49,11 @@ export function ExtrudePanel() {
           </label>
           <label className="extrude-row">
             <span>Operation</span>
-            <select value={operation} onChange={(e) => S().setExtrudeOperation(e.target.value as "new" | "join" | "cut")}>
+            <select value={operation} onChange={(e) => S().setExtrudeOperation(e.target.value as "new" | "join" | "cut" | "intersect")}>
               <option value="new">New body</option>
               <option value="join" disabled={!hasBody}>Join</option>
               <option value="cut" disabled={!hasBody}>Cut</option>
+              <option value="intersect" disabled={!hasBody}>Intersect</option>
             </select>
           </label>
           <label className="extrude-row checkbox">

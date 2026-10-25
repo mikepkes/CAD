@@ -48,7 +48,7 @@ export interface ViewData {
   /** Pickable region fills for the active extrude session (click to choose a region). */
   extrudeRegions?: { plane: WorkPlane; regions: { interior: { x: number; y: number }; outer: { x: number; y: number }[]; holes: { x: number; y: number }[][]; selected: boolean }[] };
   /** Live translucent preview of the pending extrude. */
-  extrudePreview?: { plane: WorkPlane; regions: { outer: { x: number; y: number }[]; holes: { x: number; y: number }[][] }[]; distance: number; symmetric: boolean; operation: "new" | "join" | "cut" };
+  extrudePreview?: { plane: WorkPlane; regions: { outer: { x: number; y: number }[]; holes: { x: number; y: number }[][] }[]; distance: number; symmetric: boolean; operation: "new" | "join" | "cut" | "intersect" };
 }
 
 export interface PickResult {

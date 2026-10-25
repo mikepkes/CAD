@@ -1106,7 +1106,7 @@ export const BUILTINS: CommandDef<any>[] = [
         symmetric: { type: "boolean", description: "Extrude symmetrically about the plane." },
         direction: { type: "string", enum: ["normal", "reverse"], description: "Along the sketch normal (default) or against it." },
         extent: { type: "string", enum: ["blind", "throughAll"], description: "blind (default): `distance`. throughAll: past every existing body." },
-        operation: { type: "string", enum: ["new", "join", "cut"], description: "Combine with existing bodies: new (default), join, or cut." },
+        operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies: new (default), join, or cut." },
         region: {
           type: "object",
           description: "A point inside the region to extrude (sketch u,v). Omit to extrude every region.",
@@ -1121,7 +1121,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Join a boss onto the current body", params: { sketch: "sketch3", distance: "6", operation: "join" } },
       { note: "A through-hole from a face sketch", params: { sketch: "sketch4", distance: "0", operation: "cut", direction: "reverse", extent: "throughAll" } },
     ],
-    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; extent?: "blind" | "throughAll"; operation?: "new" | "join" | "cut"; region?: { x: number; y: number }; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; extent?: "blind" | "throughAll"; operation?: "new" | "join" | "cut" | "intersect"; region?: { x: number; y: number }; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("ext");
       draft.features[id] = {
@@ -1162,7 +1162,7 @@ export const BUILTINS: CommandDef<any>[] = [
           },
         },
         angle: { type: "string", description: "Sweep angle in degrees (expression). Default 360." },
-        operation: { type: "string", enum: ["new", "join", "cut"] },
+        operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
         region: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
         name: { type: "string" },
       },
@@ -1171,7 +1171,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A drum from its half profile sketched on XZ, revolved about the sketch v (world Z) axis", params: { sketch: "sketch2", axis: { p1: { x: 0, y: 0 }, p2: { x: 0, y: 1 } } } },
       { note: "A quarter-turn boss joined to the body", params: { sketch: "sketch5", axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "90", operation: "join" } },
     ],
-    apply(draft, p: { sketch: string; axis: { p1: Vec; p2: Vec }; angle?: string | number; operation?: "new" | "join" | "cut"; region?: Vec; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; axis: { p1: Vec; p2: Vec }; angle?: string | number; operation?: "new" | "join" | "cut" | "intersect"; region?: Vec; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("rev");
       draft.features[id] = {
@@ -1194,12 +1194,12 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         sketches: { type: "array", items: { type: "string" }, description: "Ordered profile sketch ids (at least two)." },
         ruled: { type: "boolean", description: "Straight sections between profiles (default false = smooth)." },
-        operation: { type: "string", enum: ["new", "join", "cut"], description: "Combine with existing bodies." },
+        operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies." },
         name: { type: "string" },
       },
     },
     examples: [{ note: "Loft through two profiles", params: { sketches: ["sketch1", "sketch3"] } }],
-    apply(draft, p: { sketches: string[]; ruled?: boolean; operation?: "new" | "join" | "cut"; name?: string }, ctx) {
+    apply(draft, p: { sketches: string[]; ruled?: boolean; operation?: "new" | "join" | "cut" | "intersect"; name?: string }, ctx) {
       if (!Array.isArray(p.sketches) || p.sketches.length < 2) throw new Error("loft needs at least two sketches");
       for (const sid of p.sketches) if (!draft.sketches[sid]) throw new Error(`No sketch "${sid}"`);
       const id = ctx.alloc("loft");
