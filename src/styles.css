@@ -1218,3 +1218,71 @@ body {
   border-radius: 5px; padding: 3px 6px; font-size: 12px; font-family: ui-monospace, monospace;
 }
 .grid-controls .grid-size:focus { outline: none; border-color: var(--accent); }
+
+/* ---- Customize (slider-only) mode ------------------------------------- */
+.customize { position: fixed; inset: 0; background: var(--bg); overflow: hidden; }
+.customize .viewport { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Overlaid controls — translucent so the model shows through. Floating card on
+   desktop (top-right), bottom sheet on phones. */
+.cz-panel {
+  position: absolute; z-index: 5;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--line); border-radius: 12px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.cz-handle {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: transparent; border: none; color: var(--text);
+  font-size: 13px; font-weight: 600; letter-spacing: 0.3px;
+  padding: 11px 14px; cursor: pointer; width: 100%;
+}
+.cz-chevron { color: var(--text-dim); }
+.cz-controls { padding: 4px 14px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.cz-row { display: grid; grid-template-columns: 74px 1fr 44px; align-items: center; gap: 10px; }
+.cz-row-name { font-size: 12.5px; color: var(--text); font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; }
+.cz-row-val { font-size: 12px; color: var(--text-dim); font-family: ui-monospace, monospace; text-align: right; }
+.cz-range { width: 100%; accent-color: var(--accent); }
+.cz-select {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 5px 6px; font-size: 12.5px;
+}
+
+/* Motion-study status badge. */
+.cz-badge {
+  position: absolute; top: 14px; left: 14px; z-index: 6;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--panel) 82%, transparent); color: var(--text);
+  max-width: min(78vw, 460px);
+}
+.cz-badge .cz-badge-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cz-badge-icon { font-size: 14px; line-height: 1; }
+.cz-badge.pass { color: #8fe388; border-color: color-mix(in srgb, #8fe388 40%, var(--line)); }
+.cz-badge.fail { color: #ff8080; border-color: color-mix(in srgb, #ff8080 40%, var(--line)); }
+.cz-badge.running .cz-badge-icon { animation: cz-spin 1.1s linear infinite; color: var(--accent); }
+.cz-badge.idle { color: var(--text-dim); }
+@keyframes cz-spin { to { transform: rotate(360deg); } }
+.cz-badge-bar { position: relative; width: 56px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.cz-badge-bar > span { position: absolute; inset: 0 auto 0 0; background: var(--accent); transition: width 0.15s linear; }
+
+.cz-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); font-size: 14px; padding: 24px; text-align: center; z-index: 7;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+.cz-overlay.error { color: #ff9a9a; }
+
+/* Desktop: floating card, top-right. */
+@media (min-width: 721px) {
+  .cz-panel { top: 14px; right: 14px; width: 300px; max-height: calc(100vh - 28px); }
+}
+/* Phone: bottom sheet, full width, capped height so the model stays visible. */
+@media (max-width: 720px) {
+  .cz-panel { left: 8px; right: 8px; bottom: 8px; border-radius: 14px; }
+  .cz-controls { max-height: 38vh; }
+  .cz-badge { left: 50%; transform: translateX(-50%); top: 10px; }
+}

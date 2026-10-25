@@ -1,0 +1,1977 @@
+{
+  "format": "chisel-cad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 306,
+  "rollbackIndex": 109,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "wall",
+        "expression": "6",
+        "min": 3,
+        "max": 12
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512011
+    },
+    {
+      "opId": "op3",
+      "type": "parameter.add",
+      "params": {
+        "name": "gap",
+        "expression": "6",
+        "min": 3,
+        "max": 12
+      },
+      "createdIds": [
+        "param4"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512018
+    },
+    {
+      "opId": "op5",
+      "type": "parameter.add",
+      "params": {
+        "name": "ringH",
+        "expression": "12",
+        "min": 6,
+        "max": 30
+      },
+      "createdIds": [
+        "param6"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512023
+    },
+    {
+      "opId": "op7",
+      "type": "parameter.add",
+      "params": {
+        "name": "clr",
+        "expression": "0.4",
+        "values": [
+          0.3,
+          0.4,
+          0.5,
+          0.6
+        ]
+      },
+      "createdIds": [
+        "param8"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512026
+    },
+    {
+      "opId": "op9",
+      "type": "parameter.add",
+      "params": {
+        "name": "coneR",
+        "expression": "3",
+        "min": 2,
+        "max": 5
+      },
+      "createdIds": [
+        "param10"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512030
+    },
+    {
+      "opId": "op11",
+      "type": "parameter.add",
+      "params": {
+        "name": "pinInset",
+        "expression": "1"
+      },
+      "createdIds": [
+        "param12"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512033
+    },
+    {
+      "opId": "op13",
+      "type": "parameter.add",
+      "params": {
+        "name": "pinDepth",
+        "expression": "2"
+      },
+      "createdIds": [
+        "param14"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512037
+    },
+    {
+      "opId": "op15",
+      "type": "parameter.add",
+      "params": {
+        "name": "mouthOut",
+        "expression": "1"
+      },
+      "createdIds": [
+        "param16"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512040
+    },
+    {
+      "opId": "op17",
+      "type": "parameter.add",
+      "params": {
+        "name": "r3i",
+        "expression": "21",
+        "min": 10,
+        "max": 40
+      },
+      "createdIds": [
+        "param18"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512042
+    },
+    {
+      "opId": "op19",
+      "type": "parameter.add",
+      "params": {
+        "name": "r3o",
+        "expression": "r3i + wall"
+      },
+      "createdIds": [
+        "param20"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512045
+    },
+    {
+      "opId": "op21",
+      "type": "parameter.add",
+      "params": {
+        "name": "r2i",
+        "expression": "r3o + gap"
+      },
+      "createdIds": [
+        "param22"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512048
+    },
+    {
+      "opId": "op23",
+      "type": "parameter.add",
+      "params": {
+        "name": "r2o",
+        "expression": "r2i + wall"
+      },
+      "createdIds": [
+        "param24"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512052
+    },
+    {
+      "opId": "op25",
+      "type": "parameter.add",
+      "params": {
+        "name": "r1i",
+        "expression": "r2o + gap"
+      },
+      "createdIds": [
+        "param26"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512055
+    },
+    {
+      "opId": "op27",
+      "type": "parameter.add",
+      "params": {
+        "name": "r1o",
+        "expression": "r1i + wall"
+      },
+      "createdIds": [
+        "param28"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512058
+    },
+    {
+      "opId": "op29",
+      "type": "parameter.add",
+      "params": {
+        "name": "socketR",
+        "expression": "coneR * 0.5 + clr"
+      },
+      "createdIds": [
+        "param30"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512061
+    },
+    {
+      "opId": "op31",
+      "type": "parameter.add",
+      "params": {
+        "name": "spin2",
+        "expression": "0"
+      },
+      "createdIds": [
+        "param32"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512065
+    },
+    {
+      "opId": "op33",
+      "type": "parameter.add",
+      "params": {
+        "name": "spin3",
+        "expression": "0"
+      },
+      "createdIds": [
+        "param34"
+      ],
+      "label": "Add parameter",
+      "at": 1792899512068
+    },
+    {
+      "opId": "op35",
+      "type": "component.create",
+      "params": {
+        "name": "Ring 1 (frame)"
+      },
+      "createdIds": [
+        "cmp36"
+      ],
+      "label": "New component",
+      "at": 1792899512072
+    },
+    {
+      "opId": "op37",
+      "type": "component.create",
+      "params": {
+        "name": "Ring 2 (middle)"
+      },
+      "createdIds": [
+        "cmp38"
+      ],
+      "label": "New component",
+      "at": 1792899512076
+    },
+    {
+      "opId": "op39",
+      "type": "component.create",
+      "params": {
+        "name": "Ring 3 (inner)"
+      },
+      "createdIds": [
+        "cmp40"
+      ],
+      "label": "New component",
+      "at": 1792899512081
+    },
+    {
+      "opId": "op41",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "name": "Ring 1 (frame)",
+        "component": "cmp36"
+      },
+      "createdIds": [
+        "sketch42",
+        "pt43"
+      ],
+      "label": "Create sketch",
+      "at": 1792899512086
+    },
+    {
+      "opId": "op44",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch42",
+        "start": {
+          "ref": "pt43"
+        },
+        "end": {
+          "x": 10,
+          "y": 0
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt45",
+        "ln46"
+      ],
+      "label": "Add line",
+      "at": 1792899512240
+    },
+    {
+      "opId": "op47",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch42",
+        "type": "fix",
+        "point": "pt45"
+      },
+      "createdIds": [
+        "c48"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512276
+    },
+    {
+      "opId": "op49",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch42",
+        "corner": {
+          "x": 45,
+          "y": -6
+        },
+        "opposite": {
+          "x": 51,
+          "y": 6
+        }
+      },
+      "createdIds": [
+        "pt50",
+        "pt51",
+        "pt52",
+        "pt53",
+        "ln54",
+        "ln55",
+        "ln56",
+        "ln57",
+        "c58",
+        "c59",
+        "c60",
+        "c61"
+      ],
+      "label": "Add rectangle",
+      "at": 1792899512289
+    },
+    {
+      "opId": "op62",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch42",
+        "type": "symmetric",
+        "a": "pt50",
+        "b": "pt53",
+        "line": "ln46"
+      },
+      "createdIds": [
+        "c63"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512304
+    },
+    {
+      "opId": "op64",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceX",
+        "a": "pt43",
+        "b": "pt50",
+        "expression": "r1i"
+      },
+      "createdIds": [
+        "d65"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512318
+    },
+    {
+      "opId": "op66",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceX",
+        "a": "pt50",
+        "b": "pt51",
+        "expression": "wall"
+      },
+      "createdIds": [
+        "d67"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512328
+    },
+    {
+      "opId": "op68",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceY",
+        "a": "pt50",
+        "b": "pt53",
+        "expression": "ringH"
+      },
+      "createdIds": [
+        "d69"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512338
+    },
+    {
+      "opId": "op70",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch42",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "angle": "360",
+        "name": "Ring 1 (frame)"
+      },
+      "createdIds": [
+        "rev71"
+      ],
+      "label": "Revolve",
+      "at": 1792899512355
+    },
+    {
+      "opId": "op72",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "name": "R1 ±X sockets",
+        "component": "cmp36"
+      },
+      "createdIds": [
+        "sketch73",
+        "pt74"
+      ],
+      "label": "Create sketch",
+      "at": 1792899512360
+    },
+    {
+      "opId": "op75",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch73",
+        "points": [
+          {
+            "x": 44,
+            "y": 0
+          },
+          {
+            "x": 44,
+            "y": 1.9
+          },
+          {
+            "x": 47,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt76",
+        "pt77",
+        "pt78",
+        "ln79",
+        "ln80",
+        "ln81"
+      ],
+      "label": "Polyline",
+      "at": 1792899512368
+    },
+    {
+      "opId": "op82",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch73",
+        "type": "distanceX",
+        "a": "pt74",
+        "b": "pt76",
+        "expression": "r1i - mouthOut"
+      },
+      "createdIds": [
+        "d83"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512386
+    },
+    {
+      "opId": "op84",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch73",
+        "type": "horizontal",
+        "a": "pt74",
+        "b": "pt76"
+      },
+      "createdIds": [
+        "c85"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512394
+    },
+    {
+      "opId": "op86",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch73",
+        "type": "distanceX",
+        "a": "pt74",
+        "b": "pt77",
+        "expression": "r1i - mouthOut"
+      },
+      "createdIds": [
+        "d87"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512402
+    },
+    {
+      "opId": "op88",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch73",
+        "type": "distanceY",
+        "a": "pt74",
+        "b": "pt77",
+        "expression": "socketR"
+      },
+      "createdIds": [
+        "d89"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512422
+    },
+    {
+      "opId": "op90",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch73",
+        "type": "distanceX",
+        "a": "pt74",
+        "b": "pt78",
+        "expression": "r1i + pinDepth"
+      },
+      "createdIds": [
+        "d91"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512446
+    },
+    {
+      "opId": "op92",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch73",
+        "type": "horizontal",
+        "a": "pt74",
+        "b": "pt78"
+      },
+      "createdIds": [
+        "c93"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512466
+    },
+    {
+      "opId": "op94",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch73",
+        "start": {
+          "ref": "pt74"
+        },
+        "end": {
+          "x": 0,
+          "y": 10
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt95",
+        "ln96"
+      ],
+      "label": "Add line",
+      "at": 1792899512480
+    },
+    {
+      "opId": "op97",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch73",
+        "type": "fix",
+        "point": "pt95"
+      },
+      "createdIds": [
+        "c98"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512497
+    },
+    {
+      "opId": "op99",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch73",
+        "points": [
+          {
+            "x": -44,
+            "y": 0
+          },
+          {
+            "x": -44,
+            "y": 1.9
+          },
+          {
+            "x": -47,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt100",
+        "pt101",
+        "pt102",
+        "ln103",
+        "ln104",
+        "ln105"
+      ],
+      "label": "Polyline",
+      "at": 1792899512508
+    },
+    {
+      "opId": "op106",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch73",
+        "type": "symmetric",
+        "a": "pt76",
+        "b": "pt100",
+        "line": "ln96"
+      },
+      "createdIds": [
+        "c107"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512518
+    },
+    {
+      "opId": "op108",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch73",
+        "type": "symmetric",
+        "a": "pt77",
+        "b": "pt101",
+        "line": "ln96"
+      },
+      "createdIds": [
+        "c109"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512529
+    },
+    {
+      "opId": "op110",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch73",
+        "type": "symmetric",
+        "a": "pt78",
+        "b": "pt102",
+        "line": "ln96"
+      },
+      "createdIds": [
+        "c111"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512542
+    },
+    {
+      "opId": "op112",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch73",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "cut",
+        "name": "R1 ±X sockets"
+      },
+      "createdIds": [
+        "rev113"
+      ],
+      "label": "Revolve",
+      "at": 1792899512585
+    },
+    {
+      "opId": "op114",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "name": "Ring 2 (middle)",
+        "component": "cmp38"
+      },
+      "createdIds": [
+        "sketch115",
+        "pt116"
+      ],
+      "label": "Create sketch",
+      "at": 1792899512592
+    },
+    {
+      "opId": "op117",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch115",
+        "start": {
+          "ref": "pt116"
+        },
+        "end": {
+          "x": 10,
+          "y": 0
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt118",
+        "ln119"
+      ],
+      "label": "Add line",
+      "at": 1792899512601
+    },
+    {
+      "opId": "op120",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch115",
+        "type": "fix",
+        "point": "pt118"
+      },
+      "createdIds": [
+        "c121"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512616
+    },
+    {
+      "opId": "op122",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch115",
+        "corner": {
+          "x": 33,
+          "y": -6
+        },
+        "opposite": {
+          "x": 39,
+          "y": 6
+        }
+      },
+      "createdIds": [
+        "pt123",
+        "pt124",
+        "pt125",
+        "pt126",
+        "ln127",
+        "ln128",
+        "ln129",
+        "ln130",
+        "c131",
+        "c132",
+        "c133",
+        "c134"
+      ],
+      "label": "Add rectangle",
+      "at": 1792899512624
+    },
+    {
+      "opId": "op135",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch115",
+        "type": "symmetric",
+        "a": "pt123",
+        "b": "pt126",
+        "line": "ln119"
+      },
+      "createdIds": [
+        "c136"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512644
+    },
+    {
+      "opId": "op137",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch115",
+        "type": "distanceX",
+        "a": "pt116",
+        "b": "pt123",
+        "expression": "r2i"
+      },
+      "createdIds": [
+        "d138"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512652
+    },
+    {
+      "opId": "op139",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch115",
+        "type": "distanceX",
+        "a": "pt123",
+        "b": "pt124",
+        "expression": "wall"
+      },
+      "createdIds": [
+        "d140"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512670
+    },
+    {
+      "opId": "op141",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch115",
+        "type": "distanceY",
+        "a": "pt123",
+        "b": "pt126",
+        "expression": "ringH"
+      },
+      "createdIds": [
+        "d142"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512694
+    },
+    {
+      "opId": "op143",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch115",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "angle": "360",
+        "name": "Ring 2 (middle)"
+      },
+      "createdIds": [
+        "rev144"
+      ],
+      "label": "Revolve",
+      "at": 1792899512717
+    },
+    {
+      "opId": "op145",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "name": "R2 ±X pins",
+        "component": "cmp38"
+      },
+      "createdIds": [
+        "sketch146",
+        "pt147"
+      ],
+      "label": "Create sketch",
+      "at": 1792899512728
+    },
+    {
+      "opId": "op148",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch146",
+        "points": [
+          {
+            "x": 38,
+            "y": 0
+          },
+          {
+            "x": 38,
+            "y": 3
+          },
+          {
+            "x": 47,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt149",
+        "pt150",
+        "pt151",
+        "ln152",
+        "ln153",
+        "ln154"
+      ],
+      "label": "Polyline",
+      "at": 1792899512741
+    },
+    {
+      "opId": "op155",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch146",
+        "type": "distanceX",
+        "a": "pt147",
+        "b": "pt149",
+        "expression": "r2o - pinInset"
+      },
+      "createdIds": [
+        "d156"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512764
+    },
+    {
+      "opId": "op157",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch146",
+        "type": "horizontal",
+        "a": "pt147",
+        "b": "pt149"
+      },
+      "createdIds": [
+        "c158"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512774
+    },
+    {
+      "opId": "op159",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch146",
+        "type": "distanceX",
+        "a": "pt147",
+        "b": "pt150",
+        "expression": "r2o - pinInset"
+      },
+      "createdIds": [
+        "d160"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512783
+    },
+    {
+      "opId": "op161",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch146",
+        "type": "distanceY",
+        "a": "pt147",
+        "b": "pt150",
+        "expression": "coneR"
+      },
+      "createdIds": [
+        "d162"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512797
+    },
+    {
+      "opId": "op163",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch146",
+        "type": "distanceX",
+        "a": "pt147",
+        "b": "pt151",
+        "expression": "r1i + pinDepth"
+      },
+      "createdIds": [
+        "d164"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512853
+    },
+    {
+      "opId": "op165",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch146",
+        "type": "horizontal",
+        "a": "pt147",
+        "b": "pt151"
+      },
+      "createdIds": [
+        "c166"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512862
+    },
+    {
+      "opId": "op167",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch146",
+        "start": {
+          "ref": "pt147"
+        },
+        "end": {
+          "x": 0,
+          "y": 10
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt168",
+        "ln169"
+      ],
+      "label": "Add line",
+      "at": 1792899512876
+    },
+    {
+      "opId": "op170",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch146",
+        "type": "fix",
+        "point": "pt168"
+      },
+      "createdIds": [
+        "c171"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512889
+    },
+    {
+      "opId": "op172",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch146",
+        "points": [
+          {
+            "x": -38,
+            "y": 0
+          },
+          {
+            "x": -38,
+            "y": 3
+          },
+          {
+            "x": -47,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt173",
+        "pt174",
+        "pt175",
+        "ln176",
+        "ln177",
+        "ln178"
+      ],
+      "label": "Polyline",
+      "at": 1792899512903
+    },
+    {
+      "opId": "op179",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch146",
+        "type": "symmetric",
+        "a": "pt149",
+        "b": "pt173",
+        "line": "ln169"
+      },
+      "createdIds": [
+        "c180"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512918
+    },
+    {
+      "opId": "op181",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch146",
+        "type": "symmetric",
+        "a": "pt150",
+        "b": "pt174",
+        "line": "ln169"
+      },
+      "createdIds": [
+        "c182"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512928
+    },
+    {
+      "opId": "op183",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch146",
+        "type": "symmetric",
+        "a": "pt151",
+        "b": "pt175",
+        "line": "ln169"
+      },
+      "createdIds": [
+        "c184"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899512938
+    },
+    {
+      "opId": "op185",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch146",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R2 ±X pins"
+      },
+      "createdIds": [
+        "rev186"
+      ],
+      "label": "Revolve",
+      "at": 1792899512956
+    },
+    {
+      "opId": "op187",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "name": "R2 ±Y sockets",
+        "component": "cmp38"
+      },
+      "createdIds": [
+        "sketch188",
+        "pt189"
+      ],
+      "label": "Create sketch",
+      "at": 1792899512963
+    },
+    {
+      "opId": "op190",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch188",
+        "points": [
+          {
+            "x": 32,
+            "y": 0
+          },
+          {
+            "x": 32,
+            "y": 1.9
+          },
+          {
+            "x": 35,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt191",
+        "pt192",
+        "pt193",
+        "ln194",
+        "ln195",
+        "ln196"
+      ],
+      "label": "Polyline",
+      "at": 1792899512974
+    },
+    {
+      "opId": "op197",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch188",
+        "type": "distanceX",
+        "a": "pt189",
+        "b": "pt191",
+        "expression": "r2i - mouthOut"
+      },
+      "createdIds": [
+        "d198"
+      ],
+      "label": "Add dimension",
+      "at": 1792899512993
+    },
+    {
+      "opId": "op199",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch188",
+        "type": "horizontal",
+        "a": "pt189",
+        "b": "pt191"
+      },
+      "createdIds": [
+        "c200"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513002
+    },
+    {
+      "opId": "op201",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch188",
+        "type": "distanceX",
+        "a": "pt189",
+        "b": "pt192",
+        "expression": "r2i - mouthOut"
+      },
+      "createdIds": [
+        "d202"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513010
+    },
+    {
+      "opId": "op203",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch188",
+        "type": "distanceY",
+        "a": "pt189",
+        "b": "pt192",
+        "expression": "socketR"
+      },
+      "createdIds": [
+        "d204"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513020
+    },
+    {
+      "opId": "op205",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch188",
+        "type": "distanceX",
+        "a": "pt189",
+        "b": "pt193",
+        "expression": "r2i + pinDepth"
+      },
+      "createdIds": [
+        "d206"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513031
+    },
+    {
+      "opId": "op207",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch188",
+        "type": "horizontal",
+        "a": "pt189",
+        "b": "pt193"
+      },
+      "createdIds": [
+        "c208"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513040
+    },
+    {
+      "opId": "op209",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch188",
+        "start": {
+          "ref": "pt189"
+        },
+        "end": {
+          "x": 0,
+          "y": 10
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt210",
+        "ln211"
+      ],
+      "label": "Add line",
+      "at": 1792899513048
+    },
+    {
+      "opId": "op212",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch188",
+        "type": "fix",
+        "point": "pt210"
+      },
+      "createdIds": [
+        "c213"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513057
+    },
+    {
+      "opId": "op214",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch188",
+        "points": [
+          {
+            "x": -32,
+            "y": 0
+          },
+          {
+            "x": -32,
+            "y": 1.9
+          },
+          {
+            "x": -35,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt215",
+        "pt216",
+        "pt217",
+        "ln218",
+        "ln219",
+        "ln220"
+      ],
+      "label": "Polyline",
+      "at": 1792899513066
+    },
+    {
+      "opId": "op221",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch188",
+        "type": "symmetric",
+        "a": "pt191",
+        "b": "pt215",
+        "line": "ln211"
+      },
+      "createdIds": [
+        "c222"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513075
+    },
+    {
+      "opId": "op223",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch188",
+        "type": "symmetric",
+        "a": "pt192",
+        "b": "pt216",
+        "line": "ln211"
+      },
+      "createdIds": [
+        "c224"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513086
+    },
+    {
+      "opId": "op225",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch188",
+        "type": "symmetric",
+        "a": "pt193",
+        "b": "pt217",
+        "line": "ln211"
+      },
+      "createdIds": [
+        "c226"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513097
+    },
+    {
+      "opId": "op227",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch188",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "cut",
+        "name": "R2 ±Y sockets"
+      },
+      "createdIds": [
+        "rev228"
+      ],
+      "label": "Revolve",
+      "at": 1792899513117
+    },
+    {
+      "opId": "op229",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "name": "Ring 3 (inner)",
+        "component": "cmp40"
+      },
+      "createdIds": [
+        "sketch230",
+        "pt231"
+      ],
+      "label": "Create sketch",
+      "at": 1792899513123
+    },
+    {
+      "opId": "op232",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch230",
+        "start": {
+          "ref": "pt231"
+        },
+        "end": {
+          "x": 10,
+          "y": 0
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt233",
+        "ln234"
+      ],
+      "label": "Add line",
+      "at": 1792899513135
+    },
+    {
+      "opId": "op235",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch230",
+        "type": "fix",
+        "point": "pt233"
+      },
+      "createdIds": [
+        "c236"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513148
+    },
+    {
+      "opId": "op237",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch230",
+        "corner": {
+          "x": 21,
+          "y": -6
+        },
+        "opposite": {
+          "x": 27,
+          "y": 6
+        }
+      },
+      "createdIds": [
+        "pt238",
+        "pt239",
+        "pt240",
+        "pt241",
+        "ln242",
+        "ln243",
+        "ln244",
+        "ln245",
+        "c246",
+        "c247",
+        "c248",
+        "c249"
+      ],
+      "label": "Add rectangle",
+      "at": 1792899513157
+    },
+    {
+      "opId": "op250",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch230",
+        "type": "symmetric",
+        "a": "pt238",
+        "b": "pt241",
+        "line": "ln234"
+      },
+      "createdIds": [
+        "c251"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513167
+    },
+    {
+      "opId": "op252",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch230",
+        "type": "distanceX",
+        "a": "pt231",
+        "b": "pt238",
+        "expression": "r3i"
+      },
+      "createdIds": [
+        "d253"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513177
+    },
+    {
+      "opId": "op254",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch230",
+        "type": "distanceX",
+        "a": "pt238",
+        "b": "pt239",
+        "expression": "wall"
+      },
+      "createdIds": [
+        "d255"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513187
+    },
+    {
+      "opId": "op256",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch230",
+        "type": "distanceY",
+        "a": "pt238",
+        "b": "pt241",
+        "expression": "ringH"
+      },
+      "createdIds": [
+        "d257"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513197
+    },
+    {
+      "opId": "op258",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch230",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "angle": "360",
+        "name": "Ring 3 (inner)"
+      },
+      "createdIds": [
+        "rev259"
+      ],
+      "label": "Revolve",
+      "at": 1792899513217
+    },
+    {
+      "opId": "op260",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "name": "R3 ±Y pins",
+        "component": "cmp40"
+      },
+      "createdIds": [
+        "sketch261",
+        "pt262"
+      ],
+      "label": "Create sketch",
+      "at": 1792899513228
+    },
+    {
+      "opId": "op263",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch261",
+        "points": [
+          {
+            "x": 26,
+            "y": 0
+          },
+          {
+            "x": 26,
+            "y": 3
+          },
+          {
+            "x": 35,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt264",
+        "pt265",
+        "pt266",
+        "ln267",
+        "ln268",
+        "ln269"
+      ],
+      "label": "Polyline",
+      "at": 1792899513242
+    },
+    {
+      "opId": "op270",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch261",
+        "type": "distanceX",
+        "a": "pt262",
+        "b": "pt264",
+        "expression": "r3o - pinInset"
+      },
+      "createdIds": [
+        "d271"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513266
+    },
+    {
+      "opId": "op272",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch261",
+        "type": "horizontal",
+        "a": "pt262",
+        "b": "pt264"
+      },
+      "createdIds": [
+        "c273"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513279
+    },
+    {
+      "opId": "op274",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch261",
+        "type": "distanceX",
+        "a": "pt262",
+        "b": "pt265",
+        "expression": "r3o - pinInset"
+      },
+      "createdIds": [
+        "d275"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513289
+    },
+    {
+      "opId": "op276",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch261",
+        "type": "distanceY",
+        "a": "pt262",
+        "b": "pt265",
+        "expression": "coneR"
+      },
+      "createdIds": [
+        "d277"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513298
+    },
+    {
+      "opId": "op278",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch261",
+        "type": "distanceX",
+        "a": "pt262",
+        "b": "pt266",
+        "expression": "r2i + pinDepth"
+      },
+      "createdIds": [
+        "d279"
+      ],
+      "label": "Add dimension",
+      "at": 1792899513310
+    },
+    {
+      "opId": "op280",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch261",
+        "type": "horizontal",
+        "a": "pt262",
+        "b": "pt266"
+      },
+      "createdIds": [
+        "c281"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513325
+    },
+    {
+      "opId": "op282",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch261",
+        "start": {
+          "ref": "pt262"
+        },
+        "end": {
+          "x": 0,
+          "y": 10
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt283",
+        "ln284"
+      ],
+      "label": "Add line",
+      "at": 1792899513336
+    },
+    {
+      "opId": "op285",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch261",
+        "type": "fix",
+        "point": "pt283"
+      },
+      "createdIds": [
+        "c286"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513349
+    },
+    {
+      "opId": "op287",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch261",
+        "points": [
+          {
+            "x": -26,
+            "y": 0
+          },
+          {
+            "x": -26,
+            "y": 3
+          },
+          {
+            "x": -35,
+            "y": 0
+          }
+        ],
+        "closed": true
+      },
+      "createdIds": [
+        "pt288",
+        "pt289",
+        "pt290",
+        "ln291",
+        "ln292",
+        "ln293"
+      ],
+      "label": "Polyline",
+      "at": 1792899513362
+    },
+    {
+      "opId": "op294",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch261",
+        "type": "symmetric",
+        "a": "pt264",
+        "b": "pt288",
+        "line": "ln284"
+      },
+      "createdIds": [
+        "c295"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513379
+    },
+    {
+      "opId": "op296",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch261",
+        "type": "symmetric",
+        "a": "pt265",
+        "b": "pt289",
+        "line": "ln284"
+      },
+      "createdIds": [
+        "c297"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513394
+    },
+    {
+      "opId": "op298",
+      "type": "sketch.addConstraint",
+      "params": {
+        "sketch": "sketch261",
+        "type": "symmetric",
+        "a": "pt266",
+        "b": "pt290",
+        "line": "ln284"
+      },
+      "createdIds": [
+        "c299"
+      ],
+      "label": "Add geometric constraint",
+      "at": 1792899513413
+    },
+    {
+      "opId": "op300",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch261",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 1,
+            "y": 0
+          }
+        },
+        "angle": "360",
+        "operation": "join",
+        "name": "R3 ±Y pins"
+      },
+      "createdIds": [
+        "rev301"
+      ],
+      "label": "Revolve",
+      "at": 1792899513444
+    },
+    {
+      "opId": "op302",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "base": "cmp36",
+        "moved": "cmp38",
+        "baseOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "value": "spin2",
+        "name": "Ring 2 pivot (X)"
+      },
+      "createdIds": [
+        "jnt303"
+      ],
+      "label": "Joint",
+      "at": 1792899513452
+    },
+    {
+      "opId": "op304",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "base": "cmp38",
+        "moved": "cmp40",
+        "baseOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "value": "spin3",
+        "name": "Ring 3 pivot (Y)"
+      },
+      "createdIds": [
+        "jnt305"
+      ],
+      "label": "Joint",
+      "at": 1792899513459
+    }
+  ],
+  "timelineGroups": []
+}

@@ -22,6 +22,7 @@ import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
 import type { SolidEval } from "../core/features";
 import { GeometryBackend, InlineGeometryBackend } from "../core/geometry/backend";
 import { WorkerGeometryBackend } from "../core/geometry/worker-backend";
+import { runMotionStudy, driveParams, MotionStatus, MotionResult } from "./motionStudy";
 import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
 import { CadDocument } from "../core/document";
@@ -36,6 +37,11 @@ function createGeometryBackend(): GeometryBackend {
   return new InlineGeometryBackend();
 }
 const geometry = createGeometryBackend();
+// A second backend dedicated to the motion study, so its 360° sweep runs in
+// parallel with (and never blocks) the live preview on the main backend.
+const studyGeometry = createGeometryBackend();
+let studyReady = false;
+let motionToken = 0; // bumped to cancel/supersede an in-flight study
 
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -103,6 +109,15 @@ export interface AppState {
   solids: Record<string, SolidEval>;
   kernelReady: boolean;
   kernelLoading: boolean;
+
+  // Motion study (customize mode): sweep the driven joints and pass/fail the
+  // current configuration on collision.
+  motionStatus: MotionStatus;
+  motionProgress: number; // 0..1 while running
+  motionResult: MotionResult | null;
+  hasMotionStudy: boolean; // the model has driven joints to sweep
+  runMotionStudy: () => Promise<void>;
+  cancelMotionStudy: () => void;
 
   toast: Toast | null;
   lastMessage: string;
@@ -401,6 +416,10 @@ export const useStore = create<AppState>((set, get) => {
     contextMenu: null,
     solids: {},
     kernelReady: false,
+    motionStatus: "idle",
+    motionProgress: 0,
+    motionResult: null,
+    hasMotionStudy: false,
     kernelLoading: false,
     toast: null,
     lastMessage: "Pick an origin plane to start a sketch.",
@@ -755,6 +774,26 @@ export const useStore = create<AppState>((set, get) => {
       }
       bump({ solids });
     },
+    runMotionStudy: async () => {
+      const doc = get().session.doc;
+      if (!driveParams(doc).length) { set({ hasMotionStudy: false, motionStatus: "idle", motionResult: null }); return; }
+      const token = ++motionToken; // supersede any in-flight study
+      set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null });
+      try {
+        if (!studyReady) { await studyGeometry.init({ wasmUrl: occWasmUrl }); studyReady = studyGeometry.ready(); }
+        const res = await runMotionStudy(studyGeometry, doc, {
+          steps: 8,
+          onProgress: (f) => { if (token === motionToken) set({ motionProgress: f }); },
+          cancelled: () => token !== motionToken,
+        });
+        if (token !== motionToken) return;            // superseded by a newer run
+        if (!res) { set({ motionStatus: "idle" }); return; } // cancelled
+        set({ motionStatus: res.status, motionResult: res, motionProgress: 1 });
+      } catch (e) {
+        if (token === motionToken) set({ motionStatus: "fail", motionResult: { status: "fail", reason: (e as Error).message, worstOverlap: 0 }, motionProgress: 1 });
+      }
+    },
+    cancelMotionStudy: () => { motionToken++; set({ motionStatus: "idle", motionProgress: 0 }); },
     extrudeSketch: async (sketchId, distanceExpr, opts) => {
       await get().ensureKernel();
       await runDispatch("feature.extrude", {
