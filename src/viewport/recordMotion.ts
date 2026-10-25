@@ -17,6 +17,10 @@ export interface RecordOptions {
   secondsPerSweep?: number; // seconds for one joint's 360° turn
   width?: number;
   height?: number;
+  /** Override the view direction (from the subject toward the camera) and up
+   *  vector; defaults to the viewport's current framing. */
+  dir?: { x: number; y: number; z: number };
+  up?: { x: number; y: number; z: number };
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
 }
@@ -40,20 +44,31 @@ export async function recordMotionStudy(doc: CadDocument, solids: SolidEval[], o
   const width = evenDim(opts.width ?? 960);
   const height = evenDim(opts.height ?? 720);
 
-  // The sweep timeline: each driver 0→360°, the others pinned at 0.
+  // The sweep timeline. A driver whose parameter has min/max bounds (a hinge,
+  // actuator, scissor lift…) sweeps its range and back (so it opens and closes);
+  // an unbounded one does a full 360° turn (a wheel, the gyro rings). Other
+  // drivers are held at their home value.
+  const param = (name: string) => doc.parameters.find((p) => p.name === name);
+  const home: Record<string, number> = {};
+  for (const d of poser.drivers) home[d] = param(d)?.value ?? 0;
+
   const timeline: Record<string, number>[] = [];
   for (const d of poser.drivers) {
-    for (let k = 0; k < perSweep; k++) {
-      const o: Record<string, number> = {};
-      for (const other of poser.drivers) o[other] = 0;
-      o[d] = (360 * k) / perSweep;
-      timeline.push(o);
+    const p = param(d);
+    const push = (v: number) => { const o = { ...home }; o[d] = v; timeline.push(o); };
+    if (p && p.min != null && p.max != null) {
+      const lo = p.min, hi = p.max;
+      for (let k = 0; k < perSweep; k++) push(lo + ((hi - lo) * k) / perSweep); // open
+      for (let k = 0; k < perSweep; k++) push(hi - ((hi - lo) * k) / perSweep); // close
+    } else {
+      for (let k = 0; k < perSweep; k++) push((360 * k) / perSweep); // full turn
     }
   }
 
   // Fixed framing: fit a sphere over a coarse sample of poses so nothing leaves
   // the frame as the parts swing, using the user's current view direction.
-  const framing = { ...computeBounds(poser, timeline), ...scene.viewFraming() };
+  const view = opts.dir ? { dir: opts.dir, up: opts.up ?? { x: 0, y: 0, z: 1 } } : scene.viewFraming();
+  const framing = { ...computeBounds(poser, timeline), ...view };
   const scratch = document.createElement("canvas");
 
   const blob = await encodeToWebM({
