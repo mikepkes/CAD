@@ -264,7 +264,21 @@ function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: 
     const size = resolveExpr(f.sizeExpr, f.sizeValue, scope);
     f.sizeValue = size;
     if (!(size > 0)) throw new Error(`${f.kind} size must be positive`);
-    replaceShape(target, blendEdges(target.shape, f.kind, size, f.edges));
+    const before = volumeOfShape(target.shape);
+    const blended = blendEdges(target.shape, f.kind, size, f.edges);
+    const after = volumeOfShape(blended);
+    const dim = f.kind === "fillet" ? "radius" : "setback";
+    // An un-measurable result means OCC produced an invalid solid (usually the
+    // size doesn't fit): don't corrupt the body with it — surface the failure.
+    if (Number.isFinite(before) && !Number.isFinite(after)) {
+      blended.delete();
+      throw new Error(`${f.kind} failed: the ${dim} (${size}) does not fit the selected edges`);
+    }
+    replaceShape(target, blended);
+    // A blend that changed nothing means no edges matched (or OCC skipped them).
+    if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, Math.abs(before))) {
+      out[f.id].warning = `${f.kind} changed nothing: no edges matched the selector, or the ${dim} does not fit`;
+    }
   } catch (e) {
     out[f.id].error = (e as Error).message;
   }
@@ -278,7 +292,19 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
     const t = resolveExpr(f.thicknessExpr, f.thicknessValue, scope);
     f.thicknessValue = t;
     if (!(t > 0)) throw new Error("shell thickness must be positive");
-    replaceShape(target, shellShape(target.shape, t, f.openFaces));
+    const before = volumeOfShape(target.shape);
+    const hollowed = shellShape(target.shape, t, f.openFaces);
+    const after = volumeOfShape(hollowed);
+    // An un-measurable result means OCC produced an invalid solid (usually the
+    // wall is thicker than the body allows, or no face matched): keep the body.
+    if (Number.isFinite(before) && !Number.isFinite(after)) {
+      hollowed.delete();
+      throw new Error(`shell failed: wall thickness (${t}) is too large for the body, or openFaces matched no face`);
+    }
+    replaceShape(target, hollowed);
+    if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, Math.abs(before))) {
+      out[f.id].warning = "shell changed nothing: no faces matched openFaces, or the wall is thicker than the body allows";
+    }
   } catch (e) {
     out[f.id].error = (e as Error).message;
   }
