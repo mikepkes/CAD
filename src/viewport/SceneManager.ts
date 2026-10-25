@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { sampleSpline } from "../core/geometry/spline";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { PLANES, WorkPlane, to3d } from "../geometry/plane";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchEllipse, SketchLine, SketchPoint } from "../sketch/types";
 import { isDimension } from "../sketch/types";
@@ -193,10 +194,19 @@ export class SceneManager {
     this.controls.target.set(0, 0, 0);
 
     // lights
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.45));
     const dir = new THREE.DirectionalLight(0xffffff, 0.6);
     dir.position.set(1, -1, 2);
     this.scene.add(dir);
+
+    // Image-based environment so PBR materials (esp. metals) read correctly —
+    // without a reflection probe, metalness renders near-black.
+    try {
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      this.scene.environmentIntensity = 0.55;
+      pmrem.dispose();
+    } catch { /* headless / no-WebGL: skip */ }
 
     // grid on XY (world), rotated so it lies in XY with Z up
     this.grid = this.makeGrid(this.gridSize);
