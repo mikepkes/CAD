@@ -74,6 +74,7 @@ function buildView(s: AppState): ViewData {
       normals: sol.mesh!.normals,
       indices: sol.mesh!.indices,
       edges: sol.mesh!.edges,
+      threadDecals: sol.threadDecals,
     }));
   return {
     mode: s.mode,

@@ -38,6 +38,18 @@ export function compose(A: Rigid, B: Rigid): Rigid {
   return { origin: applyPoint(A, B.origin), x: applyVec(A, B.x), y: applyVec(A, B.y), z: applyVec(A, B.z) };
 }
 
+/** Inverse of a rigid transform: transpose the (orthonormal) basis, negate the
+ *  mapped origin. compose(T, invert(T)) === identity. */
+export function invert(T: Rigid): Rigid {
+  // Transposed basis: rows of the original become the images of the axes.
+  const xT = { x: T.x.x, y: T.y.x, z: T.z.x };
+  const yT = { x: T.x.y, y: T.y.y, z: T.z.y };
+  const zT = { x: T.x.z, y: T.y.z, z: T.z.z };
+  const Rt: Rigid = { origin: v3(0, 0, 0), x: xT, y: yT, z: zT };
+  const o = applyVec(Rt, T.origin);
+  return { origin: { x: -o.x, y: -o.y, z: -o.z }, x: xT, y: yT, z: zT };
+}
+
 const normalize = (a: Vec3): Vec3 => { const m = Math.hypot(a.x, a.y, a.z) || 1; return { x: a.x / m, y: a.y / m, z: a.z / m }; };
 
 /** A rotation about `axis` (through the origin) by `angle` radians (Rodrigues). */

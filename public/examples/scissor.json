@@ -1,0 +1,490 @@
+{
+  "format": "chisel-cad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 73,
+  "rollbackIndex": 28,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "stages",
+        "expression": "3",
+        "min": 1,
+        "max": 8,
+        "step": 1
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1792964104466
+    },
+    {
+      "opId": "op3",
+      "type": "parameter.add",
+      "params": {
+        "name": "openAngle",
+        "expression": "45",
+        "min": 20,
+        "max": 70
+      },
+      "createdIds": [
+        "param4"
+      ],
+      "label": "Add parameter",
+      "at": 1792964104468
+    },
+    {
+      "opId": "op5",
+      "type": "parameter.add",
+      "params": {
+        "name": "linkLength",
+        "expression": "60",
+        "min": 40,
+        "max": 100
+      },
+      "createdIds": [
+        "param6"
+      ],
+      "label": "Add parameter",
+      "at": 1792964104468
+    },
+    {
+      "opId": "op7",
+      "type": "parameter.add",
+      "params": {
+        "name": "linkWidth",
+        "expression": "6",
+        "min": 3,
+        "max": 12
+      },
+      "createdIds": [
+        "param8"
+      ],
+      "label": "Add parameter",
+      "at": 1792964104468
+    },
+    {
+      "opId": "op9",
+      "type": "parameter.add",
+      "params": {
+        "name": "thickness",
+        "expression": "4",
+        "min": 2,
+        "max": 10
+      },
+      "createdIds": [
+        "param10"
+      ],
+      "label": "Add parameter",
+      "at": 1792964104469
+    },
+    {
+      "opId": "op11",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ"
+      },
+      "createdIds": [
+        "sketch12",
+        "pt13"
+      ],
+      "label": "Create sketch",
+      "at": 1792964104469
+    },
+    {
+      "opId": "op14",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch12",
+        "points": [
+          {
+            "x": -2.121320343559643,
+            "y": 2.121320343559643
+          },
+          {
+            "x": 2.121320343559643,
+            "y": -2.121320343559643
+          },
+          {
+            "x": 44.5477272147525,
+            "y": 40.30508652763321
+          },
+          {
+            "x": 40.30508652763321,
+            "y": 44.5477272147525
+          }
+        ]
+      },
+      "createdIds": [
+        "pt15",
+        "pt16",
+        "pt17",
+        "pt18",
+        "ln19",
+        "ln20",
+        "ln21",
+        "ln22"
+      ],
+      "label": "Polyline",
+      "at": 1792964104499
+    },
+    {
+      "opId": "op23",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch12",
+        "type": "distanceX",
+        "a": "pt13",
+        "b": "pt15",
+        "expression": "-linkWidth/2*sin(rad(openAngle))"
+      },
+      "createdIds": [
+        "d24"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104500
+    },
+    {
+      "opId": "op25",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch12",
+        "type": "distanceY",
+        "a": "pt13",
+        "b": "pt15",
+        "expression": "linkWidth/2*cos(rad(openAngle))"
+      },
+      "createdIds": [
+        "d26"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104505
+    },
+    {
+      "opId": "op27",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch12",
+        "type": "distanceX",
+        "a": "pt13",
+        "b": "pt16",
+        "expression": "linkWidth/2*sin(rad(openAngle))"
+      },
+      "createdIds": [
+        "d28"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104506
+    },
+    {
+      "opId": "op29",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch12",
+        "type": "distanceY",
+        "a": "pt13",
+        "b": "pt16",
+        "expression": "-linkWidth/2*cos(rad(openAngle))"
+      },
+      "createdIds": [
+        "d30"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104507
+    },
+    {
+      "opId": "op31",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch12",
+        "type": "distanceX",
+        "a": "pt13",
+        "b": "pt17",
+        "expression": "linkLength*cos(rad(openAngle))+linkWidth/2*sin(rad(openAngle))"
+      },
+      "createdIds": [
+        "d32"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104508
+    },
+    {
+      "opId": "op33",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch12",
+        "type": "distanceY",
+        "a": "pt13",
+        "b": "pt17",
+        "expression": "linkLength*sin(rad(openAngle))-linkWidth/2*cos(rad(openAngle))"
+      },
+      "createdIds": [
+        "d34"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104509
+    },
+    {
+      "opId": "op35",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch12",
+        "type": "distanceX",
+        "a": "pt13",
+        "b": "pt18",
+        "expression": "linkLength*cos(rad(openAngle))-linkWidth/2*sin(rad(openAngle))"
+      },
+      "createdIds": [
+        "d36"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104509
+    },
+    {
+      "opId": "op37",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch12",
+        "type": "distanceY",
+        "a": "pt13",
+        "b": "pt18",
+        "expression": "linkLength*sin(rad(openAngle))+linkWidth/2*cos(rad(openAngle))"
+      },
+      "createdIds": [
+        "d38"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104510
+    },
+    {
+      "opId": "op39",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch12",
+        "distance": "thickness",
+        "operation": "new"
+      },
+      "createdIds": [
+        "ext40"
+      ],
+      "label": "Extrude",
+      "at": 1792964104510
+    },
+    {
+      "opId": "op41",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ"
+      },
+      "createdIds": [
+        "sketch42",
+        "pt43"
+      ],
+      "label": "Create sketch",
+      "at": 1792964104511
+    },
+    {
+      "opId": "op44",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch42",
+        "points": [
+          {
+            "x": 40.30508652763321,
+            "y": -2.121320343559643
+          },
+          {
+            "x": 44.5477272147525,
+            "y": 2.121320343559643
+          },
+          {
+            "x": 2.121320343559643,
+            "y": 44.5477272147525
+          },
+          {
+            "x": -2.121320343559643,
+            "y": 40.30508652763321
+          }
+        ]
+      },
+      "createdIds": [
+        "pt45",
+        "pt46",
+        "pt47",
+        "pt48",
+        "ln49",
+        "ln50",
+        "ln51",
+        "ln52"
+      ],
+      "label": "Polyline",
+      "at": 1792964104512
+    },
+    {
+      "opId": "op53",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceX",
+        "a": "pt43",
+        "b": "pt45",
+        "expression": "linkLength*cos(rad(openAngle))-linkWidth/2*sin(rad(openAngle))"
+      },
+      "createdIds": [
+        "d54"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104513
+    },
+    {
+      "opId": "op55",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceY",
+        "a": "pt43",
+        "b": "pt45",
+        "expression": "-linkWidth/2*cos(rad(openAngle))"
+      },
+      "createdIds": [
+        "d56"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104513
+    },
+    {
+      "opId": "op57",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceX",
+        "a": "pt43",
+        "b": "pt46",
+        "expression": "linkLength*cos(rad(openAngle))+linkWidth/2*sin(rad(openAngle))"
+      },
+      "createdIds": [
+        "d58"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104514
+    },
+    {
+      "opId": "op59",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceY",
+        "a": "pt43",
+        "b": "pt46",
+        "expression": "linkWidth/2*cos(rad(openAngle))"
+      },
+      "createdIds": [
+        "d60"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104515
+    },
+    {
+      "opId": "op61",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceX",
+        "a": "pt43",
+        "b": "pt47",
+        "expression": "linkWidth/2*sin(rad(openAngle))"
+      },
+      "createdIds": [
+        "d62"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104516
+    },
+    {
+      "opId": "op63",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceY",
+        "a": "pt43",
+        "b": "pt47",
+        "expression": "linkLength*sin(rad(openAngle))+linkWidth/2*cos(rad(openAngle))"
+      },
+      "createdIds": [
+        "d64"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104517
+    },
+    {
+      "opId": "op65",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceX",
+        "a": "pt43",
+        "b": "pt48",
+        "expression": "-linkWidth/2*sin(rad(openAngle))"
+      },
+      "createdIds": [
+        "d66"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104518
+    },
+    {
+      "opId": "op67",
+      "type": "sketch.addDimension",
+      "params": {
+        "sketch": "sketch42",
+        "type": "distanceY",
+        "a": "pt43",
+        "b": "pt48",
+        "expression": "linkLength*sin(rad(openAngle))-linkWidth/2*cos(rad(openAngle))"
+      },
+      "createdIds": [
+        "d68"
+      ],
+      "label": "Add dimension",
+      "at": 1792964104518
+    },
+    {
+      "opId": "op69",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch42",
+        "distance": "thickness",
+        "operation": "join"
+      },
+      "createdIds": [
+        "ext70"
+      ],
+      "label": "Extrude",
+      "at": 1792964104519
+    },
+    {
+      "opId": "op71",
+      "type": "feature.pattern",
+      "params": {
+        "mode": "linear",
+        "count": "stages",
+        "step": {
+          "x": 0,
+          "y": 0,
+          "z": "linkLength*sin(rad(openAngle))"
+        },
+        "name": "Linkages"
+      },
+      "createdIds": [
+        "pat72"
+      ],
+      "label": "Pattern body",
+      "at": 1792964104520
+    }
+  ],
+  "timelineGroups": []
+}

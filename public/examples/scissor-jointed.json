@@ -1,0 +1,430 @@
+{
+  "format": "chisel-cad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 63,
+  "rollbackIndex": 22,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "theta",
+        "expression": "40",
+        "min": 18,
+        "max": 68
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1792963922194
+    },
+    {
+      "opId": "op3",
+      "type": "parameter.add",
+      "params": {
+        "name": "stages",
+        "expression": "3",
+        "min": 1,
+        "max": 8,
+        "step": 1
+      },
+      "createdIds": [
+        "param4"
+      ],
+      "label": "Add parameter",
+      "at": 1792963922196
+    },
+    {
+      "opId": "op5",
+      "type": "component.create",
+      "params": {
+        "name": "Stage"
+      },
+      "createdIds": [
+        "cmp6"
+      ],
+      "label": "New component",
+      "at": 1792963922196
+    },
+    {
+      "opId": "op7",
+      "type": "component.create",
+      "params": {
+        "name": "BarA",
+        "parent": "cmp6"
+      },
+      "createdIds": [
+        "cmp8"
+      ],
+      "label": "New component",
+      "at": 1792963922197
+    },
+    {
+      "opId": "op9",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp8"
+      },
+      "createdIds": [
+        "sketch10",
+        "pt11"
+      ],
+      "label": "Create sketch",
+      "at": 1792963922197
+    },
+    {
+      "opId": "op12",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch10",
+        "corner": {
+          "x": -3,
+          "y": -3
+        },
+        "opposite": {
+          "x": 63,
+          "y": 3
+        }
+      },
+      "createdIds": [
+        "pt13",
+        "pt14",
+        "pt15",
+        "pt16",
+        "ln17",
+        "ln18",
+        "ln19",
+        "ln20",
+        "c21",
+        "c22",
+        "c23",
+        "c24"
+      ],
+      "label": "Add rectangle",
+      "at": 1792963922228
+    },
+    {
+      "opId": "op25",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch10",
+        "distance": "4"
+      },
+      "createdIds": [
+        "ext26"
+      ],
+      "label": "Extrude",
+      "at": 1792963922234
+    },
+    {
+      "opId": "op27",
+      "type": "component.connector",
+      "params": {
+        "component": "cmp8",
+        "name": "bottom",
+        "origin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "createdIds": [],
+      "label": "Add connector",
+      "at": 1792963922235
+    },
+    {
+      "opId": "op28",
+      "type": "component.connector",
+      "params": {
+        "component": "cmp8",
+        "name": "top",
+        "origin": {
+          "x": 60,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "createdIds": [],
+      "label": "Add connector",
+      "at": 1792963922235
+    },
+    {
+      "opId": "op29",
+      "type": "component.connector",
+      "params": {
+        "component": "cmp8",
+        "name": "center",
+        "origin": {
+          "x": 30,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "createdIds": [],
+      "label": "Add connector",
+      "at": 1792963922236
+    },
+    {
+      "opId": "op30",
+      "type": "component.create",
+      "params": {
+        "name": "BarB",
+        "parent": "cmp6"
+      },
+      "createdIds": [
+        "cmp31"
+      ],
+      "label": "New component",
+      "at": 1792963922237
+    },
+    {
+      "opId": "op32",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp31"
+      },
+      "createdIds": [
+        "sketch33",
+        "pt34"
+      ],
+      "label": "Create sketch",
+      "at": 1792963922238
+    },
+    {
+      "opId": "op35",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch33",
+        "corner": {
+          "x": -3,
+          "y": -3
+        },
+        "opposite": {
+          "x": 63,
+          "y": 3
+        }
+      },
+      "createdIds": [
+        "pt36",
+        "pt37",
+        "pt38",
+        "pt39",
+        "ln40",
+        "ln41",
+        "ln42",
+        "ln43",
+        "c44",
+        "c45",
+        "c46",
+        "c47"
+      ],
+      "label": "Add rectangle",
+      "at": 1792963922238
+    },
+    {
+      "opId": "op48",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch33",
+        "distance": "4",
+        "direction": "reverse"
+      },
+      "createdIds": [
+        "ext49"
+      ],
+      "label": "Extrude",
+      "at": 1792963922239
+    },
+    {
+      "opId": "op50",
+      "type": "component.connector",
+      "params": {
+        "component": "cmp31",
+        "name": "bottom",
+        "origin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "createdIds": [],
+      "label": "Add connector",
+      "at": 1792963922240
+    },
+    {
+      "opId": "op51",
+      "type": "component.connector",
+      "params": {
+        "component": "cmp31",
+        "name": "top",
+        "origin": {
+          "x": 60,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "createdIds": [],
+      "label": "Add connector",
+      "at": 1792963922240
+    },
+    {
+      "opId": "op52",
+      "type": "component.connector",
+      "params": {
+        "component": "cmp31",
+        "name": "center",
+        "origin": {
+          "x": 30,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "createdIds": [],
+      "label": "Add connector",
+      "at": 1792963922241
+    },
+    {
+      "opId": "op53",
+      "type": "assembly.pattern",
+      "params": {
+        "source": "cmp6",
+        "count": "stages",
+        "name": "Linkages"
+      },
+      "createdIds": [
+        "apat54"
+      ],
+      "label": "Pattern components (jointed)",
+      "at": 1792963922242
+    },
+    {
+      "opId": "op55",
+      "type": "joint.template",
+      "params": {
+        "pattern": "apat54",
+        "kind": "revolute",
+        "base": {
+          "role": "root",
+          "origin": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        "moved": {
+          "role": "self",
+          "component": "cmp8",
+          "port": "bottom"
+        },
+        "axis": {
+          "x": 0,
+          "y": -1,
+          "z": 0
+        },
+        "value": "theta",
+        "appliesTo": "first"
+      },
+      "createdIds": [
+        "jtpl56"
+      ],
+      "label": "Joint template",
+      "at": 1792963922242
+    },
+    {
+      "opId": "op57",
+      "type": "joint.template",
+      "params": {
+        "pattern": "apat54",
+        "kind": "revolute",
+        "base": {
+          "role": "self",
+          "component": "cmp8",
+          "port": "center"
+        },
+        "moved": {
+          "role": "self",
+          "component": "cmp31",
+          "port": "center"
+        },
+        "axis": {
+          "x": 0,
+          "y": -1,
+          "z": 0
+        },
+        "value": "180 - 2*theta",
+        "appliesTo": "first"
+      },
+      "createdIds": [
+        "jtpl58"
+      ],
+      "label": "Joint template",
+      "at": 1792963922243
+    },
+    {
+      "opId": "op59",
+      "type": "joint.template",
+      "params": {
+        "pattern": "apat54",
+        "kind": "revolute",
+        "base": {
+          "role": "prev",
+          "component": "cmp31",
+          "port": "top"
+        },
+        "moved": {
+          "role": "self",
+          "component": "cmp8",
+          "port": "bottom"
+        },
+        "axis": {
+          "x": 0,
+          "y": -1,
+          "z": 0
+        },
+        "value": "2*theta - 180",
+        "appliesTo": "rest"
+      },
+      "createdIds": [
+        "jtpl60"
+      ],
+      "label": "Joint template",
+      "at": 1792963922244
+    },
+    {
+      "opId": "op61",
+      "type": "joint.template",
+      "params": {
+        "pattern": "apat54",
+        "kind": "revolute",
+        "base": {
+          "role": "prev",
+          "component": "cmp8",
+          "port": "top"
+        },
+        "moved": {
+          "role": "self",
+          "component": "cmp31",
+          "port": "bottom"
+        },
+        "axis": {
+          "x": 0,
+          "y": -1,
+          "z": 0
+        },
+        "value": "180 - 2*theta",
+        "appliesTo": "rest"
+      },
+      "createdIds": [
+        "jtpl62"
+      ],
+      "label": "Joint template",
+      "at": 1792963922245
+    }
+  ],
+  "timelineGroups": []
+}

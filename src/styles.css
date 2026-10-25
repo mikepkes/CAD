@@ -754,6 +754,51 @@ body {
   outline: none;
   border-color: var(--accent-2);
 }
+
+/* ---- parametric jointed assemblies (Browser panel) ---- */
+.tree-row.section { cursor: default; padding-top: 8px; }
+.tree-row.section:hover { background: transparent; }
+.tree-row.asm-actions { cursor: default; gap: 6px; }
+.tree-row.asm-actions:hover { background: transparent; }
+.asm-btn {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.asm-btn:hover { color: var(--text); border-color: var(--accent-2); }
+.asm-x {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  opacity: 0.5;
+}
+.asm-x:hover { opacity: 1; color: #e4564e; }
+.asm-sel {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 2px 3px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+.asm-form, .asm-ref { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.asm-tform {
+  display: flex; flex-direction: column; gap: 5px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px;
+  width: 100%;
+}
+.asm-ref .muted-inline { flex: none; }
 .dim-val {
   color: var(--accent-2);
   font-family: ui-monospace, monospace;

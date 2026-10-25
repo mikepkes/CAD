@@ -7,7 +7,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature,
+  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, regionAt, Region } from "./geometry/profile";
@@ -15,9 +15,10 @@ import { FaceRef } from "../sketch/types";
 import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
-  boundsOfShape, volumeOfShape, Bounds3,
+  boundsOfShape, volumeOfShape, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
 } from "./occ/kernel";
 import type { Shape3D } from "replicad";
+import { Vec3 } from "../math/vec";
 
 export interface SolidEval {
   featureId: string;
@@ -32,6 +33,8 @@ export interface SolidEval {
   bounds?: Bounds3;
   /** Enclosed volume in mm³ (set for body rows). */
   volume?: number;
+  /** Cosmetic thread regions on this body (rendered as a shaded texture). */
+  threadDecals?: ThreadDecal[];
 }
 
 /** Evaluate a parametric expression, writing the value back onto `holder[key]Value`. */
@@ -96,15 +99,20 @@ function buildFeatureSolid(doc: CadDocument, scope: Scope, f: SketchFeature, tar
   return buildRegionsSolid(wp, regions, d);
 }
 
-interface Body { id: string; name: string; sketchId: string; distance: number; shape: Shape3D }
+interface Body { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; decals?: ThreadDecal[] }
 
 /** Row for a feature that modifies bodies but makes none (listed in the inspector/timeline, not rendered). */
 const modifierRow = (f: FeatureDef): SolidEval => ({ featureId: f.id, name: f.name, sketchId: "", distance: 0 });
 
 /** The body a modifier (cut/join/fillet/shell/pattern) acts on: the most recent one. */
-function lastBody(bodies: Body[], what: string): Body {
-  const b = bodies[bodies.length - 1];
-  if (!b) throw new Error(`${what}: no body to modify yet`);
+/** The body a modifier/boolean targets: a specific one by its creating-feature id
+ *  (`body`), else the most recent. Bodies are named by the feature that created
+ *  them, so `body` is an extrude/revolve/primitive/loft/sweep id. */
+function pickBody(bodies: Body[], ref: string | undefined, what: string): Body {
+  if (!bodies.length) throw new Error(`${what}: no body to modify yet`);
+  if (!ref || ref === "last") return bodies[bodies.length - 1];
+  const b = bodies.find((x) => x.id === ref);
+  if (!b) throw new Error(`${what}: no body "${ref}" (a body is named by the feature that created it)`);
   return b;
 }
 
@@ -163,7 +171,7 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
     if (wp) sketch.plane = wp; // also the frame the ghost render / next pass uses
   }
   const op = f.operation ?? "new";
-  const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
+  const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, f.kind) : undefined;
   let shape: Shape3D;
   try {
     shape = buildFeatureSolid(doc, scope, f, target ? safeBounds(target.shape) : undefined);
@@ -184,7 +192,8 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
     // A boolean that changed nothing almost always means the tool missed the body
     // (wrong plane offset / direction) — say so instead of failing silently.
     if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, before)) {
-      out[f.id] = { ...modifierRow(f), sketchId: f.sketchId, distance, warning: `${op} changed nothing: the ${f.kind} does not intersect the body (check plane offset, direction, extent)` };
+      const msg = `${op} changed nothing: the ${f.kind} does not intersect the body (check plane offset, direction, extent)`;
+      out[f.id] = { ...modifierRow(f), sketchId: f.sketchId, distance, ...(f.requireEffect ? { error: msg } : { warning: msg }) };
     }
   } catch (e) {
     shape.delete();
@@ -194,6 +203,188 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
 
 function safeBounds(shape: Shape3D): Bounds3 | undefined {
   try { return boundsOfShape(shape); } catch { return undefined; }
+}
+
+/** Fold a freshly built solid into an existing body via a boolean op, detecting a
+ *  no-op (tool missed the body). Consumes `shape`. On a no-op or failure it writes
+ *  a modifier row for the feature (error when it opted into `requireEffect`). */
+function combineBody(op: BooleanOp, target: Body, shape: Shape3D, f: FeatureDef & { requireEffect?: boolean }, label: string, out: Record<string, SolidEval>) {
+  try {
+    const before = volumeOfShape(target.shape);
+    const combined = op === "cut" ? cutShapes(target.shape, shape) : op === "intersect" ? intersectShapes(target.shape, shape) : fuseShapes(target.shape, shape);
+    shape.delete();
+    replaceShape(target, combined);
+    const after = volumeOfShape(target.shape);
+    if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, Math.abs(before))) {
+      const msg = `${op} changed nothing: the ${label} does not intersect the body (check position, size, operation)`;
+      out[f.id] = { ...modifierRow(f), ...(f.requireEffect ? { error: msg } : { warning: msg }) };
+    }
+  } catch (e) {
+    shape.delete();
+    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+  }
+}
+
+/** Build a primitive solid (box/cylinder/cone/sphere/torus) and fold it in. */
+function applyPrimitive(scope: Scope, f: PrimitiveFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  let shape: Shape3D;
+  try {
+    const dim = (k: keyof PrimitiveFeature["dims"]): number | undefined => {
+      const expr = f.dims[k];
+      if (expr == null) return undefined;
+      const v = resolveExpr(expr, (f.dimValues?.[k] as number) ?? 0, scope);
+      (f.dimValues ??= {})[k] = v;
+      return v;
+    };
+    shape = buildPrimitive({
+      shape: f.shape, at: f.at ?? { x: 0, y: 0, z: 0 },
+      x: dim("x"), y: dim("y"), z: dim("z"), radius: dim("radius"), radius2: dim("radius2"), height: dim("height"), tube: dim("tube"),
+    });
+  } catch (e) {
+    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+    return;
+  }
+  const op = f.operation ?? "new";
+  const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, "primitive") : undefined;
+  if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
+  combineBody(op, target, shape, f, f.shape, out);
+}
+
+const V = {
+  norm: (a: Vec3): Vec3 => { const m = Math.hypot(a.x, a.y, a.z) || 1; return { x: a.x / m, y: a.y / m, z: a.z / m }; },
+  cross: (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }),
+  dot: (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z,
+};
+
+/** Rotate `base` so its `from` axis aligns with world `axis`, then translate to
+ *  `p`. Returns a fresh shape (the base is preserved). */
+function placeAlong(base: Shape3D, from: Vec3, axis: Vec3, p: Vec3): Shape3D {
+  const to = V.norm(axis);
+  const d = Math.max(-1, Math.min(1, V.dot(from, to)));
+  let rotated: Shape3D;
+  if (d > 0.999999) rotated = translateShape(base, { x: 0, y: 0, z: 0 }); // same direction → clone
+  else {
+    const rotAxis = d < -0.999999 ? V.norm(V.cross(from, { x: 1, y: 0, z: 0 })) : V.norm(V.cross(from, to));
+    const angle = d < -0.999999 ? 180 : (Math.acos(d) * 180) / Math.PI;
+    rotated = rotateShape(base, angle, { x: 0, y: 0, z: 0 }, rotAxis);
+  }
+  if (p.x === 0 && p.y === 0 && p.z === 0) return rotated;
+  const moved = translateShape(rotated, p);
+  rotated.delete();
+  return moved;
+}
+
+/** A −Z cutter (mouth at origin) oriented to drill along `axis` from point `p`. */
+const orientCutter = (base: Shape3D, axis: Vec3, p: Vec3): Shape3D => placeAlong(base, { x: 0, y: 0, z: -1 }, axis, p);
+
+/** A modelled thread rod (+Z) for a spec; throws if the helical sweep degenerates. */
+function buildThreadRod(spec: ThreadSpec, clearance: number): Shape3D {
+  return buildThread({
+    form: spec.form, pitch: spec.pitch, majorDiameter: spec.diameter + clearance, length: spec.length,
+    leftHand: spec.leftHand, starts: spec.starts, depth: spec.depth, custom: spec.profilePoints,
+  });
+}
+
+/** The cosmetic-thread decal for a spec at a placement. */
+function threadDecalOf(spec: ThreadSpec, at: ThreadDecal["at"], axis: ThreadDecal["axis"], internal: boolean): ThreadDecal {
+  return { at, axis, radius: spec.diameter / 2, length: spec.length, form: spec.form, pitch: spec.pitch, starts: spec.starts, leftHand: spec.leftHand, internal, profilePoints: spec.profilePoints };
+}
+
+/** A thread at a point: external (a new rod / joined to a shaft) or internal
+ *  (cut as a tap). Cosmetic threads are a plain cylinder + a shaded decal; a
+ *  modelled thread is real geometry that falls back to a cosmetic decal if the
+ *  kernel can't form it. */
+function applyThread(f: ThreadFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  const axis = f.axis ?? { x: 0, y: 0, z: 1 };
+  const internal = !!f.spec.internal;
+  const modeled = f.spec.representation === "modeled";
+
+  // Cosmetic: no thread geometry — a decal on the relevant body (and a plain
+  // cylinder for a standalone external thread).
+  const cosmetic = (warn?: string) => {
+    if (warn) out[f.id].warning = out[f.id].warning ? `${out[f.id].warning}; ${warn}` : warn;
+    const decal = threadDecalOf(f.spec, f.at, axis, internal);
+    const op = internal ? "cut" : (f.operation ?? "new");
+    if (!internal && (op === "new" || !bodies.length)) {
+      const cyl = placeAlong(buildPrimitive({ shape: "cylinder", at: { x: 0, y: 0, z: f.spec.length / 2 }, radius: f.spec.diameter / 2, height: f.spec.length }), { x: 0, y: 0, z: 1 }, axis, f.at);
+      bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape: cyl, decals: [decal] });
+      return;
+    }
+    try { (pickBody(bodies, f.body, "thread").decals ??= []).push(decal); }
+    catch (e) { out[f.id].error = (e as Error).message; }
+  };
+
+  if (!modeled) { cosmetic(); return; }
+
+  try {
+    const rod = placeAlong(buildThreadRod(f.spec, internal ? 0.1 : 0), { x: 0, y: 0, z: 1 }, axis, f.at);
+    const op = internal ? "cut" : (f.operation ?? "new");
+    if (op !== "cut" && (op === "new" || !bodies.length)) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape: rod }); return; }
+    combineBody(op, pickBody(bodies, f.body, "thread"), rod, f, "thread", out);
+  } catch (e) {
+    cosmetic(`modelled thread fell back to cosmetic: ${(e as Error).message}`); // kernel couldn't form it
+  }
+}
+
+/** Drill one or more holes (cut) into a body: simple / counterbore / countersink. */
+function applyHole(scope: Scope, f: HoleFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = pickBody(bodies, f.body, "hole");
+    const dia = resolveExpr(f.diameterExpr, f.diameterValue ?? 0, scope); f.diameterValue = dia;
+    if (!(dia > 0)) throw new Error("hole diameter must be positive");
+    const radius = dia / 2;
+    const tb = safeBounds(target.shape);
+    const depth = f.throughAll ? throughAllLength(tb) : resolveExpr(f.depthExpr ?? "0", f.depthValue ?? 0, scope);
+    if (!f.throughAll && !(depth > 0)) throw new Error("hole needs a positive depth (or throughAll)");
+    f.depthValue = depth;
+    const spec: HoleCutterSpec = { radius, depth, drillPoint: !f.throughAll && f.bottom === "drill" };
+    if (f.counterbore) spec.counterbore = { radius: resolveExpr(f.counterbore.diameterExpr, 0, scope) / 2, depth: resolveExpr(f.counterbore.depthExpr, 0, scope) };
+    if (f.countersink) spec.countersink = { radius: resolveExpr(f.countersink.diameterExpr, 0, scope) / 2, angle: resolveExpr(f.countersink.angleExpr ?? "90", 90, scope) };
+    const base = buildHoleCutter(spec);
+    const axis = f.axis ?? { x: 0, y: 0, z: -1 };
+    const pts = f.at && f.at.length ? f.at : [{ x: 0, y: 0, z: 0 }];
+    const before = volumeOfShape(target.shape);
+    try {
+      for (const p of pts) {
+        const cutter = orientCutter(base, axis, p);
+        try { const cut = cutShapes(target.shape, cutter); replaceShape(target, cut); }
+        finally { cutter.delete(); }
+      }
+    } finally { base.delete(); }
+    // Threaded hole: cosmetic = a decal per bore; modelled = cut a tap (a thread
+    // rod at the nominal/major diameter) from each bore, so the hole should be
+    // drilled at the tap-drill (minor) diameter.
+    if (f.thread) {
+      const addDecals = (warn?: string) => {
+        if (warn) out[f.id].warning = out[f.id].warning ? `${out[f.id].warning}; ${warn}` : warn;
+        target.decals ??= [];
+        for (const p of pts) target.decals.push(threadDecalOf(f.thread!, p, axis, true));
+      };
+      if (f.thread.representation === "modeled") {
+        try {
+          const shape = buildThreadRod(f.thread, 0.1);
+          try {
+            for (const p of pts) {
+              const tap = placeAlong(shape, { x: 0, y: 0, z: 1 }, axis, p);
+              try { const cut = cutShapes(target.shape, tap); replaceShape(target, cut); }
+              finally { tap.delete(); }
+            }
+          } finally { shape.delete(); }
+        } catch (e) { addDecals(`modelled thread fell back to cosmetic: ${(e as Error).message}`); }
+      } else {
+        addDecals();
+      }
+    }
+    const after = volumeOfShape(target.shape);
+    if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, before)) {
+      const msg = "hole changed nothing: it does not meet the body (check at / axis / depth)";
+      if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
+    }
+  } catch (e) {
+    out[f.id].error = (e as Error).message;
+  }
 }
 
 /** Sweep the feature's profile along its path sketch, then combine it. */
@@ -214,16 +405,9 @@ function applySweep(doc: CadDocument, f: SweepFeature, bodies: Body[], out: Reco
     return;
   }
   const op = f.operation ?? "new";
-  const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
+  const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, "sweep") : undefined;
   if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
-  try {
-    const combined = op === "cut" ? cutShapes(target.shape, shape) : op === "intersect" ? intersectShapes(target.shape, shape) : fuseShapes(target.shape, shape);
-    shape.delete();
-    replaceShape(target, combined);
-  } catch (e) {
-    shape.delete();
-    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
-  }
+  combineBody(op, target, shape, f, "sweep", out);
 }
 
 /** Loft a solid through the feature's ordered profile sketches, then combine it. */
@@ -244,23 +428,16 @@ function applyLoft(doc: CadDocument, f: LoftFeature, bodies: Body[], out: Record
     return;
   }
   const op = f.operation ?? "new";
-  const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
+  const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, "loft") : undefined;
   if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
-  try {
-    const combined = op === "cut" ? cutShapes(target.shape, shape) : op === "intersect" ? intersectShapes(target.shape, shape) : fuseShapes(target.shape, shape);
-    shape.delete();
-    replaceShape(target, combined);
-  } catch (e) {
-    shape.delete();
-    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
-  }
+  combineBody(op, target, shape, f, "loft", out);
 }
 
 /** Fillet or chamfer the selected edges of the most recent body. */
 function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
-    const target = lastBody(bodies, f.kind);
+    const target = pickBody(bodies, f.body, f.kind);
     const size = resolveExpr(f.sizeExpr, f.sizeValue, scope);
     f.sizeValue = size;
     if (!(size > 0)) throw new Error(`${f.kind} size must be positive`);
@@ -277,7 +454,8 @@ function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: 
     replaceShape(target, blended);
     // A blend that changed nothing means no edges matched (or OCC skipped them).
     if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, Math.abs(before))) {
-      out[f.id].warning = `${f.kind} changed nothing: no edges matched the selector, or the ${dim} does not fit`;
+      const msg = `${f.kind} changed nothing: no edges matched the selector, or the ${dim} does not fit`;
+      if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
     }
   } catch (e) {
     out[f.id].error = (e as Error).message;
@@ -288,7 +466,7 @@ function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: 
 function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
-    const target = lastBody(bodies, "shell");
+    const target = pickBody(bodies, f.body, "shell");
     const t = resolveExpr(f.thicknessExpr, f.thicknessValue, scope);
     f.thicknessValue = t;
     if (!(t > 0)) throw new Error("shell thickness must be positive");
@@ -303,7 +481,8 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
     }
     replaceShape(target, hollowed);
     if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, Math.abs(before))) {
-      out[f.id].warning = "shell changed nothing: no faces matched openFaces, or the wall is thicker than the body allows";
+      const msg = "shell changed nothing: no faces matched openFaces, or the wall is thicker than the body allows";
+      if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
     }
   } catch (e) {
     out[f.id].error = (e as Error).message;
@@ -311,11 +490,22 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
 }
 
 /** Repeat the most recent body (linear vector or circular axis), fusing the copies in. */
-function applyPattern(f: PatternFeature, bodies: Body[], out: Record<string, SolidEval>) {
+function applyPattern(scope: Scope, f: PatternFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
-    const target = lastBody(bodies, "pattern");
-    const n = Math.max(1, Math.floor(f.count));
+    const target = pickBody(bodies, f.body, "pattern");
+    // Resolve parametric count / spacing / angle, falling back to the stored
+    // literal when there is no expression. count is rounded to an integer ≥1.
+    f.count = Math.max(1, Math.round(f.countExpr ? resolveExpr(f.countExpr, f.count, scope) : f.count));
+    const n = f.count;
+    if (f.stepExpr && f.step) {
+      f.step = {
+        x: f.stepExpr.x ? resolveExpr(f.stepExpr.x, f.step.x, scope) : f.step.x,
+        y: f.stepExpr.y ? resolveExpr(f.stepExpr.y, f.step.y, scope) : f.step.y,
+        z: f.stepExpr.z ? resolveExpr(f.stepExpr.z, f.step.z, scope) : f.step.z,
+      };
+    }
+    if (f.angleExpr) f.angle = resolveExpr(f.angleExpr, f.angle ?? 360 / n, scope);
     const original = target.shape;
     let acc: Shape3D = (original as unknown as { clone: () => Shape3D }).clone();
     for (let i = 1; i < n; i++) {
@@ -417,7 +607,12 @@ function sketchSignature(sk: { entities: Record<string, unknown>; plane?: WorkPl
   }
   const p = sk.plane ? sk.plane.origin : { x: 0, y: 0, z: 0 };
   const n = sk.plane ? sk.plane.normal : { x: 0, y: 0, z: 0 };
-  return `${sk.planeId}:${p.x},${p.y},${p.z},${n.x},${n.y},${n.z}#${ents.join(",")}`;
+  // The in-plane basis matters too: a sketch that only rotates about its own
+  // normal (a jointed bar swinging within its plane) keeps the same origin and
+  // normal, so without u/v its signature would be stale and the cache would
+  // serve a mesh built at the previous pose.
+  const u = sk.plane ? sk.plane.u : { x: 0, y: 0, z: 0 };
+  return `${sk.planeId}:${p.x},${p.y},${p.z},${n.x},${n.y},${n.z},${u.x},${u.y},${u.z}#${ents.join(",")}`;
 }
 
 /** Build a body group's final shape: its "new" extrude with its joins/cuts folded in. */
@@ -447,7 +642,11 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
   // The cache only applies when every body is independent: extrude-only models
   // with no face-referenced sketch. Modifiers (mirror, fillet, shell, pattern,
   // revolve) take the full path — still correct, just not incremental.
-  const independent = features.every((f) => f.kind === "extrude") && !Object.values(doc.sketches).some((s) => s.faceRef);
+  // Body targeting and requireEffect both need the full, ordered path (the cache
+  // groups join/cuts onto the previous "new" and never flags no-ops), so they opt
+  // out of incremental evaluation.
+  const independent = features.every((f) => f.kind === "extrude" && !f.body && !f.requireEffect)
+    && !Object.values(doc.sketches).some((s) => s.faceRef);
   if (cache && independent) return evaluateCached(doc, scope, cache);
   return evaluateFull(doc, scope);
 }
@@ -486,13 +685,16 @@ function evaluateBodies(doc: CadDocument, scope: Scope): { bodies: Body[]; out: 
     switch (f.kind) {
       case "extrude":
       case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
+      case "primitive": applyPrimitive(scope, f, bodies, out); break;
+      case "hole": applyHole(scope, f, bodies, out); break;
+      case "thread": applyThread(f, bodies, out); break;
       case "loft": applyLoft(doc, f, bodies, out); break;
       case "sweep": applySweep(doc, f, bodies, out); break;
       case "mirror": applyMirror(doc, f, bodies, out); break;
       case "fillet":
       case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;
       case "shell": applyShell(scope, f, bodies, out); break;
-      case "pattern": applyPattern(f, bodies, out); break;
+      case "pattern": applyPattern(scope, f, bodies, out); break;
     }
   }
   return { bodies, out };
@@ -503,6 +705,7 @@ function evaluateFull(doc: CadDocument, scope: Scope): Record<string, SolidEval>
   const { bodies, out } = evaluateBodies(doc, scope);
   for (const body of bodies) {
     const row: SolidEval = { ...(out[body.id] ?? {}), featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance };
+    if (body.decals?.length) row.threadDecals = body.decals;
     try {
       row.mesh = meshShape(body.shape);
       row.bounds = safeBounds(body.shape);

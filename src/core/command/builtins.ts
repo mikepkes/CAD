@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument } from "../document";
+import { CadDocument, RoleRef } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -37,8 +37,20 @@ const CONSTRUCTION_SCHEMA: JSONSchema = {
 type PointRef = { x: number; y: number } | { ref: string };
 type EdgeSelectorParams = import("../document").EdgeSelector;
 type FaceSelectorParams = import("../document").FaceSelector;
+type ThreadSpecParams = import("../document").ThreadSpec;
 
 const V3_SCHEMA: JSONSchema = { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } };
+const ROLE_REF_SCHEMA: JSONSchema = {
+  type: "object",
+  required: ["role"],
+  additionalProperties: false,
+  properties: {
+    role: { type: "string", enum: ["self", "prev", "root"], description: "self → instance i, prev → i-1, root → ground." },
+    component: { type: "string", description: "Source component whose per-instance clone this addresses (self/prev)." },
+    port: { type: "string", description: "Connector name on that component." },
+    origin: { ...V3_SCHEMA, description: "Raw local origin when there is no named port (e.g. a ground anchor)." },
+  },
+};
 const IN_PLANE_SCHEMA: JSONSchema = {
   type: "object",
   required: ["plane"],
@@ -66,6 +78,25 @@ const FACE_SELECTOR_SCHEMA: JSONSchema = {
     parallelTo: { type: "string", enum: PLANE_ENUM, description: "Planar faces parallel to an origin plane." },
     inPlane: { ...IN_PLANE_SCHEMA, description: "Faces lying in an origin plane offset along its normal." },
     nearPoint: { ...V3_SCHEMA, description: "The face containing this world point." },
+  },
+};
+
+const THREAD_SPEC_SCHEMA: JSONSchema = {
+  type: "object",
+  required: ["form", "pitch", "diameter", "length"],
+  additionalProperties: false,
+  description: "A thread definition (shared by feature.thread and threaded holes).",
+  properties: {
+    form: { type: "string", enum: ["metric", "unified", "acme", "trapezoidal", "square", "buttress", "ballscrew", "custom"] },
+    pitch: { type: "number", description: "Axial distance per turn, per start (mm)." },
+    diameter: { type: "number", description: "Major (nominal) diameter (mm)." },
+    length: { type: "number", description: "Threaded length (mm)." },
+    internal: { type: "boolean", description: "Cut as an internal thread (a nut/bore) vs external (a screw)." },
+    leftHand: { type: "boolean" },
+    starts: { type: "integer", description: "Number of starts (multi-start). Default 1." },
+    depth: { type: "number", description: "Radial thread height override (mm)." },
+    representation: { type: "string", enum: ["cosmetic", "modeled"], description: "cosmetic (default) = a plain cylinder shaded as a thread by a normal-map texture (cheap, exports as a plain cylinder); modeled = real helical geometry." },
+    profilePoints: { type: "array", items: { type: "object", required: ["x", "y"], additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" } } }, description: "custom form only: axial section points (x = radial height, y = axial)." },
   },
 };
 
@@ -129,6 +160,30 @@ function resolvePoint(sk: Sketch, ref: PointRef, ctx: CommandContext): string {
   return id;
 }
 
+// Arc geometry for sketch.addProfile.
+const signedArea2 = (a: Vec, b: Vec, c: Vec) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+/** Circumcentre of three points (null if collinear). */
+function circumcentre(a: Vec, b: Vec, c: Vec): Vec | null {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-12) return null;
+  const a2 = a.x * a.x + a.y * a.y, b2 = b.x * b.x + b.y * b.y, c2 = c.x * c.x + c.y * c.y;
+  return {
+    x: (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d,
+    y: (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d,
+  };
+}
+/** Centre of the minor arc of radius `r` from a→c, bulging to the left of a→c when `left`. */
+function arcCentreFromRadius(a: Vec, c: Vec, r: number, left: boolean): { center: Vec; ccw: boolean } {
+  const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy);
+  if (d < 1e-9) throw new Error("profile arc endpoints coincide");
+  if (r < d / 2 - 1e-9) throw new Error(`profile arc radius ${r} too small for the ${d.toFixed(3)} span`);
+  const h = Math.sqrt(Math.max(0, r * r - (d / 2) * (d / 2)));
+  const px = -dy / d, py = dx / d, s = left ? 1 : -1;
+  const center = { x: (a.x + c.x) / 2 + px * h * s, y: (a.y + c.y) / 2 + py * h * s };
+  const cross = (a.x - center.x) * (c.y - center.y) - (a.y - center.y) * (c.x - center.x);
+  return { center, ccw: cross > 0 };
+}
+
 export function createDefaultRegistry(): CommandRegistry {
   const reg = new CommandRegistry();
   for (const def of BUILTINS) reg.register(def);
@@ -169,19 +224,21 @@ export const BUILTINS: CommandDef<any>[] = [
         expression: { type: "string", description: "Expression, e.g. '40' or 'width/2'." },
         min: { type: "number", description: "Optional lower extent (for a slider / validation)." },
         max: { type: "number", description: "Optional upper extent." },
+        step: { type: "number", exclusiveMinimum: 0, description: "Optional increment: the slider snaps to multiples of this. `step: 1` makes the parameter integer-only." },
         values: { type: "array", items: { type: "number" }, description: "Optional set of acceptable values (an enum). Mutually exclusive with min/max." },
       },
     },
     examples: [
       { params: { name: "width", expression: "60" } },
       { note: "A bounded parameter (slider 20–120)", params: { name: "width", expression: "60", min: 20, max: 120 } },
+      { note: "An integer count (slider steps by 1)", params: { name: "stages", expression: "3", min: 1, max: 8, step: 1 } },
       { note: "A pick-list parameter", params: { name: "thread", expression: "3", values: [3, 4, 5, 6, 8] } },
     ],
-    apply(draft, p: { name: string; expression: string; min?: number; max?: number; values?: number[] }, ctx) {
+    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[] }, ctx) {
       if (draft.parameters.some((x) => x.name === p.name)) throw new Error(`Parameter "${p.name}" exists`);
       const bounds = normalizeBounds(p);
       const id = ctx.alloc("param");
-      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds });
+      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}) });
       return { createdIds: [id], message: `Added parameter ${p.name}` };
     },
   },
@@ -199,19 +256,25 @@ export const BUILTINS: CommandDef<any>[] = [
         name: { type: "string" },
         min: { type: "number" },
         max: { type: "number" },
+        step: { type: "number", exclusiveMinimum: 0, description: "Snap increment (1 = integer-only)." },
         values: { type: "array", items: { type: "number" } },
         clear: { type: "boolean", description: "Remove all extents / values." },
       },
     },
     examples: [
       { params: { name: "width", min: 20, max: 120 } },
+      { note: "Integer-only count", params: { name: "stages", min: 1, max: 8, step: 1 } },
       { note: "Make unbounded", params: { name: "width", clear: true } },
     ],
-    apply(draft, p: { name: string; min?: number; max?: number; values?: number[]; clear?: boolean }) {
+    apply(draft, p: { name: string; min?: number; max?: number; step?: number; values?: number[]; clear?: boolean }) {
       const param = draft.parameters.find((x) => x.name === p.name);
       if (!param) throw new Error(`No parameter "${p.name}"`);
-      delete param.min; delete param.max; delete param.values;
-      if (!p.clear) Object.assign(param, normalizeBounds(p));
+      delete param.min; delete param.max; delete param.step; delete param.values;
+      if (!p.clear) {
+        const bounds = normalizeBounds(p);
+        Object.assign(param, bounds);
+        if (p.step != null && !bounds.values) param.step = p.step;
+      }
       return { message: `Set extents of ${p.name}` };
     },
   },
@@ -338,6 +401,93 @@ export const BUILTINS: CommandDef<any>[] = [
         valueValue: 0,
       };
       return { createdIds: [id], message: `${draft.joints[id].kind} joint` };
+    },
+  },
+  {
+    type: "component.connector",
+    title: "Add connector",
+    summary: "Add a named attachment frame (joint origin) to a component.",
+    description:
+      "Adds a named connector point in the component's LOCAL coordinates. Relational joint templates bind to these by name (e.g. a bar's `top`/`bottom`/`center` pins), so a component pattern's joints can chain instance to instance without hard-coded ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["component", "name", "origin"],
+      additionalProperties: false,
+      properties: {
+        component: { type: "string" },
+        name: { type: "string", description: "Connector name, unique on this component." },
+        origin: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+        axis: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "Optional reference axis (local)." },
+      },
+    },
+    examples: [{ params: { component: "cmp3", name: "top", origin: { x: 60, y: 0, z: 0 } } }],
+    apply(draft, p: { component: string; name: string; origin: Vec3; axis?: Vec3 }) {
+      const c = draft.components[p.component];
+      if (!c) throw new Error(`No component "${p.component}"`);
+      c.connectors = c.connectors ?? {};
+      c.connectors[p.name] = { origin: { x: p.origin.x, y: p.origin.y, z: p.origin.z }, ...(p.axis ? { axis: { x: p.axis.x, y: p.axis.y, z: p.axis.z } } : {}) };
+      return { message: `Connector ${p.name} on ${c.name}` };
+    },
+  },
+  {
+    type: "assembly.pattern",
+    title: "Pattern components (jointed)",
+    summary: "Duplicate a component subtree N times, placed by joint templates — a parametric, articulating pattern.",
+    description:
+      "Creates a component pattern over `source` (a component whose subtree — components, sketches, features — is instanced `count` times, count parametric). Unlike feature.pattern (which fuses rigid geometry), the copies are positioned by joint.template joints, so the mechanism still articulates AND the instance count is a parameter. Add the joint templates next. Returns the pattern id.",
+    paramsSchema: {
+      type: "object",
+      required: ["source", "count"],
+      additionalProperties: false,
+      properties: {
+        source: { type: "string", description: "Component id to instance (its whole subtree)." },
+        count: { type: ["integer", "string"], description: "Instance count (>=1), or an expression like \"stages\"." },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Repeat a scissor stage `stages` times", params: { source: "cmp2", count: "stages", name: "Linkages" } }],
+    apply(draft, p: { source: string; count: number | string; name?: string }, ctx) {
+      if (!draft.components[p.source]) throw new Error(`No source component "${p.source}"`);
+      const id = ctx.alloc("apat");
+      const parsed = typeof p.count === "number" ? p.count : parseFloat(p.count);
+      draft.componentPatterns[id] = { id, name: p.name ?? "Component pattern", source: p.source, countExpr: String(p.count), count: Math.max(1, Math.round(Number.isFinite(parsed) ? parsed : 1)) };
+      return { createdIds: [id], message: `Component pattern ×${p.count}` };
+    },
+  },
+  {
+    type: "joint.template",
+    title: "Joint template",
+    summary: "A relational joint for a component pattern, stamped once per instance.",
+    description:
+      "Adds a joint rule to a pattern. `base`/`moved` are role refs {role: self|prev|root, component, port}; the expander resolves them to concrete instances each rebuild (self → instance i, prev → i-1, root → ground). `appliesTo`: \"first\" (i=0, the grounding/seed joints), \"rest\" (i>=1, the repeating chain), or \"all\". `value` (degrees for revolute, length for slider) may reference the 0-based instance index `i` and parameters; a regular mechanism reuses the same expression every stage.",
+    paramsSchema: {
+      type: "object",
+      required: ["pattern", "base", "moved"],
+      additionalProperties: false,
+      properties: {
+        pattern: { type: "string" },
+        kind: { type: "string", enum: ["rigid", "revolute", "slider"] },
+        base: ROLE_REF_SCHEMA,
+        moved: ROLE_REF_SCHEMA,
+        axis: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "Joint axis in base-local coords (default +Z)." },
+        value: { type: "string", description: "Motion expression; may use `i` and parameters." },
+        appliesTo: { type: "string", enum: ["first", "rest", "all"], description: "Which instances get this joint (default all)." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "Ground + drive the first bar", params: { pattern: "apat1", kind: "revolute", base: { role: "root", origin: { x: 0, y: 0, z: 0 } }, moved: { role: "self", component: "cmp3", port: "bottom" }, axis: { x: 0, y: -1, z: 0 }, value: "theta", appliesTo: "first" } },
+      { note: "Chain each bar to the previous stage's top", params: { pattern: "apat1", kind: "revolute", base: { role: "prev", component: "cmp4", port: "top" }, moved: { role: "self", component: "cmp3", port: "bottom" }, axis: { x: 0, y: -1, z: 0 }, value: "2*theta-180", appliesTo: "rest" } },
+    ],
+    apply(draft, p: { pattern: string; kind?: "rigid" | "revolute" | "slider"; base: RoleRef; moved: RoleRef; axis?: Vec3; value?: string; appliesTo?: "first" | "rest" | "all"; name?: string }, ctx) {
+      if (!draft.componentPatterns[p.pattern]) throw new Error(`No pattern "${p.pattern}"`);
+      const id = ctx.alloc("jtpl");
+      draft.jointTemplates[id] = {
+        id, name: p.name ?? "Joint template", patternId: p.pattern, kind: p.kind ?? "revolute",
+        base: p.base, moved: p.moved, axis: p.axis ?? { x: 0, y: 0, z: 1 },
+        valueExpr: String(p.value ?? "0"), appliesTo: p.appliesTo ?? "all",
+      };
+      return { createdIds: [id], message: "Joint template" };
     },
   },
 
@@ -645,6 +795,97 @@ export const BUILTINS: CommandDef<any>[] = [
         lines.push(id);
       }
       return { createdIds: [...lines, ...ids], affectedSketchId: sk.id, message: `Polyline (${lines.length} lines)` };
+    },
+  },
+  {
+    type: "sketch.addProfile",
+    title: "Profile (lines + arcs)",
+    summary: "Add a closed profile mixing straight and curved (arc) segments in one call — for turned, filleted or organic outlines.",
+    description:
+      "Builds a chain of edges through `segments`. The FIRST segment is the start point; each later segment adds an edge to its {x,y}: a straight LINE by default, or an ARC when it carries `radius` (the minor arc of that radius, bulging to the left of the segment direction when `ccw`, else right) or `via` (a point the arc passes through — an unambiguous 3-point arc). " +
+      "`closed` (default true) closes the loop: if the last point returns to the start it reuses the start (so the last segment, arc or line, is the closing edge); otherwise a straight edge is added back to the start — for a revolve profile that returns to the axis, that closing edge lies on the axis. Corner points are shared so the chain is coincident. Returns the created ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "segments"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        segments: {
+          type: "array",
+          description: "At least 2; the first is the start point. radius/ccw or via on a segment make its edge an arc.",
+          items: {
+            type: "object",
+            required: ["x", "y"],
+            additionalProperties: false,
+            properties: {
+              x: { type: "number" }, y: { type: "number" },
+              radius: { type: "number", description: "Arc of this radius to the point (else a line)." },
+              ccw: { type: "boolean", description: "With radius: bulge left of the segment direction (default right)." },
+              via: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } }, description: "A point the arc passes through (3-point arc)." },
+            },
+          },
+        },
+        closed: { type: "boolean", description: "Close the loop (default true)." },
+        construction: CONSTRUCTION_SCHEMA,
+      },
+    },
+    examples: [
+      { note: "A rounded top (dome half-profile) to revolve: axis→rim→arc up→back down the axis", params: { sketch: "sketch1", segments: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 10, radius: 10 }] } },
+      { note: "A slot-like outline with line and 3-point arc ends", params: { sketch: "sketch1", segments: [{ x: -10, y: -3 }, { x: 10, y: -3 }, { x: 10, y: 3, via: { x: 13, y: 0 } }, { x: -10, y: 3 }, { x: -10, y: -3, via: { x: -13, y: 0 } }], closed: false } },
+    ],
+    apply(draft, p: { sketch: string; segments: { x: number; y: number; radius?: number; ccw?: boolean; via?: Vec }[]; closed?: boolean; construction?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const segs = p.segments;
+      if (!Array.isArray(segs) || segs.length < 2) throw new Error("profile needs at least 2 segments");
+      const cons = !!p.construction;
+      const created: string[] = [];
+      const mkPt = (x: number, y: number): string => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x, y, construction: cons }; created.push(id); return id; };
+      /** Add a line or arc edge from an existing point to an existing point. */
+      const addEdge = (fromId: string, from: Vec, toId: string, to: Vec, seg: { radius?: number; ccw?: boolean; via?: Vec } | null): string => {
+        if (seg && (seg.radius != null || seg.via != null)) {
+          let center: Vec, r: number, ccw: boolean;
+          if (seg.via != null) {
+            const cc = circumcentre(from, seg.via, to);
+            if (!cc) throw new Error("profile arc via-point is collinear with the endpoints");
+            center = cc; r = Math.hypot(from.x - cc.x, from.y - cc.y); ccw = signedArea2(from, seg.via, to) > 0;
+          } else {
+            const res = arcCentreFromRadius(from, to, seg.radius!, !!seg.ccw); center = res.center; r = seg.radius!; ccw = res.ccw;
+          }
+          const cid = mkPt(center.x, center.y);
+          const aid = ctx.alloc("ar");
+          sk.entities[aid] = { id: aid, kind: "arc", center: cid, p1: fromId, p2: toId, r, ccw, construction: cons };
+          created.push(aid);
+          return aid;
+        }
+        const lid = ctx.alloc("ln");
+        sk.entities[lid] = { id: lid, kind: "line", p1: fromId, p2: toId, construction: cons };
+        created.push(lid);
+        return lid;
+      };
+
+      const start = { x: segs[0].x, y: segs[0].y };
+      const startId = mkPt(start.x, start.y);
+      let prevId = startId, prev = start;
+      let lastEdge = ""; let lastToId = startId;
+      for (let i = 1; i < segs.length; i++) {
+        const to = { x: segs[i].x, y: segs[i].y };
+        const toId = mkPt(to.x, to.y);
+        lastEdge = addEdge(prevId, prev, toId, to, segs[i]);
+        prevId = toId; prev = to; lastToId = toId;
+      }
+      if (p.closed !== false) {
+        const d = Math.hypot(prev.x - start.x, prev.y - start.y);
+        if (d <= 1e-7) {
+          // Last point is the start: reuse it so the last segment IS the closer.
+          const e = sk.entities[lastEdge] as { p2: string };
+          e.p2 = startId;
+          delete sk.entities[lastToId];
+          const k = created.indexOf(lastToId); if (k >= 0) created.splice(k, 1);
+        } else {
+          addEdge(prevId, prev, startId, start, null); // straight close
+        }
+      }
+      return { createdIds: created, affectedSketchId: sk.id, message: `Profile (${created.length} ids)` };
     },
   },
   {
@@ -1168,6 +1409,8 @@ export const BUILTINS: CommandDef<any>[] = [
           required: ["x", "y"],
           properties: { x: { type: "number" }, y: { type: "number" } },
         },
+        body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a join/cut that changes nothing an error, not a warning." },
         name: { type: "string" },
       },
     },
@@ -1176,7 +1419,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Join a boss onto the current body", params: { sketch: "sketch3", distance: "6", operation: "join" } },
       { note: "A through-hole from a face sketch", params: { sketch: "sketch4", distance: "0", operation: "cut", direction: "reverse", extent: "throughAll" } },
     ],
-    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; extent?: "blind" | "throughAll"; operation?: "new" | "join" | "cut" | "intersect"; region?: { x: number; y: number }; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; extent?: "blind" | "throughAll"; operation?: "new" | "join" | "cut" | "intersect"; region?: { x: number; y: number }; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("ext");
       draft.features[id] = {
@@ -1191,6 +1434,8 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.extent === "throughAll" ? { extent: "throughAll" as const } : {}),
         operation: p.operation ?? "new",
         regionPoint: p.region,
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: `Extrude ${p.sketch}` };
     },
@@ -1219,6 +1464,8 @@ export const BUILTINS: CommandDef<any>[] = [
         angle: { type: "string", description: "Sweep angle in degrees (expression). Default 360." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
         region: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+        body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a join/cut that changes nothing an error." },
         name: { type: "string" },
       },
     },
@@ -1226,14 +1473,153 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A drum from its half profile sketched on XZ, revolved about the sketch v (world Z) axis", params: { sketch: "sketch2", axis: { p1: { x: 0, y: 0 }, p2: { x: 0, y: 1 } } } },
       { note: "A quarter-turn boss joined to the body", params: { sketch: "sketch5", axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "90", operation: "join" } },
     ],
-    apply(draft, p: { sketch: string; axis: { p1: Vec; p2: Vec }; angle?: string | number; operation?: "new" | "join" | "cut" | "intersect"; region?: Vec; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; axis: { p1: Vec; p2: Vec }; angle?: string | number; operation?: "new" | "join" | "cut" | "intersect"; region?: Vec; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("rev");
       draft.features[id] = {
         id, kind: "revolve", name: p.name ?? "Revolve", sketchId: p.sketch, axis: p.axis,
         angleExpr: String(p.angle ?? 360), angleValue: 360, operation: p.operation ?? "new", regionPoint: p.region,
+        ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: `Revolve ${p.sketch}` };
+    },
+  },
+  {
+    type: "feature.primitive",
+    title: "Primitive solid",
+    summary: "Create a box / cylinder / cone / sphere / torus directly, in one step — no sketch needed.",
+    description:
+      "Builds a primitive solid centred on `at` (world mm; default origin): a box/sphere is centred on it, a cylinder/cone is centred on its axis at mid-height (axis = world Z), a torus lies in the XY plane through it. " +
+      "Dimensions are expressions (parametric). Required dims by shape — box: x,y,z; cylinder: radius,height; cone: radius,height (plus optional radius2 for a frustum, default 0 = a point); sphere: radius; torus: radius (ring centreline) and tube. " +
+      "`operation` combines with an existing body Fusion-style (new/join/cut/intersect); `body` picks which body (its creating-feature id; default the most recent); `requireEffect` makes a cut/join that changes nothing an error. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["shape"],
+      additionalProperties: false,
+      properties: {
+        shape: { type: "string", enum: ["box", "cylinder", "cone", "sphere", "torus"] },
+        x: { type: ["string", "number"], description: "box X length (expr)." },
+        y: { type: ["string", "number"], description: "box Y length (expr)." },
+        z: { type: ["string", "number"], description: "box Z length (expr)." },
+        radius: { type: ["string", "number"], description: "cylinder/cone/sphere radius, or torus ring radius (expr)." },
+        radius2: { type: ["string", "number"], description: "cone far-end radius (expr; default 0)." },
+        height: { type: ["string", "number"], description: "cylinder/cone height (expr)." },
+        tube: { type: ["string", "number"], description: "torus tube radius (expr)." },
+        at: { type: "object", additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "World centre (default origin)." },
+        operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
+        body: { type: "string", description: "Target body (feature id) for join/cut; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a cut/join that changes nothing an error." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A 40×40×20 box on the ground (centre lifted to z=10)", params: { shape: "box", x: "40", y: "40", z: "20", at: { x: 0, y: 0, z: 10 } } },
+      { note: "A Ø16×50 cylinder", params: { shape: "cylinder", radius: "8", height: "50" } },
+      { note: "Drill a Ø6 hole through the current body", params: { shape: "cylinder", radius: "3", height: "100", operation: "cut" } },
+      { note: "A cone frustum", params: { shape: "cone", radius: "10", radius2: "4", height: "20" } },
+    ],
+    apply(draft, p: { shape: "box" | "cylinder" | "cone" | "sphere" | "torus"; at?: Vec3; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string } & Record<string, unknown>, ctx) {
+      const id = ctx.alloc("prim");
+      const dims: Record<string, string> = {};
+      for (const k of ["x", "y", "z", "radius", "radius2", "height", "tube"] as const) {
+        if (p[k] != null) dims[k] = String(p[k]);
+      }
+      draft.features[id] = {
+        id, kind: "primitive", name: p.name ?? (p.shape.charAt(0).toUpperCase() + p.shape.slice(1)),
+        shape: p.shape, dims, at: p.at, operation: p.operation ?? "new",
+        ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
+      };
+      return { createdIds: [id], message: `${p.shape}` };
+    },
+  },
+  {
+    type: "feature.hole",
+    title: "Hole",
+    summary: "Drill a hole — simple, counterbored or countersunk, blind or through — at one or more points.",
+    description:
+      "Cuts a hole into a body at each point in `at` (world-mm hole-mouth centres), drilling along `axis` (default straight down, −Z). `diameter` is the bore (expression). " +
+      "Give `depth` for a blind hole — its `bottom` is flat (default) or a 118° `drill` point — or `throughAll` to pass clear through the body. " +
+      "`counterbore` {diameter, depth} adds a flat-bottomed recess with a square shoulder at the mouth (for a socket-head cap screw); `countersink` {diameter, angle} adds an angled cone (angle = included, default 90°, for a flat-head screw). " +
+      "`body` picks which body (its creating-feature id; default the most recent); `requireEffect` makes a hole that meets nothing an error. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["at", "diameter"],
+      additionalProperties: false,
+      properties: {
+        at: { type: "array", items: { type: "object", required: ["x", "y", "z"], additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } }, description: "Hole-mouth centres (world mm)." },
+        axis: { type: "object", additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "Drill direction (default −Z)." },
+        diameter: { type: ["string", "number"], description: "Bore diameter (expr)." },
+        depth: { type: ["string", "number"], description: "Blind depth to the drill point (expr). Omit with throughAll." },
+        throughAll: { type: "boolean", description: "Pass clear through the body." },
+        bottom: { type: "string", enum: ["flat", "drill"], description: "Blind-hole bottom (default flat)." },
+        counterbore: { type: "object", required: ["diameter", "depth"], additionalProperties: false, properties: { diameter: { type: ["string", "number"] }, depth: { type: ["string", "number"] } } },
+        countersink: { type: "object", required: ["diameter"], additionalProperties: false, properties: { diameter: { type: ["string", "number"] }, angle: { type: ["string", "number"] } } },
+        thread: { ...THREAD_SPEC_SCHEMA, description: "Tap the hole: drill at the tap-drill (minor) diameter, then set thread.diameter to the nominal (major)." },
+        body: { type: "string", description: "Target body (feature id); default the most recent." },
+        requireEffect: { type: "boolean" },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A Ø6 hole through the top face at two points", params: { at: [{ x: -10, y: 0, z: 20 }, { x: 10, y: 0, z: 20 }], diameter: "6", throughAll: true } },
+      { note: "A tapped M8 blind hole (drill Ø6.75, thread to Ø8)", params: { at: [{ x: 0, y: 0, z: 20 }], diameter: "6.75", depth: "16", thread: { form: "metric", pitch: 1.25, diameter: 8, length: 14, internal: true, representation: "modeled" } } },
+      { note: "A counterbored hole for an M4 cap screw", params: { at: [{ x: 0, y: 0, z: 10 }], diameter: "4.5", depth: "12", counterbore: { diameter: "8", depth: "4" } } },
+      { note: "An 82° countersink for a flat-head screw", params: { at: [{ x: 0, y: 0, z: 6 }], diameter: "4", throughAll: true, countersink: { diameter: "8", angle: "82" } } },
+    ],
+    apply(draft, p: { at: Vec3[]; axis?: Vec3; diameter: string | number; depth?: string | number; throughAll?: boolean; bottom?: "flat" | "drill"; counterbore?: { diameter: string | number; depth: string | number }; countersink?: { diameter: string | number; angle?: string | number }; thread?: ThreadSpecParams; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      if (!p.throughAll && p.depth == null) throw new Error("hole needs `depth` or `throughAll`");
+      const id = ctx.alloc("hole");
+      draft.features[id] = {
+        id, kind: "hole", name: p.name ?? "Hole", at: p.at, axis: p.axis,
+        diameterExpr: String(p.diameter),
+        ...(p.throughAll ? { throughAll: true } : { depthExpr: String(p.depth) }),
+        ...(p.bottom ? { bottom: p.bottom } : {}),
+        ...(p.counterbore ? { counterbore: { diameterExpr: String(p.counterbore.diameter), depthExpr: String(p.counterbore.depth) } } : {}),
+        ...(p.countersink ? { countersink: { diameterExpr: String(p.countersink.diameter), ...(p.countersink.angle != null ? { angleExpr: String(p.countersink.angle) } : {}) } } : {}),
+        ...(p.thread ? { thread: { ...p.thread, internal: true } } : {}),
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
+      };
+      return { createdIds: [id], message: `Hole ×${p.at.length}` };
+    },
+  },
+  {
+    type: "feature.thread",
+    title: "Thread",
+    summary: "Add an external thread or cut an internal one — any standard form (metric, unified, ACME, trapezoidal, square, buttress), ballscrew, or custom; cosmetic or fully modelled.",
+    description:
+      "Builds a thread at `at` along `axis` (default +Z, the threaded length running from the point). `spec` gives the form, pitch, (major) diameter and length. " +
+      "`spec.internal` cuts the thread into a body as a tap (the body should already have a tap-drill bore at the minor diameter); otherwise it is external — `operation` \"new\" makes a standalone threaded rod, \"join\" adds the threads onto an existing shaft (`body` picks which). " +
+      "`spec.representation` \"cosmetic\" (default) keeps the solid a plain cylinder and shades the thread with a procedural normal-map texture (cheap, and it exports as a plain cylinder); \"modeled\" is real helical geometry (heavier — several seconds — and it automatically falls back to cosmetic with a warning if the kernel can't form it cleanly). " +
+      "`spec.leftHand`, `spec.starts` (multi-start), `spec.depth` (radial height override) and a `spec.profilePoints` custom section are supported. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["at", "spec"],
+      additionalProperties: false,
+      properties: {
+        at: { ...V3_SCHEMA, required: ["x", "y", "z"], description: "Base point of the threaded length (world mm)." },
+        axis: { ...V3_SCHEMA, description: "Thread axis direction (default +Z)." },
+        spec: THREAD_SPEC_SCHEMA,
+        operation: { type: "string", enum: ["new", "join", "cut"], description: "external only: standalone rod (new) or added to a shaft (join)." },
+        body: { type: "string", description: "Target body for join/cut; default the most recent." },
+        requireEffect: { type: "boolean" },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A modelled M10×1.5 external thread, 20mm long, as its own rod", params: { at: { x: 0, y: 0, z: 0 }, spec: { form: "metric", pitch: 1.5, diameter: 10, length: 20, representation: "modeled" } } },
+      { note: "A cosmetic ½-10 ACME leadscrew", params: { at: { x: 0, y: 0, z: 0 }, spec: { form: "acme", pitch: 2.54, diameter: 12.7, length: 60 } } },
+      { note: "A 2-start ballscrew", params: { at: { x: 0, y: 0, z: 0 }, spec: { form: "ballscrew", pitch: 5, diameter: 16, length: 50, starts: 2, representation: "modeled" } } },
+    ],
+    apply(draft, p: { at: Vec3; axis?: Vec3; spec: ThreadSpecParams; operation?: "new" | "join" | "cut"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      const id = ctx.alloc("thr");
+      draft.features[id] = {
+        id, kind: "thread", name: p.name ?? `Thread ${p.spec.form}`, at: p.at, axis: p.axis, spec: p.spec,
+        ...(p.operation ? { operation: p.operation } : {}),
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
+      };
+      return { createdIds: [id], message: `Thread ${p.spec.form}` };
     },
   },
   {
@@ -1250,11 +1636,13 @@ export const BUILTINS: CommandDef<any>[] = [
         sketches: { type: "array", items: { type: "string" }, description: "Ordered profile sketch ids (at least two)." },
         ruled: { type: "boolean", description: "Straight sections between profiles (default false = smooth)." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies." },
+        body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a join/cut that changes nothing an error." },
         name: { type: "string" },
       },
     },
     examples: [{ note: "Loft through two profiles", params: { sketches: ["sketch1", "sketch3"] } }],
-    apply(draft, p: { sketches: string[]; ruled?: boolean; operation?: "new" | "join" | "cut" | "intersect"; name?: string }, ctx) {
+    apply(draft, p: { sketches: string[]; ruled?: boolean; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!Array.isArray(p.sketches) || p.sketches.length < 2) throw new Error("loft needs at least two sketches");
       for (const sid of p.sketches) if (!draft.sketches[sid]) throw new Error(`No sketch "${sid}"`);
       const id = ctx.alloc("loft");
@@ -1265,6 +1653,8 @@ export const BUILTINS: CommandDef<any>[] = [
         sketchIds: [...p.sketches],
         ruled: !!p.ruled,
         operation: p.operation ?? "new",
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: `Loft ${p.sketches.length} profiles` };
     },
@@ -1283,11 +1673,13 @@ export const BUILTINS: CommandDef<any>[] = [
         profile: { type: "string", description: "Closed profile sketch id (its first region)." },
         path: { type: "string", description: "Open path sketch id (lines/arcs forming a chain)." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies." },
+        body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a join/cut that changes nothing an error." },
         name: { type: "string" },
       },
     },
     examples: [{ note: "Sweep a circle along an L-path", params: { profile: "sketch1", path: "sketch2" } }],
-    apply(draft, p: { profile: string; path: string; operation?: "new" | "join" | "cut" | "intersect"; name?: string }, ctx) {
+    apply(draft, p: { profile: string; path: string; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!draft.sketches[p.profile]) throw new Error(`No profile sketch "${p.profile}"`);
       if (!draft.sketches[p.path]) throw new Error(`No path sketch "${p.path}"`);
       const id = ctx.alloc("swp");
@@ -1298,6 +1690,8 @@ export const BUILTINS: CommandDef<any>[] = [
         profileSketch: p.profile,
         pathSketch: p.path,
         operation: p.operation ?? "new",
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: "Sweep profile along path" };
     },
@@ -1317,6 +1711,8 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         radius: { type: "string", description: "Radius expression, e.g. '2' or 'r_edge'." },
         edges: EDGE_SELECTOR_SCHEMA,
+        body: { type: "string", description: "Target body (feature id) to round; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a fillet that matches no edges an error." },
         name: { type: "string" },
       },
     },
@@ -1325,9 +1721,9 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Round only the vertical corner edges of a crate", params: { radius: "4", edges: { parallelTo: "Z" } } },
       { note: "Round the top outline of a 30-tall block", params: { radius: "3", edges: { inPlane: { plane: "XY", offset: 30 } } } },
     ],
-    apply(draft, p: { radius: string | number; edges?: EdgeSelectorParams; name?: string }, ctx) {
+    apply(draft, p: { radius: string | number; edges?: EdgeSelectorParams; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       const id = ctx.alloc("fil");
-      draft.features[id] = { id, kind: "fillet", name: p.name ?? "Fillet", sizeExpr: String(p.radius), sizeValue: 0, edges: p.edges ?? {} };
+      draft.features[id] = { id, kind: "fillet", name: p.name ?? "Fillet", sizeExpr: String(p.radius), sizeValue: 0, edges: p.edges ?? {}, ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}) };
       return { createdIds: [id], message: "Fillet edges" };
     },
   },
@@ -1344,13 +1740,15 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         distance: { type: "string", description: "Setback expression." },
         edges: EDGE_SELECTOR_SCHEMA,
+        body: { type: "string", description: "Target body (feature id) to bevel; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a chamfer that matches no edges an error." },
         name: { type: "string" },
       },
     },
     examples: [{ note: "Bevel the crown of a bolt head (its top outline at z=38)", params: { distance: "1", edges: { inPlane: { plane: "XY", offset: 38 } } } }],
-    apply(draft, p: { distance: string | number; edges?: EdgeSelectorParams; name?: string }, ctx) {
+    apply(draft, p: { distance: string | number; edges?: EdgeSelectorParams; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       const id = ctx.alloc("cha");
-      draft.features[id] = { id, kind: "chamfer", name: p.name ?? "Chamfer", sizeExpr: String(p.distance), sizeValue: 0, edges: p.edges ?? {} };
+      draft.features[id] = { id, kind: "chamfer", name: p.name ?? "Chamfer", sizeExpr: String(p.distance), sizeValue: 0, edges: p.edges ?? {}, ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}) };
       return { createdIds: [id], message: "Chamfer edges" };
     },
   },
@@ -1367,13 +1765,15 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         thickness: { type: "string", description: "Wall thickness expression." },
         openFaces: FACE_SELECTOR_SCHEMA,
+        body: { type: "string", description: "Target body (feature id) to hollow; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a shell that matches no faces an error." },
         name: { type: "string" },
       },
     },
     examples: [{ note: "An open-top box with 2mm walls from a 50-tall block", params: { thickness: "2", openFaces: { inPlane: { plane: "XY", offset: 50 } } } }],
-    apply(draft, p: { thickness: string | number; openFaces: FaceSelectorParams; name?: string }, ctx) {
+    apply(draft, p: { thickness: string | number; openFaces: FaceSelectorParams; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       const id = ctx.alloc("shl");
-      draft.features[id] = { id, kind: "shell", name: p.name ?? "Shell", thicknessExpr: String(p.thickness), thicknessValue: 0, openFaces: p.openFaces ?? {} };
+      draft.features[id] = { id, kind: "shell", name: p.name ?? "Shell", thicknessExpr: String(p.thickness), thicknessValue: 0, openFaces: p.openFaces ?? {}, ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}) };
       return { createdIds: [id], message: "Shell" };
     },
   },
@@ -1383,6 +1783,7 @@ export const BUILTINS: CommandDef<any>[] = [
     summary: "Repeat the most recent body along a vector (linear) or around an axis (circular), fusing the copies in.",
     description:
       "Makes `count` instances of the most recent body (including the original) and fuses them into one body. linear: each instance is offset by `step` {x,y,z} (world mm). circular: instances are rotated about `axis` {origin, direction} by `angle` degrees each (default 360/count). " +
+      "`count`, each `step` component and `angle` accept an expression (string) referencing parameters — so the instance count can be driven by a parameter (e.g. count \"stages\"); count is rounded to an integer ≥1. " +
       "Build the single element first (e.g. one picket, one tooth), then pattern it. Returns the feature id.",
     paramsSchema: {
       type: "object",
@@ -1390,8 +1791,8 @@ export const BUILTINS: CommandDef<any>[] = [
       additionalProperties: false,
       properties: {
         mode: { type: "string", enum: ["linear", "circular"] },
-        count: { type: "integer", minimum: 1 },
-        step: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "linear: offset between instances." },
+        count: { type: ["integer", "string"], description: "Instance count (integer ≥1), or an expression like \"stages\" (rounded to an int)." },
+        step: { type: "object", properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, z: { type: ["number", "string"] } }, description: "linear: offset between instances (each component a number or expression)." },
         axis: {
           type: "object",
           properties: {
@@ -1400,20 +1801,42 @@ export const BUILTINS: CommandDef<any>[] = [
           },
           description: "circular: axis origin + direction (world).",
         },
-        angle: { type: "number", description: "circular: degrees between instances (default 360/count)." },
+        angle: { type: ["number", "string"], description: "circular: degrees between instances (number or expression; default 360/count)." },
+        body: { type: "string", description: "Target body (feature id) to repeat; default the most recent." },
         name: { type: "string" },
       },
     },
     examples: [
       { note: "9 fence pickets 13mm apart along X", params: { mode: "linear", count: 9, step: { x: 13, y: 0, z: 0 } } },
+      { note: "Parametric stack: `stages` copies, spaced by `rise`", params: { mode: "linear", count: "stages", step: { x: 0, y: 0, z: "rise" } } },
       { note: "16 gear teeth around Z", params: { mode: "circular", count: 16, axis: { origin: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 0, z: 1 } } } },
     ],
-    apply(draft, p: { mode: "linear" | "circular"; count: number; step?: Vec3; axis?: { origin: Vec3; direction: Vec3 }; angle?: number; name?: string }, ctx) {
+    apply(draft, p: { mode: "linear" | "circular"; count: number | string; step?: { x?: number | string; y?: number | string; z?: number | string }; axis?: { origin: Vec3; direction: Vec3 }; angle?: number | string; body?: string; name?: string }, ctx) {
       if (p.mode === "linear" && !p.step) throw new Error("linear pattern needs `step`");
       if (p.mode === "circular" && !p.axis) throw new Error("circular pattern needs `axis`");
+      // Split literal numbers (stored as `count`/`step`/`angle`) from expressions
+      // (stored as `*Expr` and resolved against the parameter scope at rebuild).
+      const num = (v: number | string | undefined, dflt: number): { val: number; expr?: string } => {
+        if (v == null) return { val: dflt };
+        if (typeof v === "number") return { val: v };
+        const f = parseFloat(v);
+        return { val: Number.isFinite(f) ? f : dflt, expr: v };
+      };
+      const c = num(p.count, 1);
+      const s = p.step ? { x: num(p.step.x, 0), y: num(p.step.y, 0), z: num(p.step.z, 0) } : undefined;
+      const a = num(p.angle, NaN);
+      const stepExpr = s && (s.x.expr || s.y.expr || s.z.expr)
+        ? { ...(s.x.expr ? { x: s.x.expr } : {}), ...(s.y.expr ? { y: s.y.expr } : {}), ...(s.z.expr ? { z: s.z.expr } : {}) }
+        : undefined;
       const id = ctx.alloc("pat");
-      draft.features[id] = { id, kind: "pattern", name: p.name ?? (p.mode === "linear" ? "Linear pattern" : "Circular pattern"), mode: p.mode, count: p.count, step: p.step, axis: p.axis, angle: p.angle };
-      return { createdIds: [id], message: `${p.mode} pattern × ${p.count}` };
+      draft.features[id] = {
+        id, kind: "pattern", name: p.name ?? (p.mode === "linear" ? "Linear pattern" : "Circular pattern"),
+        mode: p.mode, count: Math.max(1, Math.round(c.val)), ...(c.expr ? { countExpr: c.expr } : {}),
+        step: s ? { x: s.x.val, y: s.y.val, z: s.z.val } : undefined, ...(stepExpr ? { stepExpr } : {}),
+        axis: p.axis, ...(p.angle != null ? { angle: a.val } : {}), ...(a.expr ? { angleExpr: a.expr } : {}),
+        ...(p.body ? { body: p.body } : {}),
+      };
+      return { createdIds: [id], message: `${p.mode} pattern × ${c.expr ?? Math.max(1, Math.round(c.val))}` };
     },
   },
   {

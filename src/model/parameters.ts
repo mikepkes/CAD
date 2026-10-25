@@ -12,8 +12,17 @@ export interface Parameter {
   error?: string;
   min?: number;
   max?: number;
+  /** Increment the value snaps to (a slider only lands on multiples); `step: 1`
+   *  makes it integer-only. Measured from `min` when set, else from 0. */
+  step?: number;
   values?: number[];
   warning?: string;
+}
+
+/** Snap a value to the nearest multiple of `step`, anchored at `base`. */
+export function snapToStep(value: number, step?: number, base = 0): number {
+  if (!step || !(step > 0) || !Number.isFinite(value)) return value;
+  return base + Math.round((value - base) / step) * step;
 }
 
 /**
@@ -76,6 +85,10 @@ export function resolveParameters(params: Parameter[]): {
     } else {
       if (p.min != null && p.value < p.min - 1e-9) p.warning = `${fmt(p.value)} is below min ${fmt(p.min)}`;
       else if (p.max != null && p.value > p.max + 1e-9) p.warning = `${fmt(p.value)} is above max ${fmt(p.max)}`;
+      else if (p.step && p.step > 0) {
+        const snapped = snapToStep(p.value, p.step, p.min ?? 0);
+        if (Math.abs(snapped - p.value) > 1e-9) p.warning = `${fmt(p.value)} is not a multiple of ${fmt(p.step)}`;
+      }
     }
   }
   return { scope, resolved };
