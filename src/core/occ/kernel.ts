@@ -4,7 +4,7 @@
 // display, and STL/STEP blobs for CNC / 3D-print output.
 
 import opencascade from "replicad-opencascadejs";
-import { setOC, draw, drawCircle, drawEllipse, Plane, measureVolume, type Drawing, type Shape3D, type EdgeFinder, type FaceFinder } from "replicad";
+import { setOC, draw, drawCircle, drawEllipse, makeBox, makeCylinder, makeSphere, Plane, measureVolume, type Drawing, type Shape3D, type EdgeFinder, type FaceFinder } from "replicad";
 import { WorkPlane } from "../../geometry/plane";
 import { Loop, LoopSegment, Profile, Pt } from "../geometry/profile";
 import type { EdgeSelector, FaceSelector } from "../document";
@@ -385,6 +385,62 @@ export function buildRegionsRevolved(wp: WorkPlane, regions: Profile[], axisOrig
 }
 
 /** Translated copy of a shape (operand untouched). */
+/** A parametric primitive solid (no sketch): built centred on `at`. */
+export interface PrimitiveSpec {
+  shape: "box" | "cylinder" | "cone" | "sphere" | "torus";
+  at: Vec3;
+  x?: number; y?: number; z?: number; // box
+  radius?: number;                    // cylinder/cone/sphere/torus (ring radius)
+  radius2?: number;                   // cone far-end radius (default 0 → point)
+  height?: number;                    // cylinder/cone
+  tube?: number;                      // torus tube radius
+}
+
+/** Build a primitive solid directly (box/cylinder/cone/sphere/torus), centred on
+ *  `at` — so a box/sphere is centred, and a cylinder/cone is centred on its axis
+ *  mid-height. One kernel call instead of sketch→extrude/revolve. */
+export function buildPrimitive(s: PrimitiveSpec): Shape3D {
+  const req = (v: number | undefined, name: string): number => {
+    if (v == null || !Number.isFinite(v)) throw new Error(`primitive ${s.shape} needs "${name}"`);
+    return v;
+  };
+  const moveTo = (shape: Shape3D, p: Vec3): Shape3D => {
+    if (p.x === 0 && p.y === 0 && p.z === 0) return shape;
+    const t = translateShape(shape, p);
+    shape.delete();
+    return t;
+  };
+  const revolveZ = (pts: [number, number][]): Shape3D => {
+    let pen = draw([pts[0][0], pts[0][1]]);
+    for (let i = 1; i < pts.length; i++) pen = pen.lineTo([pts[i][0], pts[i][1]]);
+    const sk = pen.close().sketchOnPlane("XZ") as unknown as { revolve: (dir: P3, o: { origin: P3; angle: number }) => Shape3D };
+    return sk.revolve([0, 0, 1], { origin: [0, 0, 0], angle: 360 });
+  };
+  switch (s.shape) {
+    case "box": {
+      const x = req(s.x, "x") / 2, y = req(s.y, "y") / 2, z = req(s.z, "z") / 2;
+      return makeBox([s.at.x - x, s.at.y - y, s.at.z - z], [s.at.x + x, s.at.y + y, s.at.z + z]) as Shape3D;
+    }
+    case "sphere":
+      return moveTo(makeSphere(req(s.radius, "radius")) as Shape3D, s.at);
+    case "cylinder": {
+      const h = req(s.height, "height");
+      return moveTo(makeCylinder(req(s.radius, "radius"), h) as Shape3D, { x: s.at.x, y: s.at.y, z: s.at.z - h / 2 });
+    }
+    case "cone": {
+      const h = req(s.height, "height"), r1 = req(s.radius, "radius"), r2 = s.radius2 ?? 0;
+      const pts: [number, number][] = r2 > 1e-9 ? [[0, 0], [r1, 0], [r2, h], [0, h]] : [[0, 0], [r1, 0], [0, h]];
+      return moveTo(revolveZ(pts), { x: s.at.x, y: s.at.y, z: s.at.z - h / 2 });
+    }
+    case "torus": {
+      const R = req(s.radius, "radius"), t = req(s.tube, "tube");
+      const sk = (drawCircle(t).translate(R, 0) as Drawing).sketchOnPlane("XZ") as unknown as { revolve: (dir: P3, o: { origin: P3; angle: number }) => Shape3D };
+      return moveTo(sk.revolve([0, 0, 1], { origin: [0, 0, 0], angle: 360 }), s.at);
+    }
+  }
+  throw new Error(`unknown primitive "${s.shape}"`);
+}
+
 export function translateShape(shape: Shape3D, v: Vec3): Shape3D {
   const clone = (shape as unknown as { clone: () => Shape3D }).clone();
   return (clone as unknown as { translate: (x: number, y: number, z: number) => Shape3D }).translate(v.x, v.y, v.z);

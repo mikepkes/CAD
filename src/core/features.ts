@@ -7,7 +7,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature,
+  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, BooleanOp,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, regionAt, Region } from "./geometry/profile";
@@ -15,7 +15,7 @@ import { FaceRef } from "../sketch/types";
 import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
-  boundsOfShape, volumeOfShape, Bounds3,
+  boundsOfShape, volumeOfShape, Bounds3, buildPrimitive,
 } from "./occ/kernel";
 import type { Shape3D } from "replicad";
 
@@ -102,9 +102,14 @@ interface Body { id: string; name: string; sketchId: string; distance: number; s
 const modifierRow = (f: FeatureDef): SolidEval => ({ featureId: f.id, name: f.name, sketchId: "", distance: 0 });
 
 /** The body a modifier (cut/join/fillet/shell/pattern) acts on: the most recent one. */
-function lastBody(bodies: Body[], what: string): Body {
-  const b = bodies[bodies.length - 1];
-  if (!b) throw new Error(`${what}: no body to modify yet`);
+/** The body a modifier/boolean targets: a specific one by its creating-feature id
+ *  (`body`), else the most recent. Bodies are named by the feature that created
+ *  them, so `body` is an extrude/revolve/primitive/loft/sweep id. */
+function pickBody(bodies: Body[], ref: string | undefined, what: string): Body {
+  if (!bodies.length) throw new Error(`${what}: no body to modify yet`);
+  if (!ref || ref === "last") return bodies[bodies.length - 1];
+  const b = bodies.find((x) => x.id === ref);
+  if (!b) throw new Error(`${what}: no body "${ref}" (a body is named by the feature that created it)`);
   return b;
 }
 
@@ -163,7 +168,7 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
     if (wp) sketch.plane = wp; // also the frame the ghost render / next pass uses
   }
   const op = f.operation ?? "new";
-  const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
+  const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, f.kind) : undefined;
   let shape: Shape3D;
   try {
     shape = buildFeatureSolid(doc, scope, f, target ? safeBounds(target.shape) : undefined);
@@ -184,7 +189,8 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
     // A boolean that changed nothing almost always means the tool missed the body
     // (wrong plane offset / direction) — say so instead of failing silently.
     if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, before)) {
-      out[f.id] = { ...modifierRow(f), sketchId: f.sketchId, distance, warning: `${op} changed nothing: the ${f.kind} does not intersect the body (check plane offset, direction, extent)` };
+      const msg = `${op} changed nothing: the ${f.kind} does not intersect the body (check plane offset, direction, extent)`;
+      out[f.id] = { ...modifierRow(f), sketchId: f.sketchId, distance, ...(f.requireEffect ? { error: msg } : { warning: msg }) };
     }
   } catch (e) {
     shape.delete();
@@ -194,6 +200,51 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
 
 function safeBounds(shape: Shape3D): Bounds3 | undefined {
   try { return boundsOfShape(shape); } catch { return undefined; }
+}
+
+/** Fold a freshly built solid into an existing body via a boolean op, detecting a
+ *  no-op (tool missed the body). Consumes `shape`. On a no-op or failure it writes
+ *  a modifier row for the feature (error when it opted into `requireEffect`). */
+function combineBody(op: BooleanOp, target: Body, shape: Shape3D, f: FeatureDef & { requireEffect?: boolean }, label: string, out: Record<string, SolidEval>) {
+  try {
+    const before = volumeOfShape(target.shape);
+    const combined = op === "cut" ? cutShapes(target.shape, shape) : op === "intersect" ? intersectShapes(target.shape, shape) : fuseShapes(target.shape, shape);
+    shape.delete();
+    replaceShape(target, combined);
+    const after = volumeOfShape(target.shape);
+    if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, Math.abs(before))) {
+      const msg = `${op} changed nothing: the ${label} does not intersect the body (check position, size, operation)`;
+      out[f.id] = { ...modifierRow(f), ...(f.requireEffect ? { error: msg } : { warning: msg }) };
+    }
+  } catch (e) {
+    shape.delete();
+    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+  }
+}
+
+/** Build a primitive solid (box/cylinder/cone/sphere/torus) and fold it in. */
+function applyPrimitive(scope: Scope, f: PrimitiveFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  let shape: Shape3D;
+  try {
+    const dim = (k: keyof PrimitiveFeature["dims"]): number | undefined => {
+      const expr = f.dims[k];
+      if (expr == null) return undefined;
+      const v = resolveExpr(expr, (f.dimValues?.[k] as number) ?? 0, scope);
+      (f.dimValues ??= {})[k] = v;
+      return v;
+    };
+    shape = buildPrimitive({
+      shape: f.shape, at: f.at ?? { x: 0, y: 0, z: 0 },
+      x: dim("x"), y: dim("y"), z: dim("z"), radius: dim("radius"), radius2: dim("radius2"), height: dim("height"), tube: dim("tube"),
+    });
+  } catch (e) {
+    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+    return;
+  }
+  const op = f.operation ?? "new";
+  const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, "primitive") : undefined;
+  if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
+  combineBody(op, target, shape, f, f.shape, out);
 }
 
 /** Sweep the feature's profile along its path sketch, then combine it. */
@@ -214,16 +265,9 @@ function applySweep(doc: CadDocument, f: SweepFeature, bodies: Body[], out: Reco
     return;
   }
   const op = f.operation ?? "new";
-  const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
+  const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, "sweep") : undefined;
   if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
-  try {
-    const combined = op === "cut" ? cutShapes(target.shape, shape) : op === "intersect" ? intersectShapes(target.shape, shape) : fuseShapes(target.shape, shape);
-    shape.delete();
-    replaceShape(target, combined);
-  } catch (e) {
-    shape.delete();
-    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
-  }
+  combineBody(op, target, shape, f, "sweep", out);
 }
 
 /** Loft a solid through the feature's ordered profile sketches, then combine it. */
@@ -244,23 +288,16 @@ function applyLoft(doc: CadDocument, f: LoftFeature, bodies: Body[], out: Record
     return;
   }
   const op = f.operation ?? "new";
-  const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
+  const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, "loft") : undefined;
   if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
-  try {
-    const combined = op === "cut" ? cutShapes(target.shape, shape) : op === "intersect" ? intersectShapes(target.shape, shape) : fuseShapes(target.shape, shape);
-    shape.delete();
-    replaceShape(target, combined);
-  } catch (e) {
-    shape.delete();
-    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
-  }
+  combineBody(op, target, shape, f, "loft", out);
 }
 
 /** Fillet or chamfer the selected edges of the most recent body. */
 function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
-    const target = lastBody(bodies, f.kind);
+    const target = pickBody(bodies, f.body, f.kind);
     const size = resolveExpr(f.sizeExpr, f.sizeValue, scope);
     f.sizeValue = size;
     if (!(size > 0)) throw new Error(`${f.kind} size must be positive`);
@@ -277,7 +314,8 @@ function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: 
     replaceShape(target, blended);
     // A blend that changed nothing means no edges matched (or OCC skipped them).
     if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, Math.abs(before))) {
-      out[f.id].warning = `${f.kind} changed nothing: no edges matched the selector, or the ${dim} does not fit`;
+      const msg = `${f.kind} changed nothing: no edges matched the selector, or the ${dim} does not fit`;
+      if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
     }
   } catch (e) {
     out[f.id].error = (e as Error).message;
@@ -288,7 +326,7 @@ function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: 
 function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
-    const target = lastBody(bodies, "shell");
+    const target = pickBody(bodies, f.body, "shell");
     const t = resolveExpr(f.thicknessExpr, f.thicknessValue, scope);
     f.thicknessValue = t;
     if (!(t > 0)) throw new Error("shell thickness must be positive");
@@ -303,7 +341,8 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
     }
     replaceShape(target, hollowed);
     if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, Math.abs(before))) {
-      out[f.id].warning = "shell changed nothing: no faces matched openFaces, or the wall is thicker than the body allows";
+      const msg = "shell changed nothing: no faces matched openFaces, or the wall is thicker than the body allows";
+      if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
     }
   } catch (e) {
     out[f.id].error = (e as Error).message;
@@ -314,7 +353,7 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
 function applyPattern(f: PatternFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
-    const target = lastBody(bodies, "pattern");
+    const target = pickBody(bodies, f.body, "pattern");
     const n = Math.max(1, Math.floor(f.count));
     const original = target.shape;
     let acc: Shape3D = (original as unknown as { clone: () => Shape3D }).clone();
@@ -447,7 +486,11 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
   // The cache only applies when every body is independent: extrude-only models
   // with no face-referenced sketch. Modifiers (mirror, fillet, shell, pattern,
   // revolve) take the full path — still correct, just not incremental.
-  const independent = features.every((f) => f.kind === "extrude") && !Object.values(doc.sketches).some((s) => s.faceRef);
+  // Body targeting and requireEffect both need the full, ordered path (the cache
+  // groups join/cuts onto the previous "new" and never flags no-ops), so they opt
+  // out of incremental evaluation.
+  const independent = features.every((f) => f.kind === "extrude" && !f.body && !f.requireEffect)
+    && !Object.values(doc.sketches).some((s) => s.faceRef);
   if (cache && independent) return evaluateCached(doc, scope, cache);
   return evaluateFull(doc, scope);
 }
@@ -486,6 +529,7 @@ function evaluateBodies(doc: CadDocument, scope: Scope): { bodies: Body[]; out: 
     switch (f.kind) {
       case "extrude":
       case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
+      case "primitive": applyPrimitive(scope, f, bodies, out); break;
       case "loft": applyLoft(doc, f, bodies, out); break;
       case "sweep": applySweep(doc, f, bodies, out); break;
       case "mirror": applyMirror(doc, f, bodies, out); break;

@@ -18,15 +18,16 @@ export function validate(schema: JSONSchema, value: unknown, path = "$"): string
 
   const t = schema.type;
   if (t) {
-    const ok =
-      (t === "object" && isPlainObject(value)) ||
-      (t === "array" && Array.isArray(value)) ||
-      (t === "string" && typeof value === "string") ||
-      (t === "number" && typeof value === "number" && Number.isFinite(value)) ||
-      (t === "integer" && Number.isInteger(value)) ||
-      (t === "boolean" && typeof value === "boolean");
-    if (!ok) {
-      errors.push(`${path}: expected ${t}, got ${describe(value)}`);
+    const types = Array.isArray(t) ? t : [t];
+    const matches = (one: string): boolean =>
+      (one === "object" && isPlainObject(value)) ||
+      (one === "array" && Array.isArray(value)) ||
+      (one === "string" && typeof value === "string") ||
+      (one === "number" && typeof value === "number" && Number.isFinite(value)) ||
+      (one === "integer" && Number.isInteger(value)) ||
+      (one === "boolean" && typeof value === "boolean");
+    if (!types.some(matches)) {
+      errors.push(`${path}: expected ${types.join(" or ")}, got ${describe(value)}`);
       return errors;
     }
   }

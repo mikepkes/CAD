@@ -42,6 +42,7 @@ function ModelInspector() {
               f.kind === "pattern" ? `×${f.count}` :
               f.kind === "loft" ? `⤳ ${f.sketchIds.length}` :
               f.kind === "sweep" ? "⟿ path" :
+              f.kind === "primitive" ? `◧ ${f.shape}` :
               `${f.kind === "fillet" ? "r" : "d"}=${f.sizeExpr}`;
             return (
               <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "1fr 1fr 60px 22px" }}>

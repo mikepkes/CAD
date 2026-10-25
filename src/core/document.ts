@@ -67,6 +67,10 @@ export interface ExtrudeFeature {
   operation?: BooleanOp;
   /** Interior point (sketch u,v) selecting one region; omitted = every region. */
   regionPoint?: { x: number; y: number };
+  /** Target body (feature id) for a join/cut/intersect; default the most recent. */
+  body?: string;
+  /** If set, a join/cut/intersect that changes nothing is an error, not a warning. */
+  requireEffect?: boolean;
 }
 
 /** A solid feature built by revolving sketch regions about an axis in the sketch plane. */
@@ -82,6 +86,25 @@ export interface RevolveFeature {
   angleValue: number;
   operation?: BooleanOp;
   regionPoint?: { x: number; y: number };
+  body?: string;
+  requireEffect?: boolean;
+}
+
+/** A parametric primitive solid (box/cylinder/cone/sphere/torus) built directly,
+ *  with no sketch — centred on `at`. One feature instead of sketch→extrude. */
+export interface PrimitiveFeature {
+  id: string;
+  kind: "primitive";
+  name: string;
+  shape: "box" | "cylinder" | "cone" | "sphere" | "torus";
+  /** Size expressions (parametric); which are used depends on `shape`. */
+  dims: Partial<Record<"x" | "y" | "z" | "radius" | "radius2" | "height" | "tube", string>>;
+  dimValues?: Partial<Record<string, number>>;
+  /** World centre of the primitive. Default origin. */
+  at?: { x: number; y: number; z: number };
+  operation?: BooleanOp;
+  body?: string;
+  requireEffect?: boolean;
 }
 
 /**
@@ -122,6 +145,10 @@ export interface EdgeBlendFeature {
   sizeExpr: string;
   sizeValue: number;
   edges: EdgeSelector;
+  /** Target body (feature id) to modify; default the most recent. */
+  body?: string;
+  /** If set, a blend that matches no edges is an error, not a warning. */
+  requireEffect?: boolean;
 }
 
 /** Hollow the most recent body to a wall thickness, opening the selected faces. */
@@ -132,6 +159,8 @@ export interface ShellFeature {
   thicknessExpr: string;
   thicknessValue: number;
   openFaces: FaceSelector;
+  body?: string;
+  requireEffect?: boolean;
 }
 
 /** Repeat the most recent body along a vector or around an axis, fusing the copies in. */
@@ -147,6 +176,8 @@ export interface PatternFeature {
   /** circular: axis origin + direction (world) and angle between instances (degrees). */
   axis?: { origin: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number } };
   angle?: number;
+  /** Target body (feature id) to repeat; default the most recent. */
+  body?: string;
 }
 /**
  * Mirror feature: reflects the running bodies across a plane and fuses each
@@ -173,6 +204,8 @@ export interface LoftFeature {
   ruled?: boolean;
   /** How the loft combines with existing bodies. Default "new". */
   operation?: BooleanOp;
+  body?: string;
+  requireEffect?: boolean;
 }
 
 /** A solid swept: a closed profile sketch dragged along an open path sketch (its spine). */
@@ -183,9 +216,11 @@ export interface SweepFeature {
   profileSketch: string; // closed profile (first region)
   pathSketch: string;    // open path (spine)
   operation?: BooleanOp;
+  body?: string;
+  requireEffect?: boolean;
 }
 
-export type FeatureDef = ExtrudeFeature | RevolveFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
+export type FeatureDef = ExtrudeFeature | RevolveFeature | PrimitiveFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
 /** Features that own a single sketch (the profile-driven ones). */
 export type SketchFeature = ExtrudeFeature | RevolveFeature;
 

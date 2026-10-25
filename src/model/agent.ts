@@ -90,6 +90,7 @@ export function describeFeature(f: FeatureDef): Record<string, unknown> {
   switch (f.kind) {
     case "extrude": return { id: f.id, kind: f.kind, name: f.name, sketchId: f.sketchId, distance: f.distanceExpr, operation: f.operation ?? "new", ...(f.symmetric ? { symmetric: true } : {}), ...(f.direction ? { direction: f.direction } : {}), ...(f.extent ? { extent: f.extent } : {}) };
     case "revolve": return { id: f.id, kind: f.kind, name: f.name, sketchId: f.sketchId, angle: f.angleExpr, axis: f.axis, operation: f.operation ?? "new" };
+    case "primitive": return { id: f.id, kind: f.kind, name: f.name, shape: f.shape, dims: f.dims, at: f.at, operation: f.operation ?? "new" };
     case "fillet":
     case "chamfer": return { id: f.id, kind: f.kind, name: f.name, size: f.sizeExpr, edges: f.edges };
     case "shell": return { id: f.id, kind: f.kind, name: f.name, thickness: f.thicknessExpr, openFaces: f.openFaces };

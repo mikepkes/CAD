@@ -129,6 +129,30 @@ function resolvePoint(sk: Sketch, ref: PointRef, ctx: CommandContext): string {
   return id;
 }
 
+// Arc geometry for sketch.addProfile.
+const signedArea2 = (a: Vec, b: Vec, c: Vec) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+/** Circumcentre of three points (null if collinear). */
+function circumcentre(a: Vec, b: Vec, c: Vec): Vec | null {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-12) return null;
+  const a2 = a.x * a.x + a.y * a.y, b2 = b.x * b.x + b.y * b.y, c2 = c.x * c.x + c.y * c.y;
+  return {
+    x: (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d,
+    y: (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d,
+  };
+}
+/** Centre of the minor arc of radius `r` from a→c, bulging to the left of a→c when `left`. */
+function arcCentreFromRadius(a: Vec, c: Vec, r: number, left: boolean): { center: Vec; ccw: boolean } {
+  const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy);
+  if (d < 1e-9) throw new Error("profile arc endpoints coincide");
+  if (r < d / 2 - 1e-9) throw new Error(`profile arc radius ${r} too small for the ${d.toFixed(3)} span`);
+  const h = Math.sqrt(Math.max(0, r * r - (d / 2) * (d / 2)));
+  const px = -dy / d, py = dx / d, s = left ? 1 : -1;
+  const center = { x: (a.x + c.x) / 2 + px * h * s, y: (a.y + c.y) / 2 + py * h * s };
+  const cross = (a.x - center.x) * (c.y - center.y) - (a.y - center.y) * (c.x - center.x);
+  return { center, ccw: cross > 0 };
+}
+
 export function createDefaultRegistry(): CommandRegistry {
   const reg = new CommandRegistry();
   for (const def of BUILTINS) reg.register(def);
@@ -645,6 +669,97 @@ export const BUILTINS: CommandDef<any>[] = [
         lines.push(id);
       }
       return { createdIds: [...lines, ...ids], affectedSketchId: sk.id, message: `Polyline (${lines.length} lines)` };
+    },
+  },
+  {
+    type: "sketch.addProfile",
+    title: "Profile (lines + arcs)",
+    summary: "Add a closed profile mixing straight and curved (arc) segments in one call — for turned, filleted or organic outlines.",
+    description:
+      "Builds a chain of edges through `segments`. The FIRST segment is the start point; each later segment adds an edge to its {x,y}: a straight LINE by default, or an ARC when it carries `radius` (the minor arc of that radius, bulging to the left of the segment direction when `ccw`, else right) or `via` (a point the arc passes through — an unambiguous 3-point arc). " +
+      "`closed` (default true) closes the loop: if the last point returns to the start it reuses the start (so the last segment, arc or line, is the closing edge); otherwise a straight edge is added back to the start — for a revolve profile that returns to the axis, that closing edge lies on the axis. Corner points are shared so the chain is coincident. Returns the created ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "segments"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        segments: {
+          type: "array",
+          description: "At least 2; the first is the start point. radius/ccw or via on a segment make its edge an arc.",
+          items: {
+            type: "object",
+            required: ["x", "y"],
+            additionalProperties: false,
+            properties: {
+              x: { type: "number" }, y: { type: "number" },
+              radius: { type: "number", description: "Arc of this radius to the point (else a line)." },
+              ccw: { type: "boolean", description: "With radius: bulge left of the segment direction (default right)." },
+              via: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } }, description: "A point the arc passes through (3-point arc)." },
+            },
+          },
+        },
+        closed: { type: "boolean", description: "Close the loop (default true)." },
+        construction: CONSTRUCTION_SCHEMA,
+      },
+    },
+    examples: [
+      { note: "A rounded top (dome half-profile) to revolve: axis→rim→arc up→back down the axis", params: { sketch: "sketch1", segments: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 10, radius: 10 }] } },
+      { note: "A slot-like outline with line and 3-point arc ends", params: { sketch: "sketch1", segments: [{ x: -10, y: -3 }, { x: 10, y: -3 }, { x: 10, y: 3, via: { x: 13, y: 0 } }, { x: -10, y: 3 }, { x: -10, y: -3, via: { x: -13, y: 0 } }], closed: false } },
+    ],
+    apply(draft, p: { sketch: string; segments: { x: number; y: number; radius?: number; ccw?: boolean; via?: Vec }[]; closed?: boolean; construction?: boolean }, ctx) {
+      const sk = sketchOf(draft, p.sketch);
+      const segs = p.segments;
+      if (!Array.isArray(segs) || segs.length < 2) throw new Error("profile needs at least 2 segments");
+      const cons = !!p.construction;
+      const created: string[] = [];
+      const mkPt = (x: number, y: number): string => { const id = ctx.alloc("pt"); sk.entities[id] = { id, kind: "point", x, y, construction: cons }; created.push(id); return id; };
+      /** Add a line or arc edge from an existing point to an existing point. */
+      const addEdge = (fromId: string, from: Vec, toId: string, to: Vec, seg: { radius?: number; ccw?: boolean; via?: Vec } | null): string => {
+        if (seg && (seg.radius != null || seg.via != null)) {
+          let center: Vec, r: number, ccw: boolean;
+          if (seg.via != null) {
+            const cc = circumcentre(from, seg.via, to);
+            if (!cc) throw new Error("profile arc via-point is collinear with the endpoints");
+            center = cc; r = Math.hypot(from.x - cc.x, from.y - cc.y); ccw = signedArea2(from, seg.via, to) > 0;
+          } else {
+            const res = arcCentreFromRadius(from, to, seg.radius!, !!seg.ccw); center = res.center; r = seg.radius!; ccw = res.ccw;
+          }
+          const cid = mkPt(center.x, center.y);
+          const aid = ctx.alloc("ar");
+          sk.entities[aid] = { id: aid, kind: "arc", center: cid, p1: fromId, p2: toId, r, ccw, construction: cons };
+          created.push(aid);
+          return aid;
+        }
+        const lid = ctx.alloc("ln");
+        sk.entities[lid] = { id: lid, kind: "line", p1: fromId, p2: toId, construction: cons };
+        created.push(lid);
+        return lid;
+      };
+
+      const start = { x: segs[0].x, y: segs[0].y };
+      const startId = mkPt(start.x, start.y);
+      let prevId = startId, prev = start;
+      let lastEdge = ""; let lastToId = startId;
+      for (let i = 1; i < segs.length; i++) {
+        const to = { x: segs[i].x, y: segs[i].y };
+        const toId = mkPt(to.x, to.y);
+        lastEdge = addEdge(prevId, prev, toId, to, segs[i]);
+        prevId = toId; prev = to; lastToId = toId;
+      }
+      if (p.closed !== false) {
+        const d = Math.hypot(prev.x - start.x, prev.y - start.y);
+        if (d <= 1e-7) {
+          // Last point is the start: reuse it so the last segment IS the closer.
+          const e = sk.entities[lastEdge] as { p2: string };
+          e.p2 = startId;
+          delete sk.entities[lastToId];
+          const k = created.indexOf(lastToId); if (k >= 0) created.splice(k, 1);
+        } else {
+          addEdge(prevId, prev, startId, start, null); // straight close
+        }
+      }
+      return { createdIds: created, affectedSketchId: sk.id, message: `Profile (${created.length} ids)` };
     },
   },
   {
@@ -1168,6 +1283,8 @@ export const BUILTINS: CommandDef<any>[] = [
           required: ["x", "y"],
           properties: { x: { type: "number" }, y: { type: "number" } },
         },
+        body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a join/cut that changes nothing an error, not a warning." },
         name: { type: "string" },
       },
     },
@@ -1176,7 +1293,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Join a boss onto the current body", params: { sketch: "sketch3", distance: "6", operation: "join" } },
       { note: "A through-hole from a face sketch", params: { sketch: "sketch4", distance: "0", operation: "cut", direction: "reverse", extent: "throughAll" } },
     ],
-    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; extent?: "blind" | "throughAll"; operation?: "new" | "join" | "cut" | "intersect"; region?: { x: number; y: number }; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; extent?: "blind" | "throughAll"; operation?: "new" | "join" | "cut" | "intersect"; region?: { x: number; y: number }; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("ext");
       draft.features[id] = {
@@ -1191,6 +1308,8 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.extent === "throughAll" ? { extent: "throughAll" as const } : {}),
         operation: p.operation ?? "new",
         regionPoint: p.region,
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: `Extrude ${p.sketch}` };
     },
@@ -1219,6 +1338,8 @@ export const BUILTINS: CommandDef<any>[] = [
         angle: { type: "string", description: "Sweep angle in degrees (expression). Default 360." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
         region: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+        body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a join/cut that changes nothing an error." },
         name: { type: "string" },
       },
     },
@@ -1226,14 +1347,63 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A drum from its half profile sketched on XZ, revolved about the sketch v (world Z) axis", params: { sketch: "sketch2", axis: { p1: { x: 0, y: 0 }, p2: { x: 0, y: 1 } } } },
       { note: "A quarter-turn boss joined to the body", params: { sketch: "sketch5", axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "90", operation: "join" } },
     ],
-    apply(draft, p: { sketch: string; axis: { p1: Vec; p2: Vec }; angle?: string | number; operation?: "new" | "join" | "cut" | "intersect"; region?: Vec; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; axis: { p1: Vec; p2: Vec }; angle?: string | number; operation?: "new" | "join" | "cut" | "intersect"; region?: Vec; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("rev");
       draft.features[id] = {
         id, kind: "revolve", name: p.name ?? "Revolve", sketchId: p.sketch, axis: p.axis,
         angleExpr: String(p.angle ?? 360), angleValue: 360, operation: p.operation ?? "new", regionPoint: p.region,
+        ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: `Revolve ${p.sketch}` };
+    },
+  },
+  {
+    type: "feature.primitive",
+    title: "Primitive solid",
+    summary: "Create a box / cylinder / cone / sphere / torus directly, in one step — no sketch needed.",
+    description:
+      "Builds a primitive solid centred on `at` (world mm; default origin): a box/sphere is centred on it, a cylinder/cone is centred on its axis at mid-height (axis = world Z), a torus lies in the XY plane through it. " +
+      "Dimensions are expressions (parametric). Required dims by shape — box: x,y,z; cylinder: radius,height; cone: radius,height (plus optional radius2 for a frustum, default 0 = a point); sphere: radius; torus: radius (ring centreline) and tube. " +
+      "`operation` combines with an existing body Fusion-style (new/join/cut/intersect); `body` picks which body (its creating-feature id; default the most recent); `requireEffect` makes a cut/join that changes nothing an error. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["shape"],
+      additionalProperties: false,
+      properties: {
+        shape: { type: "string", enum: ["box", "cylinder", "cone", "sphere", "torus"] },
+        x: { type: ["string", "number"], description: "box X length (expr)." },
+        y: { type: ["string", "number"], description: "box Y length (expr)." },
+        z: { type: ["string", "number"], description: "box Z length (expr)." },
+        radius: { type: ["string", "number"], description: "cylinder/cone/sphere radius, or torus ring radius (expr)." },
+        radius2: { type: ["string", "number"], description: "cone far-end radius (expr; default 0)." },
+        height: { type: ["string", "number"], description: "cylinder/cone height (expr)." },
+        tube: { type: ["string", "number"], description: "torus tube radius (expr)." },
+        at: { type: "object", additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "World centre (default origin)." },
+        operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
+        body: { type: "string", description: "Target body (feature id) for join/cut; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a cut/join that changes nothing an error." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A 40×40×20 box on the ground (centre lifted to z=10)", params: { shape: "box", x: "40", y: "40", z: "20", at: { x: 0, y: 0, z: 10 } } },
+      { note: "A Ø16×50 cylinder", params: { shape: "cylinder", radius: "8", height: "50" } },
+      { note: "Drill a Ø6 hole through the current body", params: { shape: "cylinder", radius: "3", height: "100", operation: "cut" } },
+      { note: "A cone frustum", params: { shape: "cone", radius: "10", radius2: "4", height: "20" } },
+    ],
+    apply(draft, p: { shape: "box" | "cylinder" | "cone" | "sphere" | "torus"; at?: Vec3; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string } & Record<string, unknown>, ctx) {
+      const id = ctx.alloc("prim");
+      const dims: Record<string, string> = {};
+      for (const k of ["x", "y", "z", "radius", "radius2", "height", "tube"] as const) {
+        if (p[k] != null) dims[k] = String(p[k]);
+      }
+      draft.features[id] = {
+        id, kind: "primitive", name: p.name ?? (p.shape.charAt(0).toUpperCase() + p.shape.slice(1)),
+        shape: p.shape, dims, at: p.at, operation: p.operation ?? "new",
+        ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
+      };
+      return { createdIds: [id], message: `${p.shape}` };
     },
   },
   {
@@ -1250,11 +1420,13 @@ export const BUILTINS: CommandDef<any>[] = [
         sketches: { type: "array", items: { type: "string" }, description: "Ordered profile sketch ids (at least two)." },
         ruled: { type: "boolean", description: "Straight sections between profiles (default false = smooth)." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies." },
+        body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a join/cut that changes nothing an error." },
         name: { type: "string" },
       },
     },
     examples: [{ note: "Loft through two profiles", params: { sketches: ["sketch1", "sketch3"] } }],
-    apply(draft, p: { sketches: string[]; ruled?: boolean; operation?: "new" | "join" | "cut" | "intersect"; name?: string }, ctx) {
+    apply(draft, p: { sketches: string[]; ruled?: boolean; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!Array.isArray(p.sketches) || p.sketches.length < 2) throw new Error("loft needs at least two sketches");
       for (const sid of p.sketches) if (!draft.sketches[sid]) throw new Error(`No sketch "${sid}"`);
       const id = ctx.alloc("loft");
@@ -1265,6 +1437,8 @@ export const BUILTINS: CommandDef<any>[] = [
         sketchIds: [...p.sketches],
         ruled: !!p.ruled,
         operation: p.operation ?? "new",
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: `Loft ${p.sketches.length} profiles` };
     },
@@ -1283,11 +1457,13 @@ export const BUILTINS: CommandDef<any>[] = [
         profile: { type: "string", description: "Closed profile sketch id (its first region)." },
         path: { type: "string", description: "Open path sketch id (lines/arcs forming a chain)." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies." },
+        body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a join/cut that changes nothing an error." },
         name: { type: "string" },
       },
     },
     examples: [{ note: "Sweep a circle along an L-path", params: { profile: "sketch1", path: "sketch2" } }],
-    apply(draft, p: { profile: string; path: string; operation?: "new" | "join" | "cut" | "intersect"; name?: string }, ctx) {
+    apply(draft, p: { profile: string; path: string; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!draft.sketches[p.profile]) throw new Error(`No profile sketch "${p.profile}"`);
       if (!draft.sketches[p.path]) throw new Error(`No path sketch "${p.path}"`);
       const id = ctx.alloc("swp");
@@ -1298,6 +1474,8 @@ export const BUILTINS: CommandDef<any>[] = [
         profileSketch: p.profile,
         pathSketch: p.path,
         operation: p.operation ?? "new",
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: "Sweep profile along path" };
     },
@@ -1317,6 +1495,8 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         radius: { type: "string", description: "Radius expression, e.g. '2' or 'r_edge'." },
         edges: EDGE_SELECTOR_SCHEMA,
+        body: { type: "string", description: "Target body (feature id) to round; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a fillet that matches no edges an error." },
         name: { type: "string" },
       },
     },
@@ -1325,9 +1505,9 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Round only the vertical corner edges of a crate", params: { radius: "4", edges: { parallelTo: "Z" } } },
       { note: "Round the top outline of a 30-tall block", params: { radius: "3", edges: { inPlane: { plane: "XY", offset: 30 } } } },
     ],
-    apply(draft, p: { radius: string | number; edges?: EdgeSelectorParams; name?: string }, ctx) {
+    apply(draft, p: { radius: string | number; edges?: EdgeSelectorParams; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       const id = ctx.alloc("fil");
-      draft.features[id] = { id, kind: "fillet", name: p.name ?? "Fillet", sizeExpr: String(p.radius), sizeValue: 0, edges: p.edges ?? {} };
+      draft.features[id] = { id, kind: "fillet", name: p.name ?? "Fillet", sizeExpr: String(p.radius), sizeValue: 0, edges: p.edges ?? {}, ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}) };
       return { createdIds: [id], message: "Fillet edges" };
     },
   },
@@ -1344,13 +1524,15 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         distance: { type: "string", description: "Setback expression." },
         edges: EDGE_SELECTOR_SCHEMA,
+        body: { type: "string", description: "Target body (feature id) to bevel; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a chamfer that matches no edges an error." },
         name: { type: "string" },
       },
     },
     examples: [{ note: "Bevel the crown of a bolt head (its top outline at z=38)", params: { distance: "1", edges: { inPlane: { plane: "XY", offset: 38 } } } }],
-    apply(draft, p: { distance: string | number; edges?: EdgeSelectorParams; name?: string }, ctx) {
+    apply(draft, p: { distance: string | number; edges?: EdgeSelectorParams; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       const id = ctx.alloc("cha");
-      draft.features[id] = { id, kind: "chamfer", name: p.name ?? "Chamfer", sizeExpr: String(p.distance), sizeValue: 0, edges: p.edges ?? {} };
+      draft.features[id] = { id, kind: "chamfer", name: p.name ?? "Chamfer", sizeExpr: String(p.distance), sizeValue: 0, edges: p.edges ?? {}, ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}) };
       return { createdIds: [id], message: "Chamfer edges" };
     },
   },
@@ -1367,13 +1549,15 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         thickness: { type: "string", description: "Wall thickness expression." },
         openFaces: FACE_SELECTOR_SCHEMA,
+        body: { type: "string", description: "Target body (feature id) to hollow; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a shell that matches no faces an error." },
         name: { type: "string" },
       },
     },
     examples: [{ note: "An open-top box with 2mm walls from a 50-tall block", params: { thickness: "2", openFaces: { inPlane: { plane: "XY", offset: 50 } } } }],
-    apply(draft, p: { thickness: string | number; openFaces: FaceSelectorParams; name?: string }, ctx) {
+    apply(draft, p: { thickness: string | number; openFaces: FaceSelectorParams; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       const id = ctx.alloc("shl");
-      draft.features[id] = { id, kind: "shell", name: p.name ?? "Shell", thicknessExpr: String(p.thickness), thicknessValue: 0, openFaces: p.openFaces ?? {} };
+      draft.features[id] = { id, kind: "shell", name: p.name ?? "Shell", thicknessExpr: String(p.thickness), thicknessValue: 0, openFaces: p.openFaces ?? {}, ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}) };
       return { createdIds: [id], message: "Shell" };
     },
   },
@@ -1401,6 +1585,7 @@ export const BUILTINS: CommandDef<any>[] = [
           description: "circular: axis origin + direction (world).",
         },
         angle: { type: "number", description: "circular: degrees between instances (default 360/count)." },
+        body: { type: "string", description: "Target body (feature id) to repeat; default the most recent." },
         name: { type: "string" },
       },
     },
@@ -1408,11 +1593,11 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "9 fence pickets 13mm apart along X", params: { mode: "linear", count: 9, step: { x: 13, y: 0, z: 0 } } },
       { note: "16 gear teeth around Z", params: { mode: "circular", count: 16, axis: { origin: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 0, z: 1 } } } },
     ],
-    apply(draft, p: { mode: "linear" | "circular"; count: number; step?: Vec3; axis?: { origin: Vec3; direction: Vec3 }; angle?: number; name?: string }, ctx) {
+    apply(draft, p: { mode: "linear" | "circular"; count: number; step?: Vec3; axis?: { origin: Vec3; direction: Vec3 }; angle?: number; body?: string; name?: string }, ctx) {
       if (p.mode === "linear" && !p.step) throw new Error("linear pattern needs `step`");
       if (p.mode === "circular" && !p.axis) throw new Error("circular pattern needs `axis`");
       const id = ctx.alloc("pat");
-      draft.features[id] = { id, kind: "pattern", name: p.name ?? (p.mode === "linear" ? "Linear pattern" : "Circular pattern"), mode: p.mode, count: p.count, step: p.step, axis: p.axis, angle: p.angle };
+      draft.features[id] = { id, kind: "pattern", name: p.name ?? (p.mode === "linear" ? "Linear pattern" : "Circular pattern"), mode: p.mode, count: p.count, step: p.step, axis: p.axis, angle: p.angle, ...(p.body ? { body: p.body } : {}) };
       return { createdIds: [id], message: `${p.mode} pattern × ${p.count}` };
     },
   },
