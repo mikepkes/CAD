@@ -241,6 +241,49 @@ function interiorPoint(outer: Pt[], holes: Pt[][]): Pt {
  * become separate regions; a loop nested (odd depth) inside another is a hole
  * of the region it sits in. Each region carries a point guaranteed inside it.
  */
+/**
+ * Walk an OPEN chain of line/arc entities into an ordered path (for sweep spines).
+ * Returns null if the sketch has no open chain (empty, closed loop, or branching).
+ */
+export function extractOpenPath(sk: Sketch): { start: Pt; segments: LoopSegment[] } | null {
+  type E = { id: string; a: string; b: string; kind: "line" | "arc"; center?: string; ccw?: boolean };
+  const curves: E[] = [];
+  for (const e of Object.values(sk.entities)) {
+    if (e.construction) continue;
+    if (e.kind === "line") curves.push({ id: e.id, a: e.p1, b: e.p2, kind: "line" });
+    else if (e.kind === "arc") curves.push({ id: e.id, a: e.p1, b: e.p2, kind: "arc", center: e.center, ccw: e.ccw });
+  }
+  if (!curves.length) return null;
+  const inc = new Map<string, E[]>();
+  for (const c of curves) for (const v of [c.a, c.b]) { const l = inc.get(v) ?? []; l.push(c); inc.set(v, l); }
+  // An open chain starts at a degree-1 vertex; bail on closed loops or branches.
+  let start: string | undefined;
+  for (const [v, l] of inc) { if (l.length > 2) return null; if (l.length === 1 && !start) start = v; }
+  if (!start) return null;
+
+  const used = new Set<string>();
+  const segs: LoopSegment[] = [];
+  let cur = start;
+  const startPt: Pt = { x: P(sk, cur).x, y: P(sk, cur).y };
+  for (let guard = 0; guard <= curves.length; guard++) {
+    const next = (inc.get(cur) ?? []).find((c) => !used.has(c.id));
+    if (!next) break;
+    used.add(next.id);
+    const toId = next.a === cur ? next.b : next.a;
+    const to: Pt = { x: P(sk, toId).x, y: P(sk, toId).y };
+    if (next.kind === "line") segs.push({ kind: "line", to });
+    else {
+      const c = P(sk, next.center!);
+      const forward = next.a === cur;
+      const ccw = forward ? !!next.ccw : !next.ccw;
+      const via = arcVia({ x: c.x, y: c.y }, { x: P(sk, cur).x, y: P(sk, cur).y }, to, ccw);
+      segs.push({ kind: "arc", to, via });
+    }
+    cur = toId;
+  }
+  return segs.length ? { start: startPt, segments: segs } : null;
+}
+
 export function extractRegions(sk: Sketch): Region[] {
   const loops = collectLoops(sk);
   if (loops.length === 0) return [];

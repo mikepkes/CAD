@@ -1215,6 +1215,39 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
   {
+    type: "feature.sweep",
+    title: "Sweep",
+    summary: "Sweep a closed profile along an open path sketch.",
+    description:
+      "Drags the `profile` sketch's region along the `path` sketch (an open chain of lines/arcs — its spine), producing a solid like a pipe or extrusion that follows the route. `operation` combines it with existing bodies. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["profile", "path"],
+      additionalProperties: false,
+      properties: {
+        profile: { type: "string", description: "Closed profile sketch id (its first region)." },
+        path: { type: "string", description: "Open path sketch id (lines/arcs forming a chain)." },
+        operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies." },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Sweep a circle along an L-path", params: { profile: "sketch1", path: "sketch2" } }],
+    apply(draft, p: { profile: string; path: string; operation?: "new" | "join" | "cut" | "intersect"; name?: string }, ctx) {
+      if (!draft.sketches[p.profile]) throw new Error(`No profile sketch "${p.profile}"`);
+      if (!draft.sketches[p.path]) throw new Error(`No path sketch "${p.path}"`);
+      const id = ctx.alloc("swp");
+      draft.features[id] = {
+        id,
+        kind: "sweep",
+        name: p.name ?? "Sweep",
+        profileSketch: p.profile,
+        pathSketch: p.path,
+        operation: p.operation ?? "new",
+      };
+      return { createdIds: [id], message: "Sweep profile along path" };
+    },
+  },
+  {
     type: "feature.fillet",
     title: "Fillet edges",
     summary: "Round selected edges of the most recent body.",

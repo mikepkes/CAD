@@ -166,7 +166,17 @@ export interface LoftFeature {
   operation?: BooleanOp;
 }
 
-export type FeatureDef = ExtrudeFeature | RevolveFeature | LoftFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
+/** A solid swept: a closed profile sketch dragged along an open path sketch (its spine). */
+export interface SweepFeature {
+  id: string;
+  kind: "sweep";
+  name: string;
+  profileSketch: string; // closed profile (first region)
+  pathSketch: string;    // open path (spine)
+  operation?: BooleanOp;
+}
+
+export type FeatureDef = ExtrudeFeature | RevolveFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
 /** Features that own a single sketch (the profile-driven ones). */
 export type SketchFeature = ExtrudeFeature | RevolveFeature;
 

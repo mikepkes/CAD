@@ -7,13 +7,13 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SketchFeature,
+  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
-import { extractRegions, regionAt, Region } from "./geometry/profile";
+import { extractRegions, extractOpenPath, regionAt, Region } from "./geometry/profile";
 import { FaceRef } from "../sketch/types";
 import {
-  Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
+  Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, Bounds3,
 } from "./occ/kernel";
@@ -194,6 +194,36 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
 
 function safeBounds(shape: Shape3D): Bounds3 | undefined {
   try { return boundsOfShape(shape); } catch { return undefined; }
+}
+
+/** Sweep the feature's profile along its path sketch, then combine it. */
+function applySweep(doc: CadDocument, f: SweepFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  let shape: Shape3D;
+  try {
+    const profileSk = doc.sketches[f.profileSketch];
+    const pathSk = doc.sketches[f.pathSketch];
+    if (!profileSk) throw new Error(`sweep: no profile sketch "${f.profileSketch}"`);
+    if (!pathSk) throw new Error(`sweep: no path sketch "${f.pathSketch}"`);
+    const regions = extractRegions(profileSk);
+    if (!regions.length) throw new Error("sweep: profile sketch has no closed region");
+    const path = extractOpenPath(pathSk);
+    if (!path) throw new Error("sweep: path sketch has no open chain of lines/arcs");
+    shape = buildSweepSolid(regions[0], resolveSketchPlane(pathSk), path);
+  } catch (e) {
+    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+    return;
+  }
+  const op = f.operation ?? "new";
+  const target = op !== "new" && bodies.length ? bodies[bodies.length - 1] : undefined;
+  if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
+  try {
+    const combined = op === "cut" ? cutShapes(target.shape, shape) : op === "intersect" ? intersectShapes(target.shape, shape) : fuseShapes(target.shape, shape);
+    shape.delete();
+    replaceShape(target, combined);
+  } catch (e) {
+    shape.delete();
+    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+  }
 }
 
 /** Loft a solid through the feature's ordered profile sketches, then combine it. */
@@ -431,6 +461,7 @@ function evaluateBodies(doc: CadDocument, scope: Scope): { bodies: Body[]; out: 
       case "extrude":
       case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
       case "loft": applyLoft(doc, f, bodies, out); break;
+      case "sweep": applySweep(doc, f, bodies, out); break;
       case "mirror": applyMirror(doc, f, bodies, out); break;
       case "fillet":
       case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;

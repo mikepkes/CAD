@@ -96,6 +96,7 @@ export function describeFeature(f: FeatureDef): Record<string, unknown> {
     case "pattern": return { id: f.id, kind: f.kind, name: f.name, mode: f.mode, count: f.count, step: f.step, axis: f.axis, angle: f.angle };
     case "mirror": return { id: f.id, kind: f.kind, name: f.name, plane: f.plane, bodies: f.bodies ?? "all" };
     case "loft": return { id: f.id, kind: f.kind, name: f.name, sketches: f.sketchIds, ruled: !!f.ruled, operation: f.operation ?? "new" };
+    case "sweep": return { id: f.id, kind: f.kind, name: f.name, profile: f.profileSketch, path: f.pathSketch, operation: f.operation ?? "new" };
   }
 }
 

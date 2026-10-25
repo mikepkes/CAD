@@ -6,7 +6,7 @@
 import opencascade from "replicad-opencascadejs";
 import { setOC, draw, drawCircle, drawEllipse, Plane, measureVolume, type Drawing, type Shape3D, type EdgeFinder, type FaceFinder } from "replicad";
 import { WorkPlane } from "../../geometry/plane";
-import { Loop, Profile } from "../geometry/profile";
+import { Loop, LoopSegment, Profile, Pt } from "../geometry/profile";
 import type { EdgeSelector, FaceSelector } from "../document";
 import { splineTangents } from "../geometry/spline";
 import { Vec3 } from "../../math/vec";
@@ -121,6 +121,28 @@ export function buildRegionsSolid(wp: WorkPlane, regions: Profile[], distance: n
   }
   if (!result) throw new Error("no regions to extrude");
   return result;
+}
+
+/** Build an OPEN drawing from a path (line/arc segments) — a sweep spine. */
+function openPathToDrawing(path: { start: Pt; segments: LoopSegment[] }): Drawing {
+  let pen = draw([path.start.x, path.start.y]);
+  for (const s of path.segments) {
+    if (s.kind === "line") pen = pen.lineTo([s.to.x, s.to.y]);
+    else if (s.kind === "arc") pen = pen.threePointsArcTo([s.to.x, s.to.y], [s.via.x, s.via.y]);
+    // (spline path segments are not produced by extractOpenPath yet)
+  }
+  // An open path is finalized with done() (not close(), which would seal it).
+  return (pen as unknown as { done: () => Drawing }).done();
+}
+
+/** Sweep a profile region along an open path (its spine), both on their planes. */
+export function buildSweepSolid(profile: Profile, pathWp: WorkPlane, path: { start: Pt; segments: LoopSegment[] }): Shape3D {
+  let profileDrawing = loopToDrawing(profile.outer);
+  for (const hole of profile.holes) profileDrawing = profileDrawing.cut(loopToDrawing(hole));
+  const spine = openPathToDrawing(path).sketchOnPlane(planeFor(pathWp)) as unknown as {
+    sweepSketch: (fn: (plane: unknown) => unknown, cfg: Record<string, unknown>) => Shape3D;
+  };
+  return spine.sweepSketch((plane) => profileDrawing.sketchOnPlane(plane as never), {});
 }
 
 /** Loft a solid through an ordered list of planar profiles (each on its own plane). */
