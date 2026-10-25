@@ -135,14 +135,27 @@ function openPathToDrawing(path: { start: Pt; segments: LoopSegment[] }): Drawin
   return (pen as unknown as { done: () => Drawing }).done();
 }
 
-/** Sweep a profile region along an open path (its spine), both on their planes. */
+/** Sweep a profile region along an open path (its spine), both on their planes.
+ *  Holes are swept separately and cut out — replicad can't sweep a profile that
+ *  already has a hole, so a tube = (swept outer) − (swept inner). */
 export function buildSweepSolid(profile: Profile, pathWp: WorkPlane, path: { start: Pt; segments: LoopSegment[] }): Shape3D {
-  let profileDrawing = loopToDrawing(profile.outer);
-  for (const hole of profile.holes) profileDrawing = profileDrawing.cut(loopToDrawing(hole));
-  const spine = openPathToDrawing(path).sketchOnPlane(planeFor(pathWp)) as unknown as {
-    sweepSketch: (fn: (plane: unknown) => unknown, cfg: Record<string, unknown>) => Shape3D;
+  const sweepLoop = (loop: Loop): Shape3D => {
+    // Rebuild the spine per loop so a consumed drawing never leaks between sweeps.
+    const spine = openPathToDrawing(path).sketchOnPlane(planeFor(pathWp)) as unknown as {
+      sweepSketch: (fn: (plane: unknown) => unknown, cfg: Record<string, unknown>) => Shape3D;
+    };
+    const prof = loopToDrawing(loop);
+    return spine.sweepSketch((plane) => prof.sketchOnPlane(plane as never), {});
   };
-  return spine.sweepSketch((plane) => profileDrawing.sketchOnPlane(plane as never), {});
+  let solid = sweepLoop(profile.outer);
+  for (const hole of profile.holes) {
+    const inner = sweepLoop(hole);
+    const next = (solid as unknown as { cut: (o: Shape3D) => Shape3D }).cut(inner);
+    solid.delete();
+    inner.delete();
+    solid = next;
+  }
+  return solid;
 }
 
 /** Loft a solid through an ordered list of planar profiles (each on its own plane). */

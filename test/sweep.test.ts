@@ -60,6 +60,31 @@ describe("feature.sweep", () => {
     expect(range(b[0], 0).hi).toBeGreaterThan(19);
   });
 
+  it("sweeps a HOLLOW (ring) profile into a tube", async () => {
+    const s = realSession();
+    // ring profile: outer r=10, inner r=7
+    const prof = (await s.dispatch("sketch.create", { plane: "XY" })).createdIds[0];
+    await s.dispatch("sketch.addRing", { sketch: prof, center: { x: 0, y: 0 }, outerRadius: 10, innerRadius: 7 });
+    // straight vertical path on XZ
+    const path = (await s.dispatch("sketch.create", { plane: "XZ" })).createdIds[0];
+    await s.dispatch("sketch.addLine", { sketch: path, start: { x: 0, y: 0 }, end: { x: 0, y: 40 } });
+    const r = await s.dispatch("feature.sweep", { profile: prof, path });
+    expect(r.ok).toBe(true);
+    const b = bodies(s);
+    expect(b.length).toBe(1);
+    expect(b[0].error).toBeUndefined();
+    // Vertex radii: a tube has a bore (~7) as well as the outer wall (~10); a
+    // solid rod would have no vertices near r=7.
+    const p = b[0].mesh!.positions;
+    let rMin = Infinity, rMax = 0;
+    for (let i = 0; i < p.length; i += 3) {
+      const rad = Math.hypot(p[i], p[i + 1]);
+      rMin = Math.min(rMin, rad); rMax = Math.max(rMax, rad);
+    }
+    expect(rMax).toBeCloseTo(10, 0); // outer wall
+    expect(rMin).toBeCloseTo(7, 0);  // bore — proves it's hollow, not solid
+  });
+
   it("errors when the path has no open chain", async () => {
     const s = realSession();
     const prof = await circleProfile(s, 5);
