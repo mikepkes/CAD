@@ -135,6 +135,23 @@ export function createDefaultRegistry(): CommandRegistry {
   return reg;
 }
 
+/** Validate and normalize a parameter's optional extents/enum. A parameter may
+ *  carry extents (min and/or max) OR a list of acceptable values, never both. */
+function normalizeBounds(p: { min?: number; max?: number; values?: number[] }): { min?: number; max?: number; values?: number[] } {
+  const hasExtent = p.min != null || p.max != null;
+  const hasValues = Array.isArray(p.values) && p.values.length > 0;
+  if (hasExtent && hasValues) throw new Error("a parameter can have extents or a value list, not both");
+  if (hasValues) {
+    const vals = [...new Set(p.values!)].sort((a, b) => a - b);
+    return { values: vals };
+  }
+  if (p.min != null && p.max != null && p.min > p.max) throw new Error(`min (${p.min}) must be ≤ max (${p.max})`);
+  const out: { min?: number; max?: number } = {};
+  if (p.min != null) out.min = p.min;
+  if (p.max != null) out.max = p.max;
+  return out;
+}
+
 export const BUILTINS: CommandDef<any>[] = [
   // ---- parameters ----
   {
@@ -150,14 +167,52 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         name: { type: "string", description: "Unique parameter name." },
         expression: { type: "string", description: "Expression, e.g. '40' or 'width/2'." },
+        min: { type: "number", description: "Optional lower extent (for a slider / validation)." },
+        max: { type: "number", description: "Optional upper extent." },
+        values: { type: "array", items: { type: "number" }, description: "Optional set of acceptable values (an enum). Mutually exclusive with min/max." },
       },
     },
-    examples: [{ params: { name: "width", expression: "60" } }],
-    apply(draft, p: { name: string; expression: string }, ctx) {
+    examples: [
+      { params: { name: "width", expression: "60" } },
+      { note: "A bounded parameter (slider 20–120)", params: { name: "width", expression: "60", min: 20, max: 120 } },
+      { note: "A pick-list parameter", params: { name: "thread", expression: "3", values: [3, 4, 5, 6, 8] } },
+    ],
+    apply(draft, p: { name: string; expression: string; min?: number; max?: number; values?: number[] }, ctx) {
       if (draft.parameters.some((x) => x.name === p.name)) throw new Error(`Parameter "${p.name}" exists`);
+      const bounds = normalizeBounds(p);
       const id = ctx.alloc("param");
-      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0 });
+      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds });
       return { createdIds: [id], message: `Added parameter ${p.name}` };
+    },
+  },
+  {
+    type: "parameter.setBounds",
+    title: "Set parameter extents",
+    summary: "Set or clear a parameter's extents (min/max) or its list of acceptable values.",
+    description:
+      "Sets the optional extents of an existing parameter: `min` and/or `max` for a bounded range, OR `values` for a discrete pick-list — not both. Omit all three (or pass clear:true) to make it unbounded again. A slider/dropdown in the Parameters panel honours these.",
+    paramsSchema: {
+      type: "object",
+      required: ["name"],
+      additionalProperties: false,
+      properties: {
+        name: { type: "string" },
+        min: { type: "number" },
+        max: { type: "number" },
+        values: { type: "array", items: { type: "number" } },
+        clear: { type: "boolean", description: "Remove all extents / values." },
+      },
+    },
+    examples: [
+      { params: { name: "width", min: 20, max: 120 } },
+      { note: "Make unbounded", params: { name: "width", clear: true } },
+    ],
+    apply(draft, p: { name: string; min?: number; max?: number; values?: number[]; clear?: boolean }) {
+      const param = draft.parameters.find((x) => x.name === p.name);
+      if (!param) throw new Error(`No parameter "${p.name}"`);
+      delete param.min; delete param.max; delete param.values;
+      if (!p.clear) Object.assign(param, normalizeBounds(p));
+      return { message: `Set extents of ${p.name}` };
     },
   },
   {

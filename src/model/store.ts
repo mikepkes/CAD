@@ -188,6 +188,8 @@ export interface AppState {
   setParameterExpr: (name: string, expr: string) => Promise<void>;
   renameParameter: (name: string, newName: string) => Promise<void>;
   deleteParameter: (name: string) => Promise<void>;
+  /** Set or clear a parameter's extents (min/max) or acceptable values (enum). */
+  setParameterBounds: (name: string, bounds: { min?: number; max?: number; values?: number[]; clear?: boolean }) => Promise<void>;
 
   // constraints/dimensions by id (mapped to their creating operation)
   editDimension: (constraintId: string, expr: string) => Promise<void>;
@@ -622,12 +624,23 @@ export const useStore = create<AppState>((set, get) => {
     },
     setParameterExpr: async (name, expr) => {
       const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
-      if (op) await get().editOperation(op.opId, { name, expression: expr });
+      if (op) await get().editOperation(op.opId, { ...op.params, name, expression: expr });
       else await runDispatch("parameter.set", { name, expression: expr });
     },
     renameParameter: async (name, newName) => {
       const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
-      if (op) await get().editOperation(op.opId, { name: newName, expression: String(op.params.expression) });
+      if (op) await get().editOperation(op.opId, { ...op.params, name: newName });
+    },
+    setParameterBounds: async (name, bounds) => {
+      const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
+      // Rebuild the parameter.add params so the new extents replace the old ones.
+      const extra = bounds.clear
+        ? {}
+        : bounds.values != null
+          ? { values: bounds.values }
+          : { ...(bounds.min != null ? { min: bounds.min } : {}), ...(bounds.max != null ? { max: bounds.max } : {}) };
+      if (op) await get().editOperation(op.opId, { name: op.params.name, expression: op.params.expression, ...extra });
+      else await runDispatch("parameter.setBounds", { name, ...(bounds.clear ? { clear: true } : extra) });
     },
     deleteParameter: async (name) => {
       const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);

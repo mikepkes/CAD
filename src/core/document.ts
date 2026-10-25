@@ -16,6 +16,15 @@ export interface Parameter {
   /** Last evaluated value (canonical units). */
   value: number;
   error?: string;
+  /** Optional lower / upper extent. A UI slider and validation honour these.
+   *  Mutually exclusive with `values`. */
+  min?: number;
+  max?: number;
+  /** Optional discrete set of acceptable values (an enum). Mutually exclusive
+   *  with min/max. */
+  values?: number[];
+  /** Set when the resolved value falls outside the extents / enum. */
+  warning?: string;
 }
 
 /**
