@@ -15,6 +15,13 @@ parametric scissor lift whose **number of linkages** is itself a slider
 size. It shows off a **parametric pattern count**: the repeat is driven by a
 parameter, so dragging `stages` restamps the mechanism taller or shorter.
 
+And **https://mikepkes.github.io/CAD/?mode=customize&example=scissor-jointed** —
+the same scissor, but **jointed**: a component pattern + relational joint
+templates, so `stages` sets the number of linkages *and* the mechanism still
+articulates (drag `theta` to collapse/extend it). Patterning a component and
+keeping it jointed is something Fusion 360 cannot do — see
+[Parametric jointed assemblies](#parametric-jointed-assemblies-prototype) below.
+
 A **local-first, browser-based parametric CAD** app. It runs entirely in the
 browser (static, GitHub-Pages-servable) and is built so the geometry is
 **math-exact and CNC/3D-print ready**, not just a pretty picture. The long-term
@@ -193,6 +200,7 @@ straight from a URL:
 ```
 ?mode=customize&example=gyroscope      # a bundled example (public/examples/<name>.json)
 ?mode=customize&example=scissor        # a parametric scissor lift (linkage count is a slider)
+?mode=customize&example=scissor-jointed # the scissor as a jointed assembly (count + articulates)
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```
 
@@ -224,3 +232,39 @@ or is uploaded to **MakerWorld** for cloud slicing, then printed.
 - [ ] Sketches on faces & construction planes; assemblies/joints
 - [ ] In-viewport dimension editing; trim/offset; Tauri desktop packaging
 ```
+
+## Parametric jointed assemblies (prototype)
+
+Most CAD (Fusion 360 included) lets you pattern a *component*, but the copies
+come out **rigid** — the joints don't come along, so you can't have a mechanism
+whose instance count is a parameter *and* still articulates. Chisel prototypes
+exactly that. Three pieces make it work:
+
+- **Connectors** — named attachment frames (joint origins) on a component, in
+  its local coordinates (`component.connector`). A relational joint binds to
+  these by name rather than to raw coordinates.
+- **Component patterns** — duplicate a component subtree a *parametric* number
+  of times (`assembly.pattern`, `count` an expression like `"stages"`).
+- **Joint templates** — relational joints addressed by role: `self` → instance
+  *i*, `prev` → *i-1*, `root` → ground, each with a `port` (connector name) and
+  a `value` expression that may use the instance index `i` (`joint.template`,
+  `appliesTo: first | rest | all`).
+
+At rebuild an **expander** (`src/core/assembly.ts`) stamps the rule into
+concrete instances and joints, with deterministic ids
+(`pattern#i__localId`) so selections and caches stay stable as the count
+changes. Everything downstream — the tree-based assembly FK, the geometry
+pipeline, the motion study — then runs unchanged.
+
+Closed loops (a scissor is one per stage) use the same trick the hand-built
+jointed models use: each joint's `value` is an expression of one driver, so the
+tree FK reproduces the loop without a loop solver. That covers regular,
+repeating mechanisms (the common case). A general loop-closure solver — for
+irregular linkages whose closure isn't expressible in closed form — is the
+natural next step and is not part of this prototype.
+
+**Status: prototype.** Instances are derived (not individually selectable yet),
+authoring is via commands (no UI for connectors/templates yet), and patterned
+docs skip the incremental geometry cache (correctness over speed while the
+instances are small). See `test/assembly.test.ts` and
+`test/scissor_jointed.build.test.ts`.

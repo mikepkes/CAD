@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 77,
-  "rollbackIndex": 32,
+  "nextId": 73,
+  "rollbackIndex": 28,
   "operations": [
     {
       "opId": "op1",
@@ -20,7 +20,7 @@
         "param2"
       ],
       "label": "Add parameter",
-      "at": 1792961279785
+      "at": 1792964104466
     },
     {
       "opId": "op3",
@@ -35,7 +35,7 @@
         "param4"
       ],
       "label": "Add parameter",
-      "at": 1792961279787
+      "at": 1792964104468
     },
     {
       "opId": "op5",
@@ -50,7 +50,7 @@
         "param6"
       ],
       "label": "Add parameter",
-      "at": 1792961279787
+      "at": 1792964104468
     },
     {
       "opId": "op7",
@@ -65,7 +65,7 @@
         "param8"
       ],
       "label": "Add parameter",
-      "at": 1792961279788
+      "at": 1792964104468
     },
     {
       "opId": "op9",
@@ -80,7 +80,7 @@
         "param10"
       ],
       "label": "Add parameter",
-      "at": 1792961279788
+      "at": 1792964104469
     },
     {
       "opId": "op11",
@@ -93,7 +93,7 @@
         "pt13"
       ],
       "label": "Create sketch",
-      "at": 1792961279788
+      "at": 1792964104469
     },
     {
       "opId": "op14",
@@ -130,7 +130,7 @@
         "ln22"
       ],
       "label": "Polyline",
-      "at": 1792961279821
+      "at": 1792964104499
     },
     {
       "opId": "op23",
@@ -146,7 +146,7 @@
         "d24"
       ],
       "label": "Add dimension",
-      "at": 1792961279822
+      "at": 1792964104500
     },
     {
       "opId": "op25",
@@ -162,7 +162,7 @@
         "d26"
       ],
       "label": "Add dimension",
-      "at": 1792961279828
+      "at": 1792964104505
     },
     {
       "opId": "op27",
@@ -178,7 +178,7 @@
         "d28"
       ],
       "label": "Add dimension",
-      "at": 1792961279829
+      "at": 1792964104506
     },
     {
       "opId": "op29",
@@ -194,7 +194,7 @@
         "d30"
       ],
       "label": "Add dimension",
-      "at": 1792961279830
+      "at": 1792964104507
     },
     {
       "opId": "op31",
@@ -210,7 +210,7 @@
         "d32"
       ],
       "label": "Add dimension",
-      "at": 1792961279831
+      "at": 1792964104508
     },
     {
       "opId": "op33",
@@ -226,7 +226,7 @@
         "d34"
       ],
       "label": "Add dimension",
-      "at": 1792961279831
+      "at": 1792964104509
     },
     {
       "opId": "op35",
@@ -242,7 +242,7 @@
         "d36"
       ],
       "label": "Add dimension",
-      "at": 1792961279832
+      "at": 1792964104509
     },
     {
       "opId": "op37",
@@ -258,7 +258,7 @@
         "d38"
       ],
       "label": "Add dimension",
-      "at": 1792961279832
+      "at": 1792964104510
     },
     {
       "opId": "op39",
@@ -272,7 +272,7 @@
         "ext40"
       ],
       "label": "Extrude",
-      "at": 1792961279833
+      "at": 1792964104510
     },
     {
       "opId": "op41",
@@ -285,7 +285,7 @@
         "pt43"
       ],
       "label": "Create sketch",
-      "at": 1792961279834
+      "at": 1792964104511
     },
     {
       "opId": "op44",
@@ -322,7 +322,7 @@
         "ln52"
       ],
       "label": "Polyline",
-      "at": 1792961279835
+      "at": 1792964104512
     },
     {
       "opId": "op53",
@@ -338,7 +338,7 @@
         "d54"
       ],
       "label": "Add dimension",
-      "at": 1792961279835
+      "at": 1792964104513
     },
     {
       "opId": "op55",
@@ -354,7 +354,7 @@
         "d56"
       ],
       "label": "Add dimension",
-      "at": 1792961279836
+      "at": 1792964104513
     },
     {
       "opId": "op57",
@@ -370,7 +370,7 @@
         "d58"
       ],
       "label": "Add dimension",
-      "at": 1792961279837
+      "at": 1792964104514
     },
     {
       "opId": "op59",
@@ -386,7 +386,7 @@
         "d60"
       ],
       "label": "Add dimension",
-      "at": 1792961279837
+      "at": 1792964104515
     },
     {
       "opId": "op61",
@@ -402,7 +402,7 @@
         "d62"
       ],
       "label": "Add dimension",
-      "at": 1792961279838
+      "at": 1792964104516
     },
     {
       "opId": "op63",
@@ -418,7 +418,7 @@
         "d64"
       ],
       "label": "Add dimension",
-      "at": 1792961279839
+      "at": 1792964104517
     },
     {
       "opId": "op65",
@@ -434,7 +434,7 @@
         "d66"
       ],
       "label": "Add dimension",
-      "at": 1792961279839
+      "at": 1792964104518
     },
     {
       "opId": "op67",
@@ -450,7 +450,7 @@
         "d68"
       ],
       "label": "Add dimension",
-      "at": 1792961279840
+      "at": 1792964104518
     },
     {
       "opId": "op69",
@@ -464,7 +464,7 @@
         "ext70"
       ],
       "label": "Extrude",
-      "at": 1792961279841
+      "at": 1792964104519
     },
     {
       "opId": "op71",
@@ -483,51 +483,7 @@
         "pat72"
       ],
       "label": "Pattern body",
-      "at": 1792961279842
-    },
-    {
-      "opId": "op73",
-      "type": "parameter.set",
-      "params": {
-        "name": "stages",
-        "expression": "5"
-      },
-      "createdIds": [],
-      "label": "Set parameter",
-      "at": 1792961280073
-    },
-    {
-      "opId": "op74",
-      "type": "parameter.set",
-      "params": {
-        "name": "stages",
-        "expression": "3"
-      },
-      "createdIds": [],
-      "label": "Set parameter",
-      "at": 1792961280386
-    },
-    {
-      "opId": "op75",
-      "type": "parameter.set",
-      "params": {
-        "name": "openAngle",
-        "expression": "25"
-      },
-      "createdIds": [],
-      "label": "Set parameter",
-      "at": 1792961280388
-    },
-    {
-      "opId": "op76",
-      "type": "parameter.set",
-      "params": {
-        "name": "openAngle",
-        "expression": "45"
-      },
-      "createdIds": [],
-      "label": "Set parameter",
-      "at": 1792961280501
+      "at": 1792964104520
     }
   ],
   "timelineGroups": []

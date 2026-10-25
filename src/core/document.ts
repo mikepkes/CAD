@@ -47,6 +47,8 @@ export interface Component {
   sketches: string[];
   /** Placement relative to the parent component (identity for root). */
   transform: ComponentTransform;
+  /** Named attachment frames (joint origins) in local coords, for relational joints. */
+  connectors?: Record<string, Connector>;
 }
 
 /** How a feature combines with the running bodies (Fusion-style). */
@@ -371,6 +373,60 @@ export interface Joint {
   error?: string;
 }
 
+/** A named attachment frame on a component, in that component's LOCAL coordinates.
+ *  Relational joints bind to these by name instead of to raw coordinates, so a
+ *  pattern's joints can say "instance i's `top` meets instance i-1's `bottom`". */
+export interface Connector {
+  origin: { x: number; y: number; z: number };
+  axis?: { x: number; y: number; z: number };
+}
+
+/** A reference, inside a joint template, to one endpoint of a to-be-generated
+ *  joint. Resolved per instance at rebuild: `self` → the current instance, `prev`
+ *  → the one before it, `root` → ground. `component` names which SOURCE component
+ *  the clone descends from; `port` names a connector on it. */
+export interface RoleRef {
+  role: "self" | "prev" | "root";
+  /** Source component whose per-instance clone this addresses (self/prev). */
+  component?: string;
+  /** Connector name on that component; when omitted, `origin` is used raw. */
+  port?: string;
+  /** Explicit local origin when there is no named port (e.g. a ground anchor). */
+  origin?: { x: number; y: number; z: number };
+}
+
+/** A relational joint attached to a component pattern. The expander stamps one
+ *  concrete `Joint` per applicable instance, resolving the role refs to real
+ *  component ids and connector origins. `valueExpr` may reference the 0-based
+ *  instance index `i` (and parameters), so per-instance motion laws are possible;
+ *  a regular mechanism (like a scissor) uses the same expression every stage. */
+export interface JointTemplate {
+  id: string;
+  name: string;
+  patternId: string;
+  kind: "rigid" | "revolute" | "slider";
+  base: RoleRef;
+  moved: RoleRef;
+  axis: { x: number; y: number; z: number };
+  valueExpr: string;
+  /** Which instances get this joint: the first (i=0), the rest (i>=1), or all.
+   *  Grounding/seed joints are "first"; the repeating chain joints are "rest". */
+  appliesTo: "first" | "rest" | "all";
+}
+
+/** Duplicate a component subtree N times, where N is a parameter expression.
+ *  Placement comes entirely from the pattern's joint templates (so the copies are
+ *  jointed, not rigid) — the feature F360 lacks: a parametric instance count on a
+ *  mechanism that still articulates. */
+export interface ComponentPattern {
+  id: string;
+  name: string;
+  /** Component id whose subtree (components + sketches + features) is instanced. */
+  source: string;
+  countExpr: string;
+  count: number;
+}
+
 export interface CadDocument {
   schema: 1;
   id: string;
@@ -392,6 +448,10 @@ export interface CadDocument {
   components: Record<string, Component>;
   planes: Record<string, DatumPlane>;
   joints: Record<string, Joint>;
+  /** Parametric component patterns (jointed duplication) and their joint templates.
+   *  These stay as design intent; the expander materializes instances at rebuild. */
+  componentPatterns: Record<string, ComponentPattern>;
+  jointTemplates: Record<string, JointTemplate>;
   sketches: Record<string, Sketch>;
   features: Record<string, FeatureDef>;
 }
@@ -422,6 +482,8 @@ export function createDocument(id = "doc1"): CadDocument {
     components: freshComponents(rootId),
     planes: {},
     joints: {},
+    componentPatterns: {},
+    jointTemplates: {},
     sketches: {},
     features: {},
   };

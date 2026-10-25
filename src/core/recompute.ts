@@ -148,7 +148,7 @@ function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope): Rigid {
 
 /** Resolve every component's world frame — from its joint if it has one, else
  *  its static placement composed down the parent chain. */
-function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<string, Rigid> {
+export function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<string, Rigid> {
   const jointByMoved = new Map<string, Joint>();
   for (const j of Object.values(doc.joints)) {
     j.error = undefined;

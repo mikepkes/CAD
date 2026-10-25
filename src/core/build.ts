@@ -42,6 +42,8 @@ export function rebuild(doc: CadDocument, registry: CommandRegistry): RebuildRes
   doc.components = freshComponents(doc.rootComponentId);
   doc.planes = {};
   doc.joints = {};
+  doc.componentPatterns = {};
+  doc.jointTemplates = {};
   doc.sketches = {};
   doc.features = {};
 

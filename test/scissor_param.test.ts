@@ -95,6 +95,10 @@ describe("build parametric scissor lift", () => {
 
     await s.recompute();
 
+    // Serialize the CLEAN construction before the sweeps below append parameter.set
+    // ops (which would otherwise override the Customize sliders on load).
+    if (OUT) writeFileSync(`${OUT}/scissor.chisel.json`, serializeDocument(s.doc));
+
     // One fused body; height is (stages) × rise.
     const setParam = async (name: string, expr: string) => { await dis(s, "parameter.set", { name, expression: expr }); await s.recompute(); };
 
@@ -113,7 +117,5 @@ describe("build parametric scissor lift", () => {
 
     await setParam("openAngle", "45");
     console.log(`scissor: stages 3 → topZ ${h3.toFixed(1)}mm; stages 5 → ${h5.toFixed(1)}mm; rise/stage ≈ ${rise.toFixed(1)}mm`);
-
-    if (OUT) writeFileSync(`${OUT}/scissor.chisel.json`, serializeDocument(s.doc));
   }, 120000);
 });

@@ -607,7 +607,12 @@ function sketchSignature(sk: { entities: Record<string, unknown>; plane?: WorkPl
   }
   const p = sk.plane ? sk.plane.origin : { x: 0, y: 0, z: 0 };
   const n = sk.plane ? sk.plane.normal : { x: 0, y: 0, z: 0 };
-  return `${sk.planeId}:${p.x},${p.y},${p.z},${n.x},${n.y},${n.z}#${ents.join(",")}`;
+  // The in-plane basis matters too: a sketch that only rotates about its own
+  // normal (a jointed bar swinging within its plane) keeps the same origin and
+  // normal, so without u/v its signature would be stale and the cache would
+  // serve a mesh built at the previous pose.
+  const u = sk.plane ? sk.plane.u : { x: 0, y: 0, z: 0 };
+  return `${sk.planeId}:${p.x},${p.y},${p.z},${n.x},${n.y},${n.z},${u.x},${u.y},${u.z}#${ents.join(",")}`;
 }
 
 /** Build a body group's final shape: its "new" extrude with its joins/cuts folded in. */

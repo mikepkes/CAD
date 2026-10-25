@@ -11,6 +11,8 @@ import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
 import { evaluateFeatures, featureEdges, exportFeatureBytes, collideFeatures, CollisionResult, GeometryCache, SolidEval } from "../features";
 import { placeComponentSketches } from "../recompute";
+import { expandAssembly, hasAssemblyPatterns } from "../assembly";
+import { Scope } from "../../math/expr";
 
 export type ExportFormat = "stl" | "step";
 
@@ -49,6 +51,16 @@ export interface GeometryBackend {
 }
 
 const scopeOf = (doc: CadDocument) => resolveParameters(doc.parameters).scope;
+
+/** Expand component patterns into concrete instances and place every sketch in
+ *  its (instance's) component frame, so geometry/collision see the articulated
+ *  copies. A no-op passthrough when the document has no component patterns. */
+function geometryDoc(doc: CadDocument, scope: Scope): CadDocument {
+  if (!hasAssemblyPatterns(doc)) return doc;
+  const d = expandAssembly(doc, scope);
+  placeComponentSketches(d, scope);
+  return d;
+}
 
 /** A pose of `doc` for a collision check: parameter expressions overridden and
  *  sketches re-placed in their components' frames for those values. Clones the
@@ -105,19 +117,24 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
   try {
     const scope = scopeOf(req.doc);
     if (req.kind === "evaluate") {
-      const solids = evaluateFeatures(req.doc, scope, cache);
-      return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(req.doc) }, transfer: meshTransferables(solids) };
+      const doc = geometryDoc(req.doc, scope);
+      // Instance geometry is placed by joint-driven worlds that vary with the
+      // drive parameters; skip the incremental cache for patterned docs so a
+      // pose change always rebuilds (the instances are small — correctness first).
+      const solids = evaluateFeatures(doc, scope, hasAssemblyPatterns(req.doc) ? undefined : cache);
+      return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(doc) }, transfer: meshTransferables(solids) };
     }
     if (req.kind === "edges") {
-      const edges = featureEdges(req.doc, scope, req.featureId);
+      const edges = featureEdges(geometryDoc(req.doc, scope), scope, req.featureId);
       return { res: { id: req.id, kind: "edges", edges }, transfer: [] };
     }
     if (req.kind === "collide") {
-      const doc = poseDoc(req.doc, req.overrides);
+      const posed = poseDoc(req.doc, req.overrides);
+      const doc = geometryDoc(posed, scopeOf(posed));
       const result = collideFeatures(doc, scopeOf(doc));
       return { res: { id: req.id, kind: "collide", result }, transfer: [] };
     }
-    const bytes = await exportFeatureBytes(req.doc, scope, req.featureId, req.format);
+    const bytes = await exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format);
     return { res: { id: req.id, kind: "export", bytes }, transfer: bytes ? [bytes.buffer as ArrayBuffer] : [] };
   } catch (e) {
     return { res: { id: req.id, kind: "error", message: (e as Error).message }, transfer: [] };
@@ -137,17 +154,22 @@ export class InlineGeometryBackend implements GeometryBackend {
   }
   ready(): boolean { return this.isReady; }
   async evaluate(doc: CadDocument): Promise<EvaluateResult> {
-    const solids = evaluateFeatures(doc, scopeOf(doc), this.cache);
-    return { solids, facePlanes: collectFacePlanes(doc) };
+    const scope = scopeOf(doc);
+    const d = geometryDoc(doc, scope);
+    const solids = evaluateFeatures(d, scope, hasAssemblyPatterns(doc) ? undefined : this.cache);
+    return { solids, facePlanes: collectFacePlanes(d) };
   }
   async edges(doc: CadDocument, featureId: string): Promise<Edge3D[]> {
-    return featureEdges(doc, scopeOf(doc), featureId);
+    const scope = scopeOf(doc);
+    return featureEdges(geometryDoc(doc, scope), scope, featureId);
   }
   async exportBytes(doc: CadDocument, featureId: string, format: ExportFormat): Promise<Uint8Array | null> {
-    return exportFeatureBytes(doc, scopeOf(doc), featureId, format);
+    const scope = scopeOf(doc);
+    return exportFeatureBytes(geometryDoc(doc, scope), scope, featureId, format);
   }
   async collide(doc: CadDocument, overrides?: Record<string, string>): Promise<CollisionResult> {
-    const d = poseDoc(doc, overrides);
+    const posed = poseDoc(doc, overrides);
+    const d = geometryDoc(posed, scopeOf(posed));
     return collideFeatures(d, scopeOf(d));
   }
   dispose(): void {}

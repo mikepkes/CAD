@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument } from "../document";
+import { CadDocument, RoleRef } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -40,6 +40,17 @@ type FaceSelectorParams = import("../document").FaceSelector;
 type ThreadSpecParams = import("../document").ThreadSpec;
 
 const V3_SCHEMA: JSONSchema = { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } };
+const ROLE_REF_SCHEMA: JSONSchema = {
+  type: "object",
+  required: ["role"],
+  additionalProperties: false,
+  properties: {
+    role: { type: "string", enum: ["self", "prev", "root"], description: "self → instance i, prev → i-1, root → ground." },
+    component: { type: "string", description: "Source component whose per-instance clone this addresses (self/prev)." },
+    port: { type: "string", description: "Connector name on that component." },
+    origin: { ...V3_SCHEMA, description: "Raw local origin when there is no named port (e.g. a ground anchor)." },
+  },
+};
 const IN_PLANE_SCHEMA: JSONSchema = {
   type: "object",
   required: ["plane"],
@@ -390,6 +401,93 @@ export const BUILTINS: CommandDef<any>[] = [
         valueValue: 0,
       };
       return { createdIds: [id], message: `${draft.joints[id].kind} joint` };
+    },
+  },
+  {
+    type: "component.connector",
+    title: "Add connector",
+    summary: "Add a named attachment frame (joint origin) to a component.",
+    description:
+      "Adds a named connector point in the component's LOCAL coordinates. Relational joint templates bind to these by name (e.g. a bar's `top`/`bottom`/`center` pins), so a component pattern's joints can chain instance to instance without hard-coded ids.",
+    paramsSchema: {
+      type: "object",
+      required: ["component", "name", "origin"],
+      additionalProperties: false,
+      properties: {
+        component: { type: "string" },
+        name: { type: "string", description: "Connector name, unique on this component." },
+        origin: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+        axis: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "Optional reference axis (local)." },
+      },
+    },
+    examples: [{ params: { component: "cmp3", name: "top", origin: { x: 60, y: 0, z: 0 } } }],
+    apply(draft, p: { component: string; name: string; origin: Vec3; axis?: Vec3 }) {
+      const c = draft.components[p.component];
+      if (!c) throw new Error(`No component "${p.component}"`);
+      c.connectors = c.connectors ?? {};
+      c.connectors[p.name] = { origin: { x: p.origin.x, y: p.origin.y, z: p.origin.z }, ...(p.axis ? { axis: { x: p.axis.x, y: p.axis.y, z: p.axis.z } } : {}) };
+      return { message: `Connector ${p.name} on ${c.name}` };
+    },
+  },
+  {
+    type: "assembly.pattern",
+    title: "Pattern components (jointed)",
+    summary: "Duplicate a component subtree N times, placed by joint templates — a parametric, articulating pattern.",
+    description:
+      "Creates a component pattern over `source` (a component whose subtree — components, sketches, features — is instanced `count` times, count parametric). Unlike feature.pattern (which fuses rigid geometry), the copies are positioned by joint.template joints, so the mechanism still articulates AND the instance count is a parameter. Add the joint templates next. Returns the pattern id.",
+    paramsSchema: {
+      type: "object",
+      required: ["source", "count"],
+      additionalProperties: false,
+      properties: {
+        source: { type: "string", description: "Component id to instance (its whole subtree)." },
+        count: { type: ["integer", "string"], description: "Instance count (>=1), or an expression like \"stages\"." },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Repeat a scissor stage `stages` times", params: { source: "cmp2", count: "stages", name: "Linkages" } }],
+    apply(draft, p: { source: string; count: number | string; name?: string }, ctx) {
+      if (!draft.components[p.source]) throw new Error(`No source component "${p.source}"`);
+      const id = ctx.alloc("apat");
+      const parsed = typeof p.count === "number" ? p.count : parseFloat(p.count);
+      draft.componentPatterns[id] = { id, name: p.name ?? "Component pattern", source: p.source, countExpr: String(p.count), count: Math.max(1, Math.round(Number.isFinite(parsed) ? parsed : 1)) };
+      return { createdIds: [id], message: `Component pattern ×${p.count}` };
+    },
+  },
+  {
+    type: "joint.template",
+    title: "Joint template",
+    summary: "A relational joint for a component pattern, stamped once per instance.",
+    description:
+      "Adds a joint rule to a pattern. `base`/`moved` are role refs {role: self|prev|root, component, port}; the expander resolves them to concrete instances each rebuild (self → instance i, prev → i-1, root → ground). `appliesTo`: \"first\" (i=0, the grounding/seed joints), \"rest\" (i>=1, the repeating chain), or \"all\". `value` (degrees for revolute, length for slider) may reference the 0-based instance index `i` and parameters; a regular mechanism reuses the same expression every stage.",
+    paramsSchema: {
+      type: "object",
+      required: ["pattern", "base", "moved"],
+      additionalProperties: false,
+      properties: {
+        pattern: { type: "string" },
+        kind: { type: "string", enum: ["rigid", "revolute", "slider"] },
+        base: ROLE_REF_SCHEMA,
+        moved: ROLE_REF_SCHEMA,
+        axis: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "Joint axis in base-local coords (default +Z)." },
+        value: { type: "string", description: "Motion expression; may use `i` and parameters." },
+        appliesTo: { type: "string", enum: ["first", "rest", "all"], description: "Which instances get this joint (default all)." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "Ground + drive the first bar", params: { pattern: "apat1", kind: "revolute", base: { role: "root", origin: { x: 0, y: 0, z: 0 } }, moved: { role: "self", component: "cmp3", port: "bottom" }, axis: { x: 0, y: -1, z: 0 }, value: "theta", appliesTo: "first" } },
+      { note: "Chain each bar to the previous stage's top", params: { pattern: "apat1", kind: "revolute", base: { role: "prev", component: "cmp4", port: "top" }, moved: { role: "self", component: "cmp3", port: "bottom" }, axis: { x: 0, y: -1, z: 0 }, value: "2*theta-180", appliesTo: "rest" } },
+    ],
+    apply(draft, p: { pattern: string; kind?: "rigid" | "revolute" | "slider"; base: RoleRef; moved: RoleRef; axis?: Vec3; value?: string; appliesTo?: "first" | "rest" | "all"; name?: string }, ctx) {
+      if (!draft.componentPatterns[p.pattern]) throw new Error(`No pattern "${p.pattern}"`);
+      const id = ctx.alloc("jtpl");
+      draft.jointTemplates[id] = {
+        id, name: p.name ?? "Joint template", patternId: p.pattern, kind: p.kind ?? "revolute",
+        base: p.base, moved: p.moved, axis: p.axis ?? { x: 0, y: 0, z: 1 },
+        valueExpr: String(p.value ?? "0"), appliesTo: p.appliesTo ?? "all",
+      };
+      return { createdIds: [id], message: "Joint template" };
     },
   },
 
