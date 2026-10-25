@@ -1295,5 +1295,10 @@ body {
 .cz-share:hover { filter: brightness(1.08); }
 
 .cz-export { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 4px; }
+.cz-export-row { display: flex; align-items: center; gap: 12px; }
 .cz-share-alt { background: none; border: none; color: var(--text-dim); font-size: 11.5px; cursor: pointer; padding: 2px; }
 .cz-share-alt:hover { color: var(--text); }
+.cz-vidprog { display: inline-flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 11.5px; }
+.cz-cancel { background: none; border: 1px solid var(--border, #3a4152); border-radius: 5px; color: var(--text-dim); font-size: 11px; cursor: pointer; padding: 1px 7px; }
+.cz-cancel:hover { color: var(--text); }
+.cz-viderr { color: #e4786e; font-size: 11px; max-width: 240px; text-align: center; }

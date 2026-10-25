@@ -10,6 +10,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Viewport } from "./Viewport";
 import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
+import { recordMotionStudy, canRecordMotion } from "../viewport/recordMotion";
+import { deliverFile } from "./deliverFile";
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000));
 // The 3D rebuild is the slow part, so the slider's own value updates live while
@@ -96,11 +98,14 @@ export function CustomizeApp() {
   const runMotionStudy = useStore((s) => s.runMotionStudy);
   const cancelMotionStudy = useStore((s) => s.cancelMotionStudy);
   const shareModel = useStore((s) => s.shareModel);
+  const hasMotion = useStore((s) => s.hasMotionStudy);
   const params = useStore((s) => s.session.doc.parameters);
   useStore((s) => s.rev); // re-render as the model resolves
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [open, setOpen] = useState(true);
+  const [vid, setVid] = useState<{ status: "idle" | "rendering" | "error"; progress: number; msg?: string }>({ status: "idle", progress: 0 });
+  const vidAbort = useRef<AbortController | null>(null);
 
   const idle = useRef<ReturnType<typeof setTimeout>>();
   const commit = useRef<{ timer?: ReturnType<typeof setTimeout>; pending: [string, string] | null }>({ pending: null });
@@ -125,6 +130,29 @@ export function CustomizeApp() {
     if (flush) fire();
     else c.timer = setTimeout(fire, COMMIT_MS);
   }, [armStudy]);
+
+  // Render the motion study to a WebM via WebCodecs. Pauses the (worker) study
+  // so it doesn't contend, sweeps every driven joint through a full turn, and
+  // hands the file to the share sheet (phone) or a download (desktop).
+  const exportVideo = useCallback(async () => {
+    cancelMotionStudy();
+    const s = useStore.getState();
+    const ac = new AbortController();
+    vidAbort.current = ac;
+    setVid({ status: "rendering", progress: 0 });
+    try {
+      const { blob, extension } = await recordMotionStudy(s.session.doc, Object.values(s.solids), {
+        onProgress: (f) => setVid((v) => (v.status === "rendering" ? { ...v, progress: f } : v)),
+        signal: ac.signal,
+      });
+      const name = new URLSearchParams(location.search).get("example") || "model";
+      await deliverFile(new File([blob], `${name}-motion.${extension}`, { type: "video/webm" }), "Motion study from Chisel CAD");
+      setVid({ status: "idle", progress: 0 });
+    } catch (e) {
+      if ((e as Error).name === "AbortError") { setVid({ status: "idle", progress: 0 }); return; }
+      setVid({ status: "error", progress: 0, msg: (e as Error).message });
+    }
+  }, [cancelMotionStudy]);
 
   useEffect(() => {
     void (async () => {
@@ -168,9 +196,24 @@ export function CustomizeApp() {
                 >
                   ⬇ Save / share for printing (3MF)
                 </button>
-                <button className="cz-share-alt" title="Export a single STL instead" onClick={() => void shareModel("stl", new URLSearchParams(location.search).get("example") || "model")}>
-                  or STL
-                </button>
+                <div className="cz-export-row">
+                  {hasMotion && canRecordMotion() && (
+                    vid.status === "rendering" ? (
+                      <span className="cz-vidprog">
+                        Rendering motion… {Math.round(vid.progress * 100)}%
+                        <button className="cz-cancel" onClick={() => vidAbort.current?.abort()}>Cancel</button>
+                      </span>
+                    ) : (
+                      <button className="cz-share-alt" title="Record the motion study (both rings sweeping a full turn) to a video file" onClick={() => void exportVideo()}>
+                        🎞 Motion video
+                      </button>
+                    )
+                  )}
+                  <button className="cz-share-alt" title="Export a single STL instead" onClick={() => void shareModel("stl", new URLSearchParams(location.search).get("example") || "model")}>
+                    STL
+                  </button>
+                </div>
+                {vid.status === "error" && <span className="cz-viderr">{vid.msg}</span>}
               </div>
             </div>
           )}

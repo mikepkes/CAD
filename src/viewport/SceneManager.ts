@@ -136,6 +136,7 @@ export class SceneManager {
   private sketchGroup = new THREE.Group();
   private previewGroup = new THREE.Group();
   private solidsGroup = new THREE.Group();
+  private axesGroup = new THREE.Group();
   private raycaster = new THREE.Raycaster();
   private rayHelper = new THREE.Raycaster();
   readonly handles = new HandleManager(this);
@@ -240,7 +241,7 @@ export class SceneManager {
       ]);
       return new THREE.Line(g, new THREE.LineBasicMaterial({ color }));
     };
-    const axes = new THREE.Group();
+    const axes = this.axesGroup;
     axes.add(mk(new THREE.Vector3(1, 0, 0), 0xff5555));
     axes.add(mk(new THREE.Vector3(0, 1, 0), 0x55ff77));
     axes.add(mk(new THREE.Vector3(0, 0, 1), 0x5588ff));
@@ -609,6 +610,92 @@ export class SceneManager {
     }
     ctx.putImageData(img, 0, 0);
     return { base64: canvas.toDataURL("image/png").split(",")[1], width, height, view };
+  }
+
+  /** Current view direction (camera offset from the orbit target) and up vector,
+   *  so a motion export can hold the user's framing fixed across frames. */
+  viewFraming(): { dir: { x: number; y: number; z: number }; up: { x: number; y: number; z: number } } {
+    const off = this.camera.position.clone().sub(this.controls.target);
+    if (off.lengthSq() < 1e-9) off.set(1, -1, 0.8);
+    off.normalize();
+    const up = this.camera.up.clone().normalize();
+    return { dir: { x: off.x, y: off.y, z: off.z }, up: { x: up.x, y: up.y, z: up.z } };
+  }
+
+  /** Render a set of already-world-posed solids into an offscreen target from a
+   *  fixed framing, returning a 2D canvas — called frame-by-frame by the motion
+   *  video exporter. Each body gets its own palette colour so the motion reads
+   *  clearly. The live scene is untouched: temp meshes are added then removed. */
+  renderSolidsImage(
+    solids: SolidView[],
+    framing: { center: { x: number; y: number; z: number }; radius: number; dir: { x: number; y: number; z: number }; up: { x: number; y: number; z: number } },
+    width: number,
+    height: number,
+    out?: HTMLCanvasElement,
+  ): HTMLCanvasElement {
+    const grp = new THREE.Group();
+    const disposables: { dispose(): void }[] = [];
+    solids.forEach((s, i) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(s.positions, 3));
+      if (s.normals.length === s.positions.length) geo.setAttribute("normal", new THREE.BufferAttribute(s.normals, 3));
+      else geo.computeVertexNormals();
+      geo.setIndex(new THREE.BufferAttribute(s.indices, 1));
+      const mat = new THREE.MeshStandardMaterial({ color: bodyColor(i), metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide });
+      grp.add(new THREE.Mesh(geo, mat));
+      disposables.push(geo, mat);
+      if (s.edges.length) {
+        const egeo = new THREE.BufferGeometry();
+        egeo.setAttribute("position", new THREE.BufferAttribute(s.edges, 3));
+        const emat = new THREE.LineBasicMaterial({ color: 0x20242e });
+        grp.add(new THREE.LineSegments(egeo, emat));
+        disposables.push(egeo, emat);
+      }
+    });
+    this.scene.add(grp);
+
+    const center = new THREE.Vector3(framing.center.x, framing.center.y, framing.center.z);
+    const cam = new THREE.PerspectiveCamera(45, width / height, 0.1, 1e6);
+    cam.up.set(framing.up.x, framing.up.y, framing.up.z);
+    const dir = new THREE.Vector3(framing.dir.x, framing.dir.y, framing.dir.z).normalize();
+    const dist = (Math.max(framing.radius, 1) / Math.sin((45 * Math.PI) / 180 / 2)) * 1.15;
+    cam.position.copy(center).addScaledVector(dir, dist);
+    cam.lookAt(center);
+    cam.updateProjectionMatrix();
+
+    // Hide everything but the posed solids for a clean product capture.
+    const hidden = [this.planeGroup, this.datumGroup, this.grid, this.axesGroup, this.sketchGroup, this.ghostGroup, this.regionGroup, this.previewSolidGroup, this.solidsGroup];
+    const vis = hidden.map((g) => g.visible);
+    hidden.forEach((g) => (g.visible = false));
+
+    const key = new THREE.DirectionalLight(0xffffff, 1.1);
+    key.position.copy(cam.position).add(new THREE.Vector3(framing.radius, -framing.radius * 0.5, framing.radius * 1.5));
+    const fill = new THREE.DirectionalLight(0xbfd4ff, 0.45);
+    fill.position.copy(center).add(new THREE.Vector3(-framing.radius * 2, framing.radius, framing.radius * 0.5));
+    this.scene.add(key, fill);
+
+    const rt = new THREE.WebGLRenderTarget(width, height);
+    this.renderer.setRenderTarget(rt);
+    this.renderer.render(this.scene, cam);
+    const buf = new Uint8Array(width * height * 4);
+    this.renderer.readRenderTargetPixels(rt, 0, 0, width, height, buf);
+    this.renderer.setRenderTarget(null);
+
+    this.scene.remove(key, fill, grp);
+    for (const d of disposables) d.dispose();
+    rt.dispose();
+    hidden.forEach((g, i) => (g.visible = vis[i]));
+
+    const canvas = out ?? document.createElement("canvas");
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext("2d")!;
+    const img = ctx.createImageData(width, height);
+    for (let y = 0; y < height; y++) {
+      const src = (height - 1 - y) * width * 4; // readPixels is bottom-up
+      img.data.set(buf.subarray(src, src + width * 4), y * width * 4);
+    }
+    ctx.putImageData(img, 0, 0);
+    return canvas;
   }
 
   /** Project a world point to client (screen) coordinates. */

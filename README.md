@@ -200,6 +200,14 @@ driven revolute joint through a full 360° turn and fails if any two bodies
 interpenetrate or the build errors — so a value that would jam or break the
 mechanism is flagged before you print it.
 
+**Record the motion study** (🎞 Motion video) renders the sweep to a video file
+with **WebCodecs**: each driven joint turns a full 360° (the camera held still)
+while the assembly is posed *rigidly* — the kernel runs once, then every frame is
+just a rigid re-placement of the built bodies, so a study renders in seconds
+rather than re-solving geometry per frame. Frames are encoded with a
+`VideoEncoder` (VP9, falling back to VP8) and muxed into **WebM** by a small
+zero-dependency muxer, then shared (phone) or downloaded (desktop).
+
 **Save / share for printing** exports the whole configured model as a **3MF**
 (the format Bambu Studio and MakerWorld prefer) with each body a separate,
 named `<object>`, so a print-in-place assembly opens as its distinct parts in
