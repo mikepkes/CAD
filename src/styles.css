@@ -1293,3 +1293,7 @@ body {
   padding: 10px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .cz-share:hover { filter: brightness(1.08); }
+
+.cz-export { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 4px; }
+.cz-share-alt { background: none; border: none; color: var(--text-dim); font-size: 11.5px; cursor: pointer; padding: 2px; }
+.cz-share-alt:hover { color: var(--text); }

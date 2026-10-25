@@ -160,13 +160,18 @@ export function CustomizeApp() {
           {open && (
             <div className="cz-controls">
               {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} values={p.values} onEdit={onEdit} />)}
-              <button
-                className="cz-share"
-                title="Save the model as an STL (all parts in one file), or share it to Files / AirDrop / another app on a phone"
-                onClick={() => void shareModel(new URLSearchParams(location.search).get("example") || "model")}
-              >
-                ⬇ Save / share for printing
-              </button>
+              <div className="cz-export">
+                <button
+                  className="cz-share"
+                  title="Download a 3MF (each part separate, ready for Bambu Studio / MakerWorld), or share it to Files / AirDrop / another app on a phone"
+                  onClick={() => void shareModel("3mf", new URLSearchParams(location.search).get("example") || "model")}
+                >
+                  ⬇ Save / share for printing (3MF)
+                </button>
+                <button className="cz-share-alt" title="Export a single STL instead" onClick={() => void shareModel("stl", new URLSearchParams(location.search).get("example") || "model")}>
+                  or STL
+                </button>
+              </div>
             </div>
           )}
         </div>

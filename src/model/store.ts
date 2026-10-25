@@ -24,6 +24,7 @@ import { GeometryBackend, InlineGeometryBackend } from "../core/geometry/backend
 import { WorkerGeometryBackend } from "../core/geometry/worker-backend";
 import { runMotionStudy, driveParams, MotionStatus, MotionResult } from "./motionStudy";
 import { meshesToStlBinary } from "../core/export/stl";
+import { meshesToThreeMF } from "../core/export/threemf";
 import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
 import { CadDocument } from "../core/document";
@@ -263,9 +264,10 @@ export interface AppState {
   deleteJoint: (jointId: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step") => Promise<void>;
-  /** The whole model as one STL file, offered through the native share sheet on
-   *  phones (Save to Files / AirDrop / another app) and downloaded elsewhere. */
-  shareModel: (name?: string) => Promise<void>;
+  /** The whole model as one file (STL, or 3MF with each body a separate part),
+   *  offered through the native share sheet on phones (Save to Files / AirDrop /
+   *  another app) and downloaded elsewhere. */
+  shareModel: (format: "stl" | "3mf", name?: string) => Promise<void>;
 
   // agent
   setSettingsOpen: (open: boolean) => void;
@@ -917,12 +919,13 @@ export const useStore = create<AppState>((set, get) => {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     },
-    shareModel: async (name) => {
-      const meshes = Object.values(get().solids)
+    shareModel: async (format, name) => {
+      const bodies = Object.values(get().solids)
         .filter((s) => s.mesh)
-        .map((s) => ({ positions: s.mesh!.positions, indices: s.mesh!.indices }));
-      if (!meshes.length) { set({ toast: { kind: "info", text: "Nothing to export yet." } }); return; }
-      const file = new File([meshesToStlBinary(meshes)], `${name || "model"}.stl`, { type: "model/stl" });
+        .map((s) => ({ name: s.name, positions: s.mesh!.positions, indices: s.mesh!.indices }));
+      if (!bodies.length) { set({ toast: { kind: "info", text: "Nothing to export yet." } }); return; }
+      const data = format === "3mf" ? meshesToThreeMF(bodies) : meshesToStlBinary(bodies);
+      const file = new File([data as BlobPart], `${name || "model"}.${format}`, { type: format === "3mf" ? "model/3mf" : "model/stl" });
       const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
       // Native share sheet (phones) → Save to Files / AirDrop / another app.
       if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
