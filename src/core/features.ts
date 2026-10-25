@@ -490,11 +490,22 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
 }
 
 /** Repeat the most recent body (linear vector or circular axis), fusing the copies in. */
-function applyPattern(f: PatternFeature, bodies: Body[], out: Record<string, SolidEval>) {
+function applyPattern(scope: Scope, f: PatternFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
     const target = pickBody(bodies, f.body, "pattern");
-    const n = Math.max(1, Math.floor(f.count));
+    // Resolve parametric count / spacing / angle, falling back to the stored
+    // literal when there is no expression. count is rounded to an integer ≥1.
+    f.count = Math.max(1, Math.round(f.countExpr ? resolveExpr(f.countExpr, f.count, scope) : f.count));
+    const n = f.count;
+    if (f.stepExpr && f.step) {
+      f.step = {
+        x: f.stepExpr.x ? resolveExpr(f.stepExpr.x, f.step.x, scope) : f.step.x,
+        y: f.stepExpr.y ? resolveExpr(f.stepExpr.y, f.step.y, scope) : f.step.y,
+        z: f.stepExpr.z ? resolveExpr(f.stepExpr.z, f.step.z, scope) : f.step.z,
+      };
+    }
+    if (f.angleExpr) f.angle = resolveExpr(f.angleExpr, f.angle ?? 360 / n, scope);
     const original = target.shape;
     let acc: Shape3D = (original as unknown as { clone: () => Shape3D }).clone();
     for (let i = 1; i < n; i++) {
@@ -678,7 +689,7 @@ function evaluateBodies(doc: CadDocument, scope: Scope): { bodies: Body[]; out: 
       case "fillet":
       case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;
       case "shell": applyShell(scope, f, bodies, out); break;
-      case "pattern": applyPattern(f, bodies, out); break;
+      case "pattern": applyPattern(scope, f, bodies, out); break;
     }
   }
   return { bodies, out };

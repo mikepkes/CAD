@@ -9,6 +9,12 @@ sliders to resize the print-in-place gyroscope gimbal; after a short dwell it
 sweeps both rings through a full turn and tells you whether the chosen
 dimensions still rotate freely or jam.
 
+Or try **https://mikepkes.github.io/CAD/?mode=customize&example=scissor** — a
+parametric scissor lift whose **number of linkages** is itself a slider
+(`stages`, stepped to whole numbers), alongside the opening angle and link
+size. It shows off a **parametric pattern count**: the repeat is driven by a
+parameter, so dragging `stages` restamps the mechanism taller or shorter.
+
 A **local-first, browser-based parametric CAD** app. It runs entirely in the
 browser (static, GitHub-Pages-servable) and is built so the geometry is
 **math-exact and CNC/3D-print ready**, not just a pretty picture. The long-term
@@ -186,6 +192,7 @@ straight from a URL:
 
 ```
 ?mode=customize&example=gyroscope      # a bundled example (public/examples/<name>.json)
+?mode=customize&example=scissor        # a parametric scissor lift (linkage count is a slider)
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```
 

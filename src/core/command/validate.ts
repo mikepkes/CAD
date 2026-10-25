@@ -40,6 +40,8 @@ export function validate(schema: JSONSchema, value: unknown, path = "$"): string
       errors.push(`${path}: must be >= ${schema.minimum}`);
     if (schema.maximum !== undefined && value > schema.maximum)
       errors.push(`${path}: must be <= ${schema.maximum}`);
+    if (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum)
+      errors.push(`${path}: must be > ${schema.exclusiveMinimum}`);
   }
 
   if (t === "object" && isPlainObject(value)) {

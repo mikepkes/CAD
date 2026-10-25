@@ -213,19 +213,21 @@ export const BUILTINS: CommandDef<any>[] = [
         expression: { type: "string", description: "Expression, e.g. '40' or 'width/2'." },
         min: { type: "number", description: "Optional lower extent (for a slider / validation)." },
         max: { type: "number", description: "Optional upper extent." },
+        step: { type: "number", exclusiveMinimum: 0, description: "Optional increment: the slider snaps to multiples of this. `step: 1` makes the parameter integer-only." },
         values: { type: "array", items: { type: "number" }, description: "Optional set of acceptable values (an enum). Mutually exclusive with min/max." },
       },
     },
     examples: [
       { params: { name: "width", expression: "60" } },
       { note: "A bounded parameter (slider 20–120)", params: { name: "width", expression: "60", min: 20, max: 120 } },
+      { note: "An integer count (slider steps by 1)", params: { name: "stages", expression: "3", min: 1, max: 8, step: 1 } },
       { note: "A pick-list parameter", params: { name: "thread", expression: "3", values: [3, 4, 5, 6, 8] } },
     ],
-    apply(draft, p: { name: string; expression: string; min?: number; max?: number; values?: number[] }, ctx) {
+    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[] }, ctx) {
       if (draft.parameters.some((x) => x.name === p.name)) throw new Error(`Parameter "${p.name}" exists`);
       const bounds = normalizeBounds(p);
       const id = ctx.alloc("param");
-      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds });
+      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}) });
       return { createdIds: [id], message: `Added parameter ${p.name}` };
     },
   },
@@ -243,19 +245,25 @@ export const BUILTINS: CommandDef<any>[] = [
         name: { type: "string" },
         min: { type: "number" },
         max: { type: "number" },
+        step: { type: "number", exclusiveMinimum: 0, description: "Snap increment (1 = integer-only)." },
         values: { type: "array", items: { type: "number" } },
         clear: { type: "boolean", description: "Remove all extents / values." },
       },
     },
     examples: [
       { params: { name: "width", min: 20, max: 120 } },
+      { note: "Integer-only count", params: { name: "stages", min: 1, max: 8, step: 1 } },
       { note: "Make unbounded", params: { name: "width", clear: true } },
     ],
-    apply(draft, p: { name: string; min?: number; max?: number; values?: number[]; clear?: boolean }) {
+    apply(draft, p: { name: string; min?: number; max?: number; step?: number; values?: number[]; clear?: boolean }) {
       const param = draft.parameters.find((x) => x.name === p.name);
       if (!param) throw new Error(`No parameter "${p.name}"`);
-      delete param.min; delete param.max; delete param.values;
-      if (!p.clear) Object.assign(param, normalizeBounds(p));
+      delete param.min; delete param.max; delete param.step; delete param.values;
+      if (!p.clear) {
+        const bounds = normalizeBounds(p);
+        Object.assign(param, bounds);
+        if (p.step != null && !bounds.values) param.step = p.step;
+      }
       return { message: `Set extents of ${p.name}` };
     },
   },
@@ -1677,6 +1685,7 @@ export const BUILTINS: CommandDef<any>[] = [
     summary: "Repeat the most recent body along a vector (linear) or around an axis (circular), fusing the copies in.",
     description:
       "Makes `count` instances of the most recent body (including the original) and fuses them into one body. linear: each instance is offset by `step` {x,y,z} (world mm). circular: instances are rotated about `axis` {origin, direction} by `angle` degrees each (default 360/count). " +
+      "`count`, each `step` component and `angle` accept an expression (string) referencing parameters — so the instance count can be driven by a parameter (e.g. count \"stages\"); count is rounded to an integer ≥1. " +
       "Build the single element first (e.g. one picket, one tooth), then pattern it. Returns the feature id.",
     paramsSchema: {
       type: "object",
@@ -1684,8 +1693,8 @@ export const BUILTINS: CommandDef<any>[] = [
       additionalProperties: false,
       properties: {
         mode: { type: "string", enum: ["linear", "circular"] },
-        count: { type: "integer", minimum: 1 },
-        step: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "linear: offset between instances." },
+        count: { type: ["integer", "string"], description: "Instance count (integer ≥1), or an expression like \"stages\" (rounded to an int)." },
+        step: { type: "object", properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, z: { type: ["number", "string"] } }, description: "linear: offset between instances (each component a number or expression)." },
         axis: {
           type: "object",
           properties: {
@@ -1694,21 +1703,42 @@ export const BUILTINS: CommandDef<any>[] = [
           },
           description: "circular: axis origin + direction (world).",
         },
-        angle: { type: "number", description: "circular: degrees between instances (default 360/count)." },
+        angle: { type: ["number", "string"], description: "circular: degrees between instances (number or expression; default 360/count)." },
         body: { type: "string", description: "Target body (feature id) to repeat; default the most recent." },
         name: { type: "string" },
       },
     },
     examples: [
       { note: "9 fence pickets 13mm apart along X", params: { mode: "linear", count: 9, step: { x: 13, y: 0, z: 0 } } },
+      { note: "Parametric stack: `stages` copies, spaced by `rise`", params: { mode: "linear", count: "stages", step: { x: 0, y: 0, z: "rise" } } },
       { note: "16 gear teeth around Z", params: { mode: "circular", count: 16, axis: { origin: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 0, z: 1 } } } },
     ],
-    apply(draft, p: { mode: "linear" | "circular"; count: number; step?: Vec3; axis?: { origin: Vec3; direction: Vec3 }; angle?: number; body?: string; name?: string }, ctx) {
+    apply(draft, p: { mode: "linear" | "circular"; count: number | string; step?: { x?: number | string; y?: number | string; z?: number | string }; axis?: { origin: Vec3; direction: Vec3 }; angle?: number | string; body?: string; name?: string }, ctx) {
       if (p.mode === "linear" && !p.step) throw new Error("linear pattern needs `step`");
       if (p.mode === "circular" && !p.axis) throw new Error("circular pattern needs `axis`");
+      // Split literal numbers (stored as `count`/`step`/`angle`) from expressions
+      // (stored as `*Expr` and resolved against the parameter scope at rebuild).
+      const num = (v: number | string | undefined, dflt: number): { val: number; expr?: string } => {
+        if (v == null) return { val: dflt };
+        if (typeof v === "number") return { val: v };
+        const f = parseFloat(v);
+        return { val: Number.isFinite(f) ? f : dflt, expr: v };
+      };
+      const c = num(p.count, 1);
+      const s = p.step ? { x: num(p.step.x, 0), y: num(p.step.y, 0), z: num(p.step.z, 0) } : undefined;
+      const a = num(p.angle, NaN);
+      const stepExpr = s && (s.x.expr || s.y.expr || s.z.expr)
+        ? { ...(s.x.expr ? { x: s.x.expr } : {}), ...(s.y.expr ? { y: s.y.expr } : {}), ...(s.z.expr ? { z: s.z.expr } : {}) }
+        : undefined;
       const id = ctx.alloc("pat");
-      draft.features[id] = { id, kind: "pattern", name: p.name ?? (p.mode === "linear" ? "Linear pattern" : "Circular pattern"), mode: p.mode, count: p.count, step: p.step, axis: p.axis, angle: p.angle, ...(p.body ? { body: p.body } : {}) };
-      return { createdIds: [id], message: `${p.mode} pattern × ${p.count}` };
+      draft.features[id] = {
+        id, kind: "pattern", name: p.name ?? (p.mode === "linear" ? "Linear pattern" : "Circular pattern"),
+        mode: p.mode, count: Math.max(1, Math.round(c.val)), ...(c.expr ? { countExpr: c.expr } : {}),
+        step: s ? { x: s.x.val, y: s.y.val, z: s.z.val } : undefined, ...(stepExpr ? { stepExpr } : {}),
+        axis: p.axis, ...(p.angle != null ? { angle: a.val } : {}), ...(a.expr ? { angleExpr: a.expr } : {}),
+        ...(p.body ? { body: p.body } : {}),
+      };
+      return { createdIds: [id], message: `${p.mode} pattern × ${c.expr ?? Math.max(1, Math.round(c.val))}` };
     },
   },
   {

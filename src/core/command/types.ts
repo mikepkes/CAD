@@ -19,6 +19,7 @@ export interface JSONSchema {
   enum?: (string | number)[];
   minimum?: number;
   maximum?: number;
+  exclusiveMinimum?: number;
   default?: unknown;
   /** Allow one of several shapes (e.g. a point given as coords OR a ref). */
   oneOf?: JSONSchema[];

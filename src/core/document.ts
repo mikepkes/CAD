@@ -20,6 +20,9 @@ export interface Parameter {
    *  Mutually exclusive with `values`. */
   min?: number;
   max?: number;
+  /** Optional increment: the value snaps to multiples of this (a slider then only
+   *  lands on them). `step: 1` makes the parameter integer-only. */
+  step?: number;
   /** Optional discrete set of acceptable values (an enum). Mutually exclusive
    *  with min/max. */
   values?: number[];
@@ -171,11 +174,18 @@ export interface PatternFeature {
   mode: "linear" | "circular";
   /** Total instances including the original. */
   count: number;
+  /** Optional expression driving `count` (e.g. a "stages" parameter). Evaluated,
+   *  rounded and clamped to ≥1 at rebuild; `count` holds the last value. */
+  countExpr?: string;
   /** linear: offset between instances (world). */
   step?: { x: number; y: number; z: number };
+  /** Optional expressions driving each `step` component (parametric spacing). */
+  stepExpr?: { x?: string; y?: string; z?: string };
   /** circular: axis origin + direction (world) and angle between instances (degrees). */
   axis?: { origin: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number } };
   angle?: number;
+  /** Optional expression driving `angle` (degrees between instances). */
+  angleExpr?: string;
   /** Target body (feature id) to repeat; default the most recent. */
   body?: string;
 }

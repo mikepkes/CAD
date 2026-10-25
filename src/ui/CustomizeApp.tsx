@@ -29,8 +29,8 @@ function modelUrl(): string | null {
 
 /** One bounded parameter. Shows its own local value instantly while dragging
  *  (so the slider never lags the model), reporting changes up via `onEdit`. */
-function Control({ name, value, expr, min, max, values, onEdit }: {
-  name: string; value: number; expr: string; min?: number; max?: number; values?: number[];
+function Control({ name, value, expr, min, max, step: paramStep, values, onEdit }: {
+  name: string; value: number; expr: string; min?: number; max?: number; step?: number; values?: number[];
   onEdit: (name: string, value: string, flush: boolean) => void;
 }) {
   const [local, setLocal] = useState(value);
@@ -50,7 +50,8 @@ function Control({ name, value, expr, min, max, values, onEdit }: {
     );
   }
   const span = max! - min!;
-  const step = span >= 20 ? 1 : span >= 2 ? 0.1 : 0.01;
+  // An explicit increment wins; otherwise pick a sensible precision from the span.
+  const step = paramStep && paramStep > 0 ? paramStep : span >= 20 ? 1 : span >= 2 ? 0.1 : 0.01;
   return (
     <label className="cz-row">
       {label}
@@ -159,7 +160,7 @@ export function CustomizeApp() {
           </button>
           {open && (
             <div className="cz-controls">
-              {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} values={p.values} onEdit={onEdit} />)}
+              {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} step={p.step} values={p.values} onEdit={onEdit} />)}
               <button
                 className="cz-share"
                 title="Save the model as an STL (all parts in one file), or share it to Files / AirDrop / another app on a phone"

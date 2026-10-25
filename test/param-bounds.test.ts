@@ -50,6 +50,27 @@ describe("parameter extents / enum", () => {
     expect(s.doc.parameters[0].min).toBeUndefined();
   });
 
+  it("stores a step increment and drops it when switched to an enum", async () => {
+    const s = realSession();
+    await s.dispatch("parameter.add", { name: "stages", expression: "3", min: 1, max: 8, step: 1 });
+    expect(s.doc.parameters[0].step).toBe(1);
+    await s.dispatch("parameter.setBounds", { name: "stages", values: [2, 4, 6] });
+    expect(s.doc.parameters[0].step).toBeUndefined(); // step is meaningless with an enum
+  });
+
+  it("warns when a value is off the step increment (anchored at min)", () => {
+    const params: Parameter[] = [
+      { id: "p1", name: "a", expr: "2.5", value: 0, min: 1, max: 8, step: 1 },
+      { id: "p2", name: "b", expr: "4", value: 0, min: 1, max: 8, step: 1 },
+      { id: "p3", name: "c", expr: "1.5", value: 0, min: 0, max: 5, step: 0.5 },
+    ];
+    const { resolved } = resolveParameters(params);
+    const by = (n: string) => resolved.find((p) => p.name === n)!;
+    expect(by("a").warning).toMatch(/not a multiple/i);
+    expect(by("b").warning).toBeUndefined(); // 4 = 1 + 3×1
+    expect(by("c").warning).toBeUndefined(); // 1.5 = 0 + 3×0.5
+  });
+
   it("warns (but does not error) when a value is out of range or off the list", () => {
     const params: Parameter[] = [
       { id: "p1", name: "a", expr: "150", value: 0, min: 20, max: 120 },
