@@ -12,8 +12,11 @@ import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000));
-const IDLE_MS = 900;   // run the motion study after this long with no interaction
-const COMMIT_MS = 120; // throttle how often a drag commits a value to the model
+// The 3D rebuild is the slow part, so the slider's own value updates live while
+// the model is rebuilt only when you briefly pause or release (debounce, not
+// per-frame), and the (secondary) motion study runs only well after you stop.
+const IDLE_MS = 2000;   // run the motion study after this long with no interaction
+const COMMIT_MS = 200;  // debounce: rebuild the model this long after the last move
 
 function modelUrl(): string | null {
   const q = new URLSearchParams(location.search);
@@ -99,7 +102,7 @@ export function CustomizeApp() {
   const [open, setOpen] = useState(true);
 
   const idle = useRef<ReturnType<typeof setTimeout>>();
-  const throttle = useRef<{ last: number; timer?: ReturnType<typeof setTimeout>; pending: [string, string] | null }>({ last: 0, pending: null });
+  const commit = useRef<{ timer?: ReturnType<typeof setTimeout>; pending: [string, string] | null }>({ pending: null });
 
   // Run the study only after the user has been idle; any edit restarts the wait.
   const armStudy = useCallback(() => {
@@ -108,16 +111,18 @@ export function CustomizeApp() {
     idle.current = setTimeout(() => void runMotionStudy(), IDLE_MS);
   }, [cancelMotionStudy, runMotionStudy]);
 
-  // Commit a control's value to the model, throttled so a drag doesn't replay
-  // the whole recipe every frame; `flush` commits immediately (pointer-up / select).
+  // Commit a control's value to the model. Debounced: a continuous drag doesn't
+  // rebuild until you pause briefly (or release, `flush`), so a ~2s rebuild is
+  // never spent on a value you've already dragged past. The slider's own number
+  // tracks every move regardless (Control keeps a local value).
   const onEdit = useCallback((name: string, value: string, flush: boolean) => {
     armStudy();
-    const t = throttle.current;
-    t.pending = [name, value];
-    const fire = () => { if (!t.pending) return; const [n, v] = t.pending; t.pending = null; t.last = Date.now(); void useStore.getState().setParameterExpr(n, v); };
-    clearTimeout(t.timer);
-    if (flush || Date.now() - t.last >= COMMIT_MS) fire();
-    else t.timer = setTimeout(fire, COMMIT_MS - (Date.now() - t.last));
+    const c = commit.current;
+    c.pending = [name, value];
+    const fire = () => { if (!c.pending) return; const [n, v] = c.pending; c.pending = null; void useStore.getState().setParameterExpr(n, v); };
+    clearTimeout(c.timer);
+    if (flush) fire();
+    else c.timer = setTimeout(fire, COMMIT_MS);
   }, [armStudy]);
 
   useEffect(() => {
@@ -137,7 +142,7 @@ export function CustomizeApp() {
         setState("error");
       }
     })();
-    return () => { clearTimeout(idle.current); clearTimeout(throttle.current.timer); };
+    return () => { clearTimeout(idle.current); clearTimeout(commit.current.timer); };
   }, [ensureKernel, loadDocument, armStudy]);
 
   const bounded = params.filter((p) => (p.min != null && p.max != null) || (p.values && p.values.length));
