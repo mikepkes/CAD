@@ -44,6 +44,7 @@ export function rebuild(doc: CadDocument, registry: CommandRegistry): RebuildRes
   doc.joints = {};
   doc.componentPatterns = {};
   doc.jointTemplates = {};
+  doc.materials = {};
   doc.sketches = {};
   doc.features = {};
 

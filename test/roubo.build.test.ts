@@ -89,13 +89,20 @@ describe("build Roubo workbench (wood assembly + leg vise)", () => {
     await dis(s, "sketch.addRectangle", { sketch: chopSk, corner: { x: 0, y: 0 }, opposite: { x: 120, y: 40 } });
     await dis(s, "feature.extrude", { sketch: chopSk, distance: "500" });
     // Screw: a cylinder from the chop's front face back through the chop into the
-    // leg (handle at the front). Second body in the chop component; +Y (reverse).
-    const scrSk = (await dis(s, "sketch.create", { plane: "XZ", component: chop }))[0];
+    // leg (handle at the front). Its own child component so it can be steel.
+    const screw = (await dis(s, "component.create", { name: "Vise screw", parent: chop }))[0];
+    const scrSk = (await dis(s, "sketch.create", { plane: "XZ", component: screw }))[0];
     await dis(s, "sketch.addCircle", { sketch: scrSk, center: { x: 60, y: 250 }, radius: 14 });
     await dis(s, "feature.extrude", { sketch: scrSk, distance: "130", direction: "reverse" });
 
     const P = at(100 + LEG / 2 - 60, -40, 300); // centre the 120-wide chop on the 90 leg
     await dis(s, "joint.create", { kind: "slider", moved: chop, baseOrigin: P, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: -1, z: 0 }, value: "viseGap", name: "Vise slide" });
+
+    // ---- Materials: white oak everywhere (document default), steel screw.
+    const oak = (await dis(s, "material.create", { name: "White Oak", kind: "wood", species: "white-oak" }))[0];
+    const steel = (await dis(s, "material.create", { name: "Steel", kind: "metal", finish: "satin", color: "#8a8f96" }))[0];
+    await dis(s, "material.assign", { material: oak });                    // root = default
+    await dis(s, "material.assign", { material: steel, component: screw });
 
     await s.recompute();
 
@@ -105,7 +112,8 @@ describe("build Roubo workbench (wood assembly + leg vise)", () => {
     // 7 top + 4 legs + 4 rails + chop + screw = 17 bodies; 16 components under root.
     const all = bounds(s);
     expect(all.bodies).toBe(17);
-    expect(Object.keys(s.doc.components).length).toBe(1 + 7 + 4 + 4 + 1); // root + parts (chop holds 2 bodies)
+    expect(Object.keys(s.doc.components).length).toBe(1 + 7 + 4 + 4 + 1 + 1); // root + boards + chop + screw
+    expect(Object.keys(s.doc.materials).length).toBe(2); // oak + steel
 
     // The vise WORKS: the whole chop (board + screw) rides the slider. Closing
     // (viseGap 0) seats the chop's back face at the leg front (Y≈0); opening

@@ -49,6 +49,8 @@ export interface Component {
   transform: ComponentTransform;
   /** Named attachment frames (joint origins) in local coords, for relational joints. */
   connectors?: Record<string, Connector>;
+  /** Material assigned to this component (bodies inherit; nearest ancestor wins). */
+  materialId?: string;
 }
 
 /** How a feature combines with the running bodies (Fusion-style). */
@@ -427,6 +429,26 @@ export interface ComponentPattern {
   count: number;
 }
 
+/** An appearance assigned to components/bodies. Wood is procedural (species +
+ *  params); metal/plastic are PBR. Rendering turns this into a three.js material. */
+export interface Material {
+  id: string;
+  name: string;
+  kind: "wood" | "metal" | "plastic" | "painted";
+  /** wood: species preset key (e.g. "white-oak", "walnut"). */
+  species?: string;
+  /** metal/plastic: finish preset (polished | brushed | satin | matte | gloss). */
+  finish?: string;
+  /** base/tint colour override (hex). */
+  color?: string;
+  roughness?: number;
+  metalness?: number;
+  /** wood grain overrides. */
+  ringScale?: number;
+  grainContrast?: number;
+  poreStrength?: number;
+}
+
 export interface CadDocument {
   schema: 1;
   id: string;
@@ -452,8 +474,25 @@ export interface CadDocument {
    *  These stay as design intent; the expander materializes instances at rebuild. */
   componentPatterns: Record<string, ComponentPattern>;
   jointTemplates: Record<string, JointTemplate>;
+  /** Appearance library; components reference these by id. */
+  materials: Record<string, Material>;
   sketches: Record<string, Sketch>;
   features: Record<string, FeatureDef>;
+}
+
+/** The material that applies to `componentId`: its own, else the nearest ancestor's
+ *  (root may hold the document default). Undefined → the viewport's plain default. */
+export function materialForComponent(doc: CadDocument, componentId: string | undefined): Material | undefined {
+  let id = componentId;
+  const seen = new Set<string>();
+  while (id && !seen.has(id)) {
+    seen.add(id);
+    const c = doc.components[id];
+    if (!c) break;
+    if (c.materialId && doc.materials[c.materialId]) return doc.materials[c.materialId];
+    id = c.parentId ?? undefined;
+  }
+  return undefined;
 }
 
 /** A fresh, empty root component map (used when rebuilding derived state). */
@@ -484,6 +523,7 @@ export function createDocument(id = "doc1"): CadDocument {
     joints: {},
     componentPatterns: {},
     jointTemplates: {},
+    materials: {},
     sketches: {},
     features: {},
   };

@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument, RoleRef } from "../document";
+import { CadDocument, Material, RoleRef } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -488,6 +488,63 @@ export const BUILTINS: CommandDef<any>[] = [
         valueExpr: String(p.value ?? "0"), appliesTo: p.appliesTo ?? "all",
       };
       return { createdIds: [id], message: "Joint template" };
+    },
+  },
+  {
+    type: "material.create",
+    title: "Create material",
+    summary: "Define a material (wood / metal / plastic) assignable to components.",
+    description:
+      "Adds a material to the document's appearance library. kind \"wood\" uses a procedural 3D grain shader driven by `species` (white-oak, red-oak, walnut, maple, hard-maple, cherry, southern-pine, mahogany, beech, ash) with optional ringScale/grainContrast/poreStrength overrides; \"metal\"/\"plastic\"/\"painted\" use PBR (color, roughness, metalness, finish). Assign it with material.assign. Returns the material id.",
+    paramsSchema: {
+      type: "object",
+      required: ["name", "kind"],
+      additionalProperties: false,
+      properties: {
+        name: { type: "string" },
+        kind: { type: "string", enum: ["wood", "metal", "plastic", "painted"] },
+        species: { type: "string", description: "wood species preset key." },
+        finish: { type: "string", description: "metal/plastic: polished|brushed|satin|matte|gloss." },
+        color: { type: "string", description: "base/tint hex override, e.g. \"#8a6b3f\"." },
+        roughness: { type: "number", minimum: 0, maximum: 1 },
+        metalness: { type: "number", minimum: 0, maximum: 1 },
+        ringScale: { type: "number", exclusiveMinimum: 0, description: "wood: growth-ring spacing (mm)." },
+        grainContrast: { type: "number", minimum: 0, maximum: 1 },
+        poreStrength: { type: "number", minimum: 0, maximum: 1 },
+      },
+    },
+    examples: [
+      { note: "White oak", params: { name: "Oak", kind: "wood", species: "white-oak" } },
+      { note: "A steel screw", params: { name: "Steel", kind: "metal", finish: "satin", color: "#8a8f96" } },
+    ],
+    apply(draft, p: { name: string; kind: Material["kind"]; [k: string]: unknown }, ctx) {
+      const id = ctx.alloc("mat");
+      const m: Material = { id, name: p.name, kind: p.kind };
+      for (const k of ["species", "finish", "color", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength"] as const) {
+        if (p[k] !== undefined) (m as unknown as Record<string, unknown>)[k] = p[k];
+      }
+      draft.materials[id] = m;
+      return { createdIds: [id], message: `Material ${p.name}` };
+    },
+  },
+  {
+    type: "material.assign",
+    title: "Assign material",
+    summary: "Assign a material to a component (its bodies inherit; root = document default).",
+    description: "Sets the material of `component` (defaults to the root component, i.e. the document-wide default). A body uses the nearest ancestor component that has a material.",
+    paramsSchema: {
+      type: "object",
+      required: ["material"],
+      additionalProperties: false,
+      properties: { material: { type: "string" }, component: { type: "string", description: "Target component; defaults to root." } },
+    },
+    examples: [{ params: { material: "mat5", component: "cmp3" } }],
+    apply(draft, p: { material: string; component?: string }) {
+      if (!draft.materials[p.material]) throw new Error(`No material "${p.material}"`);
+      const comp = p.component ?? draft.rootComponentId;
+      if (!draft.components[comp]) throw new Error(`No component "${comp}"`);
+      draft.components[comp].materialId = p.material;
+      return { message: `Assigned ${draft.materials[p.material].name}` };
     },
   },
 

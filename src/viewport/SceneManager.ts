@@ -7,6 +7,7 @@ import { isDimension } from "../sketch/types";
 import { extractProfiles, Loop } from "../core/geometry/profile";
 import { HandleManager } from "./handles";
 import { makeThreadNormalMap } from "./threadTexture";
+import { createMaterial, MaterialSpec, WoodFrame } from "./material";
 import type { ThreadDecal } from "../core/document";
 
 export interface PreviewGeom {
@@ -21,12 +22,18 @@ export interface PreviewGeom {
 }
 
 export interface SolidView {
+  /** Stable body id (feature id), for caching per-body materials. */
+  id?: string;
   positions: Float32Array;
   normals: Float32Array;
   indices: Uint32Array;
   edges: Float32Array;
   /** Cosmetic thread regions drawn as a shaded normal-mapped sleeve. */
   threadDecals?: ThreadDecal[];
+  /** Assigned appearance (resolved from the owning component). */
+  material?: MaterialSpec;
+  /** Per-body wood grain frame (grain axis + pith), for the procedural shader. */
+  woodFrame?: WoodFrame;
 }
 
 export interface ViewData {
@@ -805,17 +812,19 @@ export class SceneManager {
     geo.setIndex(new THREE.BufferAttribute(s.indices, 1));
     const clip = this.clipPlane ? [this.clipPlane] : null;
     // In section view each body gets its own colour so parts read apart; the
-    // normal (un-sectioned) view keeps the uniform body colour.
+    // normal (un-sectioned) view keeps the assigned material, else a uniform tint.
     const color = clip ? bodyColor(index) : 0x7b86e0;
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      metalness: 0.15,
-      roughness: 0.5,
-      side: THREE.DoubleSide,
-      transparent: faded,
-      opacity: faded ? 0.25 : 1,
-      clippingPlanes: clip ?? undefined,
-    });
+    let mat: THREE.Material;
+    if (s.material && !clip) {
+      mat = this.materialFor(s);
+      (mat as THREE.MeshStandardMaterial).transparent = faded;
+      (mat as THREE.MeshStandardMaterial).opacity = faded ? 0.25 : 1;
+    } else {
+      mat = new THREE.MeshStandardMaterial({
+        color, metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide,
+        transparent: faded, opacity: faded ? 0.25 : 1, clippingPlanes: clip ?? undefined,
+      });
+    }
     const mesh = new THREE.Mesh(geo, mat);
     this.solidsGroup.add(mesh);
 
@@ -912,9 +921,30 @@ export class SceneManager {
       g.remove(child);
       (child as any).geometry?.dispose?.();
       const m = (child as any).material;
-      if (Array.isArray(m)) m.forEach((x) => x.dispose());
-      else m?.dispose?.();
+      const keep = (x: THREE.Material) => !!x.userData?.cached; // cached materials are reused across frames
+      if (Array.isArray(m)) m.forEach((x) => { if (!keep(x)) x.dispose(); });
+      else if (m && !keep(m)) m.dispose?.();
     }
+  }
+
+  // Per-body / per-spec material cache so the procedural shaders aren't rebuilt
+  // on every frame (e.g. during a slider drag). Wood keeps one material per body
+  // and updates its grain-frame uniforms in place, so grain travels with a part.
+  private matCache = new Map<string, THREE.Material>();
+  private materialFor(s: SolidView): THREE.Material {
+    const spec = s.material!;
+    if (spec.kind === "wood") {
+      const key = "w:" + (s.id ?? JSON.stringify(spec));
+      let m = this.matCache.get(key);
+      if (!m) { m = createMaterial(spec, s.woodFrame); m.userData.cached = true; this.matCache.set(key, m); }
+      const u = m.userData.woodUniforms as { uAxis: { value: THREE.Vector3 }; uPith: { value: THREE.Vector3 } } | undefined;
+      if (u && s.woodFrame) { u.uAxis.value.set(...s.woodFrame.axis); u.uPith.value.set(...s.woodFrame.pith); }
+      return m;
+    }
+    const key = spec.kind + ":" + JSON.stringify(spec);
+    let m = this.matCache.get(key);
+    if (!m) { m = createMaterial(spec); m.userData.cached = true; this.matCache.set(key, m); }
+    return m;
   }
 
   private worldPt(plane: WorkPlane, u: number, v: number) {
