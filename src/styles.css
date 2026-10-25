@@ -1286,3 +1286,10 @@ body {
   .cz-controls { max-height: 38vh; }
   .cz-badge { left: 50%; transform: translateX(-50%); top: 10px; }
 }
+
+.cz-share {
+  margin-top: 4px; width: 100%;
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  padding: 10px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.cz-share:hover { filter: brightness(1.08); }

@@ -200,6 +200,14 @@ driven revolute joint through a full 360° turn and fails if any two bodies
 interpenetrate or the build errors — so a value that would jam or break the
 mechanism is flagged before you print it.
 
+**Save / share for printing** exports the whole configured model (all bodies in
+one file, so a print-in-place assembly stays together) as a binary **STL**. On
+a phone this goes through the native share sheet (Save to Files, AirDrop, or any
+app that accepts the file); on desktop it downloads. Note: there is no direct
+"web → Bambu Handy" path — Handy is not a slicer and doesn't import local STL /
+3MF — so the file goes into **Bambu Studio** (or Bambu Connect) on a computer,
+or is uploaded to **MakerWorld** for cloud slicing, then printed.
+
 ## Roadmap
 
 - [x] Milestone 1: parametric 2D sketching (PlaneGCS)

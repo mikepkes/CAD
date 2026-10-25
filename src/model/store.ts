@@ -23,6 +23,7 @@ import type { SolidEval } from "../core/features";
 import { GeometryBackend, InlineGeometryBackend } from "../core/geometry/backend";
 import { WorkerGeometryBackend } from "../core/geometry/worker-backend";
 import { runMotionStudy, driveParams, MotionStatus, MotionResult } from "./motionStudy";
+import { meshesToStlBinary } from "../core/export/stl";
 import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
 import { CadDocument } from "../core/document";
@@ -262,6 +263,9 @@ export interface AppState {
   deleteJoint: (jointId: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step") => Promise<void>;
+  /** The whole model as one STL file, offered through the native share sheet on
+   *  phones (Save to Files / AirDrop / another app) and downloaded elsewhere. */
+  shareModel: (name?: string) => Promise<void>;
 
   // agent
   setSettingsOpen: (open: boolean) => void;
@@ -911,6 +915,23 @@ export const useStore = create<AppState>((set, get) => {
       a.href = url;
       a.download = `model.${format === "step" ? "step" : "stl"}`;
       a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    },
+    shareModel: async (name) => {
+      const meshes = Object.values(get().solids)
+        .filter((s) => s.mesh)
+        .map((s) => ({ positions: s.mesh!.positions, indices: s.mesh!.indices }));
+      if (!meshes.length) { set({ toast: { kind: "info", text: "Nothing to export yet." } }); return; }
+      const file = new File([meshesToStlBinary(meshes)], `${name || "model"}.stl`, { type: "model/stl" });
+      const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
+      // Native share sheet (phones) → Save to Files / AirDrop / another app.
+      if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+        try { await nav.share({ files: [file], title: file.name, text: "3D model (STL) from Chisel CAD" }); return; }
+        catch (e) { if ((e as Error).name === "AbortError") return; /* else fall through to download */ }
+      }
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url; a.download = file.name; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     },
 

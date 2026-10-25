@@ -95,6 +95,7 @@ export function CustomizeApp() {
   const ensureKernel = useStore((s) => s.ensureKernel);
   const runMotionStudy = useStore((s) => s.runMotionStudy);
   const cancelMotionStudy = useStore((s) => s.cancelMotionStudy);
+  const shareModel = useStore((s) => s.shareModel);
   const params = useStore((s) => s.session.doc.parameters);
   useStore((s) => s.rev); // re-render as the model resolves
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -159,6 +160,13 @@ export function CustomizeApp() {
           {open && (
             <div className="cz-controls">
               {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} values={p.values} onEdit={onEdit} />)}
+              <button
+                className="cz-share"
+                title="Save the model as an STL (all parts in one file), or share it to Files / AirDrop / another app on a phone"
+                onClick={() => void shareModel(new URLSearchParams(location.search).get("example") || "model")}
+              >
+                ⬇ Save / share for printing
+              </button>
             </div>
           )}
         </div>
