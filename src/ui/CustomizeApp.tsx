@@ -1,16 +1,19 @@
 // Customize mode: a slider-only product-tuning view. Loads a model from the
 // URL (?model=<url> or ?example=<name>) and shows just the 3D preview with the
 // bounded parameters as sliders/dropdowns overlaid, so an end user can dial the
-// product to their dimensions. Every change updates the preview immediately;
-// after a short dwell a motion study runs in the background and reports whether
-// the chosen values still work (pass) or jam / break the mechanism (fail).
+// product to their dimensions. Dragging a control updates the preview smoothly
+// (local value + throttled, coalesced rebuilds); the motion study runs only
+// after the user goes idle and is cancelled the moment they touch a control
+// again, so it never churns through the values a drag passed through.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Viewport } from "./Viewport";
 import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000));
+const IDLE_MS = 900;   // run the motion study after this long with no interaction
+const COMMIT_MS = 120; // throttle how often a drag commits a value to the model
 
 function modelUrl(): string | null {
   const q = new URLSearchParams(location.search);
@@ -21,28 +24,41 @@ function modelUrl(): string | null {
   return null;
 }
 
-/** One bounded parameter as a slider (min&max) or a dropdown (value list). */
-function Control({ name, value, expr, min, max, values }: { name: string; value: number; expr: string; min?: number; max?: number; values?: number[] }) {
-  const setParameterExpr = useStore((s) => s.setParameterExpr);
+/** One bounded parameter. Shows its own local value instantly while dragging
+ *  (so the slider never lags the model), reporting changes up via `onEdit`. */
+function Control({ name, value, expr, min, max, values, onEdit }: {
+  name: string; value: number; expr: string; min?: number; max?: number; values?: number[];
+  onEdit: (name: string, value: string, flush: boolean) => void;
+}) {
+  const [local, setLocal] = useState(value);
+  const dragging = useRef(false);
+  useEffect(() => { if (!dragging.current) setLocal(value); }, [value]); // follow external changes when idle
+
   const label = <span className="cz-row-name" title={expr}>{name}</span>;
   if (values && values.length) {
     return (
       <label className="cz-row">
         {label}
-        <select className="cz-select" value={values.some((v) => Math.abs(v - value) < 1e-9) ? String(value) : ""} onChange={(e) => setParameterExpr(name, e.target.value)}>
+        <select className="cz-select" value={values.some((v) => Math.abs(v - value) < 1e-9) ? String(value) : ""} onChange={(e) => onEdit(name, e.target.value, true)}>
           {!values.some((v) => Math.abs(v - value) < 1e-9) && <option value="">{fmt(value)}…</option>}
           {values.map((v) => <option key={v} value={String(v)}>{fmt(v)}</option>)}
         </select>
       </label>
     );
   }
-  const span = (max! - min!);
+  const span = max! - min!;
   const step = span >= 20 ? 1 : span >= 2 ? 0.1 : 0.01;
   return (
     <label className="cz-row">
       {label}
-      <input className="cz-range" type="range" min={min} max={max} step={step} value={Math.min(max!, Math.max(min!, value))} onChange={(e) => setParameterExpr(name, e.target.value)} />
-      <span className="cz-row-val">{fmt(value)}</span>
+      <input
+        className="cz-range" type="range" min={min} max={max} step={step}
+        value={Math.min(max!, Math.max(min!, local))}
+        onPointerDown={() => { dragging.current = true; }}
+        onPointerUp={() => { dragging.current = false; onEdit(name, String(local), true); }}
+        onChange={(e) => { const v = Number(e.target.value); setLocal(v); onEdit(name, String(v), false); }}
+      />
+      <span className="cz-row-val">{fmt(local)}</span>
     </label>
   );
 }
@@ -76,12 +92,33 @@ export function CustomizeApp() {
   const ensureKernel = useStore((s) => s.ensureKernel);
   const runMotionStudy = useStore((s) => s.runMotionStudy);
   const cancelMotionStudy = useStore((s) => s.cancelMotionStudy);
-  const rev = useStore((s) => s.rev);
   const params = useStore((s) => s.session.doc.parameters);
+  useStore((s) => s.rev); // re-render as the model resolves
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [open, setOpen] = useState(true);
-  const dwell = useRef<ReturnType<typeof setTimeout>>();
+
+  const idle = useRef<ReturnType<typeof setTimeout>>();
+  const throttle = useRef<{ last: number; timer?: ReturnType<typeof setTimeout>; pending: [string, string] | null }>({ last: 0, pending: null });
+
+  // Run the study only after the user has been idle; any edit restarts the wait.
+  const armStudy = useCallback(() => {
+    cancelMotionStudy();
+    clearTimeout(idle.current);
+    idle.current = setTimeout(() => void runMotionStudy(), IDLE_MS);
+  }, [cancelMotionStudy, runMotionStudy]);
+
+  // Commit a control's value to the model, throttled so a drag doesn't replay
+  // the whole recipe every frame; `flush` commits immediately (pointer-up / select).
+  const onEdit = useCallback((name: string, value: string, flush: boolean) => {
+    armStudy();
+    const t = throttle.current;
+    t.pending = [name, value];
+    const fire = () => { if (!t.pending) return; const [n, v] = t.pending; t.pending = null; t.last = Date.now(); void useStore.getState().setParameterExpr(n, v); };
+    clearTimeout(t.timer);
+    if (flush || Date.now() - t.last >= COMMIT_MS) fire();
+    else t.timer = setTimeout(fire, COMMIT_MS - (Date.now() - t.last));
+  }, [armStudy]);
 
   useEffect(() => {
     void (async () => {
@@ -94,22 +131,14 @@ export function CustomizeApp() {
         if (!resp.ok) throw new Error(`Could not load model (${resp.status}).`);
         await loadDocument(deserializeDocument(await resp.text()));
         setState("ready");
+        armStudy(); // validate the starting configuration once
       } catch (e) {
         setError((e as Error).message);
         setState("error");
       }
     })();
-  }, [ensureKernel, loadDocument]);
-
-  // After a stable dwell on a configuration, run the motion study. Any change
-  // resets it (back to "not checked") so the preview stays responsive.
-  useEffect(() => {
-    if (state !== "ready") return;
-    cancelMotionStudy();
-    clearTimeout(dwell.current);
-    dwell.current = setTimeout(() => void runMotionStudy(), 700);
-    return () => clearTimeout(dwell.current);
-  }, [rev, state, cancelMotionStudy, runMotionStudy]);
+    return () => { clearTimeout(idle.current); clearTimeout(throttle.current.timer); };
+  }, [ensureKernel, loadDocument, armStudy]);
 
   const bounded = params.filter((p) => (p.min != null && p.max != null) || (p.values && p.values.length));
 
@@ -124,7 +153,7 @@ export function CustomizeApp() {
           </button>
           {open && (
             <div className="cz-controls">
-              {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} values={p.values} />)}
+              {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} values={p.values} onEdit={onEdit} />)}
             </div>
           )}
         </div>
