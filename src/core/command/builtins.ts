@@ -37,6 +37,7 @@ const CONSTRUCTION_SCHEMA: JSONSchema = {
 type PointRef = { x: number; y: number } | { ref: string };
 type EdgeSelectorParams = import("../document").EdgeSelector;
 type FaceSelectorParams = import("../document").FaceSelector;
+type ThreadSpecParams = import("../document").ThreadSpec;
 
 const V3_SCHEMA: JSONSchema = { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } };
 const IN_PLANE_SCHEMA: JSONSchema = {
@@ -66,6 +67,25 @@ const FACE_SELECTOR_SCHEMA: JSONSchema = {
     parallelTo: { type: "string", enum: PLANE_ENUM, description: "Planar faces parallel to an origin plane." },
     inPlane: { ...IN_PLANE_SCHEMA, description: "Faces lying in an origin plane offset along its normal." },
     nearPoint: { ...V3_SCHEMA, description: "The face containing this world point." },
+  },
+};
+
+const THREAD_SPEC_SCHEMA: JSONSchema = {
+  type: "object",
+  required: ["form", "pitch", "diameter", "length"],
+  additionalProperties: false,
+  description: "A thread definition (shared by feature.thread and threaded holes).",
+  properties: {
+    form: { type: "string", enum: ["metric", "unified", "acme", "trapezoidal", "square", "buttress", "ballscrew", "custom"] },
+    pitch: { type: "number", description: "Axial distance per turn, per start (mm)." },
+    diameter: { type: "number", description: "Major (nominal) diameter (mm)." },
+    length: { type: "number", description: "Threaded length (mm)." },
+    internal: { type: "boolean", description: "Cut as an internal thread (a nut/bore) vs external (a screw)." },
+    leftHand: { type: "boolean" },
+    starts: { type: "integer", description: "Number of starts (multi-start). Default 1." },
+    depth: { type: "number", description: "Radial thread height override (mm)." },
+    representation: { type: "string", enum: ["cosmetic", "modeled"], description: "cosmetic = cheap low-poly hint (default); modeled = real helical geometry." },
+    profilePoints: { type: "array", items: { type: "object", required: ["x", "y"], additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" } } }, description: "custom form only: axial section points (x = radial height, y = axial)." },
   },
 };
 
@@ -1404,6 +1424,96 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: `${p.shape}` };
+    },
+  },
+  {
+    type: "feature.hole",
+    title: "Hole",
+    summary: "Drill a hole — simple, counterbored or countersunk, blind or through — at one or more points.",
+    description:
+      "Cuts a hole into a body at each point in `at` (world-mm hole-mouth centres), drilling along `axis` (default straight down, −Z). `diameter` is the bore (expression). " +
+      "Give `depth` for a blind hole — its `bottom` is flat (default) or a 118° `drill` point — or `throughAll` to pass clear through the body. " +
+      "`counterbore` {diameter, depth} adds a flat-bottomed recess with a square shoulder at the mouth (for a socket-head cap screw); `countersink` {diameter, angle} adds an angled cone (angle = included, default 90°, for a flat-head screw). " +
+      "`body` picks which body (its creating-feature id; default the most recent); `requireEffect` makes a hole that meets nothing an error. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["at", "diameter"],
+      additionalProperties: false,
+      properties: {
+        at: { type: "array", items: { type: "object", required: ["x", "y", "z"], additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } }, description: "Hole-mouth centres (world mm)." },
+        axis: { type: "object", additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "Drill direction (default −Z)." },
+        diameter: { type: ["string", "number"], description: "Bore diameter (expr)." },
+        depth: { type: ["string", "number"], description: "Blind depth to the drill point (expr). Omit with throughAll." },
+        throughAll: { type: "boolean", description: "Pass clear through the body." },
+        bottom: { type: "string", enum: ["flat", "drill"], description: "Blind-hole bottom (default flat)." },
+        counterbore: { type: "object", required: ["diameter", "depth"], additionalProperties: false, properties: { diameter: { type: ["string", "number"] }, depth: { type: ["string", "number"] } } },
+        countersink: { type: "object", required: ["diameter"], additionalProperties: false, properties: { diameter: { type: ["string", "number"] }, angle: { type: ["string", "number"] } } },
+        thread: { ...THREAD_SPEC_SCHEMA, description: "Tap the hole: drill at the tap-drill (minor) diameter, then set thread.diameter to the nominal (major)." },
+        body: { type: "string", description: "Target body (feature id); default the most recent." },
+        requireEffect: { type: "boolean" },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A Ø6 hole through the top face at two points", params: { at: [{ x: -10, y: 0, z: 20 }, { x: 10, y: 0, z: 20 }], diameter: "6", throughAll: true } },
+      { note: "A tapped M8 blind hole (drill Ø6.75, thread to Ø8)", params: { at: [{ x: 0, y: 0, z: 20 }], diameter: "6.75", depth: "16", thread: { form: "metric", pitch: 1.25, diameter: 8, length: 14, internal: true, representation: "modeled" } } },
+      { note: "A counterbored hole for an M4 cap screw", params: { at: [{ x: 0, y: 0, z: 10 }], diameter: "4.5", depth: "12", counterbore: { diameter: "8", depth: "4" } } },
+      { note: "An 82° countersink for a flat-head screw", params: { at: [{ x: 0, y: 0, z: 6 }], diameter: "4", throughAll: true, countersink: { diameter: "8", angle: "82" } } },
+    ],
+    apply(draft, p: { at: Vec3[]; axis?: Vec3; diameter: string | number; depth?: string | number; throughAll?: boolean; bottom?: "flat" | "drill"; counterbore?: { diameter: string | number; depth: string | number }; countersink?: { diameter: string | number; angle?: string | number }; thread?: ThreadSpecParams; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      if (!p.throughAll && p.depth == null) throw new Error("hole needs `depth` or `throughAll`");
+      const id = ctx.alloc("hole");
+      draft.features[id] = {
+        id, kind: "hole", name: p.name ?? "Hole", at: p.at, axis: p.axis,
+        diameterExpr: String(p.diameter),
+        ...(p.throughAll ? { throughAll: true } : { depthExpr: String(p.depth) }),
+        ...(p.bottom ? { bottom: p.bottom } : {}),
+        ...(p.counterbore ? { counterbore: { diameterExpr: String(p.counterbore.diameter), depthExpr: String(p.counterbore.depth) } } : {}),
+        ...(p.countersink ? { countersink: { diameterExpr: String(p.countersink.diameter), ...(p.countersink.angle != null ? { angleExpr: String(p.countersink.angle) } : {}) } } : {}),
+        ...(p.thread ? { thread: { ...p.thread, internal: true } } : {}),
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
+      };
+      return { createdIds: [id], message: `Hole ×${p.at.length}` };
+    },
+  },
+  {
+    type: "feature.thread",
+    title: "Thread",
+    summary: "Add an external thread or cut an internal one — any standard form (metric, unified, ACME, trapezoidal, square, buttress), ballscrew, or custom; cosmetic or fully modelled.",
+    description:
+      "Builds a thread at `at` along `axis` (default +Z, the threaded length running from the point). `spec` gives the form, pitch, (major) diameter and length. " +
+      "`spec.internal` cuts the thread into a body as a tap (the body should already have a tap-drill bore at the minor diameter); otherwise it is external — `operation` \"new\" makes a standalone threaded rod, \"join\" adds the threads onto an existing shaft (`body` picks which). " +
+      "`spec.representation` \"cosmetic\" (default) is a cheap low-poly visual hint; \"modeled\" is real helical geometry (heavier — several seconds — and it automatically falls back to cosmetic with a warning if the kernel can't form it cleanly). " +
+      "`spec.leftHand`, `spec.starts` (multi-start), `spec.depth` (radial height override) and a `spec.profilePoints` custom section are supported. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["at", "spec"],
+      additionalProperties: false,
+      properties: {
+        at: { ...V3_SCHEMA, required: ["x", "y", "z"], description: "Base point of the threaded length (world mm)." },
+        axis: { ...V3_SCHEMA, description: "Thread axis direction (default +Z)." },
+        spec: THREAD_SPEC_SCHEMA,
+        operation: { type: "string", enum: ["new", "join", "cut"], description: "external only: standalone rod (new) or added to a shaft (join)." },
+        body: { type: "string", description: "Target body for join/cut; default the most recent." },
+        requireEffect: { type: "boolean" },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A modelled M10×1.5 external thread, 20mm long, as its own rod", params: { at: { x: 0, y: 0, z: 0 }, spec: { form: "metric", pitch: 1.5, diameter: 10, length: 20, representation: "modeled" } } },
+      { note: "A cosmetic ½-10 ACME leadscrew", params: { at: { x: 0, y: 0, z: 0 }, spec: { form: "acme", pitch: 2.54, diameter: 12.7, length: 60 } } },
+      { note: "A 2-start ballscrew", params: { at: { x: 0, y: 0, z: 0 }, spec: { form: "ballscrew", pitch: 5, diameter: 16, length: 50, starts: 2, representation: "modeled" } } },
+    ],
+    apply(draft, p: { at: Vec3; axis?: Vec3; spec: ThreadSpecParams; operation?: "new" | "join" | "cut"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      const id = ctx.alloc("thr");
+      draft.features[id] = {
+        id, kind: "thread", name: p.name ?? `Thread ${p.spec.form}`, at: p.at, axis: p.axis, spec: p.spec,
+        ...(p.operation ? { operation: p.operation } : {}),
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
+      };
+      return { createdIds: [id], message: `Thread ${p.spec.form}` };
     },
   },
   {

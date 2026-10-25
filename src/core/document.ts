@@ -220,7 +220,75 @@ export interface SweepFeature {
   requireEffect?: boolean;
 }
 
-export type FeatureDef = ExtrudeFeature | RevolveFeature | PrimitiveFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
+/** A drilled hole (cut) at one or more points: simple, counterbored or
+ *  countersunk, blind or through, with an optional thread. */
+export interface HoleFeature {
+  id: string;
+  kind: "hole";
+  name: string;
+  /** Hole-mouth centres in world mm (one or many). */
+  at: { x: number; y: number; z: number }[];
+  /** Drilling direction (default straight down, −Z). */
+  axis?: { x: number; y: number; z: number };
+  diameterExpr: string;
+  diameterValue?: number;
+  /** Blind depth (to the start of the drill point). Omit with throughAll. */
+  depthExpr?: string;
+  depthValue?: number;
+  throughAll?: boolean;
+  /** Blind-hole bottom: flat (default) or a 118° drill point. */
+  bottom?: "flat" | "drill";
+  counterbore?: { diameterExpr: string; depthExpr: string };
+  countersink?: { diameterExpr: string; angleExpr?: string }; // included angle (default 90°)
+  /** Optional thread cut into the bore (see ThreadSpec). */
+  thread?: ThreadSpec;
+  body?: string;
+  requireEffect?: boolean;
+}
+
+/** A thread: either cosmetic (a cheap helical hint) or fully modelled, with a
+ *  standard or custom axial profile. Shared by feature.thread and threaded holes. */
+export interface ThreadSpec {
+  /** Profile family. "custom" uses `profilePoints` (axial, one pitch tall). */
+  form: "metric" | "unified" | "acme" | "trapezoidal" | "square" | "buttress" | "ballscrew" | "custom";
+  /** Thread pitch (mm) — axial distance per turn (per start). */
+  pitch: number;
+  /** Thread (major, external / nominal) diameter in mm. */
+  diameter: number;
+  /** Threaded length along the axis (mm). */
+  length: number;
+  /** Internal (a nut/bore) vs external (a screw/shaft). Default external. */
+  internal?: boolean;
+  /** Left-hand thread. Default right-hand. */
+  leftHand?: boolean;
+  /** Number of starts (multi-start). Default 1. */
+  starts?: number;
+  /** Depth of engagement override (mm); default derived from the form. */
+  depth?: number;
+  /** cosmetic = cheap coarse helix hint; modeled = full geometry. Default cosmetic. */
+  representation?: "cosmetic" | "modeled";
+  /** custom form: axial half-profile points (u = radial offset from the pitch line, v = axial 0..pitch). */
+  profilePoints?: { x: number; y: number }[];
+}
+
+/** A thread at a point along an axis: external (added) or internal (cut as a tap). */
+export interface ThreadFeature {
+  id: string;
+  kind: "thread";
+  name: string;
+  /** Base point of the thread (world mm) — the start of the threaded length. */
+  at: { x: number; y: number; z: number };
+  /** Thread axis direction (default +Z). */
+  axis?: { x: number; y: number; z: number };
+  spec: ThreadSpec;
+  /** external only: combine with a body (new = standalone rod, join = add to a
+   *  shaft). internal is always cut. Default new. */
+  operation?: BooleanOp;
+  body?: string;
+  requireEffect?: boolean;
+}
+
+export type FeatureDef = ExtrudeFeature | RevolveFeature | PrimitiveFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
 /** Features that own a single sketch (the profile-driven ones). */
 export type SketchFeature = ExtrudeFeature | RevolveFeature;
 

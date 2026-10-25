@@ -7,7 +7,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, BooleanOp,
+  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, BooleanOp,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, regionAt, Region } from "./geometry/profile";
@@ -15,9 +15,10 @@ import { FaceRef } from "../sketch/types";
 import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
-  boundsOfShape, volumeOfShape, Bounds3, buildPrimitive,
+  boundsOfShape, volumeOfShape, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread, ThreadBuildSpec,
 } from "./occ/kernel";
 import type { Shape3D } from "replicad";
+import { Vec3 } from "../math/vec";
 
 export interface SolidEval {
   featureId: string;
@@ -245,6 +246,116 @@ function applyPrimitive(scope: Scope, f: PrimitiveFeature, bodies: Body[], out: 
   const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, "primitive") : undefined;
   if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape }); return; }
   combineBody(op, target, shape, f, f.shape, out);
+}
+
+const V = {
+  norm: (a: Vec3): Vec3 => { const m = Math.hypot(a.x, a.y, a.z) || 1; return { x: a.x / m, y: a.y / m, z: a.z / m }; },
+  cross: (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }),
+  dot: (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z,
+};
+
+/** Rotate `base` so its `from` axis aligns with world `axis`, then translate to
+ *  `p`. Returns a fresh shape (the base is preserved). */
+function placeAlong(base: Shape3D, from: Vec3, axis: Vec3, p: Vec3): Shape3D {
+  const to = V.norm(axis);
+  const d = Math.max(-1, Math.min(1, V.dot(from, to)));
+  let rotated: Shape3D;
+  if (d > 0.999999) rotated = translateShape(base, { x: 0, y: 0, z: 0 }); // same direction → clone
+  else {
+    const rotAxis = d < -0.999999 ? V.norm(V.cross(from, { x: 1, y: 0, z: 0 })) : V.norm(V.cross(from, to));
+    const angle = d < -0.999999 ? 180 : (Math.acos(d) * 180) / Math.PI;
+    rotated = rotateShape(base, angle, { x: 0, y: 0, z: 0 }, rotAxis);
+  }
+  if (p.x === 0 && p.y === 0 && p.z === 0) return rotated;
+  const moved = translateShape(rotated, p);
+  rotated.delete();
+  return moved;
+}
+
+/** A −Z cutter (mouth at origin) oriented to drill along `axis` from point `p`. */
+const orientCutter = (base: Shape3D, axis: Vec3, p: Vec3): Shape3D => placeAlong(base, { x: 0, y: 0, z: -1 }, axis, p);
+
+/** Build a thread solid (a +Z rod) for a spec, falling back to cosmetic if the
+ *  modelled helical sweep degenerates in the kernel. Returns {shape, note}. */
+function buildThreadSolid(spec: ThreadSpec, clearance: number): { shape: Shape3D; note?: string } {
+  const b: ThreadBuildSpec = {
+    form: spec.form, pitch: spec.pitch, majorDiameter: spec.diameter + clearance, length: spec.length,
+    leftHand: spec.leftHand, starts: spec.starts, depth: spec.depth, representation: spec.representation ?? "cosmetic", custom: spec.profilePoints,
+  };
+  if (b.representation !== "modeled") return { shape: buildThread(b) };
+  try {
+    return { shape: buildThread(b) };
+  } catch (e) {
+    return { shape: buildThread({ ...b, representation: "cosmetic" }), note: `modelled thread fell back to cosmetic: ${(e as Error).message}` };
+  }
+}
+
+/** A thread at a point: external (added as a new rod / joined to a shaft) or
+ *  internal (cut as a tap). */
+function applyThread(f: ThreadFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const internal = !!f.spec.internal;
+    const { shape, note } = buildThreadSolid(f.spec, internal ? 0.1 : 0); // small clearance for a cut tap
+    if (note) out[f.id].warning = note;
+    const rod = placeAlong(shape, { x: 0, y: 0, z: 1 }, f.axis ?? { x: 0, y: 0, z: 1 }, f.at);
+    shape.delete();
+    const op = internal ? "cut" : (f.operation ?? "new");
+    if (op !== "cut" && (op === "new" || !bodies.length)) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape: rod }); return; }
+    const target = pickBody(bodies, f.body, "thread");
+    combineBody(op, target, rod, f, "thread", out);
+  } catch (e) {
+    out[f.id].error = (e as Error).message;
+  }
+}
+
+/** Drill one or more holes (cut) into a body: simple / counterbore / countersink. */
+function applyHole(scope: Scope, f: HoleFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = pickBody(bodies, f.body, "hole");
+    const dia = resolveExpr(f.diameterExpr, f.diameterValue ?? 0, scope); f.diameterValue = dia;
+    if (!(dia > 0)) throw new Error("hole diameter must be positive");
+    const radius = dia / 2;
+    const tb = safeBounds(target.shape);
+    const depth = f.throughAll ? throughAllLength(tb) : resolveExpr(f.depthExpr ?? "0", f.depthValue ?? 0, scope);
+    if (!f.throughAll && !(depth > 0)) throw new Error("hole needs a positive depth (or throughAll)");
+    f.depthValue = depth;
+    const spec: HoleCutterSpec = { radius, depth, drillPoint: !f.throughAll && f.bottom === "drill" };
+    if (f.counterbore) spec.counterbore = { radius: resolveExpr(f.counterbore.diameterExpr, 0, scope) / 2, depth: resolveExpr(f.counterbore.depthExpr, 0, scope) };
+    if (f.countersink) spec.countersink = { radius: resolveExpr(f.countersink.diameterExpr, 0, scope) / 2, angle: resolveExpr(f.countersink.angleExpr ?? "90", 90, scope) };
+    const base = buildHoleCutter(spec);
+    const axis = f.axis ?? { x: 0, y: 0, z: -1 };
+    const pts = f.at && f.at.length ? f.at : [{ x: 0, y: 0, z: 0 }];
+    const before = volumeOfShape(target.shape);
+    try {
+      for (const p of pts) {
+        const cutter = orientCutter(base, axis, p);
+        try { const cut = cutShapes(target.shape, cutter); replaceShape(target, cut); }
+        finally { cutter.delete(); }
+      }
+    } finally { base.delete(); }
+    // Threaded hole: cut a tap (a thread rod at the nominal/major diameter) from
+    // each bore, so the hole should be drilled at the tap-drill (minor) diameter.
+    if (f.thread) {
+      const { shape, note } = buildThreadSolid(f.thread, 0.1);
+      if (note) out[f.id].warning = out[f.id].warning ? `${out[f.id].warning}; ${note}` : note;
+      try {
+        for (const p of pts) {
+          const tap = placeAlong(shape, { x: 0, y: 0, z: 1 }, axis, p);
+          try { const cut = cutShapes(target.shape, tap); replaceShape(target, cut); }
+          finally { tap.delete(); }
+        }
+      } finally { shape.delete(); }
+    }
+    const after = volumeOfShape(target.shape);
+    if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, before)) {
+      const msg = "hole changed nothing: it does not meet the body (check at / axis / depth)";
+      if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
+    }
+  } catch (e) {
+    out[f.id].error = (e as Error).message;
+  }
 }
 
 /** Sweep the feature's profile along its path sketch, then combine it. */
@@ -530,6 +641,8 @@ function evaluateBodies(doc: CadDocument, scope: Scope): { bodies: Body[]; out: 
       case "extrude":
       case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
       case "primitive": applyPrimitive(scope, f, bodies, out); break;
+      case "hole": applyHole(scope, f, bodies, out); break;
+      case "thread": applyThread(f, bodies, out); break;
       case "loft": applyLoft(doc, f, bodies, out); break;
       case "sweep": applySweep(doc, f, bodies, out); break;
       case "mirror": applyMirror(doc, f, bodies, out); break;

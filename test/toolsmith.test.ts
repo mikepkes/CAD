@@ -14,6 +14,7 @@ const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-openca
 const evalAll = (s: CadSession): Record<string, SolidEval> => evaluateFeatures(s.doc, resolveParameters(s.doc.parameters).scope);
 const bodies = (s: CadSession) => Object.values(evalAll(s)).filter((b) => b.mesh);
 const rows = (s: CadSession) => Object.values(evalAll(s));
+const vol0 = (s: CadSession) => bodies(s)[0].volume!;
 const PI = Math.PI;
 
 describe("proposal 1 — feature.primitive", () => {
@@ -99,6 +100,100 @@ describe("proposal 3 — per-body targeting on finishing features", () => {
     await s.dispatch("feature.primitive", { shape: "box", x: "10", y: "10", z: "10" });
     await s.dispatch("feature.fillet", { radius: "1", body: "nope" });
     expect(rows(s).some((r) => /no body "nope"/.test(r.error ?? ""))).toBe(true);
+  });
+});
+
+describe("proposal 5 — feature.hole", () => {
+  const box = async () => { const s = realSession(); await s.dispatch("feature.primitive", { shape: "box", x: "40", y: "40", z: "20", at: { x: 0, y: 0, z: 10 } }); return s; }; // z ∈ [0,20]
+  const vol = (s: CadSession) => bodies(s)[0].volume!;
+
+  it("a simple through hole removes a full-height cylinder", async () => {
+    const s = await box();
+    await s.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 20 }], diameter: "6", throughAll: true });
+    expect(vol(s)).toBeCloseTo(40 * 40 * 20 - PI * 9 * 20, 0);
+    expect(bodies(s)[0].error).toBeUndefined();
+  });
+
+  it("drills at multiple points at once (removes ~N bores)", async () => {
+    const s = await box();
+    await s.dispatch("feature.hole", { at: [{ x: -12, y: 0, z: 20 }, { x: 12, y: 0, z: 20 }], diameter: "6", throughAll: true });
+    expect(vol(s)).toBeCloseTo(40 * 40 * 20 - 2 * PI * 9 * 20, 0);
+  });
+
+  it("counterbore and countersink both build and remove more than the bore alone", async () => {
+    const plain = await box();
+    await plain.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 20 }], diameter: "5", depth: "20" });
+    const plainVol = vol(plain);
+
+    const cbore = await box();
+    await cbore.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 20 }], diameter: "5", depth: "20", counterbore: { diameter: "10", depth: "5" } });
+    expect(bodies(cbore)[0].error).toBeUndefined();
+    expect(vol(cbore)).toBeLessThan(plainVol);
+
+    const csink = await box();
+    await csink.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 20 }], diameter: "5", throughAll: true, countersink: { diameter: "10", angle: "90" } });
+    expect(bodies(csink)[0].error).toBeUndefined();
+    expect(vol(csink)).toBeLessThan(40 * 40 * 20 - PI * 6.25 * 20); // more than the bore
+  });
+
+  it("a blind hole with a drill point builds", async () => {
+    const s = await box();
+    await s.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 20 }], diameter: "6", depth: "12", bottom: "drill" });
+    expect(bodies(s)[0].error).toBeUndefined();
+    expect(vol(s)).toBeLessThan(40 * 40 * 20);
+  });
+
+  it("a hole that misses is loud under requireEffect", async () => {
+    const s = await box();
+    await s.dispatch("feature.hole", { at: [{ x: 500, y: 0, z: 20 }], diameter: "6", throughAll: true, requireEffect: true });
+    expect(rows(s).some((r) => r.error && /changed nothing/.test(r.error))).toBe(true);
+  });
+});
+
+describe("proposal 6 — feature.thread", () => {
+  const PId = { x: 0, y: 0, z: 0 };
+
+  it("builds an external cosmetic thread as a standalone rod", async () => {
+    const s = realSession();
+    await s.dispatch("feature.thread", { at: PId, spec: { form: "metric", pitch: 1.5, diameter: 10, length: 16 } });
+    const b = bodies(s)[0];
+    expect(b.error).toBeUndefined();
+    expect(b.volume!).toBeGreaterThan(0);
+    expect(b.volume!).toBeLessThan(PI * 25 * 16 * 1.01); // ≤ a Ø10 cylinder
+  });
+
+  it("builds a modelled metric thread whose volume sits between minor and major", async () => {
+    const s = realSession();
+    await s.dispatch("feature.thread", { at: PId, spec: { form: "metric", pitch: 2, diameter: 12, length: 14, representation: "modeled" } });
+    const b = bodies(s)[0];
+    expect(b.error).toBeUndefined();
+    const minorR = 6 - 0.6134 * 2;
+    expect(b.volume!).toBeGreaterThan(PI * minorR * minorR * 14); // more than the bare core
+    expect(b.volume!).toBeLessThan(PI * 36 * 14 * 1.02);          // less than the full Ø12
+  }, 40000);
+
+  it("cuts an internal thread (tap) into a bored block", async () => {
+    const s = realSession();
+    await s.dispatch("feature.primitive", { shape: "box", x: "30", y: "30", z: "16", at: { x: 0, y: 0, z: 8 } });
+    await s.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 16 }], diameter: "6.75", throughAll: true });    // tap drill
+    const bored = vol0(s);
+    await s.dispatch("feature.thread", { at: { x: 0, y: 0, z: 16 }, axis: { x: 0, y: 0, z: -1 }, spec: { form: "metric", pitch: 1.25, diameter: 8, length: 14, internal: true } });
+    expect(bodies(s)[0].error).toBeUndefined();
+    expect(vol0(s)).toBeLessThan(bored); // the tap removed the thread valleys
+  });
+
+  it("drills and taps a hole in one feature", async () => {
+    const s = realSession();
+    await s.dispatch("feature.primitive", { shape: "box", x: "30", y: "30", z: "16", at: { x: 0, y: 0, z: 8 } });
+    await s.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 16 }], diameter: "6.75", depth: "14", thread: { form: "metric", pitch: 1.25, diameter: 8, length: 12, internal: true } });
+    expect(bodies(s)[0].error).toBeUndefined();
+    expect(vol0(s)).toBeLessThan(30 * 30 * 16);
+  });
+
+  it("errors when an internal thread has no body to tap", async () => {
+    const s = realSession();
+    await s.dispatch("feature.thread", { at: PId, spec: { form: "metric", pitch: 1, diameter: 6, length: 10, internal: true } });
+    expect(rows(s).some((r) => /no body/.test(r.error ?? ""))).toBe(true);
   });
 });
 

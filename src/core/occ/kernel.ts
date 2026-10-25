@@ -4,7 +4,8 @@
 // display, and STL/STEP blobs for CNC / 3D-print output.
 
 import opencascade from "replicad-opencascadejs";
-import { setOC, draw, drawCircle, drawEllipse, makeBox, makeCylinder, makeSphere, Plane, measureVolume, type Drawing, type Shape3D, type EdgeFinder, type FaceFinder } from "replicad";
+import { setOC, draw, drawCircle, drawEllipse, makeBox, makeCylinder, makeSphere, makeHelix, genericSweep, Plane, measureVolume, type Drawing, type Shape3D, type Wire, type EdgeFinder, type FaceFinder } from "replicad";
+import { ThreadForm, threadSection, threadLead, ThreadSection } from "../geometry/thread";
 import { WorkPlane } from "../../geometry/plane";
 import { Loop, LoopSegment, Profile, Pt } from "../geometry/profile";
 import type { EdgeSelector, FaceSelector } from "../document";
@@ -385,6 +386,157 @@ export function buildRegionsRevolved(wp: WorkPlane, regions: Profile[], axisOrig
 }
 
 /** Translated copy of a shape (operand untouched). */
+/** Revolve a closed (u=radius, v=height) profile a full turn about world Z. */
+function revolveProfileZ(pts: [number, number][]): Shape3D {
+  let pen = draw([pts[0][0], pts[0][1]]);
+  for (let i = 1; i < pts.length; i++) pen = pen.lineTo([pts[i][0], pts[i][1]]);
+  const sk = pen.close().sketchOnPlane("XZ") as unknown as { revolve: (dir: P3, o: { origin: P3; angle: number }) => Shape3D };
+  return sk.revolve([0, 0, 1], { origin: [0, 0, 0], angle: 360 });
+}
+
+/** A hole cutter, built along −Z with its mouth at the origin (going downward),
+ *  ready to be oriented and placed at each hole centre and cut from a body. */
+export interface HoleCutterSpec {
+  radius: number;                               // bore radius
+  depth: number;                                // cylindrical bore length (mouth → bottom)
+  drillPoint?: boolean;                          // 118° conical tip at the bottom (blind drilled)
+  counterbore?: { radius: number; depth: number };
+  countersink?: { radius: number; angle: number }; // included angle, degrees
+}
+
+export function buildHoleCutter(s: HoleCutterSpec): Shape3D {
+  const overshoot = Math.max(0.05, s.radius * 0.02); // break the mouth surface cleanly
+  // Main bore: a cylinder from z=+overshoot down to z=−depth.
+  const boreLen = s.depth + overshoot;
+  let cutter = translateShape(makeCylinder(s.radius, boreLen) as Shape3D, { x: 0, y: 0, z: -s.depth });
+  const fuseIn = (piece: Shape3D) => { const f = fuseShapes(cutter, piece); cutter.delete(); piece.delete(); cutter = f; };
+  if (s.drillPoint) {
+    const tip = s.radius / Math.tan((59 * Math.PI) / 180); // 118° included → 59° half-angle
+    fuseIn(revolveProfileZ([[0, -s.depth], [s.radius, -s.depth], [0, -s.depth - tip]]));
+  }
+  if (s.counterbore) {
+    fuseIn(translateShape(makeCylinder(s.counterbore.radius, s.counterbore.depth + overshoot) as Shape3D, { x: 0, y: 0, z: -s.counterbore.depth }));
+  }
+  if (s.countersink) {
+    const half = (s.countersink.angle * Math.PI) / 360; // half the included angle
+    const csDepth = (s.countersink.radius - s.radius) / Math.tan(half);
+    // A frustum from the sink radius at the mouth down to the bore radius.
+    fuseIn(revolveProfileZ([[0, overshoot], [s.countersink.radius + overshoot, overshoot], [s.countersink.radius, 0], [s.radius, -csDepth], [0, -csDepth]]));
+  }
+  return cutter;
+}
+
+/** A thread solid built along +Z with its base at the origin: a threaded rod
+ *  (external form). An internal thread is this rod cut from a body (a tap). */
+export interface ThreadBuildSpec {
+  form: ThreadForm;
+  pitch: number;
+  majorDiameter: number;
+  length: number;
+  leftHand?: boolean;
+  starts?: number;
+  depth?: number;                              // radial thread height override
+  representation?: "cosmetic" | "modeled";     // default cosmetic
+  custom?: { x: number; y: number }[];
+}
+
+export function buildThread(s: ThreadBuildSpec): Shape3D {
+  const rMaj = s.majorDiameter / 2;
+  const starts = Math.max(1, Math.floor(s.starts ?? 1));
+  const lead = threadLead(s.pitch, starts);
+  const sec = threadSection(s.form, s.pitch, { depth: s.depth, custom: s.custom });
+  const rMin = Math.max(0.1, rMaj - sec.depth);
+  const len = s.length;
+  if (!(len > 0)) throw new Error("thread length must be positive");
+
+  if ((s.representation ?? "cosmetic") === "cosmetic") return buildThreadCosmetic(rMaj, sec.depth, s.pitch, len);
+
+  const coreVol = Math.PI * rMin * rMin * len, majorVol = Math.PI * rMaj * rMaj * len;
+  // OCC's helical sweep degenerates (silently drops the ribs) for some
+  // profile/size combos, and which sweep config survives varies by form — so we
+  // try a few and keep the first that validates, before the caller falls back to
+  // cosmetic. Orthogonality-to-spine first (keeps the section radial).
+  const configs: SweepConfig[] = [{ forceProfileSpineOthogonality: true }, { frenet: true }, {}];
+  let lastErr: Error | null = null;
+  for (const cfg of configs) {
+    try {
+      if (sec.mode === "groove") { // ballscrew: cut circular grooves from a major shaft
+        let shaft = makeCylinder(rMaj, len) as Shape3D;
+        for (let k = 0; k < starts; k++) {
+          const g = sweepThreadSection(sec, rMaj, len, lead, !!s.leftHand, k, starts, cfg);
+          const cut = cutShapes(shaft, g); shaft.delete(); g.delete(); shaft = cut;
+        }
+        return validateThread(trimRod(shaft, rMaj, len), (v) => v < majorVol * 0.995);
+      }
+      const embed = Math.min(0.03, sec.depth * 0.08);
+      let rod = makeCylinder(rMin + embed, len) as Shape3D;
+      for (let k = 0; k < starts; k++) {
+        const rib = sweepThreadSection(sec, rMin, len, lead, !!s.leftHand, k, starts, cfg);
+        const f = fuseShapes(rod, rib); rod.delete(); rib.delete(); rod = f;
+      }
+      return validateThread(trimRod(rod, rMaj, len), (v) => v > coreVol * 1.02 && v < majorVol * 1.02);
+    } catch (e) { lastErr = e as Error; }
+  }
+  throw lastErr ?? new Error("modeled thread did not form");
+}
+
+type SweepConfig = { frenet?: boolean; forceProfileSpineOthogonality?: boolean };
+
+/** Guard against OCC quietly dropping the thread ribs/grooves (some pitch/size
+ *  combos degenerate to a bare cylinder): throw so the feature can fall back. */
+function validateThread(rod: Shape3D, ok: (v: number) => boolean): Shape3D {
+  const v = volumeOfShape(rod);
+  if (!Number.isFinite(v) || !ok(v)) {
+    rod.delete();
+    throw new Error("modeled thread did not form cleanly (the kernel dropped the thread); try cosmetic, or a different pitch/diameter");
+  }
+  return rod;
+}
+
+/** Sweep one thread section along a helix (one start), returning the rib/groove
+ *  solid. Multi-start copies are the same helix rotated (which, on a lead-pitch
+ *  helix, is an exact axial interleave). */
+function sweepThreadSection(sec: ThreadSection, rBase: number, len: number, lead: number, leftHand: boolean, startIndex: number, starts: number, cfg: SweepConfig): Shape3D {
+  const xz = sec.poly.map((p) => [sec.mode === "rib" ? rBase + p.r : rBase - p.r, p.a] as [number, number]);
+  let pen = draw([xz[0][0], xz[0][1]]);
+  for (let i = 1; i < xz.length; i++) pen = pen.lineTo([xz[i][0], xz[i][1]]);
+  const wire = (pen.close().sketchOnPlane("XZ") as unknown as { wire: Wire }).wire;
+  // Run the helix from below z=0 to above len so the section is established at
+  // both ends; the rod is trimmed flat afterwards.
+  const helix = makeHelix(lead, len + 2 * lead, rBase, [0, 0, -lead], [0, 0, 1], leftHand);
+  let swept = genericSweep(wire, helix, cfg) as Shape3D;
+  if (startIndex > 0) {
+    const rot = rotateShape(swept, (360 / starts) * startIndex, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
+    swept.delete(); swept = rot;
+  }
+  return swept;
+}
+
+/** Trim a thread solid to exactly z ∈ [0, len] with flat ends. */
+function trimRod(shape: Shape3D, rMaj: number, len: number): Shape3D {
+  const clip = makeCylinder(rMaj + 1, len) as Shape3D;
+  const out = intersectShapes(shape, clip);
+  shape.delete(); clip.delete();
+  return out;
+}
+
+/** A cheap cosmetic thread: a plain major cylinder with shallow revolved V-ring
+ *  hints at the pitch spacing (robust and low-poly; a visual cue, not a mating
+ *  thread — a true shaded/bump-mapped thread needs the material system). */
+function buildThreadCosmetic(rMaj: number, depth: number, pitch: number, len: number): Shape3D {
+  let rod = makeCylinder(rMaj, len) as Shape3D;
+  const rings = Math.min(60, Math.max(1, Math.floor(len / pitch)));
+  const spacing = len / rings;
+  const ringDepth = Math.min(depth * 0.55, rMaj * 0.6);
+  const ah = pitch * 0.28;
+  for (let i = 0; i < rings; i++) {
+    const z = (i + 0.5) * spacing;
+    const groove = revolveProfileZ([[rMaj + 0.01, z - ah], [rMaj - ringDepth, z], [rMaj + 0.01, z + ah]]);
+    const cut = cutShapes(rod, groove); rod.delete(); groove.delete(); rod = cut;
+  }
+  return rod;
+}
+
 /** A parametric primitive solid (no sketch): built centred on `at`. */
 export interface PrimitiveSpec {
   shape: "box" | "cylinder" | "cone" | "sphere" | "torus";
@@ -410,12 +562,6 @@ export function buildPrimitive(s: PrimitiveSpec): Shape3D {
     shape.delete();
     return t;
   };
-  const revolveZ = (pts: [number, number][]): Shape3D => {
-    let pen = draw([pts[0][0], pts[0][1]]);
-    for (let i = 1; i < pts.length; i++) pen = pen.lineTo([pts[i][0], pts[i][1]]);
-    const sk = pen.close().sketchOnPlane("XZ") as unknown as { revolve: (dir: P3, o: { origin: P3; angle: number }) => Shape3D };
-    return sk.revolve([0, 0, 1], { origin: [0, 0, 0], angle: 360 });
-  };
   switch (s.shape) {
     case "box": {
       const x = req(s.x, "x") / 2, y = req(s.y, "y") / 2, z = req(s.z, "z") / 2;
@@ -430,7 +576,7 @@ export function buildPrimitive(s: PrimitiveSpec): Shape3D {
     case "cone": {
       const h = req(s.height, "height"), r1 = req(s.radius, "radius"), r2 = s.radius2 ?? 0;
       const pts: [number, number][] = r2 > 1e-9 ? [[0, 0], [r1, 0], [r2, h], [0, h]] : [[0, 0], [r1, 0], [0, h]];
-      return moveTo(revolveZ(pts), { x: s.at.x, y: s.at.y, z: s.at.z - h / 2 });
+      return moveTo(revolveProfileZ(pts), { x: s.at.x, y: s.at.y, z: s.at.z - h / 2 });
     }
     case "torus": {
       const R = req(s.radius, "radius"), t = req(s.tube, "tube");
