@@ -1,0 +1,63 @@
+// Rigid transforms (rotation + translation) in 3D, for component placement and
+// joints. A transform is an origin plus an orthonormal basis — the images of the
+// x/y/z axes — so applying it is the same mapping a WorkPlane uses for (u,v,w).
+
+import { Vec3, v3 } from "./vec";
+
+export interface Rigid {
+  origin: Vec3;
+  x: Vec3; // image of (1,0,0)
+  y: Vec3; // image of (0,1,0)
+  z: Vec3; // image of (0,0,1)
+}
+
+export const IDENTITY: Rigid = { origin: v3(0, 0, 0), x: v3(1, 0, 0), y: v3(0, 1, 0), z: v3(0, 0, 1) };
+
+export const translation = (t: Vec3): Rigid => ({ ...IDENTITY, origin: { ...t } });
+
+/** Map a point through the transform (rotate then translate). */
+export function applyPoint(T: Rigid, p: Vec3): Vec3 {
+  return {
+    x: T.origin.x + p.x * T.x.x + p.y * T.y.x + p.z * T.z.x,
+    y: T.origin.y + p.x * T.x.y + p.y * T.y.y + p.z * T.z.y,
+    z: T.origin.z + p.x * T.x.z + p.y * T.y.z + p.z * T.z.z,
+  };
+}
+
+/** Map a direction (rotation only, no translation). */
+export function applyVec(T: Rigid, v: Vec3): Vec3 {
+  return {
+    x: v.x * T.x.x + v.y * T.y.x + v.z * T.z.x,
+    y: v.x * T.x.y + v.y * T.y.y + v.z * T.z.y,
+    z: v.x * T.x.z + v.y * T.y.z + v.z * T.z.z,
+  };
+}
+
+/** Compose two transforms: compose(A, B) applies B, then A. */
+export function compose(A: Rigid, B: Rigid): Rigid {
+  return { origin: applyPoint(A, B.origin), x: applyVec(A, B.x), y: applyVec(A, B.y), z: applyVec(A, B.z) };
+}
+
+const normalize = (a: Vec3): Vec3 => { const m = Math.hypot(a.x, a.y, a.z) || 1; return { x: a.x / m, y: a.y / m, z: a.z / m }; };
+
+/** A rotation about `axis` (through the origin) by `angle` radians (Rodrigues). */
+export function rotation(axis: Vec3, angle: number): Rigid {
+  const n = normalize(axis);
+  const c = Math.cos(angle), s = Math.sin(angle), t = 1 - c;
+  const { x, y, z } = n;
+  // Columns of the rotation matrix = images of the basis vectors.
+  return {
+    origin: v3(0, 0, 0),
+    x: { x: t * x * x + c, y: t * x * y + s * z, z: t * x * z - s * y },
+    y: { x: t * x * y - s * z, y: t * y * y + c, z: t * y * z + s * x },
+    z: { x: t * x * z + s * y, y: t * y * z - s * x, z: t * z * z + c },
+  };
+}
+
+/** A rotation about `axis` through the point `center`. */
+export function rotationAbout(axis: Vec3, angle: number, center: Vec3): Rigid {
+  const R = rotation(axis, angle);
+  // Translate center→origin, rotate, translate back: origin = center - R·center.
+  const rc = applyVec(R, center);
+  return { ...R, origin: { x: center.x - rc.x, y: center.y - rc.y, z: center.z - rc.z } };
+}

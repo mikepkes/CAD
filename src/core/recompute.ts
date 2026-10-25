@@ -8,7 +8,9 @@ import { resolveParameters } from "../model/parameters";
 import { ConstraintSolver, SolveDiagnosis } from "./solver/model";
 import { compileSketch } from "./solver/compile";
 import { compileExpr, Scope } from "../math/expr";
-import { planeById, offsetPlane } from "../geometry/plane";
+import { planeById, offsetPlane, WorkPlane } from "../geometry/plane";
+import { Rigid, IDENTITY, translation, compose, applyPoint, applyVec, rotationAbout } from "../math/transform";
+import { Joint } from "./document";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchLine, SketchPoint } from "../sketch/types";
 
 export interface SketchEvaluation {
@@ -32,16 +34,18 @@ export async function recompute(
   // the sketches that live on it — so a sketch/feature built on a datum moves
   // when the datum's offset changes.
   resolveDatumPlanes(doc, scope);
+  const componentWorld = resolveComponentWorld(doc, scope);
   for (const sk of Object.values(doc.sketches)) {
     if (sk.datumId) sk.plane = doc.planes[sk.datumId]?.plane;
-    // Component placement: compose the owning component's world translation into
-    // the frame. Rebuilt from an immutable base (datum frame or origin plane)
-    // every recompute, so the offset never accumulates. Face/offset ("custom")
-    // sketches already carry world position, so they are left as-is.
-    const off = componentWorldOffset(doc, sk.componentId);
-    if ((off.x || off.y || off.z) && sk.planeId !== "custom") {
+    // Component placement: compose the owning component's world frame (static
+    // offset or joint-driven rigid transform) into the sketch frame. Rebuilt
+    // from an immutable base (datum frame or origin plane) every recompute, so
+    // it never accumulates. Face/offset ("custom") sketches already carry world
+    // position, so they are left as-is.
+    const W = sk.componentId ? componentWorld.get(sk.componentId) : undefined;
+    if (W && !isIdentity(W) && sk.planeId !== "custom") {
       const base = sk.datumId ? doc.planes[sk.datumId]?.plane : planeById(sk.planeId);
-      if (base) sk.plane = { ...base, origin: { x: base.origin.x + off.x, y: base.origin.y + off.y, z: base.origin.z + off.z } };
+      if (base) sk.plane = transformPlane(W, base);
     }
   }
 
@@ -113,18 +117,64 @@ export async function recompute(
   return evals;
 }
 
-/** Sum a component's placement up the parent chain → its world translation. */
-function componentWorldOffset(doc: CadDocument, componentId?: string): { x: number; y: number; z: number } {
-  const off = { x: 0, y: 0, z: 0 };
-  const seen = new Set<string>();
-  let id = componentId;
-  while (id && doc.components[id] && !seen.has(id)) {
-    seen.add(id);
-    const t = doc.components[id].transform?.position;
-    if (t) { off.x += t.x; off.y += t.y; off.z += t.z; }
-    id = doc.components[id].parentId ?? undefined;
+const DEG = Math.PI / 180;
+
+/** The world rigid transform a joint gives its `moved` component. */
+function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope): Rigid {
+  let value = j.valueValue;
+  try { const v = compileExpr(j.valueExpr).eval(scope); if (Number.isFinite(v)) value = v; } catch { /* keep last */ }
+  j.valueValue = value;
+  const conn = applyPoint(baseWorld, j.baseOrigin);          // base connector in world
+  const axis = applyVec(baseWorld, j.axis);                  // joint axis in world
+  // Place `moved` so its connector coincides with the base connector (no rotation).
+  const seat = translation({ x: conn.x - j.movedOrigin.x, y: conn.y - j.movedOrigin.y, z: conn.z - j.movedOrigin.z });
+  if (j.kind === "revolute") return compose(rotationAbout(axis, value * DEG, conn), seat);
+  if (j.kind === "slider") {
+    const m = Math.hypot(axis.x, axis.y, axis.z) || 1;
+    return compose(translation({ x: (axis.x / m) * value, y: (axis.y / m) * value, z: (axis.z / m) * value }), seat);
   }
-  return off;
+  return seat; // rigid
+}
+
+/** Resolve every component's world frame — from its joint if it has one, else
+ *  its static placement composed down the parent chain. */
+function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<string, Rigid> {
+  const jointByMoved = new Map<string, Joint>();
+  for (const j of Object.values(doc.joints)) {
+    j.error = undefined;
+    if (!doc.components[j.base]) { j.error = `joint base "${j.base}" not found`; continue; }
+    if (!doc.components[j.moved]) { j.error = `joint moved "${j.moved}" not found`; continue; }
+    jointByMoved.set(j.moved, j);
+  }
+  const world = new Map<string, Rigid>();
+  const active = new Set<string>();
+  const resolve = (id: string): Rigid => {
+    const cached = world.get(id);
+    if (cached) return cached;
+    const c = doc.components[id];
+    if (!c || active.has(id)) return IDENTITY; // missing or cycle
+    active.add(id);
+    const j = jointByMoved.get(id);
+    let W: Rigid;
+    if (j) W = jointWorld(resolve(j.base), j, scope);
+    else if (c.parentId) W = compose(resolve(c.parentId), translation(c.transform.position));
+    else W = IDENTITY;
+    active.delete(id);
+    world.set(id, W);
+    return W;
+  };
+  for (const id of Object.keys(doc.components)) resolve(id);
+  return world;
+}
+
+const isIdentity = (W: Rigid): boolean =>
+  Math.abs(W.origin.x) < 1e-9 && Math.abs(W.origin.y) < 1e-9 && Math.abs(W.origin.z) < 1e-9 &&
+  Math.abs(W.x.x - 1) < 1e-9 && Math.abs(W.y.y - 1) < 1e-9 && Math.abs(W.z.z - 1) < 1e-9 &&
+  Math.abs(W.x.y) < 1e-9 && Math.abs(W.x.z) < 1e-9 && Math.abs(W.y.x) < 1e-9;
+
+/** Map a work plane through a rigid transform (rotate the basis, move the origin). */
+function transformPlane(W: Rigid, p: WorkPlane): WorkPlane {
+  return { ...p, origin: applyPoint(W, p.origin), u: applyVec(W, p.u), v: applyVec(W, p.v), normal: applyVec(W, p.normal) };
 }
 
 /** Resolve each datum plane's frame from its base + offset expression. Chains

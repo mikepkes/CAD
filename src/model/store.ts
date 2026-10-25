@@ -235,6 +235,8 @@ export interface AppState {
   /** Extrude a planar face directly: project its boundary into a new sketch and target it. */
   startFaceExtrude: (hit: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => Promise<void>;
   editFeatureDistance: (featureId: string, expr: string) => Promise<void>;
+  editJointValue: (jointId: string, expr: string) => Promise<void>;
+  deleteJoint: (jointId: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step") => Promise<void>;
 
@@ -813,6 +815,14 @@ export const useStore = create<AppState>((set, get) => {
     },
     deleteFeature: async (featureId) => {
       const op = get().session.timeline.find((o) => o.type.startsWith("feature.") && o.createdIds.includes(featureId));
+      if (op) await get().deleteOperation(op.opId);
+    },
+    editJointValue: async (jointId, expr) => {
+      const op = get().session.timeline.find((o) => o.type === "joint.create" && o.createdIds.includes(jointId));
+      if (op) await get().editOperation(op.opId, { ...op.params, value: expr });
+    },
+    deleteJoint: async (jointId) => {
+      const op = get().session.timeline.find((o) => o.type === "joint.create" && o.createdIds.includes(jointId));
       if (op) await get().deleteOperation(op.opId);
     },
     exportSolid: async (format) => {

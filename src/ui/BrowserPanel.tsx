@@ -64,6 +64,7 @@ export function BrowserPanel() {
   const session = useStore((s) => s.session);
   useStore((s) => s.rev); // re-render on changes
   const startSketch = useStore((s) => s.startSketch);
+  const editJointValue = useStore((s) => s.editJointValue);
   const doc = session.doc;
   const root = doc.components[doc.rootComponentId];
   const datums = Object.values(doc.planes);
@@ -91,7 +92,28 @@ export function BrowserPanel() {
           </div>
         ))}
         <ComponentNode doc={doc} id={doc.rootComponentId} depth={0} />
-        {empty && <div className="muted">No sketches yet.</div>}
+        {Object.values(doc.joints).map((j) => (
+          <div key={j.id} className="tree-row" style={{ paddingLeft: 22 }} title={j.error ? `Unresolved: ${j.error}` : `${j.kind} joint: ${doc.components[j.moved]?.name ?? j.moved} → ${doc.components[j.base]?.name ?? j.base}`}>
+            <span className="tree-icon" style={{ color: "#8fd3ff" }}>⚙</span>
+            <span className="tree-label">
+              {j.name} <span className="muted-inline">· {j.kind}</span>
+            </span>
+            {j.kind !== "rigid" && (
+              <input
+                className="dim-expr"
+                style={{ width: 54 }}
+                defaultValue={j.valueExpr}
+                key={j.id + j.valueExpr}
+                title={j.kind === "revolute" ? "Angle (degrees)" : "Distance"}
+                onClick={(e) => e.stopPropagation()}
+                onBlur={(e) => { if (e.target.value !== j.valueExpr) editJointValue(j.id, e.target.value); }}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+              />
+            )}
+            {j.error && <span className="dof-dot bad" />}
+          </div>
+        ))}
+        {empty && Object.keys(doc.joints).length === 0 && <div className="muted">No sketches yet.</div>}
       </div>
     </div>
   );

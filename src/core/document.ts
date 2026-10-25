@@ -185,6 +185,31 @@ export interface TimelineGroup {
   collapsed: boolean;
 }
 
+/**
+ * An assembly joint: positions the `moved` component relative to `base` by
+ * aligning a connector point on each (in local coordinates), then applying the
+ * joint's motion. Resolved to the moved component's world frame by recompute.
+ *  - rigid: fully fixed (connectors coincide, no residual motion)
+ *  - revolute: free rotation about `axis` by `value` degrees
+ *  - slider: free translation along `axis` by `value`
+ */
+export interface Joint {
+  id: string;
+  name: string;
+  kind: "rigid" | "revolute" | "slider";
+  base: string;  // base component id (root = ground)
+  moved: string; // the component this joint places
+  /** Connector point on each component, in that component's LOCAL coordinates. */
+  baseOrigin: { x: number; y: number; z: number };
+  movedOrigin: { x: number; y: number; z: number };
+  /** Joint axis in the base component's local frame (revolute/slider). */
+  axis: { x: number; y: number; z: number };
+  /** Motion value expression (degrees for revolute, length for slider). */
+  valueExpr: string;
+  valueValue: number;
+  error?: string;
+}
+
 export interface CadDocument {
   schema: 1;
   id: string;
@@ -205,6 +230,7 @@ export interface CadDocument {
   rootComponentId: string;
   components: Record<string, Component>;
   planes: Record<string, DatumPlane>;
+  joints: Record<string, Joint>;
   sketches: Record<string, Sketch>;
   features: Record<string, FeatureDef>;
 }
@@ -234,6 +260,7 @@ export function createDocument(id = "doc1"): CadDocument {
     rootComponentId: rootId,
     components: freshComponents(rootId),
     planes: {},
+    joints: {},
     sketches: {},
     features: {},
   };
