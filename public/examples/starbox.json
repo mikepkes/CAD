@@ -1,0 +1,1478 @@
+{
+  "format": "chisel-cad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 342,
+  "rollbackIndex": 49,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "component.create",
+      "params": {
+        "name": "Star half"
+      },
+      "createdIds": [
+        "cmp2"
+      ],
+      "label": "New component",
+      "at": 1793056125922
+    },
+    {
+      "opId": "op3",
+      "type": "material.create",
+      "params": {
+        "name": "TPU",
+        "kind": "plastic",
+        "finish": "matte",
+        "color": "#f2c14e"
+      },
+      "createdIds": [
+        "mat4"
+      ],
+      "label": "Create material",
+      "at": 1793056125923
+    },
+    {
+      "opId": "op5",
+      "type": "material.assign",
+      "params": {
+        "material": "mat4",
+        "component": "cmp2"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793056125923
+    },
+    {
+      "opId": "op6",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp2",
+        "name": "Star"
+      },
+      "createdIds": [
+        "sketch7",
+        "pt8"
+      ],
+      "label": "Create sketch",
+      "at": 1793056125923
+    },
+    {
+      "opId": "op9",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch7",
+        "points": [
+          {
+            "x": 2.388061258337339e-15,
+            "y": 39
+          },
+          {
+            "x": -10.403798965576772,
+            "y": 14.31960080043657
+          },
+          {
+            "x": -37.091204135510985,
+            "y": 12.051662780622953
+          },
+          {
+            "x": -16.833700338424215,
+            "y": -5.469600800436575
+          },
+          {
+            "x": -22.923624839406457,
+            "y": -31.551662780622948
+          },
+          {
+            "x": -3.2514372517362224e-15,
+            "y": -17.7
+          },
+          {
+            "x": 22.923624839406443,
+            "y": -31.551662780622955
+          },
+          {
+            "x": 16.833700338424215,
+            "y": -5.469600800436573
+          },
+          {
+            "x": 37.09120413551099,
+            "y": 12.051662780622939
+          },
+          {
+            "x": 10.40379896557679,
+            "y": 14.319600800436557
+          }
+        ]
+      },
+      "createdIds": [
+        "pt10",
+        "pt11",
+        "pt12",
+        "pt13",
+        "pt14",
+        "pt15",
+        "pt16",
+        "pt17",
+        "pt18",
+        "pt19",
+        "ln20",
+        "ln21",
+        "ln22",
+        "ln23",
+        "ln24",
+        "ln25",
+        "ln26",
+        "ln27",
+        "ln28",
+        "ln29"
+      ],
+      "label": "Polyline",
+      "at": 1793056125951
+    },
+    {
+      "opId": "op30",
+      "type": "sketch.filletCorners",
+      "params": {
+        "sketch": "sketch7",
+        "points": [
+          "pt10",
+          "pt12",
+          "pt14",
+          "pt16",
+          "pt18"
+        ],
+        "size": 3.5
+      },
+      "createdIds": [
+        "pt31",
+        "pt32",
+        "pt33",
+        "ar34",
+        "pt35",
+        "pt36",
+        "pt37",
+        "ar38",
+        "pt39",
+        "pt40",
+        "pt41",
+        "ar42",
+        "pt43",
+        "pt44",
+        "pt45",
+        "ar46",
+        "pt47",
+        "pt48",
+        "pt49",
+        "ar50"
+      ],
+      "label": "Fillet corners",
+      "at": 1793056125953
+    },
+    {
+      "opId": "op51",
+      "type": "sketch.filletCorners",
+      "params": {
+        "sketch": "sketch7",
+        "points": [
+          "pt11",
+          "pt13",
+          "pt15",
+          "pt17",
+          "pt19"
+        ],
+        "size": 2.5
+      },
+      "createdIds": [
+        "pt52",
+        "pt53",
+        "pt54",
+        "ar55",
+        "pt56",
+        "pt57",
+        "pt58",
+        "ar59",
+        "pt60",
+        "pt61",
+        "pt62",
+        "ar63",
+        "pt64",
+        "pt65",
+        "pt66",
+        "ar67",
+        "pt68",
+        "pt69",
+        "pt70",
+        "ar71"
+      ],
+      "label": "Fillet corners",
+      "at": 1793056125959
+    },
+    {
+      "opId": "op72",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch7",
+        "distance": "14",
+        "name": "Shell"
+      },
+      "createdIds": [
+        "ext73"
+      ],
+      "label": "Extrude",
+      "at": 1793056125962
+    },
+    {
+      "opId": "op74",
+      "type": "feature.fillet",
+      "params": {
+        "radius": "1.5",
+        "edges": {
+          "inPlane": {
+            "plane": "XY",
+            "offset": 0
+          }
+        },
+        "name": "Base round"
+      },
+      "createdIds": [
+        "fil75"
+      ],
+      "label": "Fillet edges",
+      "at": 1793056125964
+    },
+    {
+      "opId": "op76",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 2,
+        "component": "cmp2",
+        "name": "Cavity"
+      },
+      "createdIds": [
+        "sketch77",
+        "pt78"
+      ],
+      "label": "Create sketch",
+      "at": 1793056125967
+    },
+    {
+      "opId": "op79",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch77",
+        "points": [
+          {
+            "x": 2.4813837314210846e-15,
+            "y": 32.3065454461008
+          },
+          {
+            "x": -8.61822574598724,
+            "y": 11.861970103316036
+          },
+          {
+            "x": -30.725350565499678,
+            "y": 9.983271572391716
+          },
+          {
+            "x": -13.944582179726774,
+            "y": -4.530869405931629
+          },
+          {
+            "x": -18.989310965734607,
+            "y": -26.1365442954421
+          },
+          {
+            "x": -6.019689831898912e-15,
+            "y": -14.662201394768818
+          },
+          {
+            "x": 18.9893109657346,
+            "y": -26.136544295442114
+          },
+          {
+            "x": 13.944582179726774,
+            "y": -4.530869405931626
+          },
+          {
+            "x": 30.72535056549968,
+            "y": 9.983271572391704
+          },
+          {
+            "x": 8.618225745987262,
+            "y": 11.861970103316022
+          }
+        ]
+      },
+      "createdIds": [
+        "pt80",
+        "pt81",
+        "pt82",
+        "pt83",
+        "pt84",
+        "pt85",
+        "pt86",
+        "pt87",
+        "pt88",
+        "pt89",
+        "ln90",
+        "ln91",
+        "ln92",
+        "ln93",
+        "ln94",
+        "ln95",
+        "ln96",
+        "ln97",
+        "ln98",
+        "ln99"
+      ],
+      "label": "Polyline",
+      "at": 1793056125969
+    },
+    {
+      "opId": "op100",
+      "type": "sketch.filletCorners",
+      "params": {
+        "sketch": "sketch77",
+        "points": [
+          "pt80",
+          "pt82",
+          "pt84",
+          "pt86",
+          "pt88"
+        ],
+        "size": 0.8999999999999999
+      },
+      "createdIds": [
+        "pt101",
+        "pt102",
+        "pt103",
+        "ar104",
+        "pt105",
+        "pt106",
+        "pt107",
+        "ar108",
+        "pt109",
+        "pt110",
+        "pt111",
+        "ar112",
+        "pt113",
+        "pt114",
+        "pt115",
+        "ar116",
+        "pt117",
+        "pt118",
+        "pt119",
+        "ar120"
+      ],
+      "label": "Fillet corners",
+      "at": 1793056125971
+    },
+    {
+      "opId": "op121",
+      "type": "sketch.filletCorners",
+      "params": {
+        "sketch": "sketch77",
+        "points": [
+          "pt81",
+          "pt83",
+          "pt85",
+          "pt87",
+          "pt89"
+        ],
+        "size": 5.1
+      },
+      "createdIds": [
+        "pt122",
+        "pt123",
+        "pt124",
+        "ar125",
+        "pt126",
+        "pt127",
+        "pt128",
+        "ar129",
+        "pt130",
+        "pt131",
+        "pt132",
+        "ar133",
+        "pt134",
+        "pt135",
+        "pt136",
+        "ar137",
+        "pt138",
+        "pt139",
+        "pt140",
+        "ar141"
+      ],
+      "label": "Fillet corners",
+      "at": 1793056125974
+    },
+    {
+      "opId": "op142",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch77",
+        "distance": "14",
+        "operation": "cut",
+        "name": "Cavity"
+      },
+      "createdIds": [
+        "ext143"
+      ],
+      "label": "Extrude",
+      "at": 1793056125977
+    },
+    {
+      "opId": "op144",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Tongue 0",
+        "planeDef": {
+          "origin": {
+            "x": -7.144095384070329,
+            "y": 22.052428580943914,
+            "z": 0
+          },
+          "normal": {
+            "x": -0.38843918025638885,
+            "y": -0.921474363854874,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch145",
+        "pt146"
+      ],
+      "label": "Create sketch",
+      "at": 1793056125981
+    },
+    {
+      "opId": "op147",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch145",
+        "points": [
+          {
+            "x": 2.2,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 21
+          },
+          {
+            "x": 3.15,
+            "y": 21
+          },
+          {
+            "x": 1.75,
+            "y": 18.6
+          },
+          {
+            "x": 1.75,
+            "y": 18
+          },
+          {
+            "x": 2.85,
+            "y": 16.9
+          },
+          {
+            "x": 2.85,
+            "y": 13.4
+          },
+          {
+            "x": 2.2,
+            "y": 13.4
+          }
+        ]
+      },
+      "createdIds": [
+        "pt148",
+        "pt149",
+        "pt150",
+        "pt151",
+        "pt152",
+        "pt153",
+        "pt154",
+        "pt155",
+        "pt156",
+        "ln157",
+        "ln158",
+        "ln159",
+        "ln160",
+        "ln161",
+        "ln162",
+        "ln163",
+        "ln164",
+        "ln165"
+      ],
+      "label": "Polyline",
+      "at": 1793056125985
+    },
+    {
+      "opId": "op166",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch145",
+        "distance": "6",
+        "symmetric": true,
+        "operation": "join",
+        "name": "Tongue 0"
+      },
+      "createdIds": [
+        "ext167"
+      ],
+      "label": "Extrude",
+      "at": 1793056125988
+    },
+    {
+      "opId": "op168",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Pocket 9",
+        "planeDef": {
+          "origin": {
+            "x": 7.144095384070329,
+            "y": 22.052428580943914,
+            "z": 0
+          },
+          "normal": {
+            "x": -0.3884391802563891,
+            "y": 0.9214743638548738,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch169",
+        "pt170"
+      ],
+      "label": "Create sketch",
+      "at": 1793056125991
+    },
+    {
+      "opId": "op171",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch169",
+        "points": [
+          {
+            "x": 3.35,
+            "y": 11.850000000000001
+          },
+          {
+            "x": 1.45,
+            "y": 9.95
+          },
+          {
+            "x": 1.45,
+            "y": 9
+          },
+          {
+            "x": 3.35,
+            "y": 6.100000000000001
+          }
+        ]
+      },
+      "createdIds": [
+        "pt172",
+        "pt173",
+        "pt174",
+        "pt175",
+        "ln176",
+        "ln177",
+        "ln178",
+        "ln179"
+      ],
+      "label": "Polyline",
+      "at": 1793056125994
+    },
+    {
+      "opId": "op180",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch169",
+        "distance": "7",
+        "symmetric": true,
+        "operation": "cut",
+        "name": "Pocket 9"
+      },
+      "createdIds": [
+        "ext181"
+      ],
+      "label": "Extrude",
+      "at": 1793056125997
+    },
+    {
+      "opId": "op182",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Tongue 2",
+        "planeDef": {
+          "origin": {
+            "x": -23.180752785153544,
+            "y": 0.020136730697256855,
+            "z": 0
+          },
+          "normal": {
+            "x": 0.7563398903628114,
+            "y": -0.6541788518791865,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch183",
+        "pt184"
+      ],
+      "label": "Create sketch",
+      "at": 1793056126000
+    },
+    {
+      "opId": "op185",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch183",
+        "points": [
+          {
+            "x": 2.2,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 21
+          },
+          {
+            "x": 3.15,
+            "y": 21
+          },
+          {
+            "x": 1.75,
+            "y": 18.6
+          },
+          {
+            "x": 1.75,
+            "y": 18
+          },
+          {
+            "x": 2.85,
+            "y": 16.9
+          },
+          {
+            "x": 2.85,
+            "y": 13.4
+          },
+          {
+            "x": 2.2,
+            "y": 13.4
+          }
+        ]
+      },
+      "createdIds": [
+        "pt186",
+        "pt187",
+        "pt188",
+        "pt189",
+        "pt190",
+        "pt191",
+        "pt192",
+        "pt193",
+        "pt194",
+        "ln195",
+        "ln196",
+        "ln197",
+        "ln198",
+        "ln199",
+        "ln200",
+        "ln201",
+        "ln202",
+        "ln203"
+      ],
+      "label": "Polyline",
+      "at": 1793056126003
+    },
+    {
+      "opId": "op204",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch183",
+        "distance": "6",
+        "symmetric": true,
+        "operation": "join",
+        "name": "Tongue 2"
+      },
+      "createdIds": [
+        "ext205"
+      ],
+      "label": "Extrude",
+      "at": 1793056126006
+    },
+    {
+      "opId": "op206",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Pocket 7",
+        "planeDef": {
+          "origin": {
+            "x": 23.180752785153544,
+            "y": 0.020136730697256855,
+            "z": 0
+          },
+          "normal": {
+            "x": 0.7563398903628118,
+            "y": 0.6541788518791859,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch207",
+        "pt208"
+      ],
+      "label": "Create sketch",
+      "at": 1793056126009
+    },
+    {
+      "opId": "op209",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch207",
+        "points": [
+          {
+            "x": 3.35,
+            "y": 11.850000000000001
+          },
+          {
+            "x": 1.45,
+            "y": 9.95
+          },
+          {
+            "x": 1.45,
+            "y": 9
+          },
+          {
+            "x": 3.35,
+            "y": 6.100000000000001
+          }
+        ]
+      },
+      "createdIds": [
+        "pt210",
+        "pt211",
+        "pt212",
+        "pt213",
+        "ln214",
+        "ln215",
+        "ln216",
+        "ln217"
+      ],
+      "label": "Polyline",
+      "at": 1793056126013
+    },
+    {
+      "opId": "op218",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch207",
+        "distance": "7",
+        "symmetric": true,
+        "operation": "cut",
+        "name": "Pocket 7"
+      },
+      "createdIds": [
+        "ext219"
+      ],
+      "label": "Extrude",
+      "at": 1793056126016
+    },
+    {
+      "opId": "op220",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Tongue 4",
+        "planeDef": {
+          "origin": {
+            "x": -7.182397721963354,
+            "y": -22.039983396950706,
+            "z": 0
+          },
+          "normal": {
+            "x": 0.8558829395479753,
+            "y": 0.5171695986721538,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch221",
+        "pt222"
+      ],
+      "label": "Create sketch",
+      "at": 1793056126019
+    },
+    {
+      "opId": "op223",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch221",
+        "points": [
+          {
+            "x": 2.2,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 21
+          },
+          {
+            "x": 3.15,
+            "y": 21
+          },
+          {
+            "x": 1.75,
+            "y": 18.6
+          },
+          {
+            "x": 1.75,
+            "y": 18
+          },
+          {
+            "x": 2.85,
+            "y": 16.9
+          },
+          {
+            "x": 2.85,
+            "y": 13.4
+          },
+          {
+            "x": 2.2,
+            "y": 13.4
+          }
+        ]
+      },
+      "createdIds": [
+        "pt224",
+        "pt225",
+        "pt226",
+        "pt227",
+        "pt228",
+        "pt229",
+        "pt230",
+        "pt231",
+        "pt232",
+        "ln233",
+        "ln234",
+        "ln235",
+        "ln236",
+        "ln237",
+        "ln238",
+        "ln239",
+        "ln240",
+        "ln241"
+      ],
+      "label": "Polyline",
+      "at": 1793056126022
+    },
+    {
+      "opId": "op242",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch221",
+        "distance": "6",
+        "symmetric": true,
+        "operation": "join",
+        "name": "Tongue 4"
+      },
+      "createdIds": [
+        "ext243"
+      ],
+      "label": "Extrude",
+      "at": 1793056126025
+    },
+    {
+      "opId": "op244",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Pocket 5",
+        "planeDef": {
+          "origin": {
+            "x": 7.182397721963354,
+            "y": -22.039983396950706,
+            "z": 0
+          },
+          "normal": {
+            "x": 0.8558829395479752,
+            "y": -0.5171695986721542,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch245",
+        "pt246"
+      ],
+      "label": "Create sketch",
+      "at": 1793056126035
+    },
+    {
+      "opId": "op247",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch245",
+        "points": [
+          {
+            "x": 3.35,
+            "y": 11.850000000000001
+          },
+          {
+            "x": 1.45,
+            "y": 9.95
+          },
+          {
+            "x": 1.45,
+            "y": 9
+          },
+          {
+            "x": 3.35,
+            "y": 6.100000000000001
+          }
+        ]
+      },
+      "createdIds": [
+        "pt248",
+        "pt249",
+        "pt250",
+        "pt251",
+        "ln252",
+        "ln253",
+        "ln254",
+        "ln255"
+      ],
+      "label": "Polyline",
+      "at": 1793056126038
+    },
+    {
+      "opId": "op256",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch245",
+        "distance": "7",
+        "symmetric": true,
+        "operation": "cut",
+        "name": "Pocket 5"
+      },
+      "createdIds": [
+        "ext257"
+      ],
+      "label": "Extrude",
+      "at": 1793056126041
+    },
+    {
+      "opId": "op258",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Tongue 6",
+        "planeDef": {
+          "origin": {
+            "x": 18.741786872260374,
+            "y": -13.641595581496166,
+            "z": 0
+          },
+          "normal": {
+            "x": -0.22737514333099096,
+            "y": 0.9738072418067198,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch259",
+        "pt260"
+      ],
+      "label": "Create sketch",
+      "at": 1793056126045
+    },
+    {
+      "opId": "op261",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch259",
+        "points": [
+          {
+            "x": 2.2,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 21
+          },
+          {
+            "x": 3.15,
+            "y": 21
+          },
+          {
+            "x": 1.75,
+            "y": 18.6
+          },
+          {
+            "x": 1.75,
+            "y": 18
+          },
+          {
+            "x": 2.85,
+            "y": 16.9
+          },
+          {
+            "x": 2.85,
+            "y": 13.4
+          },
+          {
+            "x": 2.2,
+            "y": 13.4
+          }
+        ]
+      },
+      "createdIds": [
+        "pt262",
+        "pt263",
+        "pt264",
+        "pt265",
+        "pt266",
+        "pt267",
+        "pt268",
+        "pt269",
+        "pt270",
+        "ln271",
+        "ln272",
+        "ln273",
+        "ln274",
+        "ln275",
+        "ln276",
+        "ln277",
+        "ln278",
+        "ln279"
+      ],
+      "label": "Polyline",
+      "at": 1793056126048
+    },
+    {
+      "opId": "op280",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch259",
+        "distance": "6",
+        "symmetric": true,
+        "operation": "join",
+        "name": "Tongue 6"
+      },
+      "createdIds": [
+        "ext281"
+      ],
+      "label": "Extrude",
+      "at": 1793056126051
+    },
+    {
+      "opId": "op282",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Pocket 3",
+        "planeDef": {
+          "origin": {
+            "x": -18.741786872260374,
+            "y": -13.641595581496166,
+            "z": 0
+          },
+          "normal": {
+            "x": -0.2273751433309915,
+            "y": -0.9738072418067197,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch283",
+        "pt284"
+      ],
+      "label": "Create sketch",
+      "at": 1793056126054
+    },
+    {
+      "opId": "op285",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch283",
+        "points": [
+          {
+            "x": 3.35,
+            "y": 11.850000000000001
+          },
+          {
+            "x": 1.45,
+            "y": 9.95
+          },
+          {
+            "x": 1.45,
+            "y": 9
+          },
+          {
+            "x": 3.35,
+            "y": 6.100000000000001
+          }
+        ]
+      },
+      "createdIds": [
+        "pt286",
+        "pt287",
+        "pt288",
+        "pt289",
+        "ln290",
+        "ln291",
+        "ln292",
+        "ln293"
+      ],
+      "label": "Polyline",
+      "at": 1793056126057
+    },
+    {
+      "opId": "op294",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch283",
+        "distance": "7",
+        "symmetric": true,
+        "operation": "cut",
+        "name": "Pocket 3"
+      },
+      "createdIds": [
+        "ext295"
+      ],
+      "label": "Extrude",
+      "at": 1793056126060
+    },
+    {
+      "opId": "op296",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Tongue 8",
+        "planeDef": {
+          "origin": {
+            "x": 18.765459018926855,
+            "y": 13.60901366680568,
+            "z": 0
+          },
+          "normal": {
+            "x": -0.996408506323407,
+            "y": 0.08467637525518651,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch297",
+        "pt298"
+      ],
+      "label": "Create sketch",
+      "at": 1793056126063
+    },
+    {
+      "opId": "op299",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch297",
+        "points": [
+          {
+            "x": 2.2,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 8
+          },
+          {
+            "x": 4.85,
+            "y": 21
+          },
+          {
+            "x": 3.15,
+            "y": 21
+          },
+          {
+            "x": 1.75,
+            "y": 18.6
+          },
+          {
+            "x": 1.75,
+            "y": 18
+          },
+          {
+            "x": 2.85,
+            "y": 16.9
+          },
+          {
+            "x": 2.85,
+            "y": 13.4
+          },
+          {
+            "x": 2.2,
+            "y": 13.4
+          }
+        ]
+      },
+      "createdIds": [
+        "pt300",
+        "pt301",
+        "pt302",
+        "pt303",
+        "pt304",
+        "pt305",
+        "pt306",
+        "pt307",
+        "pt308",
+        "ln309",
+        "ln310",
+        "ln311",
+        "ln312",
+        "ln313",
+        "ln314",
+        "ln315",
+        "ln316",
+        "ln317"
+      ],
+      "label": "Polyline",
+      "at": 1793056126067
+    },
+    {
+      "opId": "op318",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch297",
+        "distance": "6",
+        "symmetric": true,
+        "operation": "join",
+        "name": "Tongue 8"
+      },
+      "createdIds": [
+        "ext319"
+      ],
+      "label": "Extrude",
+      "at": 1793056126070
+    },
+    {
+      "opId": "op320",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Pocket 1",
+        "planeDef": {
+          "origin": {
+            "x": -18.765459018926855,
+            "y": 13.60901366680568,
+            "z": 0
+          },
+          "normal": {
+            "x": -0.996408506323407,
+            "y": -0.0846763752551864,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch321",
+        "pt322"
+      ],
+      "label": "Create sketch",
+      "at": 1793056126073
+    },
+    {
+      "opId": "op323",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch321",
+        "points": [
+          {
+            "x": 3.35,
+            "y": 11.850000000000001
+          },
+          {
+            "x": 1.45,
+            "y": 9.95
+          },
+          {
+            "x": 1.45,
+            "y": 9
+          },
+          {
+            "x": 3.35,
+            "y": 6.100000000000001
+          }
+        ]
+      },
+      "createdIds": [
+        "pt324",
+        "pt325",
+        "pt326",
+        "pt327",
+        "ln328",
+        "ln329",
+        "ln330",
+        "ln331"
+      ],
+      "label": "Polyline",
+      "at": 1793056126077
+    },
+    {
+      "opId": "op332",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch321",
+        "distance": "7",
+        "symmetric": true,
+        "operation": "cut",
+        "name": "Pocket 1"
+      },
+      "createdIds": [
+        "ext333"
+      ],
+      "label": "Extrude",
+      "at": 1793056126080
+    },
+    {
+      "opId": "op334",
+      "type": "component.connector",
+      "params": {
+        "component": "cmp2",
+        "name": "seat",
+        "origin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "createdIds": [],
+      "label": "Add connector",
+      "at": 1793056126083
+    },
+    {
+      "opId": "op335",
+      "type": "component.connector",
+      "params": {
+        "component": "cmp2",
+        "name": "rim",
+        "origin": {
+          "x": 0,
+          "y": 0,
+          "z": 14
+        }
+      },
+      "createdIds": [],
+      "label": "Add connector",
+      "at": 1793056126087
+    },
+    {
+      "opId": "op336",
+      "type": "assembly.pattern",
+      "params": {
+        "source": "cmp2",
+        "count": 2,
+        "name": "Box"
+      },
+      "createdIds": [
+        "apat337"
+      ],
+      "label": "Pattern components (jointed)",
+      "at": 1793056126091
+    },
+    {
+      "opId": "op338",
+      "type": "joint.template",
+      "params": {
+        "pattern": "apat337",
+        "kind": "rigid",
+        "base": {
+          "role": "root",
+          "origin": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        "moved": {
+          "role": "self",
+          "component": "cmp2",
+          "port": "seat"
+        },
+        "appliesTo": "first",
+        "name": "Bottom"
+      },
+      "createdIds": [
+        "jtpl339"
+      ],
+      "label": "Joint template",
+      "at": 1793056126097
+    },
+    {
+      "opId": "op340",
+      "type": "joint.template",
+      "params": {
+        "pattern": "apat337",
+        "kind": "revolute",
+        "base": {
+          "role": "root",
+          "origin": {
+            "x": 0,
+            "y": 0,
+            "z": 14
+          }
+        },
+        "moved": {
+          "role": "self",
+          "component": "cmp2",
+          "port": "rim"
+        },
+        "axis": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "value": "180",
+        "appliesTo": "rest",
+        "name": "Top (flipped)"
+      },
+      "createdIds": [
+        "jtpl341"
+      ],
+      "label": "Joint template",
+      "at": 1793056126101
+    }
+  ],
+  "timelineGroups": []
+}

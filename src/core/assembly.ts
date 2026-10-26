@@ -15,7 +15,7 @@
 // "self/prev/root + port", and the expander resolves it to a concrete id the
 // same way every rebuild.
 
-import { CadDocument, Joint, RoleRef } from "./document";
+import { CadDocument, FeatureDef, Joint, RoleRef, SketchFeature } from "./document";
 import { Scope, compileExpr } from "../math/expr";
 import { Sketch } from "../sketch/types";
 import { Rigid, IDENTITY, compose, invert, applyPoint, applyVec } from "../math/transform";
@@ -46,14 +46,34 @@ function collectSubtree(doc: CadDocument, root: string): string[] {
 }
 
 function cloneSketch(sk: Sketch, id: string, componentId: string | undefined): Sketch {
+  // A custom plane IS the sketch's placement (in world space), so keep it as the
+  // template the instance is placed from rather than dropping it.
+  const custom = sk.planeId === "custom" && sk.plane && sk.componentId;
   return {
     ...sk,
     id,
     componentId,
     plane: undefined, // re-placed from the instance's component world by placeComponentSketches
+    ...(custom ? { templatePlane: { plane: sk.plane!, componentId: sk.componentId! } } : {}),
     entities: JSON.parse(JSON.stringify(sk.entities)),
     constraints: JSON.parse(JSON.stringify(sk.constraints)),
   };
+}
+
+/** The body each feature starts (its own id) or acts on, replaying evaluateBodies'
+ *  rule: a solid-making feature with operation "new" — or the very first body —
+ *  starts one; anything else modifies its explicit `body`, else the most recent. */
+function featureBodies(doc: CadDocument): Map<string, string | undefined> {
+  const out = new Map<string, string | undefined>();
+  let last: string | undefined;
+  for (const f of Object.values(doc.features)) {
+    const op = "operation" in f ? f.operation ?? "new" : undefined;
+    const makesSolid = f.kind === "extrude" || f.kind === "revolve" || f.kind === "primitive" || f.kind === "loft" || f.kind === "sweep"
+      || (f.kind === "thread" && !f.spec.internal);
+    if (makesSolid && (op === "new" || !last)) { out.set(f.id, f.id); last = f.id; continue; }
+    out.set(f.id, "body" in f && f.body && f.body !== "last" ? f.body : last);
+  }
+  return out;
 }
 
 /** Replace standalone `i` identifiers (not inside `pi`, `sin`, …) with the index. */
@@ -90,7 +110,12 @@ export function expandAssembly(doc: CadDocument, scope: Scope, opts: { framesOnl
     const subCompSet = new Set(subComps);
     const subSketches = Object.values(doc.sketches).filter((sk) => sk.componentId && subCompSet.has(sk.componentId));
     const subSketchSet = new Set(subSketches.map((s) => s.id));
-    const subFeatures = Object.values(doc.features).filter((f) => "sketchId" in f && subSketchSet.has((f as { sketchId: string }).sketchId));
+    // Template features: the profile features on its sketches, plus the
+    // sketch-less modifiers (fillet, shell, hole…) aimed at a body one of them starts.
+    const owner = featureBodies(doc);
+    const onSketch = (f: FeatureDef) => "sketchId" in f && subSketchSet.has(f.sketchId);
+    const templateBodies = new Set(Object.values(doc.features).filter((f) => onSketch(f) && owner.get(f.id) === f.id).map((f) => f.id));
+    const subFeatures = Object.values(doc.features).filter((f) => onSketch(f) || (!("sketchId" in f) && templateBodies.has(owner.get(f.id) ?? "")));
     const subFeatureSet = new Set(subFeatures.map((f) => f.id));
 
     // The template subtree is a stand-in; only its instances build.
@@ -117,6 +142,15 @@ export function expandAssembly(doc: CadDocument, scope: Scope, opts: { framesOnl
         for (const f of subFeatures) {
           const nf = { ...f, id: iid(i, f.id) } as typeof f & { sketchId?: string; body?: string };
           if ("sketchId" in nf && nf.sketchId) nf.sketchId = iid(i, nf.sketchId);
+          else {
+            // A sketch-less modifier: pin it to its instance body (never "the most
+            // recent", which the interleaved instances would change) and evaluate
+            // it in the template's frame, where its world-space selectors were authored.
+            const body = owner.get(f.id)!;
+            const comp = doc.sketches[(doc.features[body] as SketchFeature).sketchId].componentId!;
+            nf.body = body;
+            nf.instanceFrame = { component: iid(i, comp), template: comp };
+          }
           if (nf.body && subFeatureSet.has(nf.body)) nf.body = iid(i, nf.body);
           features[iid(i, f.id)] = nf;
         }

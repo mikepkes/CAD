@@ -318,7 +318,19 @@ export interface ThreadDecal {
   profilePoints?: { x: number; y: number }[];
 }
 
-export type FeatureDef = ExtrudeFeature | RevolveFeature | PrimitiveFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature;
+/**
+ * Pattern instances only (set by expandAssembly on a cloned sketch-less feature:
+ * fillet, shell, hole…). Its world-space parameters (edge selectors, points,
+ * axes) were authored on the template, so it is evaluated in the template's
+ * frame: the target body is moved back by T⁻¹ (T = instanceWorld · templateWorld⁻¹),
+ * modified, and moved out again.
+ */
+export interface InstanceFrame {
+  component: string; // the instance's component
+  template: string;  // the source (template) component it was cloned from
+}
+
+export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & { instanceFrame?: InstanceFrame };
 /** Features that own a single sketch (the profile-driven ones). */
 export type SketchFeature = ExtrudeFeature | RevolveFeature;
 

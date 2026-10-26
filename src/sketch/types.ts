@@ -149,6 +149,13 @@ export interface Sketch {
    * `plane`. `plane` (the baked frame from creation) is the fallback.
    */
   faceRef?: FaceRef;
+  /**
+   * Pattern instances only (set by expandAssembly): the template sketch's world
+   * plane and owning component. A custom (offset/face) plane is stored in world
+   * space, so an instance places it by the instance's frame relative to the
+   * template's: instanceWorld · inverse(templateWorld).
+   */
+  templatePlane?: { plane: WorkPlane; componentId: string };
   originPointId: EntityId;
   entities: Record<EntityId, SketchEntity>;
   constraints: Record<ConstraintId, Constraint>;
