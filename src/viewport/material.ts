@@ -108,29 +108,38 @@ float fbm(vec3 p){
   return s;
 }`;
 
-// The 3D wood field. All effects are *face-aware*: `endGrain` (how parallel the
-// surface normal is to the grain) drives whether a face shows rings+pores (end
-// grain) or cathedral streaks (long grain), and `quarter` drives ray fleck on
-// radial faces. Fills `W` with colour, roughness bump and a height for bump.
+// The 3D wood field. This is one *continuous solid texture* sampled in world
+// space (each board carries its own pith + axis), so the grain belongs to the
+// PIECE, not to a face: it wraps around every edge, and end-grain circles /
+// flatsawn cathedrals / quartersawn lines all emerge from *where a surface cuts
+// the same growth-ring cylinders* — never from a surface-normal switch (that was
+// the bug that made edge grain not continue onto the long face). Fills `W` with
+// colour, a roughness delta and a height for the bump.
 const WOOD_GLSL = /* glsl */`
 uniform vec3 uAxis; uniform vec3 uPith;
 uniform float uRingScale; uniform float uContrast; uniform float uPore; uniform float uGrain; uniform float uRay;
 uniform vec3 uEarly; uniform vec3 uLate;
 varying vec3 vWPos; varying vec3 vWN;
 
+// anisotropic sample coordinate: squash across the grain, stretch along it, so a
+// noise fbm forms fibres that run ALONG the grain axis — the same on every face.
 vec3 grainCoord(vec3 p, vec3 a, float across, float alongS){
   float al = dot(p - uPith, a);
   vec3 ac = (p - uPith) - al*a;
   return ac*across + a*(al*alongS);
 }
-// radial distance from the pith axis, warped so rings waver (cathedral figure).
-float woodRing(vec3 p, vec3 a){
+// warped radial distance from the pith axis (the growth-ring parameter), plus
+// the local radial/tangential frame used for rays.
+float woodRing(vec3 p, vec3 a, out float along, out vec3 rdir, out vec3 tang, out float rlen){
   vec3 v = p - uPith;
-  float along = dot(v, a);
+  along = dot(v, a);
   vec3 radial = v - along*a;
-  float r = length(radial);
-  r += 2.4*fbm(grainCoord(p, a, 0.03, 0.22));
-  r += 0.6*fbm(grainCoord(p, a, 0.11, 0.5));
+  rlen = max(length(radial), 1e-3);
+  rdir = radial / rlen;
+  tang = normalize(cross(a, rdir));
+  float r = rlen;
+  r += 2.6*fbm(grainCoord(p, a, 0.026, 0.20));   // broad cathedral waver
+  r += 0.7*fbm(grainCoord(p, a, 0.10, 0.5));      // finer ring waver
   return r;
 }
 
@@ -138,44 +147,44 @@ struct Wood { vec3 col; float rough; float h; };
 
 Wood woodField(vec3 p){
   vec3 a = normalize(uAxis);
-  vec3 N = normalize(vWN);
-  float endGrain = smoothstep(0.52, 0.9, abs(dot(N, a)));        // 1 on end grain
-  vec3 v = p - uPith; float along = dot(v, a);
-  vec3 radial = v - along*a; float rlen = max(length(radial), 1e-3);
-  vec3 rdir = radial / rlen;
-  vec3 tang = normalize(cross(a, rdir));
-  float quarter = smoothstep(0.5, 0.92, abs(dot(N, tang))) * (1.0 - endGrain); // radial/quartersawn face
+  float along; vec3 rdir; vec3 tang; float rlen;
+  float r = woodRing(p, a, along, rdir, tang, rlen);
 
-  // growth rings (3D) — crisper on end grain
-  float r = woodRing(p, a);
+  // Growth rings: one thin dark latewood band per ring. This single 3D field is
+  // what makes concentric circles on end grain, arches on the flat face and
+  // near-straight lines on the quartered face — continuous across every edge.
   float t = fract(r / uRingScale);
-  float band = smoothstep(0.6, 0.9, t) * (1.0 - smoothstep(0.9, 1.0, t));
-  float late = clamp(band * (0.55 + 0.8*endGrain) * (0.55 + uContrast), 0.0, 1.0);
+  float band = smoothstep(0.52, 0.76, t) * (1.0 - smoothstep(0.84, 1.0, t));
+  float late = clamp(band * (0.5 + uContrast), 0.0, 1.0);
 
-  // cathedral streaks — long grain only (fade out on end grain)
-  float streak = fbm(grainCoord(p, a, 0.10, 0.018));
-  float streakDark = uGrain * 0.2 * smoothstep(0.1, 0.95, streak*0.5+0.5) * (1.0 - endGrain);
-  // pores: round dots on end grain, short dashes on long grain
-  float pore = fbm(grainCoord(p, a, mix(0.42, 1.1, endGrain), mix(0.09, 1.1, endGrain)));
-  float poreDark = uPore * smoothstep(0.6, 0.9, pore) * (0.22 + 0.25*endGrain);
-  float dark = streakDark + poreDark;
+  // Fine fibre texture running along the grain (hairlines), continuous in 3D.
+  float fibre = fbm(grainCoord(p, a, 0.13, 0.012));
+  float fibreDark = uGrain * 0.16 * (fibre*0.5 + 0.5);
 
-  // medullary ray fleck: short bright dashes on quartersawn faces, long radially.
-  float ray = fbm(vec3(dot(v,a)*0.55, rlen*0.05, dot(v,tang)*0.04));
-  float fleck = smoothstep(0.42, 0.72, ray) * quarter * uRay;
+  // Open-grain pores: tubes along the grain → round dots on end grain, fine
+  // dashes along the faces. Same field everywhere, so it reads correctly per cut.
+  float pore = fbm(grainCoord(p, a, 0.85, 0.06));
+  float poreDark = uPore * 0.32 * smoothstep(0.6, 0.92, pore);
+  float dark = fibreDark + poreDark;
+
+  // Medullary rays: thin sheets radiating from the pith (fast in the tangential
+  // direction, slow radially/axially). A 3D field, so it stays continuous; it
+  // naturally shows broadest where the surface lies in the radial plane.
+  float rayc = fbm(vec3(dot(p - uPith, tang)*0.55, rlen*0.03, along*0.03));
+  float fleck = smoothstep(0.55, 0.82, rayc) * uRay * 0.45;
 
   // per-board tonal variation (seed from the pith position)
   float seed = fract(sin(dot(uPith, vec3(12.9898,78.233,37.719)))*43758.5453);
-  vec3 tint = vec3(1.0 + (seed-0.5)*0.14, 1.0 + (seed-0.5)*0.05, 1.0 - (seed-0.5)*0.10);
+  vec3 tint = vec3(1.0 + (seed-0.5)*0.12, 1.0 + (seed-0.5)*0.04, 1.0 - (seed-0.5)*0.10);
 
   vec3 col = mix(uEarly, uLate, late) * (1.0 - dark);
-  col = mix(col, col*1.5 + 0.06, fleck);        // flecks lighten
+  col = mix(col, col*1.45 + 0.05, fleck);        // flecks lighten
   col *= tint;
 
   Wood W;
-  W.col = col * 1.08;
-  W.rough = 0.18*late + 0.10*dark - 0.28*fleck;  // flecks shinier, latewood rougher
-  W.h = late*1.0 + dark*0.5 - fleck*0.4;
+  W.col = col * 1.06;
+  W.rough = 0.16*late + 0.08*dark - 0.22*fleck;  // flecks shinier, latewood rougher
+  W.h = late*1.0 + dark*0.5 - fleck*0.35;
   return W;
 }`;
 
@@ -302,9 +311,16 @@ export function woodFrameFromBounds(b: { min: { x: number; y: number; z: number 
   const mid = 3 - long - thin;
   const axis: [number, number, number] = [0, 0, 0]; axis[long] = 1;
   const r = hash01(seed);
+  const widthMid = ext[mid];
   const pith = [...c] as [number, number, number];
-  pith[thin] -= 220 + 520 * r;           // log centre offset through the thin face
-  pith[mid] += (hash01(seed + "m") - 0.5) * 320; // lateral jitter for variety
+  // Pith sits just off the wide (flatsawn) face — close enough that the growth
+  // rings visibly curve across the board (radiality), far enough to read as
+  // boards rather than tight bullseyes. Scaled to the board so big and small
+  // stock both look right.
+  pith[thin] -= 0.9 * ext[thin] + 70 + 150 * r;
+  // Lateral offset of the pith (within the wide face) sets how off-centre the
+  // cathedral runs — some boards rift/quartered (pith to the side), some flat.
+  pith[mid] += (hash01(seed + "m") - 0.5) * (widthMid * 1.6 + 120);
   return { axis, pith };
 }
 
