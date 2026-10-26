@@ -94,9 +94,10 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
     const legB = await board(s, `Leg ${nm}`, at(x, y, 0), [N.LS, N.LS, legTopZ]);
     const leg = legB.cmp;
     if (nm === "FL") flLeg = legB;
-    // tenon: a reduced square carried from the slab underside up through it and
-    // ~12mm proud of the top (its own child body, in leg-local coords).
-    await board(s, `Tenon ${nm}`, { x: off, y: off, z: legTopZ }, [N.TEN, N.TEN, N.TT + 12], leg);
+    // tenon: a reduced square carried from the slab underside up through it,
+    // ending FLUSH with the top (the top is a reference surface — no proud
+    // tenon). Its own child body, in leg-local coords.
+    await board(s, `Tenon ${nm}`, { x: off, y: off, z: legTopZ }, [N.TEN, N.TEN, N.TT], leg);
     // matching through-mortise in the top board this leg sits under.
     const bi = y === 0 ? 0 : N.NB - 1;
     const by = bi * BW; // board's world Y origin (pre-centre)
@@ -120,7 +121,9 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
 
   // ---- leg vise on the front-left leg: chop + steel screw + criss-cross.
   const chop = (await dis(s, "component.create", { name: "Vise chop" }))[0];
-  const chopW = N.LS + 60, chopT = 42, chopH = legTopZ - 180;
+  // chop runs from low on the leg UP to the benchtop surface, so it can clamp
+  // small work right at bench height (bottom at z=150, top flush with the top).
+  const chopW = N.LS + 60, chopT = 42, chopH = legTopZ + N.TT - 150;
   const csk = (await dis(s, "sketch.create", { plane: "XY", component: chop }))[0];
   await dis(s, "sketch.addRectangle", { sketch: csk, corner: { x: 0, y: 0 }, opposite: { x: chopW, y: chopT } });
   await dis(s, "feature.extrude", { sketch: csk, distance: String(chopH) });
@@ -215,19 +218,28 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
     ] });
   }
   await dis(s, "feature.extrude", { sketch: ssk2, distance: "13", symmetric: true });
+  // handle landings: three cast pads proud of the rim front where the handles
+  // seat, so a turned base contacts a flat machined boss, not the cast spokes.
+  const Rh = R - 6;                           // handles mount on the rim
+  const handleAng = (i: number) => ((i * 120 + 90) * Math.PI) / 180;
+  const lsk = (await dis(s, "sketch.create", { plane: "XZ", component: wheel }))[0];
+  for (let i = 0; i < 3; i++) { const th = handleAng(i); await dis(s, "sketch.addCircle", { sketch: lsk, center: { x: Rh * Math.cos(th), y: Rh * Math.sin(th) }, radius: 14 }); }
+  await dis(s, "feature.extrude", { sketch: lsk, distance: "22" });   // -Y, proud of the rim front
   await dis(s, "joint.create", { kind: "revolute", base: chop, moved: wheel, baseOrigin: wheelCenter, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 1, z: 0 }, value: "viseGap*14.4", name: "Wheel spin" });
 
-  // three turned wooden handles, CANTED like the reference: each projects both
-  // outward (radially) and toward the operator (−Y). Built as an axial turned
-  // knob (pointing −Y), then tilted into pose by a fixed revolute joint on the
-  // wheel — so it still rides the wheel's spin. (Components only translate, and
-  // custom planes don't follow a jointed frame, so the tilt must be a joint.)
+  // three turned wooden handles mounted on the landings. Each points mostly
+  // RADIALLY outward from the wheel with a modest cant toward the operator
+  // (~22° off the wheel plane — split between flat-radial and a full 45°).
+  // Built as an axial turned knob (pointing −Y) seated on the landing front and
+  // tilted into pose by a fixed revolute joint on the wheel, so it rides the
+  // spin. (Components only translate and custom planes don't follow a jointed
+  // frame, so the tilt must be a joint.)
   const handleIds: string[] = [];
-  const Rh = R - 22;
-  const T = 1.0;  // cant: equal parts outward and toward the operator → 45°
+  const T = Math.tan((22.5 * Math.PI) / 180);   // out-of-plane cant ≈ 22.5°
   const cantAng = (Math.acos(T / Math.hypot(1, T)) * 180) / Math.PI;
+  const landFront = 22;                          // handle base seats on the landing face (−Y)
   for (let i = 0; i < 3; i++) {
-    const th = ((i * 120 + 90) * Math.PI) / 180;
+    const th = handleAng(i);
     const c = Math.cos(th), sn = Math.sin(th);
     const h = (await dis(s, "component.create", { name: `Wheel handle ${i + 1}` }))[0];
     const psk = (await dis(s, "sketch.create", { plane: "YZ", component: h }))[0];
@@ -237,22 +249,23 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
     ] });
     await dis(s, "feature.revolve", { sketch: psk, axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "360" });
     // tilt −Y out to d = normalize(c, −T, sn): rotate about (−sn,0,c) by cantAng.
-    await dis(s, "joint.create", { kind: "revolute", base: wheel, moved: h, baseOrigin: { x: Rh * c, y: 0, z: Rh * sn }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: -sn, y: 0, z: c }, value: String(cantAng), name: `Handle ${i + 1} cant` });
+    await dis(s, "joint.create", { kind: "revolute", base: wheel, moved: h, baseOrigin: { x: Rh * c, y: -landFront, z: Rh * sn }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: -sn, y: 0, z: c }, value: String(cantAng), name: `Handle ${i + 1} cant` });
     handleIds.push(h);
   }
 
-  // ---- materials: white oak bench, steel screw/criss-cross, cast-iron wheel, beech handles.
-  const oak = (await dis(s, "material.create", { name: "White Oak", kind: "wood", species: "white-oak" }))[0];
+  // ---- materials: BEECH bench, steel screw/criss-cross, cast-iron wheel, and
+  // walnut handles (a contrasting species, to show the library differentiates).
+  const beech = (await dis(s, "material.create", { name: "Beech", kind: "wood", species: "beech" }))[0];
   const steel = (await dis(s, "material.create", { name: "Steel", kind: "metal", finish: "satin", color: "#8a8f96" }))[0];
   const blackIron = (await dis(s, "material.create", { name: "Black Cast Iron", kind: "metal", color: "#26292e", roughness: 0.5, metalness: 1.0 }))[0];
   const iron = (await dis(s, "material.create", { name: "Cast Iron", kind: "metal", color: "#93979d", roughness: 0.6, metalness: 0.72 }))[0];
-  const beech = (await dis(s, "material.create", { name: "Beech", kind: "wood", species: "beech" }))[0];
-  await dis(s, "material.assign", { material: oak });
+  const walnut = (await dis(s, "material.create", { name: "Walnut", kind: "wood", species: "walnut" }))[0];
+  await dis(s, "material.assign", { material: beech });
   await dis(s, "material.assign", { material: steel, component: screw });
   await dis(s, "material.assign", { material: blackIron, component: garter });   // flange + bolts inherit
   for (const a of armIds) await dis(s, "material.assign", { material: blackIron, component: a }); // criss-cross = black cast iron; pins inherit
   await dis(s, "material.assign", { material: iron, component: wheel });
-  for (const h of handleIds) await dis(s, "material.assign", { material: beech, component: h });
+  for (const h of handleIds) await dis(s, "material.assign", { material: walnut, component: h });
 
   return { chop, armIds };
 }
@@ -268,8 +281,8 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
 
     const b0 = bodies(s);
     // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw+garter(flange+bolts=2)
-    //   + 2 arms + 5 pins + wheel(hub+boss+rim+spokes=4) + 3 handles = 34
-    expect(b0.count).toBe(34);
+    //   + 2 arms + 5 pins + wheel(hub+boss+rim+spokes+landings=5) + 3 handles = 35
+    expect(b0.count).toBe(35);
 
     const chopY = () => { const sc = resolveParameters(s.doc.parameters).scope; placeComponentSketches(s.doc, sc); let hi = -Infinity; for (const x of Object.values(evaluateFeatures(s.doc, sc))) { if (x.bounds && s.doc.sketches[x.sketchId]?.componentId === chop) hi = Math.max(hi, x.bounds.max.y); } return hi; };
     await dis(s, "parameter.set", { name: "viseGap", expression: "0" }); await s.recompute();
