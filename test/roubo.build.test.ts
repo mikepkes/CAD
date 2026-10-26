@@ -127,6 +127,19 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   await dis(s, "sketch.addCircle", { sketch: ssk, center: { x: chopW / 2, y: chopH - 150 }, radius: 16 });
   await dis(s, "feature.extrude", { sketch: ssk, distance: String(chopT + N.LS + 30), direction: "reverse" });
 
+  // garter / mounting flange: a black-steel plate the screw passes through,
+  // bolted to the chop front face. Its own component so it rides with the chop.
+  const garter = (await dis(s, "component.create", { name: "Vise garter", parent: chop }))[0];
+  const gcx = chopW / 2, gcz = chopH - 150;              // centred on the screw axis
+  const gsk = (await dis(s, "sketch.create", { plane: "XZ", component: garter }))[0];
+  await dis(s, "sketch.addCircle", { sketch: gsk, center: { x: gcx, y: gcz }, radius: 46 });
+  await dis(s, "sketch.addCircle", { sketch: gsk, center: { x: gcx, y: gcz }, radius: 17 }); // screw clears
+  await dis(s, "feature.extrude", { sketch: gsk, distance: "10" });                 // -Y, onto the front face
+  // four bolt heads in a ring around the flange (one extrude → one body)
+  const bsk = (await dis(s, "sketch.create", { plane: "XZ", component: garter }))[0];
+  for (let i = 0; i < 4; i++) { const a = (i * 90 + 45) * Math.PI / 180; await dis(s, "sketch.addCircle", { sketch: bsk, center: { x: gcx + 36 * Math.cos(a), y: gcz + 36 * Math.sin(a) }, radius: 4.5 }); }
+  await dis(s, "feature.extrude", { sketch: bsk, distance: "12" });
+
   // chop slides along -Y (front) on a slider; closed = back face at the leg front.
   const chopPivotX = N.INSET + N.LS / 2 - chopW / 2;
   const P0 = at(chopPivotX, -chopT, 150);
@@ -163,29 +176,40 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
 
   // ---- vise handwheel (cast iron) with turned wooden handles, on the screw front.
   // Spins about the screw axis (Y) as the vise racks: angle ∝ viseGap.
-  const R = 112, hubR = 22, hubLen = 48, rimT = 15, rimW = 24, spokeW = 18, spokeT = 13;
+  const R = 100, hubR = 22, hubLen = 46, rimT = 15, rimW = 24;
   const wheelCenter = { x: chopW / 2, y: -34, z: chopH - 150 }; // chop-local, on the screw axis, in front
   const wheel = (await dis(s, "component.create", { name: "Vise wheel", parent: chop }))[0];
   // hub: cylinder along Y
   const hsk = (await dis(s, "sketch.create", { plane: "XZ", component: wheel }))[0];
   await dis(s, "sketch.addCircle", { sketch: hsk, center: { x: 0, y: 0 }, radius: hubR });
   await dis(s, "feature.extrude", { sketch: hsk, distance: String(hubLen), symmetric: true });
+  // raised central boss (the cast nut cap), proud of the hub front (−Y)
+  const bosk = (await dis(s, "sketch.create", { plane: "XZ", component: wheel }))[0];
+  await dis(s, "sketch.addCircle", { sketch: bosk, center: { x: 0, y: 0 }, radius: 27 });
+  await dis(s, "feature.extrude", { sketch: bosk, distance: String(hubLen / 2 + 12) });
   // rim: revolve a rectangular section about the Y axis → a ring
   const rsk = (await dis(s, "sketch.create", { plane: "YZ", component: wheel }))[0];
   await dis(s, "sketch.addRectangle", { sketch: rsk, corner: { x: -rimW / 2, y: R - rimT }, opposite: { x: rimW / 2, y: R } });
   await dis(s, "feature.revolve", { sketch: rsk, axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "360" });
-  // spokes: a radial bar, circular-patterned ×3, extruded across Y
+  // three curved (cast) spokes: a bowed constant-width bar, stamped at 0/120/240°.
   const ssk2 = (await dis(s, "sketch.create", { plane: "XZ", component: wheel }))[0];
-  const spokeRect = await dis(s, "sketch.addRectangle", { sketch: ssk2, corner: { x: hubR - 3, y: -spokeW / 2 }, opposite: { x: R - rimT + 3, y: spokeW / 2 } });
-  await dis(s, "sketch.circularPattern", { sketch: ssk2, entities: spokeRect.slice(4), cx: 0, cy: 0, count: 3, step: 120 });
-  await dis(s, "feature.extrude", { sketch: ssk2, distance: String(spokeT), symmetric: true });
+  const ri = hubR - 4, ro = R - rimT + 3, hw = 8, bow = 20, mid = (ri + ro) / 2;
+  const rot = (x: number, y: number, d: number) => { const a = (d * Math.PI) / 180, c = Math.cos(a), s2 = Math.sin(a); return { x: x * c - y * s2, y: x * s2 + y * c }; };
+  for (const phi of [0, 120, 240]) {
+    const A = rot(ri, -hw, phi), B = rot(ro, -hw, phi), C = rot(ro, hw, phi), D = rot(ri, hw, phi);
+    const vL = rot(mid, -hw + bow, phi), vU = rot(mid, hw + bow, phi);
+    await dis(s, "sketch.addProfile", { sketch: ssk2, segments: [
+      { x: A.x, y: A.y }, { x: B.x, y: B.y, via: { x: vL.x, y: vL.y } }, { x: C.x, y: C.y }, { x: D.x, y: D.y, via: { x: vU.x, y: vU.y } },
+    ] });
+  }
+  await dis(s, "feature.extrude", { sketch: ssk2, distance: "13", symmetric: true });
   await dis(s, "joint.create", { kind: "revolute", base: chop, moved: wheel, baseOrigin: wheelCenter, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 1, z: 0 }, value: "viseGap*14.4", name: "Wheel spin" });
 
   // three turned wooden handles projecting toward the user (−Y), on the wheel face.
   const handleIds: string[] = [];
-  const Rh = R - 20;
+  const Rh = R - 18;
   for (let i = 0; i < 3; i++) {
-    const th = (i * 120 * Math.PI) / 180;
+    const th = ((i * 120 + 60) * Math.PI) / 180;
     const h = (await dis(s, "component.create", { name: `Wheel handle ${i + 1}`, parent: wheel, position: { x: Rh * Math.cos(th), y: 0, z: Rh * Math.sin(th) } }))[0];
     const psk = (await dis(s, "sketch.create", { plane: "YZ", component: h }))[0];
     // turned profile along −Y (u), radius v: collar → shaft → bulb → rounded tip.
@@ -199,11 +223,13 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   // ---- materials: white oak bench, steel screw/criss-cross, cast-iron wheel, beech handles.
   const oak = (await dis(s, "material.create", { name: "White Oak", kind: "wood", species: "white-oak" }))[0];
   const steel = (await dis(s, "material.create", { name: "Steel", kind: "metal", finish: "satin", color: "#8a8f96" }))[0];
-  const iron = (await dis(s, "material.create", { name: "Cast Iron", kind: "metal", color: "#52555b", roughness: 0.6, metalness: 0.5 }))[0];
+  const blackIron = (await dis(s, "material.create", { name: "Black Cast Iron", kind: "metal", color: "#26292e", roughness: 0.5, metalness: 1.0 }))[0];
+  const iron = (await dis(s, "material.create", { name: "Cast Iron", kind: "metal", color: "#93979d", roughness: 0.6, metalness: 0.72 }))[0];
   const beech = (await dis(s, "material.create", { name: "Beech", kind: "wood", species: "beech" }))[0];
   await dis(s, "material.assign", { material: oak });
   await dis(s, "material.assign", { material: steel, component: screw });
-  for (const a of armIds) await dis(s, "material.assign", { material: steel, component: a });
+  await dis(s, "material.assign", { material: blackIron, component: garter });   // flange + bolts inherit
+  for (const a of armIds) await dis(s, "material.assign", { material: blackIron, component: a }); // criss-cross = black cast iron; pins inherit
   await dis(s, "material.assign", { material: iron, component: wheel });
   for (const h of handleIds) await dis(s, "material.assign", { material: beech, component: h });
 
@@ -220,8 +246,9 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     if (OUT) writeFileSync(`${OUT}/roubo.chisel.json`, serializeDocument(s.doc));
 
     const b0 = bodies(s);
-    // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw + 2 arms + 5 pins + wheel(3) + 3 handles = 31
-    expect(b0.count).toBe(31);
+    // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw+garter(flange+bolts=2)
+    //   + 2 arms + 5 pins + wheel(hub+boss+rim+spokes=4) + 3 handles = 34
+    expect(b0.count).toBe(34);
 
     const chopY = () => { const sc = resolveParameters(s.doc.parameters).scope; placeComponentSketches(s.doc, sc); let hi = -Infinity; for (const x of Object.values(evaluateFeatures(s.doc, sc))) { if (x.bounds && s.doc.sketches[x.sketchId]?.componentId === chop) hi = Math.max(hi, x.bounds.max.y); } return hi; };
     await dis(s, "parameter.set", { name: "viseGap", expression: "0" }); await s.recompute();
