@@ -155,7 +155,19 @@ export function Viewport() {
     const scene = new SceneManager(container);
     const controller = new Interactions(scene, scene.renderer.domElement);
     setActiveScene(scene);
-    if (import.meta.env?.DEV) (window as unknown as { __scene?: unknown }).__scene = scene;
+    if (import.meta.env?.DEV) {
+      const w = window as unknown as { __scene?: unknown; __recordTurntable?: unknown };
+      w.__scene = scene;
+      // Transform-driven turntable recorder (WebCodecs → mp4). Returns base64 mp4.
+      w.__recordTurntable = async (opts: Record<string, unknown>) => {
+        const st = useStore.getState();
+        const { recordTurntable } = await import("../viewport/turntableRecorder");
+        const bytes = await recordTurntable(scene, st.session.doc, st.solids as never, opts as never);
+        let bin = ""; const CH = 0x8000;
+        for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CH)));
+        return btoa(bin);
+      };
+    }
 
     let prevMode = useStore.getState().mode;
     let prevSketch = useStore.getState().activeSketchId;
