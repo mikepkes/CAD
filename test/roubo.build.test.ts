@@ -126,7 +126,7 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   const chopW = N.LS + 60, chopT = 42, chopH = legTopZ + N.TT - 150;
   const csk = (await dis(s, "sketch.create", { plane: "XY", component: chop }))[0];
   await dis(s, "sketch.addRectangle", { sketch: csk, corner: { x: 0, y: 0 }, opposite: { x: chopW, y: chopT } });
-  await dis(s, "feature.extrude", { sketch: csk, distance: String(chopH) });
+  const chopFeat = (await dis(s, "feature.extrude", { sketch: csk, distance: String(chopH) }))[0];
   // screw (steel), own sub-component so it can be metal; runs back into the leg.
   const screw = (await dis(s, "component.create", { name: "Vise screw", parent: chop }))[0];
   const ssk = (await dis(s, "sketch.create", { plane: "XZ", component: screw }))[0];
@@ -151,15 +151,22 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   const P0 = at(chopPivotX, -chopT, 150);
   await dis(s, "joint.create", { kind: "slider", moved: chop, baseOrigin: P0, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: -1, z: 0 }, value: "viseGap", name: "Vise slide" });
 
-  // criss-cross: two steel arms that scissor as the chop racks, offset in X so
-  // they cross as two real bars, joined by a centre pivot pin and end pins that
-  // seat into the leg and chop. arm angle θ = asin((S0+viseGap)/LA) about world X.
+  // criss-cross stabiliser — a real scissor. Both arms pivot about a CARRIER that
+  // rides at the mid-gap (it slides out half as fast as the chop), so each arm's
+  // ends land exactly on their leg pin and chop pin and never overshoot the chop.
+  // Gap leg-pin → chop-pin  G = G0 + viseGap;  arm half-reach in Y = G/2, which is
+  // (LA/2)·sinθ, so θ = asin(G/LA). This is a driven mechanism: carrier value and
+  // both arm angles are all expressions of the one viseGap.
   const armIds: string[] = [];
-  const zc = 150 + chopH * 0.4;                  // criss-cross centre height
-  const armPivot = [at(chopPivotX + chopW / 2, 10, zc - N.LA / 3), at(chopPivotX + chopW / 2, 10, zc + N.LA / 3)];
-  const thetaExpr = `deg(asin((${N.S0}+viseGap)/${N.LA}))`;
-  // a steel pin: a cylinder along X, centred at a parent-local point, spanning
-  // both arm slabs. Child of an arm so it rides with it; inherits steel.
+  const zc = 150 + chopH * 0.4;                   // criss-cross centre height
+  const G0 = 24;                                   // leg-pin → chop-pin gap when closed
+  const cxW = chopPivotX + chopW / 2;              // criss-cross centre in world x
+  const thetaExpr = `deg(asin((${G0}+viseGap)/${N.LA}))`;
+  // carrier at the mid-gap: at viseGap=0 it sits at the leg face (y=0) and slides
+  // −Y by viseGap/2 as the chop opens.
+  const carrier = (await dis(s, "component.create", { name: "Crisscross carrier" }))[0];
+  await dis(s, "joint.create", { kind: "slider", moved: carrier, baseOrigin: at(cxW, 0, zc), movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: -1, z: 0 }, value: "viseGap/2", name: "Crisscross centre" });
+  // a steel pin: a cylinder along X through a point in the arm's local frame.
   const pin = async (parent: string, zLocal: number, len: number) => {
     const p = (await dis(s, "component.create", { name: "Pin", parent, position: { x: 0, y: 0, z: zLocal } }))[0];
     const sk = (await dis(s, "sketch.create", { plane: "YZ", component: p }))[0];
@@ -168,25 +175,34 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   };
   for (let i = 0; i < 2; i++) {
     const up = i === 0;
+    // each arm is a bar CENTRED on the carrier (Z from −LA/2..LA/2), tilted ±θ.
     const arm = (await dis(s, "component.create", { name: `Crisscross arm ${i + 1}` }))[0];
     const ask = (await dis(s, "sketch.create", { plane: "YZ", component: arm }))[0];
-    await dis(s, "sketch.addRectangle", { sketch: ask, corner: { x: -N.ARM_W / 2, y: up ? 0 : -N.LA }, opposite: { x: N.ARM_W / 2, y: up ? N.LA : 0 } });
-    // offset the two arms along X (arm 2 reversed) so they pass side-by-side.
-    await dis(s, "feature.extrude", { sketch: ask, distance: String(N.ARM_T), ...(up ? {} : { direction: "reverse" }) });
-    await dis(s, "joint.create", { kind: "revolute", moved: arm, baseOrigin: armPivot[i], movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, value: up ? thetaExpr : `-(${thetaExpr})`, name: `Crisscross ${i + 1}` });
-    await pin(arm, 0, N.ARM_T * 3);                 // pivot pin (into the leg)
-    await pin(arm, up ? N.LA : -N.LA, N.ARM_T * 3); // end pin (into the chop)
-    if (up) await pin(arm, N.LA / 2, N.ARM_T * 3.4); // central pivot pin (shared crossing)
+    await dis(s, "sketch.addRectangle", { sketch: ask, corner: { x: -N.ARM_W / 2, y: -N.LA / 2 }, opposite: { x: N.ARM_W / 2, y: N.LA / 2 } });
+    await dis(s, "feature.extrude", { sketch: ask, distance: String(N.ARM_T), ...(up ? {} : { direction: "reverse" }) }); // offset in X so they cross side-by-side
+    await dis(s, "joint.create", { kind: "revolute", base: carrier, moved: arm, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, value: up ? `-(${thetaExpr})` : thetaExpr, name: `Crisscross ${i + 1}` });
+    await pin(arm, N.LA / 2, N.ARM_T * 3);          // top-end pin
+    await pin(arm, -N.LA / 2, N.ARM_T * 3);         // bottom-end pin
+    if (up) await pin(arm, 0, N.ARM_T * 3.4);       // shared centre pivot pin
     armIds.push(arm);
   }
 
-  // ---- routed channel in the leg face so the criss-cross recesses into the leg
-  // (a real leg vise runs the scissor in a mortised channel, not against flat wood).
+  // ---- routed channels so the scissor recesses into BOTH jaws (leg + chop),
+  // like a real criss-cross, instead of standing against / poking through flat wood.
+  const crossHalfZ = N.LA / 2 + 24;
   {
-    const cu = (N.INSET + N.LS / 2) - N.INSET;     // criss-cross centre in leg-local x = LS/2
+    const cu = N.LS / 2;                            // criss-cross centre in leg-local x
     const chk = (await dis(s, "sketch.create", { plane: "XZ", component: flLeg.cmp }))[0];
-    await dis(s, "sketch.addRectangle", { sketch: chk, corner: { x: cu - 24, y: zc - N.LA / 2 - 20 }, opposite: { x: cu + 24, y: zc + N.LA / 2 + 20 } });
+    await dis(s, "sketch.addRectangle", { sketch: chk, corner: { x: cu - 24, y: zc - crossHalfZ }, opposite: { x: cu + 24, y: zc + crossHalfZ } });
     await dis(s, "feature.extrude", { sketch: chk, distance: "48", operation: "cut", symmetric: true, body: flLeg.feat });
+  }
+  {
+    // pocket in the chop BACK face (chop-local y=chopT; that is −chopT along the
+    // XZ normal) for the chop-side ends, so they seat into the chop, not through it.
+    const cx = chopW / 2, czc = zc - 150;          // chop-local centre (chop base z = 150)
+    const pk = (await dis(s, "sketch.create", { plane: "XZ", component: chop, offset: -chopT }))[0];
+    await dis(s, "sketch.addRectangle", { sketch: pk, corner: { x: cx - 24, y: czc - crossHalfZ }, opposite: { x: cx + 24, y: czc + crossHalfZ } });
+    await dis(s, "feature.extrude", { sketch: pk, distance: "50", operation: "cut", symmetric: true, body: chopFeat });
   }
 
   // ---- vise handwheel (cast iron) with turned wooden handles, on the screw front.
