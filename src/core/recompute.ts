@@ -146,6 +146,48 @@ function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope): Rigid {
   return compose(baseWorld, compose(motion, seat));
 }
 
+/** Solve a pin-slot joint: rotate `moved` about `axis` (through baseOrigin, in the
+ *  base frame) by the angle that puts its `pin` point on the slot line, then map
+ *  out by `baseWorld`. The pin travels a circle; the signed distance to the slot
+ *  line (measured along the in-plane normal) is a + b·cosθ + c·sinθ, so we find
+ *  its root nearest the last solution for a smooth, continuous motion. */
+function jointWorldPinSlot(baseWorld: Rigid, slotBaseWorld: Rigid, j: Joint): Rigid {
+  const seat = translation({ x: j.baseOrigin.x - j.movedOrigin.x, y: j.baseOrigin.y - j.movedOrigin.y, z: j.baseOrigin.z - j.movedOrigin.z });
+  const movedW = (theta: number): Rigid => compose(baseWorld, compose(rotationAbout(j.axis, theta, j.baseOrigin), seat));
+  if (!j.pin || !j.slotPoint || !j.slotDir) { j.error = "pin-slot missing constraint"; return movedW(j.valueValue * DEG); }
+
+  const axisW = applyVec(baseWorld, j.axis);
+  const Dw = applyVec(slotBaseWorld, j.slotDir);
+  const P = applyPoint(slotBaseWorld, j.slotPoint);
+  // n = axis × slotDir: perpendicular to both, so it lies in the plane the pin
+  // sweeps and is perpendicular to the slot — the direction to drive to zero.
+  let n = { x: axisW.y * Dw.z - axisW.z * Dw.y, y: axisW.z * Dw.x - axisW.x * Dw.z, z: axisW.x * Dw.y - axisW.y * Dw.x };
+  const nl = Math.hypot(n.x, n.y, n.z);
+  if (nl < 1e-9) { j.error = "pin-slot: axis parallel to slot"; return movedW(j.valueValue * DEG); }
+  n = { x: n.x / nl, y: n.y / nl, z: n.z / nl };
+  const res = (theta: number): number => { const p = applyPoint(movedW(theta), j.pin!); return (p.x - P.x) * n.x + (p.y - P.y) * n.y + (p.z - P.z) * n.z; };
+
+  const seed = j.valueValue * DEG;
+  const N = 240; const TWO_PI = Math.PI * 2;
+  const wrap = (a: number) => { let d = a; while (d > Math.PI) d -= TWO_PI; while (d < -Math.PI) d += TWO_PI; return d; };
+  let best: number | null = null, bestD = Infinity;
+  let prevT = -Math.PI, prevF = res(-Math.PI);
+  for (let i = 1; i <= N; i++) {
+    const t = -Math.PI + (TWO_PI * i) / N, ft = res(t);
+    if ((prevF < 0) !== (ft < 0)) {               // sign change → a root in (prevT, t]
+      let lo = prevT, hi = t, flo = prevF;
+      for (let k = 0; k < 44; k++) { const mid = (lo + hi) / 2, fm = res(mid); if ((flo < 0) !== (fm < 0)) hi = mid; else { lo = mid; flo = fm; } }
+      const root = (lo + hi) / 2, d = Math.abs(wrap(root - seed));
+      if (d < bestD) { bestD = d; best = root; }
+    }
+    prevT = t; prevF = ft;
+  }
+  if (best === null) { j.error = "pin-slot: pin cannot reach the slot"; return movedW(seed); }
+  j.error = undefined;
+  j.valueValue = best / DEG;
+  return movedW(best);
+}
+
 /** Resolve every component's world frame — from its joint if it has one, else
  *  its static placement composed down the parent chain. */
 export function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<string, Rigid> {
@@ -166,7 +208,8 @@ export function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<strin
     active.add(id);
     const j = jointByMoved.get(id);
     let W: Rigid;
-    if (j) W = jointWorld(resolve(j.base), j, scope);
+    if (j && j.kind === "pin-slot") W = jointWorldPinSlot(resolve(j.base), resolve(j.slotBase ?? j.base), j);
+    else if (j) W = jointWorld(resolve(j.base), j, scope);
     else if (c.parentId) W = compose(resolve(c.parentId), translation(c.transform.position));
     else W = IDENTITY;
     active.delete(id);

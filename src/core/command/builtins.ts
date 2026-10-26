@@ -361,19 +361,23 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Joint",
     summary: "Position a component relative to another (rigid / revolute / slider).",
     description:
-      "Joins the `moved` component to `base` (default root) so a connector point on each — given in that component's LOCAL coordinates — coincides, then applies the joint motion. `rigid` fixes it; `revolute` leaves free rotation about `axis` (base-local) by `value` degrees; `slider` leaves free translation along `axis` by `value`. `value` is a parametric expression. Returns the joint id.",
+      "Joins the `moved` component to `base` (default root) so a connector point on each — given in that component's LOCAL coordinates — coincides, then applies the joint motion. `rigid` fixes it; `revolute` leaves free rotation about `axis` (base-local) by `value` degrees; `slider` leaves free translation along `axis` by `value`. `pin-slot` rotates about `axis` but SOLVES the angle so the moved-body point `pin` stays on the slot line (`slotPoint`+`slotDir` in `slotBase`'s frame) — a 1-DOF mechanism constraint, so the kernel finds the angle instead of you supplying trig. `value` is a parametric expression (a seed for pin-slot). Returns the joint id.",
     paramsSchema: {
       type: "object",
       required: ["moved", "baseOrigin", "movedOrigin"],
       additionalProperties: false,
       properties: {
-        kind: { type: "string", enum: ["rigid", "revolute", "slider"], description: "Joint type (default rigid)." },
+        kind: { type: "string", enum: ["rigid", "revolute", "slider", "pin-slot"], description: "Joint type (default rigid)." },
         base: { type: "string", description: "Base component id. Defaults to the root (ground)." },
         moved: { type: "string", description: "Component to position." },
         baseOrigin: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
         movedOrigin: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
         axis: { type: "object", description: "Joint axis in base-local coords (default +Z).", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
-        value: { type: "string", description: "Motion expression: degrees (revolute) or length (slider)." },
+        value: { type: "string", description: "Motion expression: degrees (revolute) or length (slider); a seed for pin-slot." },
+        pin: { type: "object", description: "pin-slot: the moved-local point constrained to the slot.", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+        slotBase: { type: "string", description: "pin-slot: component whose frame defines the slot (default = base)." },
+        slotPoint: { type: "object", description: "pin-slot: a point on the slot line, in slotBase-local coords.", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+        slotDir: { type: "object", description: "pin-slot: the slot line direction, in slotBase-local coords.", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
         name: { type: "string" },
       },
     },
@@ -381,24 +385,31 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Pin a bracket to the base at its origin", params: { moved: "cmp3", baseOrigin: { x: 40, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 } } },
       { note: "Revolute joint spun 30°", params: { kind: "revolute", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 20 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "30" } },
     ],
-    apply(draft, p: { kind?: "rigid" | "revolute" | "slider"; base?: string; moved: string; baseOrigin: Vec3; movedOrigin: Vec3; axis?: Vec3; value?: string; name?: string }, ctx) {
+    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot"; base?: string; moved: string; baseOrigin: Vec3; movedOrigin: Vec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
       if (base === p.moved) throw new Error("a joint needs two different components");
+      const kind = p.kind ?? "rigid";
+      if (kind === "pin-slot") {
+        if (!p.pin || !p.slotPoint || !p.slotDir) throw new Error("pin-slot joint needs pin, slotPoint and slotDir");
+        if (p.slotBase && !draft.components[p.slotBase]) throw new Error(`No slotBase component "${p.slotBase}"`);
+      }
       const id = ctx.alloc("jnt");
       const count = Object.keys(draft.joints).length + 1;
+      const v3 = (q: Vec3) => ({ x: q.x, y: q.y, z: q.z });
       draft.joints[id] = {
         id,
         name: p.name ?? `Joint ${count}`,
-        kind: p.kind ?? "rigid",
+        kind,
         base,
         moved: p.moved,
-        baseOrigin: { x: p.baseOrigin.x, y: p.baseOrigin.y, z: p.baseOrigin.z },
-        movedOrigin: { x: p.movedOrigin.x, y: p.movedOrigin.y, z: p.movedOrigin.z },
+        baseOrigin: v3(p.baseOrigin),
+        movedOrigin: v3(p.movedOrigin),
         axis: p.axis ?? { x: 0, y: 0, z: 1 },
         valueExpr: String(p.value ?? "0"),
         valueValue: 0,
+        ...(kind === "pin-slot" ? { pin: v3(p.pin!), slotBase: p.slotBase ?? base, slotPoint: v3(p.slotPoint!), slotDir: v3(p.slotDir!) } : {}),
       };
       return { createdIds: [id], message: `${draft.joints[id].kind} joint` };
     },

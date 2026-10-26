@@ -357,21 +357,35 @@ export interface TimelineGroup {
  *  - rigid: fully fixed (connectors coincide, no residual motion)
  *  - revolute: free rotation about `axis` by `value` degrees
  *  - slider: free translation along `axis` by `value`
+ *  - pin-slot: rotates about `axis`, but the angle is SOLVED so that a pin point
+ *    on the moved body stays on a slot line on another body (a 1-DOF closed-loop
+ *    constraint). This is how a real mechanism — e.g. a leg-vise criss-cross — is
+ *    driven: the kernel finds the angle instead of the author supplying trig.
  */
 export interface Joint {
   id: string;
   name: string;
-  kind: "rigid" | "revolute" | "slider";
+  kind: "rigid" | "revolute" | "slider" | "pin-slot";
   base: string;  // base component id (root = ground)
   moved: string; // the component this joint places
   /** Connector point on each component, in that component's LOCAL coordinates. */
   baseOrigin: { x: number; y: number; z: number };
   movedOrigin: { x: number; y: number; z: number };
-  /** Joint axis in the base component's local frame (revolute/slider). */
+  /** Joint axis in the base component's local frame (revolute/slider/pin-slot). */
   axis: { x: number; y: number; z: number };
-  /** Motion value expression (degrees for revolute, length for slider). */
+  /** Motion value expression (degrees for revolute, length for slider). For
+   *  pin-slot it is only a seed/fallback; the solved angle is stored in valueValue. */
   valueExpr: string;
   valueValue: number;
+  // ---- pin-slot only: the constraint that solves the angle ----
+  /** The point on the MOVED body (moved-local) that must lie on the slot. */
+  pin?: { x: number; y: number; z: number };
+  /** Component whose local frame defines the slot line (default = base). */
+  slotBase?: string;
+  /** A point on the slot line, in slotBase-local coordinates. */
+  slotPoint?: { x: number; y: number; z: number };
+  /** The slot line's direction, in slotBase-local coordinates. */
+  slotDir?: { x: number; y: number; z: number };
   error?: string;
 }
 
