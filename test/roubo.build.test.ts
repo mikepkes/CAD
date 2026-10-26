@@ -151,21 +151,19 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   const P0 = at(chopPivotX, -chopT, 150);
   await dis(s, "joint.create", { kind: "slider", moved: chop, baseOrigin: P0, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: -1, z: 0 }, value: "viseGap", name: "Vise slide" });
 
-  // criss-cross stabiliser — a real scissor. Both arms pivot about a CARRIER that
-  // rides at the mid-gap (it slides out half as fast as the chop), so each arm's
-  // ends land exactly on their leg pin and chop pin and never overshoot the chop.
-  // Gap leg-pin → chop-pin  G = G0 + viseGap;  arm half-reach in Y = G/2, which is
-  // (LA/2)·sinθ, so θ = asin(G/LA). This is a driven mechanism: carrier value and
-  // both arm angles are all expressions of the one viseGap.
+  // criss-cross stabiliser — a real scissor, SOLVED (no hand-derived trig). Both
+  // arms pivot about a CARRIER that rides at the mid-gap (it slides out half as
+  // fast as the chop). Each arm's chop-end pin is constrained to a vertical SLOT
+  // in the chop via a pin-slot joint, so the kernel solves the arm angle and the
+  // ends track the chop as it racks — a genuine 1-DOF driven mechanism.
   const armIds: string[] = [];
   const zc = 150 + chopH * 0.4;                   // criss-cross centre height
-  const G0 = 24;                                   // leg-pin → chop-pin gap when closed
   const cxW = chopPivotX + chopW / 2;              // criss-cross centre in world x
-  const thetaExpr = `deg(asin((${G0}+viseGap)/${N.LA}))`;
   // carrier at the mid-gap: at viseGap=0 it sits at the leg face (y=0) and slides
-  // −Y by viseGap/2 as the chop opens.
+  // −Y by viseGap/2 as the chop opens, so the two arms always cross at centre.
   const carrier = (await dis(s, "component.create", { name: "Crisscross carrier" }))[0];
   await dis(s, "joint.create", { kind: "slider", moved: carrier, baseOrigin: at(cxW, 0, zc), movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: -1, z: 0 }, value: "viseGap/2", name: "Crisscross centre" });
+  const chopSlot = { x: chopW / 2, y: chopT - 10, z: 0 };  // vertical slot in the chop (chop-local), 10mm in from the back
   // a steel pin: a cylinder along X through a point in the arm's local frame.
   const pin = async (parent: string, zLocal: number, len: number) => {
     const p = (await dis(s, "component.create", { name: "Pin", parent, position: { x: 0, y: 0, z: zLocal } }))[0];
@@ -175,12 +173,14 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   };
   for (let i = 0; i < 2; i++) {
     const up = i === 0;
-    // each arm is a bar CENTRED on the carrier (Z from −LA/2..LA/2), tilted ±θ.
+    // each arm is a bar CENTRED on the carrier (Z from −LA/2..LA/2).
     const arm = (await dis(s, "component.create", { name: `Crisscross arm ${i + 1}` }))[0];
     const ask = (await dis(s, "sketch.create", { plane: "YZ", component: arm }))[0];
     await dis(s, "sketch.addRectangle", { sketch: ask, corner: { x: -N.ARM_W / 2, y: -N.LA / 2 }, opposite: { x: N.ARM_W / 2, y: N.LA / 2 } });
     await dis(s, "feature.extrude", { sketch: ask, distance: String(N.ARM_T), ...(up ? {} : { direction: "reverse" }) }); // offset in X so they cross side-by-side
-    await dis(s, "joint.create", { kind: "revolute", base: carrier, moved: arm, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, value: up ? `-(${thetaExpr})` : thetaExpr, name: `Crisscross ${i + 1}` });
+    // pin-slot: the arm's chop-end seats in the chop slot; the kernel solves θ.
+    const chopEndZ = up ? -N.LA / 2 : N.LA / 2;
+    await dis(s, "joint.create", { kind: "pin-slot", base: carrier, moved: arm, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, pin: { x: 0, y: 0, z: chopEndZ }, slotBase: chop, slotPoint: chopSlot, slotDir: { x: 0, y: 0, z: 1 }, name: `Crisscross ${i + 1}` });
     await pin(arm, N.LA / 2, N.ARM_T * 3);          // top-end pin
     await pin(arm, -N.LA / 2, N.ARM_T * 3);         // bottom-end pin
     if (up) await pin(arm, 0, N.ARM_T * 3.4);       // shared centre pivot pin
