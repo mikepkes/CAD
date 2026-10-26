@@ -7,6 +7,8 @@ import { resolveSketchPlane, to3d } from "../geometry/plane";
 import { extractRegions, loopPolygon, Region } from "../core/geometry/profile";
 import { resolveParameters } from "../model/parameters";
 import { compileExpr } from "../math/expr";
+import { materialForComponent } from "../core/document";
+import { woodFrameFromBounds } from "../viewport/material";
 import { ContextMenu } from "./ContextMenu";
 
 function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
@@ -67,15 +69,27 @@ function buildView(s: AppState): ViewData {
   const datumPlanes = Object.values(s.session.doc.planes)
     .filter((d) => d.plane)
     .map((d) => ({ id: d.id, name: d.name, plane: d.plane! }));
+  const doc = s.session.doc;
   const solids = Object.values(s.solids)
     .filter((sol) => sol.mesh)
-    .map((sol) => ({
-      positions: sol.mesh!.positions,
-      normals: sol.mesh!.normals,
-      indices: sol.mesh!.indices,
-      edges: sol.mesh!.edges,
-      threadDecals: sol.threadDecals,
-    }));
+    .map((sol) => {
+      // Resolve the body's material from its owning component (bodies inherit;
+      // instance bodies keep their source sketch id, so this resolves for them too).
+      const comp = sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined;
+      const mat = materialForComponent(doc, comp);
+      const material = mat ? { kind: mat.kind, species: mat.species, finish: mat.finish, color: mat.color, roughness: mat.roughness, metalness: mat.metalness, ringScale: mat.ringScale, grainContrast: mat.grainContrast, poreStrength: mat.poreStrength } : undefined;
+      const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;
+      return {
+        id: sol.featureId,
+        positions: sol.mesh!.positions,
+        normals: sol.mesh!.normals,
+        indices: sol.mesh!.indices,
+        edges: sol.mesh!.edges,
+        threadDecals: sol.threadDecals,
+        material,
+        woodFrame,
+      };
+    });
   return {
     mode: s.mode,
     planeId: sketch ? sketch.planeId : null,
