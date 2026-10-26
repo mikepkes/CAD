@@ -217,23 +217,27 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   await dis(s, "feature.extrude", { sketch: ssk2, distance: "13", symmetric: true });
   await dis(s, "joint.create", { kind: "revolute", base: chop, moved: wheel, baseOrigin: wheelCenter, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 1, z: 0 }, value: "viseGap*14.4", name: "Wheel spin" });
 
-  // three turned wooden handles, each projecting RADIALLY outward in the wheel
-  // plane (capstan style). Built on the wheel-plane sketch (XZ) with the turned
-  // profile mapped onto the radial axis d and revolved about it, so the knob
-  // points out along the radius rather than toward the viewer.
+  // three turned wooden handles, CANTED like the reference: each projects both
+  // outward (radially) and toward the operator (−Y). Built as an axial turned
+  // knob (pointing −Y), then tilted into pose by a fixed revolute joint on the
+  // wheel — so it still rides the wheel's spin. (Components only translate, and
+  // custom planes don't follow a jointed frame, so the tilt must be a joint.)
   const handleIds: string[] = [];
-  const Rh = R - 30;
-  // turned profile as (along-the-axis, radius): collar → shaft → bulb → tip.
-  const prof: [number, number][] = [[0, 0], [0, 11], [-5, 11], [-8, 8], [-24, 7], [-40, 13], [-52, 9], [-58, 0]];
+  const Rh = R - 22;
+  const T = 1.0;  // cant: equal parts outward and toward the operator → 45°
+  const cantAng = (Math.acos(T / Math.hypot(1, T)) * 180) / Math.PI;
   for (let i = 0; i < 3; i++) {
     const th = ((i * 120 + 90) * Math.PI) / 180;
     const c = Math.cos(th), sn = Math.sin(th);
-    const h = (await dis(s, "component.create", { name: `Wheel handle ${i + 1}`, parent: wheel, position: { x: Rh * c, y: 0, z: Rh * sn } }))[0];
-    const psk = (await dis(s, "sketch.create", { plane: "XZ", component: h }))[0];
-    // map (along a, radius) -> XZ, with the axis a = outward radial (c, sn).
-    const pts = prof.map(([u, v]) => ({ x: -u * c - v * sn, y: -u * sn + v * c }));
-    await dis(s, "sketch.addPolyline", { sketch: psk, points: pts });
-    await dis(s, "feature.revolve", { sketch: psk, axis: { p1: { x: 0, y: 0 }, p2: { x: c, y: sn } }, angle: "360" });
+    const h = (await dis(s, "component.create", { name: `Wheel handle ${i + 1}` }))[0];
+    const psk = (await dis(s, "sketch.create", { plane: "YZ", component: h }))[0];
+    // turned profile along −Y (u), radius v: collar → shaft → bulb → rounded tip.
+    await dis(s, "sketch.addPolyline", { sketch: psk, points: [
+      { x: 0, y: 0 }, { x: 0, y: 11 }, { x: -5, y: 11 }, { x: -8, y: 8 }, { x: -24, y: 7 }, { x: -40, y: 13 }, { x: -52, y: 9 }, { x: -58, y: 0 },
+    ] });
+    await dis(s, "feature.revolve", { sketch: psk, axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "360" });
+    // tilt −Y out to d = normalize(c, −T, sn): rotate about (−sn,0,c) by cantAng.
+    await dis(s, "joint.create", { kind: "revolute", base: wheel, moved: h, baseOrigin: { x: Rh * c, y: 0, z: Rh * sn }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: -sn, y: 0, z: c }, value: String(cantAng), name: `Handle ${i + 1} cant` });
     handleIds.push(h);
   }
 
