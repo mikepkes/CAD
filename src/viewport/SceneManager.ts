@@ -166,6 +166,8 @@ export class SceneManager {
     this.container = container;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, stencil: true });
     this.renderer.localClippingEnabled = true; // per-material section clipping
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping; // filmic highlight roll-off for PBR
+    this.renderer.toneMappingExposure = 1.15;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(this.renderer.domElement);
@@ -204,7 +206,7 @@ export class SceneManager {
     try {
       const pmrem = new THREE.PMREMGenerator(this.renderer);
       this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-      this.scene.environmentIntensity = 0.55;
+      this.scene.environmentIntensity = 0.9;
       pmrem.dispose();
     } catch { /* headless / no-WebGL: skip */ }
 

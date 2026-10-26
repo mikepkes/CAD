@@ -32,21 +32,23 @@ interface Wood {
   contrast: number;               // latewood band darkness 0..1
   pore: number;                   // open-grain pore strength 0..1
   grain: number;                  // long-grain streak strength
+  ray: number;                    // medullary-ray fleck strength (quartersawn)
   roughness: number;
 }
 
-// Species presets (hand-tuned, approximate). Colours are linear-ish sRGB hex.
+// Species presets (hand-tuned, approximate). Colours are desaturated/greyer than
+// a naive tan so oak doesn't read as orange pine. Linear conversion happens later.
 export const SPECIES: Record<string, Wood> = {
-  "white-oak": { early: "#d8bc86", late: "#8f6f42", ringScale: 7, contrast: 0.55, pore: 0.6, grain: 0.55, roughness: 0.62 },
-  "red-oak":   { early: "#cda47f", late: "#9c6b4c", ringScale: 6, contrast: 0.5, pore: 0.8, grain: 0.5, roughness: 0.64 },
-  walnut:      { early: "#6b4b32", late: "#3c2817", ringScale: 9, contrast: 0.45, pore: 0.45, grain: 0.6, roughness: 0.55 },
-  maple:       { early: "#e7d4ac", late: "#cdb483", ringScale: 5, contrast: 0.28, pore: 0.08, grain: 0.35, roughness: 0.42 },
-  cherry:      { early: "#b5724a", late: "#8a4a2c", ringScale: 6, contrast: 0.35, pore: 0.2, grain: 0.45, roughness: 0.46 },
-  "hard-maple":{ early: "#ecdcb6", late: "#d4bd8c", ringScale: 4.5, contrast: 0.25, pore: 0.06, grain: 0.3, roughness: 0.4 },
-  "southern-pine": { early: "#e3c78a", late: "#9c6a33", ringScale: 10, contrast: 0.7, pore: 0.25, grain: 0.7, roughness: 0.6 },
-  mahogany:    { early: "#8a4733", late: "#5c2c1e", ringScale: 8, contrast: 0.4, pore: 0.4, grain: 0.55, roughness: 0.5 },
-  beech:       { early: "#d8b48a", late: "#b98b5f", ringScale: 5, contrast: 0.35, pore: 0.25, grain: 0.4, roughness: 0.5 },
-  ash:         { early: "#d8c49a", late: "#a07b4c", ringScale: 7, contrast: 0.5, pore: 0.6, grain: 0.5, roughness: 0.58 },
+  "white-oak": { early: "#c3ac7e", late: "#7c6038", ringScale: 9, contrast: 0.6, pore: 0.55, grain: 0.4, ray: 0.9, roughness: 0.64 },
+  "red-oak":   { early: "#c29a74", late: "#8a5e40", ringScale: 8, contrast: 0.55, pore: 0.8, grain: 0.4, ray: 0.6, roughness: 0.66 },
+  walnut:      { early: "#5f4430", late: "#33220f", ringScale: 11, contrast: 0.5, pore: 0.4, grain: 0.5, ray: 0.15, roughness: 0.55 },
+  maple:       { early: "#ddc9a0", late: "#c2a877", ringScale: 6, contrast: 0.3, pore: 0.06, grain: 0.3, ray: 0.2, roughness: 0.42 },
+  cherry:      { early: "#ad6e48", late: "#7f4228", ringScale: 8, contrast: 0.38, pore: 0.18, grain: 0.4, ray: 0.2, roughness: 0.46 },
+  "hard-maple":{ early: "#e3d3ac", late: "#cbb285", ringScale: 5.5, contrast: 0.26, pore: 0.05, grain: 0.26, ray: 0.2, roughness: 0.4 },
+  "southern-pine": { early: "#dcc084", late: "#93622f", ringScale: 13, contrast: 0.78, pore: 0.2, grain: 0.6, ray: 0.1, roughness: 0.6 },
+  mahogany:    { early: "#82422f", late: "#54281b", ringScale: 10, contrast: 0.42, pore: 0.35, grain: 0.5, ray: 0.3, roughness: 0.5 },
+  beech:       { early: "#d7bd96", late: "#b58a60", ringScale: 6, contrast: 0.36, pore: 0.2, grain: 0.3, ray: 0.5, roughness: 0.5 },
+  ash:         { early: "#d2bd93", late: "#9a7646", ringScale: 9, contrast: 0.55, pore: 0.55, grain: 0.45, ray: 0.3, roughness: 0.58 },
 };
 export const SPECIES_KEYS = Object.keys(SPECIES);
 
@@ -106,50 +108,75 @@ float fbm(vec3 p){
   return s;
 }`;
 
-// The wood height/colour field, shared by colour and bump. Returns latewood mask.
+// The 3D wood field. All effects are *face-aware*: `endGrain` (how parallel the
+// surface normal is to the grain) drives whether a face shows rings+pores (end
+// grain) or cathedral streaks (long grain), and `quarter` drives ray fleck on
+// radial faces. Fills `W` with colour, roughness bump and a height for bump.
 const WOOD_GLSL = /* glsl */`
 uniform vec3 uAxis; uniform vec3 uPith;
-uniform float uRingScale; uniform float uContrast; uniform float uPore; uniform float uGrain;
+uniform float uRingScale; uniform float uContrast; uniform float uPore; uniform float uGrain; uniform float uRay;
 uniform vec3 uEarly; uniform vec3 uLate;
-varying vec3 vWPos;
+varying vec3 vWPos; varying vec3 vWN;
 
-// A sample coordinate that is compressed along the grain axis, so noise features
-// stretch into long streaks/pores (across = cross-grain scale, alongS = along scale).
 vec3 grainCoord(vec3 p, vec3 a, float across, float alongS){
   float al = dot(p - uPith, a);
   vec3 ac = (p - uPith) - al*a;
   return ac*across + a*(al*alongS);
 }
-// ring coordinate: distance from the pith axis, warped by noise so rings waver.
-float woodRing(vec3 p){
-  vec3 a = normalize(uAxis);
+// radial distance from the pith axis, warped so rings waver (cathedral figure).
+float woodRing(vec3 p, vec3 a){
   vec3 v = p - uPith;
   float along = dot(v, a);
   vec3 radial = v - along*a;
   float r = length(radial);
-  // run-out along the length + waviness across → flowing cathedral figure
-  r += 3.6*fbm(grainCoord(p, a, 0.028, 0.3));
-  r += 0.7*fbm(grainCoord(p, a, 0.11, 0.5));
+  r += 2.4*fbm(grainCoord(p, a, 0.03, 0.22));
+  r += 0.6*fbm(grainCoord(p, a, 0.11, 0.5));
   return r;
 }
-// 0 at earlywood, 1 at the dark latewood line.
-float woodLate(vec3 p){
-  float r = woodRing(p);
-  float t = fract(r / uRingScale);
-  // sharp dark band near the ring boundary
-  float band = smoothstep(0.78, 0.98, t) * (1.0 - smoothstep(0.98, 1.0, t));
-  return clamp(band, 0.0, 1.0);
-}
-// long-grain streaks + pores, as a dark multiplier.
-float woodGrainDark(vec3 p){
+
+struct Wood { vec3 col; float rough; float h; };
+
+Wood woodField(vec3 p){
   vec3 a = normalize(uAxis);
-  // streaks: long directional grain lines (the dominant figure)
-  float streak = fbm(grainCoord(p, a, 0.11, 0.02));
-  float streakDark = uGrain * 0.3 * smoothstep(0.15, 0.95, streak*0.5+0.5);
-  // pores: sparse specks, elongated along grain (open-grain species)
-  float pore = fbm(grainCoord(p, a, 0.45, 0.1));
-  float poreDark = uPore * smoothstep(0.62, 0.9, pore) * 0.3;
-  return streakDark + poreDark;
+  vec3 N = normalize(vWN);
+  float endGrain = smoothstep(0.52, 0.9, abs(dot(N, a)));        // 1 on end grain
+  vec3 v = p - uPith; float along = dot(v, a);
+  vec3 radial = v - along*a; float rlen = max(length(radial), 1e-3);
+  vec3 rdir = radial / rlen;
+  vec3 tang = normalize(cross(a, rdir));
+  float quarter = smoothstep(0.5, 0.92, abs(dot(N, tang))) * (1.0 - endGrain); // radial/quartersawn face
+
+  // growth rings (3D) — crisper on end grain
+  float r = woodRing(p, a);
+  float t = fract(r / uRingScale);
+  float band = smoothstep(0.6, 0.9, t) * (1.0 - smoothstep(0.9, 1.0, t));
+  float late = clamp(band * (0.55 + 0.8*endGrain) * (0.55 + uContrast), 0.0, 1.0);
+
+  // cathedral streaks — long grain only (fade out on end grain)
+  float streak = fbm(grainCoord(p, a, 0.10, 0.018));
+  float streakDark = uGrain * 0.2 * smoothstep(0.1, 0.95, streak*0.5+0.5) * (1.0 - endGrain);
+  // pores: round dots on end grain, short dashes on long grain
+  float pore = fbm(grainCoord(p, a, mix(0.42, 1.1, endGrain), mix(0.09, 1.1, endGrain)));
+  float poreDark = uPore * smoothstep(0.6, 0.9, pore) * (0.22 + 0.25*endGrain);
+  float dark = streakDark + poreDark;
+
+  // medullary ray fleck: short bright dashes on quartersawn faces, long radially.
+  float ray = fbm(vec3(dot(v,a)*0.55, rlen*0.05, dot(v,tang)*0.04));
+  float fleck = smoothstep(0.42, 0.72, ray) * quarter * uRay;
+
+  // per-board tonal variation (seed from the pith position)
+  float seed = fract(sin(dot(uPith, vec3(12.9898,78.233,37.719)))*43758.5453);
+  vec3 tint = vec3(1.0 + (seed-0.5)*0.14, 1.0 + (seed-0.5)*0.05, 1.0 - (seed-0.5)*0.10);
+
+  vec3 col = mix(uEarly, uLate, late) * (1.0 - dark);
+  col = mix(col, col*1.5 + 0.06, fleck);        // flecks lighten
+  col *= tint;
+
+  Wood W;
+  W.col = col * 1.08;
+  W.rough = 0.18*late + 0.10*dark - 0.28*fleck;  // flecks shinier, latewood rougher
+  W.h = late*1.0 + dark*0.5 - fleck*0.4;
+  return W;
 }`;
 
 function lin(hex: string): THREE.Color { return new THREE.Color(hex).convertSRGBToLinear(); }
@@ -174,41 +201,38 @@ function makeWood(spec: MaterialSpec, frame?: WoodFrame): THREE.Material {
     uContrast: { value: contrast },
     uPore: { value: pore },
     uGrain: { value: w.grain },
+    uRay: { value: w.ray },
     uEarly: { value: early },
     uLate: { value: late },
   };
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvWPos = (modelMatrix*vec4(transformed,1.0)).xyz;");
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos; varying vec3 vWN;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvWPos = (modelMatrix*vec4(transformed,1.0)).xyz;\nvWN = normalize(mat3(modelMatrix) * normal);");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\n" + NOISE_GLSL + "\n" + WOOD_GLSL)
+      .replace("#include <common>", "#include <common>\n" + NOISE_GLSL + "\n" + WOOD_GLSL + "\nWood gWood;")
       .replace("#include <map_fragment>", /* glsl */`
-        float late = woodLate(vWPos);
-        float dark = woodGrainDark(vWPos);
-        vec3 wood = mix(uEarly, uLate, late*uContrast);
-        wood *= (1.0 - dark);
-        diffuseColor.rgb *= wood * 1.12;
+        gWood = woodField(vWPos);
+        diffuseColor.rgb *= gWood.col;
       `)
       .replace("#include <roughnessmap_fragment>", /* glsl */`
-        float roughnessFactor = roughness + 0.18*late + 0.10*dark;
+        float roughnessFactor = clamp(roughness + gWood.rough, 0.04, 1.0);
       `)
       .replace("#include <normal_fragment_maps>", /* glsl */`
         #include <normal_fragment_maps>
         {
-          float h = late*1.0 + dark*0.6;
+          float h = gWood.h;
           vec3 dpx = dFdx(vWPos); vec3 dpy = dFdy(vWPos);
           float dhx = dFdx(h); float dhy = dFdy(h);
           vec3 nn = normalize(normal);
           vec3 r1 = cross(dpy, nn); vec3 r2 = cross(nn, dpx);
           float det = dot(dpx, r1);
           vec3 grad = (r1*dhx + r2*dhy) / max(abs(det), 1e-6);
-          normal = normalize(nn - 0.35*grad);
+          normal = normalize(nn - 0.4*grad);
         }
       `);
   };
-  // Force a unique program key per frame so each board keeps its own uniforms.
   mat.customProgramCacheKey = () => "wood";
   mat.userData.woodUniforms = uniforms;
   return mat;
@@ -216,13 +240,37 @@ function makeWood(spec: MaterialSpec, frame?: WoodFrame): THREE.Material {
 
 function makeMetal(spec: MaterialSpec): THREE.Material {
   const finish = spec.finish ?? "satin";
-  const rough = spec.roughness ?? (finish === "polished" ? 0.12 : finish === "brushed" ? 0.42 : 0.28);
-  return new THREE.MeshStandardMaterial({
-    color: lin(spec.color ?? "#9aa0a6"),
-    metalness: spec.metalness ?? 0.95,
+  const rough = spec.roughness ?? (finish === "polished" ? 0.12 : finish === "brushed" ? 0.4 : 0.3);
+  const mat = new THREE.MeshStandardMaterial({
+    color: lin(spec.color ?? "#b7bbc0"),
+    metalness: spec.metalness ?? 1.0,   // real metals are fully metallic; roughness sets the look
     roughness: rough,
     side: THREE.DoubleSide,
+    envMapIntensity: 1.25,
   });
+  // Cast-iron microstructure: subtle pitted roughness + bump for the rougher metals,
+  // so cast iron reads as a matte, slightly uneven casting rather than flat plastic.
+  if (rough >= 0.45) {
+    const u = { uCast: { value: 1 } };
+    mat.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, u);
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vWPosM;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvWPosM=(modelMatrix*vec4(transformed,1.0)).xyz;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\n" + NOISE_GLSL + "\nvarying vec3 vWPosM;")
+        .replace("#include <roughnessmap_fragment>", "float roughnessFactor = clamp(roughness + 0.12*fbm(vWPosM*0.22) + 0.06*fbm(vWPosM*1.4), 0.2, 1.0);")
+        .replace("#include <normal_fragment_maps>", /* glsl */`
+          #include <normal_fragment_maps>
+          { float h = 0.5*fbm(vWPosM*0.35) + 0.25*fbm(vWPosM*1.6);
+            vec3 dpx=dFdx(vWPosM), dpy=dFdy(vWPosM); float dhx=dFdx(h), dhy=dFdy(h);
+            vec3 nn=normalize(normal); vec3 r1=cross(dpy,nn), r2=cross(nn,dpx); float det=dot(dpx,r1);
+            vec3 g=(r1*dhx+r2*dhy)/max(abs(det),1e-6); normal=normalize(nn - 0.07*g); }
+        `);
+    };
+    mat.customProgramCacheKey = () => "castmetal";
+  }
+  return mat;
 }
 
 function makePlastic(spec: MaterialSpec): THREE.Material {

@@ -39,20 +39,21 @@ const at = (x: number, y: number, z: number) => ({ x: x + O.x, y: y + O.y, z: z 
 
 /** A board component built in its local frame [0,bx]×[0,by]×[0,bz], placed at pos,
  *  sketched on XY and extruded up +Z. Returns {cmp, sketch} for follow-on cuts. */
-async function board(s: CadSession, name: string, pos: { x: number; y: number; z: number }, dim: [number, number, number], parent?: string): Promise<string> {
+async function board(s: CadSession, name: string, pos: { x: number; y: number; z: number }, dim: [number, number, number], parent?: string): Promise<{ cmp: string; feat: string }> {
   const cmp = (await dis(s, "component.create", { name, position: pos, ...(parent ? { parent } : {}) }))[0];
   const sid = (await dis(s, "sketch.create", { plane: "XY", component: cmp }))[0];
   await dis(s, "sketch.addRectangle", { sketch: sid, corner: { x: 0, y: 0 }, opposite: { x: dim[0], y: dim[1] } });
-  await dis(s, "feature.extrude", { sketch: sid, distance: String(dim[2]) });
-  return cmp;
+  const feat = (await dis(s, "feature.extrude", { sketch: sid, distance: String(dim[2]) }))[0];
+  return { cmp, feat };
 }
 
-/** Cut a rectangular through-mortise in `cmp` (local coords): a hole of footprint
- *  [u0,u1]×[v0,v1] on the XY plane, cut through the full height (throughAll). */
-async function mortise(s: CadSession, cmp: string, u0: number, v0: number, u1: number, v1: number): Promise<void> {
+/** Cut a rectangular through-mortise through `targetFeat` (the host board's body),
+ *  footprint [u0,u1]×[v0,v1] in `cmp`'s local XY, through the full height. The
+ *  explicit `body` is essential: otherwise the cut hits the most-recent body. */
+async function mortise(s: CadSession, cmp: string, targetFeat: string, u0: number, v0: number, u1: number, v1: number): Promise<void> {
   const sid = (await dis(s, "sketch.create", { plane: "XY", component: cmp }))[0];
   await dis(s, "sketch.addRectangle", { sketch: sid, corner: { x: u0, y: v0 }, opposite: { x: u1, y: v1 } });
-  await dis(s, "feature.extrude", { sketch: sid, distance: "1", operation: "cut", extent: "throughAll", symmetric: true });
+  await dis(s, "feature.extrude", { sketch: sid, distance: "1", operation: "cut", extent: "throughAll", symmetric: true, body: targetFeat });
 }
 
 function bodies(s: CadSession): { count: number; byComp: Record<string, { lo: number[]; hi: number[]; feat: string }[]> } {
@@ -81,23 +82,22 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   const legNames = ["FL", "FR", "BL", "BR"];
 
   // ---- top: laminated oak boards; the two outer boards host the leg mortises.
-  const topBoards: string[] = [];
+  const topBoards: { cmp: string; feat: string }[] = [];
   for (let i = 0; i < N.NB; i++) topBoards.push(await board(s, `Top ${i + 1}`, at(0, i * BW, legTopZ), [N.L, BW - 0.8, N.TT]));
 
-  // ---- legs with through-tenons up into the slab.
+  // ---- legs with through-tenons that pass up through the slab and stand proud.
   let li = 0;
+  const off = (N.LS - N.TEN) / 2;
   for (const y of legY) for (const x of legX) {
-    const leg = await board(s, `Leg ${legNames[li++]}`, at(x, y, 0), [N.LS, N.LS, legTopZ]);
-    // tenon: a reduced square carried up through the slab, flush with the top.
-    const off = (N.LS - N.TEN) / 2;
-    const tsk = (await dis(s, "sketch.create", { plane: "XY", component: leg }))[0];
-    await dis(s, "sketch.addRectangle", { sketch: tsk, corner: { x: off, y: off }, opposite: { x: off + N.TEN, y: off + N.TEN } });
-    await dis(s, "feature.extrude", { sketch: tsk, distance: String(N.TT), operation: "join" }); // extends from legTopZ up TT
-    // matching mortise in the top board this leg sits under.
+    const nm = legNames[li++];
+    const leg = (await board(s, `Leg ${nm}`, at(x, y, 0), [N.LS, N.LS, legTopZ])).cmp;
+    // tenon: a reduced square carried from the slab underside up through it and
+    // ~12mm proud of the top (its own child body, in leg-local coords).
+    await board(s, `Tenon ${nm}`, { x: off, y: off, z: legTopZ }, [N.TEN, N.TEN, N.TT + 12], leg);
+    // matching through-mortise in the top board this leg sits under.
     const bi = y === 0 ? 0 : N.NB - 1;
-    const tb = topBoards[bi];
     const by = bi * BW; // board's world Y origin (pre-centre)
-    await mortise(s, tb, x - 0 + off, (y + off) - by, x + off + N.TEN, (y + off + N.TEN) - by);
+    await mortise(s, topBoards[bi].cmp, topBoards[bi].feat, x + off, (y + off) - by, x + off + N.TEN, (y + off + N.TEN) - by);
   }
 
   // ---- stretchers: long front/back rails + end rails, mortise-and-tenoned into legs.
@@ -132,21 +132,32 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   const P0 = at(chopPivotX, -chopT, 150);
   await dis(s, "joint.create", { kind: "slider", moved: chop, baseOrigin: P0, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: -1, z: 0 }, value: "viseGap", name: "Vise slide" });
 
-  // criss-cross: two steel arms pivoting on the leg front face, scissoring as the
-  // chop racks. arm angle θ = asin((S0+viseGap)/LA) about world X; arm2 = -θ.
-  // Each arm is a bar along local +Z (length LA), pivoting at its lower end.
+  // criss-cross: two steel arms that scissor as the chop racks, offset in X so
+  // they cross as two real bars, joined by a centre pivot pin and end pins that
+  // seat into the leg and chop. arm angle θ = asin((S0+viseGap)/LA) about world X.
   const armIds: string[] = [];
   const zc = 150 + chopH * 0.4;                  // criss-cross centre height
   const armPivot = [at(chopPivotX + chopW / 2, -6, zc - N.LA / 3), at(chopPivotX + chopW / 2, -6, zc + N.LA / 3)];
   const thetaExpr = `deg(asin((${N.S0}+viseGap)/${N.LA}))`;
+  // a steel pin: a cylinder along X, centred at a parent-local point, spanning
+  // both arm slabs. Child of an arm so it rides with it; inherits steel.
+  const pin = async (parent: string, zLocal: number, len: number) => {
+    const p = (await dis(s, "component.create", { name: "Pin", parent, position: { x: 0, y: 0, z: zLocal } }))[0];
+    const sk = (await dis(s, "sketch.create", { plane: "YZ", component: p }))[0];
+    await dis(s, "sketch.addCircle", { sketch: sk, center: { x: 0, y: 0 }, radius: N.ARM_W * 0.33 });
+    await dis(s, "feature.extrude", { sketch: sk, distance: String(len), symmetric: true });
+  };
   for (let i = 0; i < 2; i++) {
+    const up = i === 0;
     const arm = (await dis(s, "component.create", { name: `Crisscross arm ${i + 1}` }))[0];
     const ask = (await dis(s, "sketch.create", { plane: "YZ", component: arm }))[0];
-    // on YZ: u=Y, v=Z. bar from v=0 up to v=LA (lower arm) or down (upper arm), width ARM_W along Y.
-    const up = i === 0;
     await dis(s, "sketch.addRectangle", { sketch: ask, corner: { x: -N.ARM_W / 2, y: up ? 0 : -N.LA }, opposite: { x: N.ARM_W / 2, y: up ? N.LA : 0 } });
-    await dis(s, "feature.extrude", { sketch: ask, distance: String(N.ARM_T), ...(i ? {} : {}) });
-    await dis(s, "joint.create", { kind: "revolute", moved: arm, baseOrigin: armPivot[i], movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, value: i === 0 ? thetaExpr : `-(${thetaExpr})`, name: `Crisscross ${i + 1}` });
+    // offset the two arms along X (arm 2 reversed) so they pass side-by-side.
+    await dis(s, "feature.extrude", { sketch: ask, distance: String(N.ARM_T), ...(up ? {} : { direction: "reverse" }) });
+    await dis(s, "joint.create", { kind: "revolute", moved: arm, baseOrigin: armPivot[i], movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, value: up ? thetaExpr : `-(${thetaExpr})`, name: `Crisscross ${i + 1}` });
+    await pin(arm, 0, N.ARM_T * 3);                 // pivot pin (into the leg)
+    await pin(arm, up ? N.LA : -N.LA, N.ARM_T * 3); // end pin (into the chop)
+    if (up) await pin(arm, N.LA / 2, N.ARM_T * 3.4); // central pivot pin (shared crossing)
     armIds.push(arm);
   }
 
@@ -209,8 +220,8 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     if (OUT) writeFileSync(`${OUT}/roubo.chisel.json`, serializeDocument(s.doc));
 
     const b0 = bodies(s);
-    // top(4)+legs(4)+rails(4)+chop+screw+2 arms + wheel(hub,rim,spokes) + 3 handles
-    expect(b0.count).toBe(4 + 4 + 4 + 1 + 1 + 2 + 3 + 3);
+    // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw + 2 arms + 5 pins + wheel(3) + 3 handles = 31
+    expect(b0.count).toBe(31);
 
     const chopY = () => { const sc = resolveParameters(s.doc.parameters).scope; placeComponentSketches(s.doc, sc); let hi = -Infinity; for (const x of Object.values(evaluateFeatures(s.doc, sc))) { if (x.bounds && s.doc.sketches[x.sketchId]?.componentId === chop) hi = Math.max(hi, x.bounds.max.y); } return hi; };
     await dis(s, "parameter.set", { name: "viseGap", expression: "0" }); await s.recompute();
