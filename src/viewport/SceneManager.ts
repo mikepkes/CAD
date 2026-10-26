@@ -8,6 +8,17 @@ import { isDimension } from "../sketch/types";
 import { extractProfiles, Loop } from "../core/geometry/profile";
 import { HandleManager } from "./handles";
 import { makeThreadNormalMap } from "./threadTexture";
+import type { Rigid } from "../math/transform";
+
+/** Rigid transform → THREE.Matrix4 (basis columns + origin). */
+function rigidMat(R: Rigid): THREE.Matrix4 {
+  return new THREE.Matrix4().set(
+    R.x.x, R.y.x, R.z.x, R.origin.x,
+    R.x.y, R.y.y, R.z.y, R.origin.y,
+    R.x.z, R.y.z, R.z.z, R.origin.z,
+    0, 0, 0, 1,
+  );
+}
 import { createMaterial, MaterialSpec, WoodFrame } from "./material";
 import type { ThreadDecal } from "../core/document";
 
@@ -148,6 +159,13 @@ export class SceneManager {
   private sketchGroup = new THREE.Group();
   private previewGroup = new THREE.Group();
   private solidsGroup = new THREE.Group();
+  // ---- transform-driven animation (turntable / mechanism export): bodies are
+  // grouped per component and MOVED by a matrix each frame, instead of rebuilding
+  // geometry. Only joint transforms change, so this needs no OCC rebuild. ----
+  private recording = false;
+  private animGroups = new Map<string, THREE.Group>();         // componentId -> group of its bodies
+  private animBuildInv = new Map<string, THREE.Matrix4>();     // inverse of each component's build-pose world
+  private animWood: { mat: THREE.Material; axis: THREE.Vector3; pith: THREE.Vector3; cid: string }[] = [];
   private raycaster = new THREE.Raycaster();
   private rayHelper = new THREE.Raycaster();
   readonly handles = new HandleManager(this);
@@ -406,6 +424,7 @@ export class SceneManager {
   private animate = () => {
     if (this.disposed) return;
     requestAnimationFrame(this.animate);
+    if (this.recording) return; // the turntable recorder drives render() itself
     const dt = this.clock.getDelta();
     if (this.tween) this.stepTween(dt);
     else this.controls.update();
@@ -943,6 +962,83 @@ export class SceneManager {
   // on every frame (e.g. during a slider drag). Wood keeps one material per body
   // and updates its grain-frame uniforms in place, so grain travels with a part.
   private matCache = new Map<string, THREE.Material>();
+  // ---- transform-driven animation (turntable / mechanism recording) ----
+
+  /** Begin animation: build `bodies` into per-component groups (world-baked at the
+   *  build pose), remembering each component's build-pose world so a later frame
+   *  can MOVE the component by a delta matrix instead of rebuilding geometry. */
+  beginAnimation(bodies: { solid: SolidView; componentId: string }[], buildWorld: Map<string, Rigid>) {
+    this.endAnimation();
+    this.recording = true;
+    this.clearGroup(this.solidsGroup);
+    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = [];
+    this.solidsGroup.visible = true;
+    for (const { solid, componentId } of bodies) {
+      let g = this.animGroups.get(componentId);
+      if (!g) {
+        g = new THREE.Group(); g.matrixAutoUpdate = false;
+        this.animGroups.set(componentId, g); this.solidsGroup.add(g);
+        const W = buildWorld.get(componentId);
+        this.animBuildInv.set(componentId, (W ? rigidMat(W) : new THREE.Matrix4()).invert());
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(solid.positions, 3));
+      if (solid.normals.length === solid.positions.length) geo.setAttribute("normal", new THREE.BufferAttribute(solid.normals, 3));
+      else geo.computeVertexNormals();
+      geo.setIndex(new THREE.BufferAttribute(solid.indices, 1));
+      const mat = solid.material ? this.materialFor(solid) : new THREE.MeshStandardMaterial({ color: 0x7b86e0, metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide });
+      g.add(new THREE.Mesh(geo, mat));
+      if (solid.edges.length) {
+        const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(solid.edges, 3));
+        g.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x20242e })));
+      }
+      if (solid.material?.kind === "wood" && solid.woodFrame) {
+        this.animWood.push({ mat, axis: new THREE.Vector3(...solid.woodFrame.axis), pith: new THREE.Vector3(...solid.woodFrame.pith), cid: componentId });
+      }
+    }
+  }
+
+  /** Move every component to the given world pose (applied as a delta from its
+   *  build pose), carrying the wood grain frame along so grain doesn't swim. */
+  setAnimationPose(world: Map<string, Rigid>) {
+    const deltas = new Map<string, THREE.Matrix4>();
+    for (const [cid, g] of this.animGroups) {
+      const Wr = world.get(cid);
+      const W = Wr ? rigidMat(Wr) : new THREE.Matrix4();
+      const G = W.multiply(this.animBuildInv.get(cid)!); // delta = Wp · inv(Wbuild)
+      g.matrix.copy(G); g.updateMatrixWorld(true);
+      deltas.set(cid, G);
+    }
+    for (const w of this.animWood) {
+      const G = deltas.get(w.cid); if (!G) continue;
+      const u = w.mat.userData.woodUniforms as { uAxis: { value: THREE.Vector3 }; uPith: { value: THREE.Vector3 } } | undefined;
+      if (u) { u.uPith.value.copy(w.pith).applyMatrix4(G); u.uAxis.value.copy(w.axis).transformDirection(G); }
+    }
+  }
+
+  /** Set an exact output size (pixelRatio 1) for recording, so captured frames
+   *  match the encoder dimensions. The ResizeObserver restores the view size later. */
+  configureRecording(w: number, h: number) {
+    this.renderer.setPixelRatio(1);
+    this.renderer.setSize(w, h, false);
+    this.perspCam.aspect = w / h; this.perspCam.updateProjectionMatrix();
+  }
+
+  /** Render one frame now (recorder-driven; the RAF loop is paused while recording). */
+  renderFrame() { this.renderer.render(this.scene, this.camera); }
+
+  /** The canvas the recorder reads VideoFrames from. */
+  get recordCanvas(): HTMLCanvasElement { return this.renderer.domElement; }
+
+  /** End animation and restore the normal solids view. */
+  endAnimation() {
+    if (!this.recording) return;
+    this.recording = false;
+    this.clearGroup(this.solidsGroup);
+    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = [];
+    if (this.lastData) this.update(this.lastData);
+  }
+
   private materialFor(s: SolidView): THREE.Material {
     const spec = s.material!;
     if (spec.kind === "wood") {

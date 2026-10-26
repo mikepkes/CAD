@@ -20,6 +20,9 @@ export default defineConfig(({ command }) => ({
   // locateFile — so exclude it from pre-bundling.
   optimizeDeps: {
     exclude: ["replicad-opencascadejs"],
+    // Pre-bundle the turntable recorder's muxer so importing it at runtime
+    // doesn't trigger a dep re-optimize + full page reload mid-recording.
+    include: ["mp4-muxer"],
   },
   build: {
     target: "es2020",
