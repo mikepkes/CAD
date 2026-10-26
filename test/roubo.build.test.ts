@@ -234,38 +234,43 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
     ] });
   }
   await dis(s, "feature.extrude", { sketch: ssk2, distance: "13", symmetric: true });
-  // handle landings: three cast pads proud of the rim front where the handles
-  // seat, so a turned base contacts a flat machined boss, not the cast spokes.
   const Rh = R - 6;                           // handles mount on the rim
   const handleAng = (i: number) => ((i * 120 + 90) * Math.PI) / 180;
-  const lsk = (await dis(s, "sketch.create", { plane: "XZ", component: wheel }))[0];
-  for (let i = 0; i < 3; i++) { const th = handleAng(i); await dis(s, "sketch.addCircle", { sketch: lsk, center: { x: Rh * Math.cos(th), y: Rh * Math.sin(th) }, radius: 14 }); }
-  await dis(s, "feature.extrude", { sketch: lsk, distance: "22" });   // -Y, proud of the rim front
   await dis(s, "joint.create", { kind: "revolute", base: chop, moved: wheel, baseOrigin: wheelCenter, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 1, z: 0 }, value: "viseGap*14.4", name: "Wheel spin" });
 
-  // three turned wooden handles mounted on the landings. Each points mostly
-  // RADIALLY outward from the wheel with a modest cant toward the operator
-  // (~22° off the wheel plane — split between flat-radial and a full 45°).
-  // Built as an axial turned knob (pointing −Y) seated on the landing front and
-  // tilted into pose by a fixed revolute joint on the wheel, so it rides the
-  // spin. (Components only translate and custom planes don't follow a jointed
-  // frame, so the tilt must be a joint.)
+  // Handles + landings. Each turned knob points mostly RADIALLY outward with a
+  // modest cant toward the operator (~22° off the wheel plane). The matching cast
+  // LANDING shares the SAME cant, so its outer face is perpendicular to the handle
+  // axis and the turned base seats flat on it (not at an angle on a flat-to-wheel
+  // pad). Both are built axial (−Y) and tilted into pose by a fixed revolute joint
+  // on the wheel, so they ride the wheel's spin. (Components only translate and a
+  // custom plane won't follow a jointed frame, so the tilt must be a joint.)
   const handleIds: string[] = [];
+  const landingIds: string[] = [];
   const T = Math.tan((22.5 * Math.PI) / 180);   // out-of-plane cant ≈ 22.5°
   const cantAng = (Math.acos(T / Math.hypot(1, T)) * 180) / Math.PI;
-  const landFront = 22;                          // handle base seats on the landing face (−Y)
+  const ySeat = -10;                             // seat point, just proud of the rim front
   for (let i = 0; i < 3; i++) {
     const th = handleAng(i);
     const c = Math.cos(th), sn = Math.sin(th);
+    const seat = { x: Rh * c, y: ySeat, z: Rh * sn };
+    const ax = { x: -sn, y: 0, z: c };           // cant axis: tilt −Y out to d=(c,−T,sn)
+    // landing: a short cast boss coaxial with the handle, extending INTO the rim;
+    // its outer (seat) face ends up perpendicular to the handle axis.
+    const land = (await dis(s, "component.create", { name: `Handle landing ${i + 1}` }))[0];
+    const lsk = (await dis(s, "sketch.create", { plane: "XZ", component: land }))[0];
+    await dis(s, "sketch.addCircle", { sketch: lsk, center: { x: 0, y: 0 }, radius: 14 });
+    await dis(s, "feature.extrude", { sketch: lsk, distance: "24", direction: "reverse" }); // +Y local → into the rim
+    await dis(s, "joint.create", { kind: "revolute", base: wheel, moved: land, baseOrigin: seat, movedOrigin: { x: 0, y: 0, z: 0 }, axis: ax, value: String(cantAng), name: `Landing ${i + 1} cant` });
+    landingIds.push(land);
+    // handle: the turned knob, same cant, extending outward (−Y local → d).
     const h = (await dis(s, "component.create", { name: `Wheel handle ${i + 1}` }))[0];
     const psk = (await dis(s, "sketch.create", { plane: "YZ", component: h }))[0];
-    // turned profile along −Y (u), radius v: collar → shaft → bulb → rounded tip.
     await dis(s, "sketch.addPolyline", { sketch: psk, points: [
       { x: 0, y: 0 }, { x: 0, y: 11 }, { x: -5, y: 11 }, { x: -8, y: 8 }, { x: -24, y: 7 }, { x: -40, y: 13 }, { x: -52, y: 9 }, { x: -58, y: 0 },
     ] });
     await dis(s, "feature.revolve", { sketch: psk, axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "360" });
-    // tilt −Y out to d = normalize(c, −T, sn): rotate about (−sn,0,c) by cantAng.
-    await dis(s, "joint.create", { kind: "revolute", base: wheel, moved: h, baseOrigin: { x: Rh * c, y: -landFront, z: Rh * sn }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: -sn, y: 0, z: c }, value: String(cantAng), name: `Handle ${i + 1} cant` });
+    await dis(s, "joint.create", { kind: "revolute", base: wheel, moved: h, baseOrigin: seat, movedOrigin: { x: 0, y: 0, z: 0 }, axis: ax, value: String(cantAng), name: `Handle ${i + 1} cant` });
     handleIds.push(h);
   }
 
@@ -281,6 +286,7 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   await dis(s, "material.assign", { material: blackIron, component: garter });   // flange + bolts inherit
   for (const a of armIds) await dis(s, "material.assign", { material: blackIron, component: a }); // criss-cross = black cast iron; pins inherit
   await dis(s, "material.assign", { material: iron, component: wheel });
+  for (const l of landingIds) await dis(s, "material.assign", { material: iron, component: l });  // landings are cast too
   for (const h of handleIds) await dis(s, "material.assign", { material: walnut, component: h });
 
   return { chop, armIds };
@@ -297,8 +303,8 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
 
     const b0 = bodies(s);
     // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw+garter(flange+bolts=2)
-    //   + 2 arms + 5 pins + wheel(hub+boss+rim+spokes+landings=5) + 3 handles = 35
-    expect(b0.count).toBe(35);
+    //   + 2 arms + 5 pins + wheel(hub+boss+rim+spokes=4) + 3 landings + 3 handles = 37
+    expect(b0.count).toBe(37);
 
     const chopY = () => { const sc = resolveParameters(s.doc.parameters).scope; placeComponentSketches(s.doc, sc); let hi = -Infinity; for (const x of Object.values(evaluateFeatures(s.doc, sc))) { if (x.bounds && s.doc.sketches[x.sketchId]?.componentId === chop) hi = Math.max(hi, x.bounds.max.y); } return hi; };
     await dis(s, "parameter.set", { name: "viseGap", expression: "0" }); await s.recompute();
