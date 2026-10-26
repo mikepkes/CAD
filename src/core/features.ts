@@ -760,8 +760,8 @@ function evaluateFull(doc: CadDocument, scope: Scope): Record<string, SolidEval>
 export interface CollisionResult {
   /** Largest pairwise intersection volume (mm³) between any two bodies. */
   maxOverlap: number;
-  /** Bodies that interpenetrate, with the overlap volume. */
-  overlaps: { a: string; b: string; volume: number }[];
+  /** Bodies that interpenetrate (display names + body ids), with the overlap volume. */
+  overlaps: { a: string; b: string; aId: string; bId: string; volume: number }[];
   /** A feature failed to build at this configuration (a "crash" to warn about). */
   buildError?: string;
 }
@@ -772,7 +772,7 @@ export interface CollisionResult {
 export function collideFeatures(doc: CadDocument, scope: Scope): CollisionResult {
   const { bodies, out } = evaluateBodies(doc, scope);
   const buildError = Object.values(out).find((o) => o.error)?.error;
-  const overlaps: { a: string; b: string; volume: number }[] = [];
+  const overlaps: CollisionResult["overlaps"] = [];
   let maxOverlap = 0;
   try {
     for (let i = 0; i < bodies.length; i++) {
@@ -782,7 +782,7 @@ export function collideFeatures(doc: CadDocument, scope: Scope): CollisionResult
           const inter = intersectShapes(bodies[i].shape, bodies[j].shape);
           try { const v = volumeOfShape(inter); if (Number.isFinite(v)) vol = Math.abs(v); } finally { inter.delete(); }
         } catch { vol = 0; } // disjoint / touching solids → no common volume
-        if (vol > 1e-4) { overlaps.push({ a: bodies[i].name, b: bodies[j].name, volume: vol }); maxOverlap = Math.max(maxOverlap, vol); }
+        if (vol > 1e-4) { overlaps.push({ a: bodies[i].name, b: bodies[j].name, aId: bodies[i].id, bId: bodies[j].id, volume: vol }); maxOverlap = Math.max(maxOverlap, vol); }
       }
     }
   } finally {

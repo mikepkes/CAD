@@ -1,0 +1,843 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bundled examples > examples/gyroscope.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "rev144",
+    "max": [
+      47,
+      39,
+      6,
+    ],
+    "min": [
+      -47,
+      -39,
+      -6,
+    ],
+    "name": "Ring 2 (middle)",
+    "volume": 16399.5,
+  },
+  {
+    "body": "rev259",
+    "max": [
+      27,
+      35,
+      6,
+    ],
+    "min": [
+      -27,
+      -35,
+      -6,
+    ],
+    "name": "Ring 3 (inner)",
+    "volume": 10978,
+  },
+  {
+    "body": "rev71",
+    "max": [
+      51,
+      51,
+      6,
+    ],
+    "min": [
+      -51,
+      -51,
+      -6,
+    ],
+    "name": "Ring 1 (frame)",
+    "volume": 21707.9,
+  },
+]
+`;
+
+exports[`bundled examples > examples/scissor.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext40",
+    "max": [
+      44.5,
+      0,
+      129.4,
+    ],
+    "min": [
+      -2.1,
+      -4,
+      -2.1,
+    ],
+    "name": "Extrude",
+    "volume": 8064,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/gyroscope.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "rev144",
+    "max": [
+      47,
+      39,
+      6,
+    ],
+    "min": [
+      -47,
+      -39,
+      -6,
+    ],
+    "name": "Ring 2 (middle)",
+    "volume": 16399.5,
+  },
+  {
+    "body": "rev259",
+    "max": [
+      27,
+      35,
+      6,
+    ],
+    "min": [
+      -27,
+      -35,
+      -6,
+    ],
+    "name": "Ring 3 (inner)",
+    "volume": 10978,
+  },
+  {
+    "body": "rev71",
+    "max": [
+      51,
+      51,
+      6,
+    ],
+    "min": [
+      -51,
+      -51,
+      -6,
+    ],
+    "name": "Ring 1 (frame)",
+    "volume": 21707.9,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/roubo.json > is clear at rest and while its joints are driven 1`] = `
+[
+  "rest: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 56297.3, ext112 × ext490 10.8, ext112 × ext542 10.8, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 16792.3, ext424 × ext512 11084.7, ext424 × ext542 16792.3, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 0: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 80424.8, ext112 × ext490 103.2, ext112 × ext542 103.2, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 64800, ext424 × ext512 11084.7, ext424 × ext522 6281.3, ext424 × ext542 64800, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext490 × ext554 424.7, ext490 × ext564 424.7, ext502 × ext542 424.7, ext512 × ext542 424.7, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 34: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 77207.8, ext112 × ext490 27.9, ext112 × ext542 27.9, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 24943.9, ext424 × ext512 11084.7, ext424 × ext542 24943.9, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 68: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 49863.4, ext112 × ext490 7.5, ext112 × ext542 7.5, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 15250.2, ext424 × ext512 11084.7, ext424 × ext542 15250.2, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 102: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 22518.9, ext112 × ext490 0.2, ext112 × ext542 0.2, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 10941.2, ext424 × ext512 11084.7, ext424 × ext542 10941.2, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 136: ext112 × ext344 98560, ext112 × ext384 98560, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 8497.9, ext424 × ext512 11084.7, ext424 × ext542 8497.9, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 170: ext112 × ext344 98560, ext112 × ext384 98560, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 6921.6, ext424 × ext512 11084.7, ext424 × ext542 6921.6, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+]
+`;
+
+exports[`bundled examples > public/examples/roubo.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext112",
+    "max": [
+      -620,
+      -150,
+      325,
+    ],
+    "min": [
+      -720,
+      -250,
+      -425,
+    ],
+    "name": "Extrude",
+    "volume": 7029984,
+  },
+  {
+    "body": "ext132",
+    "max": [
+      -642.5,
+      -172.5,
+      425,
+    ],
+    "min": [
+      -697.5,
+      -227.5,
+      325,
+    ],
+    "name": "Extrude",
+    "volume": 302500,
+  },
+  {
+    "body": "ext170",
+    "max": [
+      720,
+      -150,
+      325,
+    ],
+    "min": [
+      620,
+      -250,
+      -425,
+    ],
+    "name": "Extrude",
+    "volume": 7500000,
+  },
+  {
+    "body": "ext190",
+    "max": [
+      697.5,
+      -172.5,
+      425,
+    ],
+    "min": [
+      642.5,
+      -227.5,
+      325,
+    ],
+    "name": "Extrude",
+    "volume": 302500,
+  },
+  {
+    "body": "ext228",
+    "max": [
+      -620,
+      250,
+      325,
+    ],
+    "min": [
+      -720,
+      150,
+      -425,
+    ],
+    "name": "Extrude",
+    "volume": 7500000,
+  },
+  {
+    "body": "ext248",
+    "max": [
+      -642.5,
+      227.5,
+      425,
+    ],
+    "min": [
+      -697.5,
+      172.5,
+      325,
+    ],
+    "name": "Extrude",
+    "volume": 302500,
+  },
+  {
+    "body": "ext286",
+    "max": [
+      720,
+      250,
+      325,
+    ],
+    "min": [
+      620,
+      150,
+      -425,
+    ],
+    "name": "Extrude",
+    "volume": 7500000,
+  },
+  {
+    "body": "ext306",
+    "max": [
+      697.5,
+      227.5,
+      425,
+    ],
+    "min": [
+      642.5,
+      172.5,
+      325,
+    ],
+    "name": "Extrude",
+    "volume": 302500,
+  },
+  {
+    "body": "ext32",
+    "max": [
+      850,
+      -125.8,
+      425,
+    ],
+    "min": [
+      -850,
+      -250,
+      325,
+    ],
+    "name": "Extrude",
+    "volume": 20509000,
+  },
+  {
+    "body": "ext344",
+    "max": [
+      648,
+      -184,
+      -145,
+    ],
+    "min": [
+      -648,
+      -216,
+      -255,
+    ],
+    "name": "Extrude",
+    "volume": 4561920,
+  },
+  {
+    "body": "ext364",
+    "max": [
+      648,
+      216,
+      -145,
+    ],
+    "min": [
+      -648,
+      184,
+      -255,
+    ],
+    "name": "Extrude",
+    "volume": 4561920,
+  },
+  {
+    "body": "ext384",
+    "max": [
+      -654,
+      178,
+      -145,
+    ],
+    "min": [
+      -686,
+      -178,
+      -255,
+    ],
+    "name": "Extrude",
+    "volume": 1253120,
+  },
+  {
+    "body": "ext404",
+    "max": [
+      686,
+      178,
+      -145,
+    ],
+    "min": [
+      654,
+      -178,
+      -255,
+    ],
+    "name": "Extrude",
+    "volume": 1253120,
+  },
+  {
+    "body": "ext424",
+    "max": [
+      -590,
+      -310,
+      425,
+    ],
+    "min": [
+      -750,
+      -352,
+      -275,
+    ],
+    "name": "Extrude",
+    "volume": 4704000,
+  },
+  {
+    "body": "ext434",
+    "max": [
+      -654,
+      -180,
+      291,
+    ],
+    "min": [
+      -686,
+      -352,
+      259,
+    ],
+    "name": "Extrude",
+    "volume": 138330.6,
+  },
+  {
+    "body": "ext447",
+    "max": [
+      -624,
+      -352,
+      321,
+    ],
+    "min": [
+      -716,
+      -362,
+      229,
+    ],
+    "name": "Extrude",
+    "volume": 57396.9,
+  },
+  {
+    "body": "ext464",
+    "max": [
+      -640,
+      -352,
+      305,
+    ],
+    "min": [
+      -700,
+      -364,
+      245,
+    ],
+    "name": "Extrude",
+    "volume": 3053.6,
+  },
+  {
+    "body": "ext490",
+    "max": [
+      -658,
+      -225.4,
+      183.8,
+    ],
+    "min": [
+      -670,
+      -334.6,
+      -173.8,
+    ],
+    "name": "Extrude",
+    "volume": 129600,
+  },
+  {
+    "body": "ext502",
+    "max": [
+      -652,
+      -230.1,
+      190.4,
+    ],
+    "min": [
+      -688,
+      -249.9,
+      170.6,
+    ],
+    "name": "Extrude",
+    "volume": 11084.7,
+  },
+  {
+    "body": "ext512",
+    "max": [
+      -652,
+      -310.1,
+      -160.6,
+    ],
+    "min": [
+      -688,
+      -329.9,
+      -180.4,
+    ],
+    "name": "Extrude",
+    "volume": 11084.7,
+  },
+  {
+    "body": "ext52",
+    "max": [
+      850,
+      -0.8,
+      425,
+    ],
+    "min": [
+      -850,
+      -125,
+      325,
+    ],
+    "name": "Extrude",
+    "volume": 21114000,
+  },
+  {
+    "body": "ext522",
+    "max": [
+      -649.6,
+      -270.1,
+      14.9,
+    ],
+    "min": [
+      -690.4,
+      -289.9,
+      -4.9,
+    ],
+    "name": "Extrude",
+    "volume": 12562.6,
+  },
+  {
+    "body": "ext542",
+    "max": [
+      -670,
+      -225.4,
+      183.8,
+    ],
+    "min": [
+      -682,
+      -334.6,
+      -173.8,
+    ],
+    "name": "Extrude",
+    "volume": 129600,
+  },
+  {
+    "body": "ext554",
+    "max": [
+      -652,
+      -310.1,
+      190.4,
+    ],
+    "min": [
+      -688,
+      -329.9,
+      170.6,
+    ],
+    "name": "Extrude",
+    "volume": 11084.7,
+  },
+  {
+    "body": "ext564",
+    "max": [
+      -652,
+      -230.1,
+      -160.6,
+    ],
+    "min": [
+      -688,
+      -249.9,
+      -180.4,
+    ],
+    "name": "Extrude",
+    "volume": 11084.7,
+  },
+  {
+    "body": "ext610",
+    "max": [
+      -648,
+      -363,
+      297,
+    ],
+    "min": [
+      -692,
+      -409,
+      253,
+    ],
+    "name": "Extrude",
+    "volume": 69944.4,
+  },
+  {
+    "body": "ext618",
+    "max": [
+      -643,
+      -386,
+      302,
+    ],
+    "min": [
+      -697,
+      -421,
+      248,
+    ],
+    "name": "Extrude",
+    "volume": 80157.7,
+  },
+  {
+    "body": "ext674",
+    "max": [
+      -586.4,
+      -379.5,
+      363.4,
+    ],
+    "min": [
+      -745.9,
+      -392.5,
+      213.4,
+    ],
+    "name": "Extrude",
+    "volume": 43680,
+  },
+  {
+    "body": "ext686",
+    "max": [
+      -603,
+      -373.9,
+      226.2,
+    ],
+    "min": [
+      -639.5,
+      -408.9,
+      189.7,
+    ],
+    "name": "Extrude",
+    "volume": 14778.1,
+  },
+  {
+    "body": "ext72",
+    "max": [
+      850,
+      124.2,
+      425,
+    ],
+    "min": [
+      -850,
+      0,
+      325,
+    ],
+    "name": "Extrude",
+    "volume": 21114000,
+  },
+  {
+    "body": "ext724",
+    "max": [
+      -618.8,
+      -373.9,
+      368.4,
+    ],
+    "min": [
+      -653.8,
+      -408.9,
+      333.1,
+    ],
+    "name": "Extrude",
+    "volume": 14778.1,
+  },
+  {
+    "body": "ext762",
+    "max": [
+      -735.9,
+      -373.9,
+      281.4,
+    ],
+    "min": [
+      -769,
+      -408.9,
+      251.2,
+    ],
+    "name": "Extrude",
+    "volume": 14778.1,
+  },
+  {
+    "body": "ext92",
+    "max": [
+      850,
+      249.2,
+      425,
+    ],
+    "min": [
+      -850,
+      125,
+      325,
+    ],
+    "name": "Extrude",
+    "volume": 20509000,
+  },
+  {
+    "body": "rev636",
+    "max": [
+      -570,
+      -374,
+      375,
+    ],
+    "min": [
+      -770,
+      -398,
+      175,
+    ],
+    "name": "Revolve",
+    "volume": 209230.1,
+  },
+  {
+    "body": "rev712",
+    "max": [
+      -579,
+      -385.8,
+      206.3,
+    ],
+    "min": [
+      -624,
+      -424.2,
+      154.1,
+    ],
+    "name": "Revolve",
+    "volume": 15888.1,
+  },
+  {
+    "body": "rev750",
+    "max": [
+      -603.9,
+      -385.8,
+      409.8,
+    ],
+    "min": [
+      -642,
+      -424.2,
+      355,
+    ],
+    "name": "Revolve",
+    "volume": 15888.1,
+  },
+  {
+    "body": "rev788",
+    "max": [
+      -759.1,
+      -385.8,
+      276.1,
+    ],
+    "min": [
+      -816.8,
+      -424.2,
+      248.4,
+    ],
+    "name": "Revolve",
+    "volume": 15888.1,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/scissor.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext40",
+    "max": [
+      44.5,
+      0,
+      129.4,
+    ],
+    "min": [
+      -2.1,
+      -4,
+      -2.1,
+    ],
+    "name": "Extrude",
+    "volume": 8064,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/scissor-jointed.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "apat54#0__ext26",
+    "max": [
+      50.2,
+      0,
+      42.8,
+    ],
+    "min": [
+      -4.2,
+      -4,
+      -4.2,
+    ],
+    "name": "Extrude",
+    "volume": 1584,
+  },
+  {
+    "body": "apat54#0__ext49",
+    "max": [
+      50.2,
+      4,
+      42.8,
+    ],
+    "min": [
+      -4.2,
+      0,
+      -4.2,
+    ],
+    "name": "Extrude",
+    "volume": 1584,
+  },
+  {
+    "body": "apat54#1__ext26",
+    "max": [
+      50.2,
+      0,
+      81.4,
+    ],
+    "min": [
+      -4.2,
+      -4,
+      34.3,
+    ],
+    "name": "Extrude",
+    "volume": 1584,
+  },
+  {
+    "body": "apat54#1__ext49",
+    "max": [
+      50.2,
+      4,
+      81.4,
+    ],
+    "min": [
+      -4.2,
+      0,
+      34.3,
+    ],
+    "name": "Extrude",
+    "volume": 1584,
+  },
+  {
+    "body": "apat54#2__ext26",
+    "max": [
+      50.2,
+      0,
+      119.9,
+    ],
+    "min": [
+      -4.2,
+      -4,
+      72.9,
+    ],
+    "name": "Extrude",
+    "volume": 1584,
+  },
+  {
+    "body": "apat54#2__ext49",
+    "max": [
+      50.2,
+      4,
+      119.9,
+    ],
+    "min": [
+      -4.2,
+      0,
+      72.9,
+    ],
+    "name": "Extrude",
+    "volume": 1584,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/starbox.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "apat337#0__ext73",
+    "max": [
+      32,
+      33.5,
+      21,
+    ],
+    "min": [
+      -32,
+      -27.8,
+      -0,
+    ],
+    "name": "Shell",
+    "volume": 11340.9,
+  },
+  {
+    "body": "apat337#1__ext73",
+    "max": [
+      32,
+      33.5,
+      28,
+    ],
+    "min": [
+      -32,
+      -27.8,
+      7,
+    ],
+    "name": "Shell",
+    "volume": 11340.9,
+  },
+]
+`;
