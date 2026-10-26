@@ -47,7 +47,9 @@ export const SPECIES: Record<string, Wood> = {
   "hard-maple":{ early: "#e3d3ac", late: "#cbb285", ringScale: 5.5, contrast: 0.26, pore: 0.05, grain: 0.26, ray: 0.2, roughness: 0.4 },
   "southern-pine": { early: "#dcc084", late: "#93622f", ringScale: 13, contrast: 0.78, pore: 0.2, grain: 0.6, ray: 0.1, roughness: 0.6 },
   mahogany:    { early: "#82422f", late: "#54281b", ringScale: 10, contrast: 0.42, pore: 0.35, grain: 0.5, ray: 0.3, roughness: 0.5 },
-  beech:       { early: "#e0caa6", late: "#c29f72", ringScale: 7, contrast: 0.26, pore: 0.07, grain: 0.22, ray: 0.75, roughness: 0.46 },
+  // American beech: pale pinkish-cream, fine even (diffuse-porous) texture with
+  // low early/late contrast and a dense, fine medullary-ray fleck — its signature.
+  beech:       { early: "#e6cba4", late: "#caa273", ringScale: 7, contrast: 0.24, pore: 0.06, grain: 0.2, ray: 0.9, roughness: 0.46 },
   ash:         { early: "#d2bd93", late: "#9a7646", ringScale: 9, contrast: 0.55, pore: 0.55, grain: 0.45, ray: 0.3, roughness: 0.58 },
 };
 export const SPECIES_KEYS = Object.keys(SPECIES);
