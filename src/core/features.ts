@@ -19,6 +19,8 @@ import {
 } from "./occ/kernel";
 import type { Shape3D } from "replicad";
 import { Vec3 } from "../math/vec";
+import { Rigid, IDENTITY, axisAngle, compose, invert, applyPoint, applyVec } from "../math/transform";
+import { resolveComponentWorld } from "./recompute";
 
 export interface SolidEval {
   featureId: string;
@@ -677,25 +679,59 @@ function evaluateCached(doc: CadDocument, scope: Scope, cache: GeometryCache): R
   return out;
 }
 
+function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Body[], out: Record<string, SolidEval>) {
+  switch (f.kind) {
+    case "extrude":
+    case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
+    case "primitive": applyPrimitive(scope, f, bodies, out); break;
+    case "hole": applyHole(scope, f, bodies, out); break;
+    case "thread": applyThread(f, bodies, out); break;
+    case "loft": applyLoft(doc, f, bodies, out); break;
+    case "sweep": applySweep(doc, f, bodies, out); break;
+    case "mirror": applyMirror(doc, f, bodies, out); break;
+    case "fillet":
+    case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;
+    case "shell": applyShell(scope, f, bodies, out); break;
+    case "pattern": applyPattern(scope, f, bodies, out); break;
+  }
+}
+
+/** Copy of a shape moved by a rigid transform (operand untouched). */
+function transformShape(shape: Shape3D, T: Rigid): Shape3D {
+  const { axis, angle } = axisAngle(T);
+  if (angle < 1e-12) return translateShape(shape, T.origin);
+  const turned = rotateShape(shape, (angle * 180) / Math.PI, { x: 0, y: 0, z: 0 }, axis);
+  try { return translateShape(turned, T.origin); } finally { turned.delete(); }
+}
+
+/** Apply a cloned pattern-instance feature in its template's frame (see
+ *  InstanceFrame): move the target body back by T⁻¹, run the feature with its
+ *  template-authored parameters, then move the result — and any thread decals it
+ *  added — out by T. */
+function applyInTemplateFrame(apply: () => void, f: FeatureDef, bodies: Body[], T: Rigid) {
+  // expandAssembly pins every clone's target (a mirror ignores it, but its "most
+  // recent body" is the same one: an instance's features are cloned contiguously)
+  const ref = "body" in f ? f.body : undefined;
+  const target = bodies.find((b) => b.id === ref);
+  if (!target) { apply(); return; } // nothing to move; the feature reports its own error
+  const decals = target.decals?.length ?? 0;
+  replaceShape(target, transformShape(target.shape, invert(T)));
+  try { apply(); } finally {
+    replaceShape(target, transformShape(target.shape, T));
+    for (const d of target.decals?.slice(decals) ?? []) { d.at = applyPoint(T, d.at); d.axis = applyVec(T, d.axis); }
+  }
+}
+
 /** Build every feature in order into live bodies (caller frees the shapes). */
 function evaluateBodies(doc: CadDocument, scope: Scope): { bodies: Body[]; out: Record<string, SolidEval> } {
   const out: Record<string, SolidEval> = {};
   const bodies: Body[] = [];
+  let worlds: Map<string, Rigid> | undefined; // component frames, resolved only for pattern instances
   for (const f of Object.values(doc.features)) {
-    switch (f.kind) {
-      case "extrude":
-      case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
-      case "primitive": applyPrimitive(scope, f, bodies, out); break;
-      case "hole": applyHole(scope, f, bodies, out); break;
-      case "thread": applyThread(f, bodies, out); break;
-      case "loft": applyLoft(doc, f, bodies, out); break;
-      case "sweep": applySweep(doc, f, bodies, out); break;
-      case "mirror": applyMirror(doc, f, bodies, out); break;
-      case "fillet":
-      case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;
-      case "shell": applyShell(scope, f, bodies, out); break;
-      case "pattern": applyPattern(scope, f, bodies, out); break;
-    }
+    if (!f.instanceFrame) { applyFeature(doc, scope, f, bodies, out); continue; }
+    worlds ??= resolveComponentWorld(doc, scope);
+    const T = compose(worlds.get(f.instanceFrame.component) ?? IDENTITY, invert(worlds.get(f.instanceFrame.template) ?? IDENTITY));
+    applyInTemplateFrame(() => applyFeature(doc, scope, f, bodies, out), f, bodies, T);
   }
   return { bodies, out };
 }

@@ -9,7 +9,7 @@ import { ConstraintSolver, SolveDiagnosis } from "./solver/model";
 import { compileSketch } from "./solver/compile";
 import { compileExpr, Scope } from "../math/expr";
 import { planeById, offsetPlane, WorkPlane } from "../geometry/plane";
-import { Rigid, IDENTITY, translation, compose, applyPoint, applyVec, rotationAbout } from "../math/transform";
+import { Rigid, IDENTITY, translation, compose, invert, applyPoint, applyVec, rotationAbout } from "../math/transform";
 import { Joint } from "./document";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchLine, SketchPoint } from "../sketch/types";
 
@@ -112,7 +112,16 @@ export function placeComponentSketches(doc: CadDocument, scope: Scope): void {
   resolveDatumPlanes(doc, scope);
   const componentWorld = resolveComponentWorld(doc, scope);
   for (const sk of Object.values(doc.sketches)) {
-    if (sk.planeId === "custom") continue; // face/offset planes carry their own world position
+    if (sk.planeId === "custom") {
+      // A pattern instance: the template's world plane, moved by the instance's
+      // frame relative to the template's (as instanceSolids moves template bodies).
+      if (sk.templatePlane) {
+        const iW = (sk.componentId ? componentWorld.get(sk.componentId) : undefined) ?? IDENTITY;
+        const tW = componentWorld.get(sk.templatePlane.componentId) ?? IDENTITY;
+        sk.plane = transformPlane(compose(iW, invert(tW)), sk.templatePlane.plane);
+      }
+      continue; // otherwise face/offset planes carry their own world position
+    }
     const base = sk.datumId ? doc.planes[sk.datumId]?.plane : planeById(sk.planeId);
     const W = sk.componentId ? componentWorld.get(sk.componentId) : undefined;
     if (W && !isIdentity(W)) sk.plane = base ? transformPlane(W, base) : sk.plane;
