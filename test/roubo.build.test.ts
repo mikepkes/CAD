@@ -88,9 +88,12 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   // ---- legs with through-tenons that pass up through the slab and stand proud.
   let li = 0;
   const off = (N.LS - N.TEN) / 2;
+  let flLeg = { cmp: "", feat: "" };     // front-left leg hosts the vise + its criss-cross channel
   for (const y of legY) for (const x of legX) {
     const nm = legNames[li++];
-    const leg = (await board(s, `Leg ${nm}`, at(x, y, 0), [N.LS, N.LS, legTopZ])).cmp;
+    const legB = await board(s, `Leg ${nm}`, at(x, y, 0), [N.LS, N.LS, legTopZ]);
+    const leg = legB.cmp;
+    if (nm === "FL") flLeg = legB;
     // tenon: a reduced square carried from the slab underside up through it and
     // ~12mm proud of the top (its own child body, in leg-local coords).
     await board(s, `Tenon ${nm}`, { x: off, y: off, z: legTopZ }, [N.TEN, N.TEN, N.TT + 12], leg);
@@ -150,7 +153,7 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   // seat into the leg and chop. arm angle θ = asin((S0+viseGap)/LA) about world X.
   const armIds: string[] = [];
   const zc = 150 + chopH * 0.4;                  // criss-cross centre height
-  const armPivot = [at(chopPivotX + chopW / 2, -6, zc - N.LA / 3), at(chopPivotX + chopW / 2, -6, zc + N.LA / 3)];
+  const armPivot = [at(chopPivotX + chopW / 2, 10, zc - N.LA / 3), at(chopPivotX + chopW / 2, 10, zc + N.LA / 3)];
   const thetaExpr = `deg(asin((${N.S0}+viseGap)/${N.LA}))`;
   // a steel pin: a cylinder along X, centred at a parent-local point, spanning
   // both arm slabs. Child of an arm so it rides with it; inherits steel.
@@ -172,6 +175,15 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
     await pin(arm, up ? N.LA : -N.LA, N.ARM_T * 3); // end pin (into the chop)
     if (up) await pin(arm, N.LA / 2, N.ARM_T * 3.4); // central pivot pin (shared crossing)
     armIds.push(arm);
+  }
+
+  // ---- routed channel in the leg face so the criss-cross recesses into the leg
+  // (a real leg vise runs the scissor in a mortised channel, not against flat wood).
+  {
+    const cu = (N.INSET + N.LS / 2) - N.INSET;     // criss-cross centre in leg-local x = LS/2
+    const chk = (await dis(s, "sketch.create", { plane: "XZ", component: flLeg.cmp }))[0];
+    await dis(s, "sketch.addRectangle", { sketch: chk, corner: { x: cu - 24, y: zc - N.LA / 2 - 20 }, opposite: { x: cu + 24, y: zc + N.LA / 2 + 20 } });
+    await dis(s, "feature.extrude", { sketch: chk, distance: "48", operation: "cut", symmetric: true, body: flLeg.feat });
   }
 
   // ---- vise handwheel (cast iron) with turned wooden handles, on the screw front.
@@ -205,18 +217,23 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   await dis(s, "feature.extrude", { sketch: ssk2, distance: "13", symmetric: true });
   await dis(s, "joint.create", { kind: "revolute", base: chop, moved: wheel, baseOrigin: wheelCenter, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 1, z: 0 }, value: "viseGap*14.4", name: "Wheel spin" });
 
-  // three turned wooden handles projecting toward the user (−Y), on the wheel face.
+  // three turned wooden handles, each projecting RADIALLY outward in the wheel
+  // plane (capstan style). Built on the wheel-plane sketch (XZ) with the turned
+  // profile mapped onto the radial axis d and revolved about it, so the knob
+  // points out along the radius rather than toward the viewer.
   const handleIds: string[] = [];
-  const Rh = R - 18;
+  const Rh = R - 30;
+  // turned profile as (along-the-axis, radius): collar → shaft → bulb → tip.
+  const prof: [number, number][] = [[0, 0], [0, 11], [-5, 11], [-8, 8], [-24, 7], [-40, 13], [-52, 9], [-58, 0]];
   for (let i = 0; i < 3; i++) {
-    const th = ((i * 120 + 60) * Math.PI) / 180;
-    const h = (await dis(s, "component.create", { name: `Wheel handle ${i + 1}`, parent: wheel, position: { x: Rh * Math.cos(th), y: 0, z: Rh * Math.sin(th) } }))[0];
-    const psk = (await dis(s, "sketch.create", { plane: "YZ", component: h }))[0];
-    // turned profile along −Y (u), radius v: collar → shaft → bulb → rounded tip.
-    await dis(s, "sketch.addPolyline", { sketch: psk, points: [
-      { x: 0, y: 0 }, { x: 0, y: 11 }, { x: -5, y: 11 }, { x: -8, y: 8 }, { x: -24, y: 7 }, { x: -40, y: 13 }, { x: -52, y: 9 }, { x: -58, y: 0 },
-    ] });
-    await dis(s, "feature.revolve", { sketch: psk, axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "360" });
+    const th = ((i * 120 + 90) * Math.PI) / 180;
+    const c = Math.cos(th), sn = Math.sin(th);
+    const h = (await dis(s, "component.create", { name: `Wheel handle ${i + 1}`, parent: wheel, position: { x: Rh * c, y: 0, z: Rh * sn } }))[0];
+    const psk = (await dis(s, "sketch.create", { plane: "XZ", component: h }))[0];
+    // map (along a, radius) -> XZ, with the axis a = outward radial (c, sn).
+    const pts = prof.map(([u, v]) => ({ x: -u * c - v * sn, y: -u * sn + v * c }));
+    await dis(s, "sketch.addPolyline", { sketch: psk, points: pts });
+    await dis(s, "feature.revolve", { sketch: psk, axis: { p1: { x: 0, y: 0 }, p2: { x: c, y: sn } }, angle: "360" });
     handleIds.push(h);
   }
 
