@@ -225,6 +225,16 @@ function normalizeBounds(p: { min?: number; max?: number; values?: number[] }): 
   return out;
 }
 
+/** A named choice's names: at least two, distinct, and nothing else bounding it. */
+function checkOptions(p: { min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[] }): string[] {
+  if (p.min != null || p.max != null || p.step != null || p.values || p.boolean) throw new Error("a named choice takes no extents, value list or checkbox");
+  const names = p.options!.map((o) => String(o).trim());
+  if (names.length < 2) throw new Error("a named choice needs at least two options");
+  if (names.some((n) => !n)) throw new Error("an option name is empty");
+  if (new Set(names).size !== names.length) throw new Error("option names must be distinct");
+  return names;
+}
+
 export const BUILTINS: CommandDef<any>[] = [
   // ---- parameters ----
   {
@@ -245,6 +255,7 @@ export const BUILTINS: CommandDef<any>[] = [
         step: { type: "number", exclusiveMinimum: 0, description: "Optional increment: the slider snaps to multiples of this. `step: 1` makes the parameter integer-only." },
         values: { type: "array", items: { type: "number" }, description: "Optional set of acceptable values (an enum). Mutually exclusive with min/max." },
         boolean: { type: "boolean", description: "A yes/no switch: the value is 1 (checked) or 0, shown as a checkbox. Use it in expressions, e.g. a pattern count of `1 + showBoth`. Implies values [0, 1]." },
+        options: { type: "array", items: { type: "string" }, description: "Named choices (an enum), shown as a dropdown of these names. The value is the chosen index 0…n−1 (the expression sets the default); other parameters use it with pick(), e.g. `pick(material, 0.8, 1.1, 1.4)`. Implies values [0 … n−1]." },
       },
     },
     examples: [
@@ -253,13 +264,15 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "An integer count (slider steps by 1)", params: { name: "stages", expression: "3", min: 1, max: 8, step: 1 } },
       { note: "A pick-list parameter", params: { name: "thread", expression: "3", values: [3, 4, 5, 6, 8] } },
       { note: "A checkbox (1 = checked)", params: { name: "showLid", expression: "1", boolean: true } },
+      { note: "Named choices (0 = PLA, 1 = PETG, 2 = TPU), defaulting to PETG", params: { name: "material", expression: "1", options: ["PLA", "PETG", "TPU"] } },
     ],
-    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean }, ctx) {
+    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[] }, ctx) {
       if (draft.parameters.some((x) => x.name === p.name)) throw new Error(`Parameter "${p.name}" exists`);
       if (p.boolean && (p.min != null || p.max != null || p.step != null || p.values)) throw new Error("a boolean parameter takes no extents or value list");
-      const bounds = normalizeBounds(p.boolean ? { values: [0, 1] } : p);
+      const options = p.options && checkOptions(p);
+      const bounds = normalizeBounds(p.boolean ? { values: [0, 1] } : options ? { values: options.map((_, i) => i) } : p);
       const id = ctx.alloc("param");
-      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}), ...(p.boolean ? { boolean: true } : {}) });
+      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}), ...(p.boolean ? { boolean: true } : {}), ...(options ? { options } : {}) });
       return { createdIds: [id], message: `Added parameter ${p.name}` };
     },
   },
@@ -280,6 +293,7 @@ export const BUILTINS: CommandDef<any>[] = [
         step: { type: "number", exclusiveMinimum: 0, description: "Snap increment (1 = integer-only)." },
         values: { type: "array", items: { type: "number" } },
         boolean: { type: "boolean", description: "Make it a yes/no switch (a checkbox): values [0, 1]; a value other than 0 or 1 snaps to 1 if non-zero, else 0." },
+        options: { type: "array", items: { type: "string" }, description: "Make it a named choice (a dropdown of these names): values [0 … n−1]; a value that isn't one of them snaps to the nearest." },
         clear: { type: "boolean", description: "Remove all extents / values." },
       },
     },
@@ -288,12 +302,19 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Integer-only count", params: { name: "stages", min: 1, max: 8, step: 1 } },
       { note: "Make unbounded", params: { name: "width", clear: true } },
       { note: "Make it a checkbox", params: { name: "showLid", boolean: true } },
+      { note: "Make it a named choice", params: { name: "material", options: ["PLA", "PETG", "TPU"] } },
     ],
-    apply(draft, p: { name: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; clear?: boolean }) {
+    apply(draft, p: { name: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[]; clear?: boolean }) {
       const param = draft.parameters.find((x) => x.name === p.name);
       if (!param) throw new Error(`No parameter "${p.name}"`);
-      delete param.min; delete param.max; delete param.step; delete param.values; delete param.boolean; // new extents replace a checkbox
-      if (p.boolean) {
+      const options = p.options && checkOptions(p);
+      delete param.min; delete param.max; delete param.step; delete param.values; delete param.boolean; delete param.options; // new extents replace a checkbox / choice
+      if (options) {
+        Object.assign(param, { values: options.map((_, i) => i), options });
+        const v = resolveParameters(draft.parameters).scope[param.name] ?? 0;
+        const k = Math.min(options.length - 1, Math.max(0, Math.round(Number.isFinite(v) ? v : 0)));
+        if (v !== k) param.expr = String(k);
+      } else if (p.boolean) {
         if (p.min != null || p.max != null || p.step != null || p.values) throw new Error("a boolean parameter takes no extents or value list");
         Object.assign(param, { values: [0, 1], boolean: true });
         const v = resolveParameters(draft.parameters).scope[param.name] ?? 0; // param.value is stale until recompute
@@ -603,18 +624,35 @@ export const BUILTINS: CommandDef<any>[] = [
     type: "material.assign",
     title: "Assign material",
     summary: "Assign a material to a component (its bodies inherit; root = document default).",
-    description: "Sets the material of `component` (defaults to the root component, i.e. the document-wide default). A body uses the nearest ancestor component that has a material.",
+    description: "Sets the material of `component` (defaults to the root component, i.e. the document-wide default). A body uses the nearest ancestor component that has a material. Or, with `materials` + `by`, the component takes materials[value of parameter `by`]: one per choice of a named-choice parameter, so picking the choice switches the material.",
     paramsSchema: {
       type: "object",
-      required: ["material"],
       additionalProperties: false,
-      properties: { material: { type: "string" }, component: { type: "string", description: "Target component; defaults to root." } },
+      properties: {
+        material: { type: "string" },
+        component: { type: "string", description: "Target component; defaults to root." },
+        materials: { type: "array", items: { type: "string" }, description: "One material per value 0…n−1 of parameter `by` (instead of `material`)." },
+        by: { type: "string", description: "The parameter whose value picks from `materials`, e.g. a named choice." },
+      },
     },
-    examples: [{ params: { material: "mat5", component: "cmp3" } }],
-    apply(draft, p: { material: string; component?: string }) {
-      if (!draft.materials[p.material]) throw new Error(`No material "${p.material}"`);
+    examples: [
+      { params: { material: "mat5", component: "cmp3" } },
+      { note: "Follow a named choice: PLA, PETG or TPU", params: { materials: ["mat5", "mat6", "mat7"], by: "material", component: "cmp3" } },
+    ],
+    apply(draft, p: { material?: string; materials?: string[]; by?: string; component?: string }) {
       const comp = p.component ?? draft.rootComponentId;
       if (!draft.components[comp]) throw new Error(`No component "${comp}"`);
+      if (p.materials || p.by) {
+        if (p.material || !p.materials || !p.by) throw new Error("give `materials` with `by` (or a single `material`)");
+        for (const m of p.materials) if (!draft.materials[m]) throw new Error(`No material "${m}"`);
+        if (!draft.parameters.some((x) => x.name === p.by)) throw new Error(`No parameter "${p.by}"`);
+        delete draft.components[comp].materialId;
+        draft.components[comp].materialChoice = { by: p.by, materials: [...p.materials] };
+        return { message: `Material follows ${p.by}` };
+      }
+      if (!p.material) throw new Error("give a `material`");
+      if (!draft.materials[p.material]) throw new Error(`No material "${p.material}"`);
+      delete draft.components[comp].materialChoice;
       draft.components[comp].materialId = p.material;
       return { message: `Assigned ${draft.materials[p.material].name}` };
     },

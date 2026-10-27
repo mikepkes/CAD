@@ -875,7 +875,7 @@ exports[`bundled examples > public/examples/scissor-jointed.json > replays, buil
 exports[`bundled examples > public/examples/starbox.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
-    "body": "apat1166#0__ext110",
+    "body": "apat1198#0__ext142",
     "max": [
       32,
       33.5,

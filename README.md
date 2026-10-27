@@ -23,10 +23,14 @@ keeping it jointed is something Fusion 360 cannot do — see
 [Parametric jointed assemblies](#parametric-jointed-assemblies-prototype) below.
 
 And **https://mikepkes.github.io/CAD/?mode=customize&example=starbox** — a
-snap-together TPU **star box**: two copies of one androgynous half clip
-together, with a snap and an anti-twist key on every edge. Drag `width` and
-`height` to size it. It opens on the single half you print (print it twice);
-tick `fullBox` to see the closed box.
+snap-together **star box**: two copies of one androgynous half clip together,
+with a snap and an anti-twist key on every edge. Drag `width` and `height` to
+size it, and pick what you print it in from `material` (PLA, PETG, ABS / ASA,
+nylon, TPU 68D or TPU 95A). The snaps resize for that material: tongue
+thickness, how far the barb deflects it, fit clearance and the lead-in angle,
+sized with the beam solver to stay within the material's strain limit across
+the print layers. It opens on the single half you print (print it twice); tick
+`fullBox` to see the closed box.
 
 A **local-first, browser-based parametric CAD** app. It runs entirely in the
 browser (static, GitHub-Pages-servable) and is built so the geometry is
@@ -207,21 +211,27 @@ straight from a URL:
 ?mode=customize&example=gyroscope      # a bundled example (public/examples/<name>.json)
 ?mode=customize&example=scissor        # a parametric scissor lift (linkage count is a slider)
 ?mode=customize&example=scissor-jointed # the scissor as a jointed assembly (count + articulates)
-?mode=customize&example=starbox        # snap-together TPU star box: width + height sliders; opens on the one printable half, tick fullBox for both (one flipped)
+?mode=customize&example=starbox        # snap-together star box: width + height sliders, print material dropdown; opens on the one printable half, tick fullBox for both (one flipped)
 ?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```
 
 It shows just the 3D preview with the model's **bounded parameters** (those with
-a min/max range or a value list — see the `⋯` editor in the Parameters panel)
-as sliders and dropdowns, overlaid so the model stays visible — a floating card
-on desktop, a bottom sheet on phones. Every change redraws the preview
+a min/max range, a value list, a checkbox or named choices — see the `⋯` editor
+in the Parameters panel) as sliders, dropdowns and checkboxes, overlaid so the
+model stays visible — a floating card on desktop, a bottom sheet on phones. Every change redraws the preview
 immediately; after a short dwell a **motion study** runs on a dedicated worker
 and a badge reports whether the configuration still works: *checking…* (with
 progress) → *passes* or *fails*, naming what collides. The study sweeps each
 driven revolute joint through a full 360° turn and fails if any two bodies
 interpenetrate or the build errors — so a value that would jam or break the
 mechanism is flagged before you print it.
+
+A **named choice** (an enum, such as the star box's print `material`) is a
+dropdown of names whose value is the chosen index, 0, 1, 2…. Other parameters
+follow it with `pick`, e.g. `pick(material, 0.75, 1.1, 1.0)`, and
+`material.assign` with `materials` + `by` makes a component's material follow it
+too, so the preview shows the chosen filament.
 
 **Save / share for printing** exports the whole configured model (all bodies in
 one file, so a print-in-place assembly stays together) as a binary **STL**. On

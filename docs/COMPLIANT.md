@@ -124,6 +124,42 @@ off by this much flags the design: the roots are likely to crack along the layer
 or the box to be very stiff to close. Lengthening the tongue's free span (detach
 it from the wall lower down) is the cheapest fix; strain falls with 1/L².
 
+### Sized per print material
+
+The star box's `material` choice resizes the snap for what it is printed in
+(`MATERIALS` in `test/starbox.model.ts`, checked by
+`test/starbox.materials.test.ts`). The tongue bends across the layers, so each
+material gets its across-layer modulus and a design strain limit. The tongue is
+then sized so it stays at or under that limit, while the box closes and pulls
+open with about the force of the TPU 68D box that works (~13 N in, ~26 N out per
+snap; μ per material):
+
+- **Thickness and deflection:** stiff plastics get a thinner tongue. Its
+  deflection fills what the strain limit allows (at most 1.5 mm, which leaves
+  0.8 mm of wall behind the pocket).
+- **Lead-in angle:** slippier materials get a slightly steeper lead-in, so
+  closing takes the same force.
+- **Retention face:** stays at 45°, the steepest overhang that prints without
+  support.
+- **Height:** the deflection scales with the tongue's free span², so the strain
+  holds at every box height. Once deflection reaches its 1.5 mm cap (at 40 mm),
+  tall boxes hold with less force.
+
+| At height 28 | E_Z (MPa) | limit | tongue root → tip (mm) | deflection (mm) | clearance | lead-in | strain | close / open per snap |
+|---|---|---|---|---|---|---|---|---|
+| PLA | 2500 | 1 % | 2.5 → 1.75 | 0.75 | 0.2 | 27° | 0.97 % | 12 / 25 N |
+| PETG | 1600 | 2 % | 2.35 → 1.6 | 1.1 | 0.25 | 27° | 1.49 % | 12 / 25 N |
+| ABS / ASA | 1800 | 1.5 % | 2.5 → 1.7 | 1.0 | 0.3 | 26° | 1.44 % | 13 / 25 N |
+| Nylon | 900 | 3 % | 3.0 → 2.05 | 1.2 | 0.25 | 26° | 2.21 % | 13 / 25 N |
+| TPU 68D (as printed) | 600 | 1.5 % | 3.5 → 2.4 | 0.85 | 0.25 | 30° | 1.50 % | 13 / 26 N |
+| TPU 95A | 26 | 6 % | 4.9 → 3.4 | 1.4 | 0.3 | 30° | 4.18 % | 4 / 9 N |
+
+- **PETG:** reaches the thinnest printable tongue (1.6 mm at the barb) before
+  its strain limit, so its deflection is set by force instead.
+- **TPU 95A:** too soft to push hard at any size that fits. It holds by its
+  grip, at about a third of the force.
+- **Material values:** typical FDM values; tune them to your filament.
+
 ## Proposed phases
 1. **Materials + PRBM flexure joint.** *Largely done* (see below). Remaining:
    print anisotropy (Z properties + build direction) and force-driven
