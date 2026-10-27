@@ -108,6 +108,14 @@ insertion force from the 30° lead-in ramp:
 | as printed (L 4.9, t 2) | 54 N | **10.8 %** | 65 MPa vs 11.2 MPa Z strength | 57–98 N (×10 snaps at once) |
 | L 9.8, t 2 | 6.6 N | 2.7 % | 16 MPa | 7–12 N |
 | L 9.8, t 1.4 | 2.2 N | 1.9 % | 11 MPa | 2–4 N |
+| **v2 as built**: free from z = 4 (L 14.3), 7 wide, curved back 3.44 → 2.43 | 8.5 N | **1.5 %** | 9 MPa | 9–16 N |
+
+The v1 tongue did break at the root soon after printing. v2 (the current
+example) roots the tongue just above the floor behind a 0.6 mm relief slot with
+a rounded end (v1's 0.25 mm slot was narrower than a 0.4 mm nozzle line and
+ended in a notch on one layer line), and tapers it along a curved back so the
+section — and the strain — changes from layer to layer. Root bending strength
+(w·t²) is 3.4× v1's while the snap strain is 7× lower.
 
 This is an upper bound: it is linear-elastic (TPU softens at large strain) and
 assigns the whole deflection to the tongue (the mating wall's free top edge bows

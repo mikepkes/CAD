@@ -128,20 +128,40 @@ export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; 
     return { fint, K, els };
   };
 
-  let converged = true;
-  for (let step = 1; step <= steps && converged; step++) {
-    const lam = step / steps;
-    for (const [d, v] of constrained) u[d] = lam * v;
-    converged = false;
+  /** Newton corrections at load factor `lam`; true once converged. */
+  const correct = (lam: number): boolean => {
     for (let it = 0; it < maxIter; it++) {
       const { fint, K } = assemble();
       const R = free.map((d) => lam * fext[d] - fint[d]);
       const scale = Math.max(1, ...free.map((d) => Math.abs(lam * fext[d])), ...free.map((d) => Math.abs(fint[d])));
-      if (Math.max(0, ...R.map(Math.abs)) <= tol * scale) { converged = true; break; }
+      if (Math.max(0, ...R.map(Math.abs)) <= tol * scale) return true;
       const du = solveDense(free.map((d) => free.map((e) => K[d][e])), R);
+      if (!du.every(Number.isFinite)) return false;
       free.forEach((d, k) => { u[d] += du[k]; });
-      if (Math.max(0, ...du.map(Math.abs)) <= 1e-12 * span) { converged = true; break; }
+      if (Math.max(0, ...du.map(Math.abs)) <= 1e-12 * span) return true;
     }
+    return false;
+  };
+
+  // Load stepping with a consistent predictor: a prescribed increment is carried
+  // into the free DOFs through the tangent (K_ff·Δu_f = Δλ·f_ext − K_fp·Δu_p)
+  // instead of jumping the driven node alone, which kinks its element and throws
+  // Newton off. A step that still fails is undone and halved.
+  let converged = true;
+  let lam = 0, dlam = 1 / steps, cuts = 0;
+  while (lam < 1 - 1e-12) {
+    const next = Math.min(1, lam + dlam);
+    const saved = u.slice();
+    const { K } = assemble();
+    const dp = new Map([...constrained].map(([d, v]) => [d, (next - lam) * v]));
+    const rhs = free.map((d) => (next - lam) * fext[d] - [...dp].reduce((acc, [p, v]) => acc + K[d][p] * v, 0));
+    const du = solveDense(free.map((d) => free.map((e) => K[d][e])), rhs);
+    free.forEach((d, k) => { u[d] += du[k]; });
+    for (const [d, v] of constrained) u[d] = next * v;
+    if (du.every(Number.isFinite) && correct(next)) { lam = next; continue; }
+    u.set(saved);
+    dlam /= 2;
+    if (++cuts > 16) { converged = false; break; }
   }
 
   const { fint, els } = assemble();

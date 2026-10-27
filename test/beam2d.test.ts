@@ -82,6 +82,39 @@ describe("co-rotational 2D beam", () => {
     expect(longer.elements[0].maxStrain).toBeCloseTo(0.027, 3);
   });
 
+  // v2 as built (test/starbox.build.test.ts): 7 mm wide, free from z = 4, its back
+  // a 3-point arc through thickness 3.5 @ z 3.5, 2.675 @ z 12.25, 2.4 @ z 21.
+  it("worked example: the v2 star box tongue (long, tapered, curved back)", () => {
+    const pts = [[3.5, 3.5], [2.675, 12.25], [2.4, 21]];
+    const [[x1, y1], [x2, y2], [x3, y3]] = pts;
+    const D = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
+    const cx = ((x1 ** 2 + y1 ** 2) * (y2 - y3) + (x2 ** 2 + y2 ** 2) * (y3 - y1) + (x3 ** 2 + y3 ** 2) * (y1 - y2)) / D;
+    const cy = ((x1 ** 2 + y1 ** 2) * (x3 - x2) + (x2 ** 2 + y2 ** 2) * (x1 - x3) + (x3 ** 2 + y3 ** 2) * (x2 - x1)) / D;
+    const R = Math.hypot(x1 - cx, y1 - cy);
+    const thick = (z: number) => cx + Math.sign(x2 - cx) * Math.sqrt(R * R - (z - cy) ** 2);
+    const zr = 4, L = 18.3 - zr, n = 40;
+    const r = solveBeam({
+      nodes: Array.from({ length: n + 1 }, (_, k) => ({ x: (L * k) / n, y: 0 })),
+      elements: Array.from({ length: n }, (_, k) => ({ a: k, b: k + 1, ...rectSection(600, 7, thick(zr + (L * (k + 0.5)) / n)) })),
+      fixed: [{ node: 0, dof: 0 }, { node: 0, dof: 1 }, { node: 0, dof: 2 }],
+    }, { prescribed: [{ node: n, dof: 1, value: 0.85 }] });
+    expect(r.converged).toBe(true);
+    expect(r.reactions[`${n}:1`]).toBeCloseTo(8.5, 0); // N per tongue (v1: 54)
+    expect(Math.max(...r.elements.map((e) => e.maxStrain))).toBeCloseTo(0.0149, 3); // ~1.5% (v1: 10.8%)
+  });
+
+  // Regression: jumping only the driven node used to kink its element and diverge
+  // on fine meshes / big steps (n = 30, 20 steps returned 21 kN for a 54 N tongue).
+  it("displacement control converges to the same answer for any mesh and step count", () => {
+    const forces: number[] = [];
+    for (const n of [10, 30, 40]) for (const steps of [1, 5, 20]) {
+      const r = solveBeam(cantilever(4.9, n, rectSection(600, 6, 2)), { prescribed: [{ node: n, dof: 1, value: 0.85 }] }, { steps });
+      expect(r.converged, `n=${n} steps=${steps}`).toBe(true);
+      forces.push(r.reactions[`${n}:1`]);
+    }
+    for (const f of forces) expect(f).toBeCloseTo(forces[0], 1);
+  });
+
   it("reports peak bending strain εmax = M·c/EI (= 3tδ/2L² for a small tip deflection)", () => {
     const sec = rectSection(600, 6, 2); // a 6×2 mm TPU strip, E = 600 MPa
     const L = 10, d = 0.05;
