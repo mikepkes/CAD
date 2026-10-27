@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 472,
-  "rollbackIndex": 64,
+  "nextId": 582,
+  "rollbackIndex": 79,
   "operations": [
     {
       "opId": "op1",
@@ -16,7 +16,7 @@
         "cmp2"
       ],
       "label": "New component",
-      "at": 1793059376992
+      "at": 1793063315328
     },
     {
       "opId": "op3",
@@ -31,7 +31,7 @@
         "mat4"
       ],
       "label": "Create material",
-      "at": 1793059376994
+      "at": 1793063315331
     },
     {
       "opId": "op5",
@@ -42,7 +42,7 @@
       },
       "createdIds": [],
       "label": "Assign material",
-      "at": 1793059376994
+      "at": 1793063315332
     },
     {
       "opId": "op6",
@@ -57,7 +57,7 @@
         "pt8"
       ],
       "label": "Create sketch",
-      "at": 1793059376994
+      "at": 1793063315332
     },
     {
       "opId": "op9",
@@ -130,7 +130,7 @@
         "ln29"
       ],
       "label": "Polyline",
-      "at": 1793059377053
+      "at": 1793063315409
     },
     {
       "opId": "op30",
@@ -169,7 +169,7 @@
         "ar50"
       ],
       "label": "Fillet corners",
-      "at": 1793059377054
+      "at": 1793063315411
     },
     {
       "opId": "op51",
@@ -208,7 +208,7 @@
         "ar71"
       ],
       "label": "Fillet corners",
-      "at": 1793059377063
+      "at": 1793063315419
     },
     {
       "opId": "op72",
@@ -222,7 +222,7 @@
         "ext73"
       ],
       "label": "Extrude",
-      "at": 1793059377066
+      "at": 1793063315422
     },
     {
       "opId": "op74",
@@ -241,7 +241,7 @@
         "fil75"
       ],
       "label": "Fillet edges",
-      "at": 1793059377068
+      "at": 1793063315424
     },
     {
       "opId": "op76",
@@ -257,7 +257,7 @@
         "pt78"
       ],
       "label": "Create sketch",
-      "at": 1793059377071
+      "at": 1793063315427
     },
     {
       "opId": "op79",
@@ -330,7 +330,7 @@
         "ln99"
       ],
       "label": "Polyline",
-      "at": 1793059377074
+      "at": 1793063315430
     },
     {
       "opId": "op100",
@@ -369,7 +369,7 @@
         "ar120"
       ],
       "label": "Fillet corners",
-      "at": 1793059377077
+      "at": 1793063315433
     },
     {
       "opId": "op121",
@@ -408,7 +408,7 @@
         "ar141"
       ],
       "label": "Fillet corners",
-      "at": 1793059377080
+      "at": 1793063315436
     },
     {
       "opId": "op142",
@@ -423,7 +423,7 @@
         "ext143"
       ],
       "label": "Extrude",
-      "at": 1793059377084
+      "at": 1793063315442
     },
     {
       "opId": "op144",
@@ -433,8 +433,8 @@
         "name": "Relief 0",
         "planeDef": {
           "origin": {
-            "x": -7.144095384070329,
-            "y": 22.052428580943914,
+            "x": -7.7267541544549125,
+            "y": 20.670217035161603,
             "z": 0
           },
           "normal": {
@@ -449,7 +449,7 @@
         "pt146"
       ],
       "label": "Create sketch",
-      "at": 1793059377088
+      "at": 1793063315447
     },
     {
       "opId": "op147",
@@ -497,7 +497,7 @@
         "ln158"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377093
+      "at": 1793063315452
     },
     {
       "opId": "op159",
@@ -513,7 +513,7 @@
         "ext160"
       ],
       "label": "Extrude",
-      "at": 1793059377097
+      "at": 1793063315457
     },
     {
       "opId": "op161",
@@ -523,8 +523,8 @@
         "name": "Tongue 0",
         "planeDef": {
           "origin": {
-            "x": -7.144095384070329,
-            "y": 22.052428580943914,
+            "x": -7.7267541544549125,
+            "y": 20.670217035161603,
             "z": 0
           },
           "normal": {
@@ -539,7 +539,7 @@
         "pt163"
       ],
       "label": "Create sketch",
-      "at": 1793059377102
+      "at": 1793063315461
     },
     {
       "opId": "op164",
@@ -639,7 +639,7 @@
         "ln191"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377108
+      "at": 1793063315466
     },
     {
       "opId": "op192",
@@ -655,7 +655,7 @@
         "ext193"
       ],
       "label": "Extrude",
-      "at": 1793059377137
+      "at": 1793063315484
     },
     {
       "opId": "op194",
@@ -665,8 +665,8 @@
         "name": "Pocket 9",
         "planeDef": {
           "origin": {
-            "x": 7.144095384070329,
-            "y": 22.052428580943914,
+            "x": 7.7267541544549125,
+            "y": 20.670217035161603,
             "z": 0
           },
           "normal": {
@@ -681,7 +681,7 @@
         "pt196"
       ],
       "label": "Create sketch",
-      "at": 1793059377144
+      "at": 1793063315489
     },
     {
       "opId": "op197",
@@ -718,7 +718,7 @@
         "ln205"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377151
+      "at": 1793063315494
     },
     {
       "opId": "op206",
@@ -734,23 +734,23 @@
         "ext207"
       ],
       "label": "Extrude",
-      "at": 1793059377158
+      "at": 1793063315498
     },
     {
       "opId": "op208",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
-        "name": "Relief 2",
+        "name": "Key 9",
         "planeDef": {
           "origin": {
-            "x": -23.180752785153544,
-            "y": 0.020136730697256855,
+            "x": 5.166241097409978,
+            "y": 26.74439096073018,
             "z": 0
           },
           "normal": {
-            "x": 0.7563398903628114,
-            "y": -0.6541788518791865,
+            "x": -0.3884391802563891,
+            "y": 0.9214743638548738,
             "z": 0
           }
         }
@@ -760,7 +760,7 @@
         "pt210"
       ],
       "label": "Create sketch",
-      "at": 1793059377165
+      "at": 1793063315503
     },
     {
       "opId": "op211",
@@ -769,28 +769,36 @@
         "sketch": "sketch209",
         "segments": [
           {
+            "x": 2.2,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 17.4
+          },
+          {
+            "x": 3.85,
+            "y": 18
+          },
+          {
             "x": 3.35,
-            "y": 14.5
-          },
-          {
-            "x": 2.25,
-            "y": 14.5
-          },
-          {
-            "x": 2.25,
-            "y": 4
+            "y": 18
           },
           {
             "x": 2.85,
-            "y": 4,
-            "via": {
-              "x": 2.55,
-              "y": 3.7
-            }
+            "y": 17.5
           },
           {
-            "x": 3.35,
-            "y": 4
+            "x": 2.85,
+            "y": 14
+          },
+          {
+            "x": 2.2,
+            "y": 14
           }
         ]
       },
@@ -801,41 +809,46 @@
         "pt215",
         "ln216",
         "pt217",
-        "pt218",
-        "ar219",
-        "pt220",
-        "ln221",
-        "ln222"
+        "ln218",
+        "pt219",
+        "ln220",
+        "pt221",
+        "ln222",
+        "pt223",
+        "ln224",
+        "pt225",
+        "ln226",
+        "ln227"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377172
+      "at": 1793063315508
     },
     {
-      "opId": "op223",
+      "opId": "op228",
       "type": "feature.extrude",
       "params": {
         "sketch": "sketch209",
-        "distance": "8",
+        "distance": "4.6",
         "symmetric": true,
-        "operation": "cut",
-        "name": "Relief 2"
+        "operation": "join",
+        "name": "Key 9"
       },
       "createdIds": [
-        "ext224"
+        "ext229"
       ],
       "label": "Extrude",
-      "at": 1793059377180
+      "at": 1793063315513
     },
     {
-      "opId": "op225",
+      "opId": "op230",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
-        "name": "Tongue 2",
+        "name": "Relief 2",
         "planeDef": {
           "origin": {
-            "x": -23.180752785153544,
-            "y": 0.020136730697256855,
+            "x": -22.046242949609326,
+            "y": -0.9611315471215227,
             "z": 0
           },
           "normal": {
@@ -846,17 +859,107 @@
         }
       },
       "createdIds": [
-        "sketch226",
-        "pt227"
+        "sketch231",
+        "pt232"
       ],
       "label": "Create sketch",
-      "at": 1793059377187
+      "at": 1793063315517
     },
     {
-      "opId": "op228",
+      "opId": "op233",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch226",
+        "sketch": "sketch231",
+        "segments": [
+          {
+            "x": 3.35,
+            "y": 14.5
+          },
+          {
+            "x": 2.25,
+            "y": 14.5
+          },
+          {
+            "x": 2.25,
+            "y": 4
+          },
+          {
+            "x": 2.85,
+            "y": 4,
+            "via": {
+              "x": 2.55,
+              "y": 3.7
+            }
+          },
+          {
+            "x": 3.35,
+            "y": 4
+          }
+        ]
+      },
+      "createdIds": [
+        "pt234",
+        "pt235",
+        "ln236",
+        "pt237",
+        "ln238",
+        "pt239",
+        "pt240",
+        "ar241",
+        "pt242",
+        "ln243",
+        "ln244"
+      ],
+      "label": "Profile (lines + arcs)",
+      "at": 1793063315522
+    },
+    {
+      "opId": "op245",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch231",
+        "distance": "8",
+        "symmetric": true,
+        "operation": "cut",
+        "name": "Relief 2"
+      },
+      "createdIds": [
+        "ext246"
+      ],
+      "label": "Extrude",
+      "at": 1793063315527
+    },
+    {
+      "opId": "op247",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Tongue 2",
+        "planeDef": {
+          "origin": {
+            "x": -22.046242949609326,
+            "y": -0.9611315471215227,
+            "z": 0
+          },
+          "normal": {
+            "x": 0.7563398903628114,
+            "y": -0.6541788518791865,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch248",
+        "pt249"
+      ],
+      "label": "Create sketch",
+      "at": 1793063315533
+    },
+    {
+      "opId": "op250",
+      "type": "sketch.addProfile",
+      "params": {
+        "sketch": "sketch248",
         "segments": [
           {
             "x": 2.2,
@@ -921,63 +1024,63 @@
         ]
       },
       "createdIds": [
-        "pt229",
-        "pt230",
-        "ln231",
-        "pt232",
-        "ln233",
-        "pt234",
-        "pt235",
-        "ar236",
-        "pt237",
-        "pt238",
-        "ar239",
-        "pt240",
-        "ln241",
-        "pt242",
-        "ln243",
-        "pt244",
-        "ln245",
-        "pt246",
-        "ln247",
-        "pt248",
-        "ln249",
-        "pt250",
         "pt251",
-        "ar252",
-        "pt253",
-        "ln254",
-        "ln255"
+        "pt252",
+        "ln253",
+        "pt254",
+        "ln255",
+        "pt256",
+        "pt257",
+        "ar258",
+        "pt259",
+        "pt260",
+        "ar261",
+        "pt262",
+        "ln263",
+        "pt264",
+        "ln265",
+        "pt266",
+        "ln267",
+        "pt268",
+        "ln269",
+        "pt270",
+        "ln271",
+        "pt272",
+        "pt273",
+        "ar274",
+        "pt275",
+        "ln276",
+        "ln277"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377204
+      "at": 1793063315538
     },
     {
-      "opId": "op256",
+      "opId": "op278",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch226",
+        "sketch": "sketch248",
         "distance": "7",
         "symmetric": true,
         "operation": "join",
         "name": "Tongue 2"
       },
       "createdIds": [
-        "ext257"
+        "ext279"
       ],
       "label": "Extrude",
-      "at": 1793059377240
+      "at": 1793063315544
     },
     {
-      "opId": "op258",
+      "opId": "op280",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Pocket 7",
         "planeDef": {
           "origin": {
-            "x": 23.180752785153544,
-            "y": 0.020136730697256855,
+            "x": 22.046242949609326,
+            "y": -0.9611315471215227,
             "z": 0
           },
           "normal": {
@@ -988,17 +1091,17 @@
         }
       },
       "createdIds": [
-        "sketch259",
-        "pt260"
+        "sketch281",
+        "pt282"
       ],
       "label": "Create sketch",
-      "at": 1793059377253
+      "at": 1793063315551
     },
     {
-      "opId": "op261",
+      "opId": "op283",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch259",
+        "sketch": "sketch281",
         "segments": [
           {
             "x": 3.35,
@@ -1019,44 +1122,147 @@
         ]
       },
       "createdIds": [
-        "pt262",
-        "pt263",
-        "ln264",
-        "pt265",
-        "ln266",
-        "pt267",
-        "ln268",
-        "ln269"
+        "pt284",
+        "pt285",
+        "ln286",
+        "pt287",
+        "ln288",
+        "pt289",
+        "ln290",
+        "ln291"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377263
+      "at": 1793063315557
     },
     {
-      "opId": "op270",
+      "opId": "op292",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch259",
+        "sketch": "sketch281",
         "distance": "8",
         "symmetric": true,
         "operation": "cut",
         "name": "Pocket 7"
       },
       "createdIds": [
-        "ext271"
+        "ext293"
       ],
       "label": "Extrude",
-      "at": 1793059377268
+      "at": 1793063315562
     },
     {
-      "opId": "op272",
+      "opId": "op294",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Key 7",
+        "planeDef": {
+          "origin": {
+            "x": 27.031883593685595,
+            "y": 3.3510840506297654,
+            "z": 0
+          },
+          "normal": {
+            "x": 0.7563398903628118,
+            "y": 0.6541788518791859,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch295",
+        "pt296"
+      ],
+      "label": "Create sketch",
+      "at": 1793063315568
+    },
+    {
+      "opId": "op297",
+      "type": "sketch.addProfile",
+      "params": {
+        "sketch": "sketch295",
+        "segments": [
+          {
+            "x": 2.2,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 17.4
+          },
+          {
+            "x": 3.85,
+            "y": 18
+          },
+          {
+            "x": 3.35,
+            "y": 18
+          },
+          {
+            "x": 2.85,
+            "y": 17.5
+          },
+          {
+            "x": 2.85,
+            "y": 14
+          },
+          {
+            "x": 2.2,
+            "y": 14
+          }
+        ]
+      },
+      "createdIds": [
+        "pt298",
+        "pt299",
+        "ln300",
+        "pt301",
+        "ln302",
+        "pt303",
+        "ln304",
+        "pt305",
+        "ln306",
+        "pt307",
+        "ln308",
+        "pt309",
+        "ln310",
+        "pt311",
+        "ln312",
+        "ln313"
+      ],
+      "label": "Profile (lines + arcs)",
+      "at": 1793063315574
+    },
+    {
+      "opId": "op314",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch295",
+        "distance": "4.6",
+        "symmetric": true,
+        "operation": "join",
+        "name": "Key 7"
+      },
+      "createdIds": [
+        "ext315"
+      ],
+      "label": "Extrude",
+      "at": 1793063315579
+    },
+    {
+      "opId": "op316",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Relief 4",
         "planeDef": {
           "origin": {
-            "x": -7.182397721963354,
-            "y": -22.039983396950706,
+            "x": -5.898573312641391,
+            "y": -21.264228998942475,
             "z": 0
           },
           "normal": {
@@ -1067,17 +1273,17 @@
         }
       },
       "createdIds": [
-        "sketch273",
-        "pt274"
+        "sketch317",
+        "pt318"
       ],
       "label": "Create sketch",
-      "at": 1793059377273
+      "at": 1793063315608
     },
     {
-      "opId": "op275",
+      "opId": "op319",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch273",
+        "sketch": "sketch317",
         "segments": [
           {
             "x": 3.35,
@@ -1106,47 +1312,47 @@
         ]
       },
       "createdIds": [
-        "pt276",
-        "pt277",
-        "ln278",
-        "pt279",
-        "ln280",
-        "pt281",
-        "pt282",
-        "ar283",
-        "pt284",
-        "ln285",
-        "ln286"
+        "pt320",
+        "pt321",
+        "ln322",
+        "pt323",
+        "ln324",
+        "pt325",
+        "pt326",
+        "ar327",
+        "pt328",
+        "ln329",
+        "ln330"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377279
+      "at": 1793063315614
     },
     {
-      "opId": "op287",
+      "opId": "op331",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch273",
+        "sketch": "sketch317",
         "distance": "8",
         "symmetric": true,
         "operation": "cut",
         "name": "Relief 4"
       },
       "createdIds": [
-        "ext288"
+        "ext332"
       ],
       "label": "Extrude",
-      "at": 1793059377285
+      "at": 1793063315620
     },
     {
-      "opId": "op289",
+      "opId": "op333",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Tongue 4",
         "planeDef": {
           "origin": {
-            "x": -7.182397721963354,
-            "y": -22.039983396950706,
+            "x": -5.898573312641391,
+            "y": -21.264228998942475,
             "z": 0
           },
           "normal": {
@@ -1157,17 +1363,17 @@
         }
       },
       "createdIds": [
-        "sketch290",
-        "pt291"
+        "sketch334",
+        "pt335"
       ],
       "label": "Create sketch",
-      "at": 1793059377292
+      "at": 1793063315626
     },
     {
-      "opId": "op292",
+      "opId": "op336",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch290",
+        "sketch": "sketch334",
         "segments": [
           {
             "x": 2.2,
@@ -1232,63 +1438,63 @@
         ]
       },
       "createdIds": [
-        "pt293",
-        "pt294",
-        "ln295",
-        "pt296",
-        "ln297",
-        "pt298",
-        "pt299",
-        "ar300",
-        "pt301",
-        "pt302",
-        "ar303",
-        "pt304",
-        "ln305",
-        "pt306",
-        "ln307",
-        "pt308",
-        "ln309",
-        "pt310",
-        "ln311",
-        "pt312",
-        "ln313",
-        "pt314",
-        "pt315",
-        "ar316",
-        "pt317",
-        "ln318",
-        "ln319"
+        "pt337",
+        "pt338",
+        "ln339",
+        "pt340",
+        "ln341",
+        "pt342",
+        "pt343",
+        "ar344",
+        "pt345",
+        "pt346",
+        "ar347",
+        "pt348",
+        "ln349",
+        "pt350",
+        "ln351",
+        "pt352",
+        "ln353",
+        "pt354",
+        "ln355",
+        "pt356",
+        "ln357",
+        "pt358",
+        "pt359",
+        "ar360",
+        "pt361",
+        "ln362",
+        "ln363"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377297
+      "at": 1793063315632
     },
     {
-      "opId": "op320",
+      "opId": "op364",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch290",
+        "sketch": "sketch334",
         "distance": "7",
         "symmetric": true,
         "operation": "join",
         "name": "Tongue 4"
       },
       "createdIds": [
-        "ext321"
+        "ext365"
       ],
       "label": "Extrude",
-      "at": 1793059377305
+      "at": 1793063315638
     },
     {
-      "opId": "op322",
+      "opId": "op366",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Pocket 5",
         "planeDef": {
           "origin": {
-            "x": 7.182397721963354,
-            "y": -22.039983396950706,
+            "x": 5.898573312641391,
+            "y": -21.264228998942475,
             "z": 0
           },
           "normal": {
@@ -1299,17 +1505,17 @@
         }
       },
       "createdIds": [
-        "sketch323",
-        "pt324"
+        "sketch367",
+        "pt368"
       ],
       "label": "Create sketch",
-      "at": 1793059377310
+      "at": 1793063315644
     },
     {
-      "opId": "op325",
+      "opId": "op369",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch323",
+        "sketch": "sketch367",
         "segments": [
           {
             "x": 3.35,
@@ -1330,44 +1536,147 @@
         ]
       },
       "createdIds": [
-        "pt326",
-        "pt327",
-        "ln328",
-        "pt329",
-        "ln330",
-        "pt331",
-        "ln332",
-        "ln333"
+        "pt370",
+        "pt371",
+        "ln372",
+        "pt373",
+        "ln374",
+        "pt375",
+        "ln376",
+        "ln377"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377315
+      "at": 1793063315650
     },
     {
-      "opId": "op334",
+      "opId": "op378",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch323",
+        "sketch": "sketch367",
         "distance": "8",
         "symmetric": true,
         "operation": "cut",
         "name": "Pocket 5"
       },
       "createdIds": [
-        "ext335"
+        "ext379"
       ],
       "label": "Extrude",
-      "at": 1793059377321
+      "at": 1793063315656
     },
     {
-      "opId": "op336",
+      "opId": "op380",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Key 5",
+        "planeDef": {
+          "origin": {
+            "x": 11.540381743418372,
+            "y": -24.673307118283304,
+            "z": 0
+          },
+          "normal": {
+            "x": 0.8558829395479752,
+            "y": -0.5171695986721542,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch381",
+        "pt382"
+      ],
+      "label": "Create sketch",
+      "at": 1793063315662
+    },
+    {
+      "opId": "op383",
+      "type": "sketch.addProfile",
+      "params": {
+        "sketch": "sketch381",
+        "segments": [
+          {
+            "x": 2.2,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 17.4
+          },
+          {
+            "x": 3.85,
+            "y": 18
+          },
+          {
+            "x": 3.35,
+            "y": 18
+          },
+          {
+            "x": 2.85,
+            "y": 17.5
+          },
+          {
+            "x": 2.85,
+            "y": 14
+          },
+          {
+            "x": 2.2,
+            "y": 14
+          }
+        ]
+      },
+      "createdIds": [
+        "pt384",
+        "pt385",
+        "ln386",
+        "pt387",
+        "ln388",
+        "pt389",
+        "ln390",
+        "pt391",
+        "ln392",
+        "pt393",
+        "ln394",
+        "pt395",
+        "ln396",
+        "pt397",
+        "ln398",
+        "ln399"
+      ],
+      "label": "Profile (lines + arcs)",
+      "at": 1793063315669
+    },
+    {
+      "opId": "op400",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch381",
+        "distance": "4.6",
+        "symmetric": true,
+        "operation": "join",
+        "name": "Key 5"
+      },
+      "createdIds": [
+        "ext401"
+      ],
+      "label": "Extrude",
+      "at": 1793063315675
+    },
+    {
+      "opId": "op402",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Relief 6",
         "planeDef": {
           "origin": {
-            "x": 18.741786872260374,
-            "y": -13.641595581496166,
+            "x": 18.400724157263888,
+            "y": -12.180884718786086,
             "z": 0
           },
           "normal": {
@@ -1378,17 +1687,17 @@
         }
       },
       "createdIds": [
-        "sketch337",
-        "pt338"
+        "sketch403",
+        "pt404"
       ],
       "label": "Create sketch",
-      "at": 1793059377326
+      "at": 1793063315682
     },
     {
-      "opId": "op339",
+      "opId": "op405",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch337",
+        "sketch": "sketch403",
         "segments": [
           {
             "x": 3.35,
@@ -1417,47 +1726,47 @@
         ]
       },
       "createdIds": [
-        "pt340",
-        "pt341",
-        "ln342",
-        "pt343",
-        "ln344",
-        "pt345",
-        "pt346",
-        "ar347",
-        "pt348",
-        "ln349",
-        "ln350"
+        "pt406",
+        "pt407",
+        "ln408",
+        "pt409",
+        "ln410",
+        "pt411",
+        "pt412",
+        "ar413",
+        "pt414",
+        "ln415",
+        "ln416"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377331
+      "at": 1793063315689
     },
     {
-      "opId": "op351",
+      "opId": "op417",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch337",
+        "sketch": "sketch403",
         "distance": "8",
         "symmetric": true,
         "operation": "cut",
         "name": "Relief 6"
       },
       "createdIds": [
-        "ext352"
+        "ext418"
       ],
       "label": "Extrude",
-      "at": 1793059377336
+      "at": 1793063315696
     },
     {
-      "opId": "op353",
+      "opId": "op419",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Tongue 6",
         "planeDef": {
           "origin": {
-            "x": 18.741786872260374,
-            "y": -13.641595581496166,
+            "x": 18.400724157263888,
+            "y": -12.180884718786086,
             "z": 0
           },
           "normal": {
@@ -1468,17 +1777,17 @@
         }
       },
       "createdIds": [
-        "sketch354",
-        "pt355"
+        "sketch420",
+        "pt421"
       ],
       "label": "Create sketch",
-      "at": 1793059377342
+      "at": 1793063315706
     },
     {
-      "opId": "op356",
+      "opId": "op422",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch354",
+        "sketch": "sketch420",
         "segments": [
           {
             "x": 2.2,
@@ -1543,63 +1852,63 @@
         ]
       },
       "createdIds": [
-        "pt357",
-        "pt358",
-        "ln359",
-        "pt360",
-        "ln361",
-        "pt362",
-        "pt363",
-        "ar364",
-        "pt365",
-        "pt366",
-        "ar367",
-        "pt368",
-        "ln369",
-        "pt370",
-        "ln371",
-        "pt372",
-        "ln373",
-        "pt374",
-        "ln375",
-        "pt376",
-        "ln377",
-        "pt378",
-        "pt379",
-        "ar380",
-        "pt381",
-        "ln382",
-        "ln383"
+        "pt423",
+        "pt424",
+        "ln425",
+        "pt426",
+        "ln427",
+        "pt428",
+        "pt429",
+        "ar430",
+        "pt431",
+        "pt432",
+        "ar433",
+        "pt434",
+        "ln435",
+        "pt436",
+        "ln437",
+        "pt438",
+        "ln439",
+        "pt440",
+        "ln441",
+        "pt442",
+        "ln443",
+        "pt444",
+        "pt445",
+        "ar446",
+        "pt447",
+        "ln448",
+        "ln449"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377347
+      "at": 1793063315712
     },
     {
-      "opId": "op384",
+      "opId": "op450",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch354",
+        "sketch": "sketch420",
         "distance": "7",
         "symmetric": true,
         "operation": "join",
         "name": "Tongue 6"
       },
       "createdIds": [
-        "ext385"
+        "ext451"
       ],
       "label": "Extrude",
-      "at": 1793059377354
+      "at": 1793063315720
     },
     {
-      "opId": "op386",
+      "opId": "op452",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Pocket 3",
         "planeDef": {
           "origin": {
-            "x": -18.741786872260374,
-            "y": -13.641595581496166,
+            "x": -18.400724157263888,
+            "y": -12.180884718786086,
             "z": 0
           },
           "normal": {
@@ -1610,17 +1919,17 @@
         }
       },
       "createdIds": [
-        "sketch387",
-        "pt388"
+        "sketch453",
+        "pt454"
       ],
       "label": "Create sketch",
-      "at": 1793059377365
+      "at": 1793063315727
     },
     {
-      "opId": "op389",
+      "opId": "op455",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch387",
+        "sketch": "sketch453",
         "segments": [
           {
             "x": 3.35,
@@ -1641,44 +1950,147 @@
         ]
       },
       "createdIds": [
-        "pt390",
-        "pt391",
-        "ln392",
-        "pt393",
-        "ln394",
-        "pt395",
-        "ln396",
-        "ln397"
+        "pt456",
+        "pt457",
+        "ln458",
+        "pt459",
+        "ln460",
+        "pt461",
+        "ln462",
+        "ln463"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377371
+      "at": 1793063315735
     },
     {
-      "opId": "op398",
+      "opId": "op464",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch387",
+        "sketch": "sketch453",
         "distance": "8",
         "symmetric": true,
         "operation": "cut",
         "name": "Pocket 3"
       },
       "createdIds": [
-        "ext399"
+        "ext465"
       ],
       "label": "Extrude",
-      "at": 1793059377377
+      "at": 1793063315742
     },
     {
-      "opId": "op400",
+      "opId": "op466",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Key 3",
+        "planeDef": {
+          "origin": {
+            "x": -19.89953543310427,
+            "y": -18.600026464593576,
+            "z": 0
+          },
+          "normal": {
+            "x": -0.2273751433309915,
+            "y": -0.9738072418067197,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch467",
+        "pt468"
+      ],
+      "label": "Create sketch",
+      "at": 1793063315750
+    },
+    {
+      "opId": "op469",
+      "type": "sketch.addProfile",
+      "params": {
+        "sketch": "sketch467",
+        "segments": [
+          {
+            "x": 2.2,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 17.4
+          },
+          {
+            "x": 3.85,
+            "y": 18
+          },
+          {
+            "x": 3.35,
+            "y": 18
+          },
+          {
+            "x": 2.85,
+            "y": 17.5
+          },
+          {
+            "x": 2.85,
+            "y": 14
+          },
+          {
+            "x": 2.2,
+            "y": 14
+          }
+        ]
+      },
+      "createdIds": [
+        "pt470",
+        "pt471",
+        "ln472",
+        "pt473",
+        "ln474",
+        "pt475",
+        "ln476",
+        "pt477",
+        "ln478",
+        "pt479",
+        "ln480",
+        "pt481",
+        "ln482",
+        "pt483",
+        "ln484",
+        "ln485"
+      ],
+      "label": "Profile (lines + arcs)",
+      "at": 1793063315758
+    },
+    {
+      "opId": "op486",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch467",
+        "distance": "4.6",
+        "symmetric": true,
+        "operation": "join",
+        "name": "Key 3"
+      },
+      "createdIds": [
+        "ext487"
+      ],
+      "label": "Extrude",
+      "at": 1793063315766
+    },
+    {
+      "opId": "op488",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Relief 8",
         "planeDef": {
           "origin": {
-            "x": 18.765459018926855,
-            "y": 13.60901366680568,
+            "x": 17.270846259441747,
+            "y": 13.73602822968846,
             "z": 0
           },
           "normal": {
@@ -1689,17 +2101,17 @@
         }
       },
       "createdIds": [
-        "sketch401",
-        "pt402"
+        "sketch489",
+        "pt490"
       ],
       "label": "Create sketch",
-      "at": 1793059377383
+      "at": 1793063315774
     },
     {
-      "opId": "op403",
+      "opId": "op491",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch401",
+        "sketch": "sketch489",
         "segments": [
           {
             "x": 3.35,
@@ -1728,47 +2140,47 @@
         ]
       },
       "createdIds": [
-        "pt404",
-        "pt405",
-        "ln406",
-        "pt407",
-        "ln408",
-        "pt409",
-        "pt410",
-        "ar411",
-        "pt412",
-        "ln413",
-        "ln414"
+        "pt492",
+        "pt493",
+        "ln494",
+        "pt495",
+        "ln496",
+        "pt497",
+        "pt498",
+        "ar499",
+        "pt500",
+        "ln501",
+        "ln502"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377390
+      "at": 1793063315782
     },
     {
-      "opId": "op415",
+      "opId": "op503",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch401",
+        "sketch": "sketch489",
         "distance": "8",
         "symmetric": true,
         "operation": "cut",
         "name": "Relief 8"
       },
       "createdIds": [
-        "ext416"
+        "ext504"
       ],
       "label": "Extrude",
-      "at": 1793059377396
+      "at": 1793063315791
     },
     {
-      "opId": "op417",
+      "opId": "op505",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Tongue 8",
         "planeDef": {
           "origin": {
-            "x": 18.765459018926855,
-            "y": 13.60901366680568,
+            "x": 17.270846259441747,
+            "y": 13.73602822968846,
             "z": 0
           },
           "normal": {
@@ -1779,17 +2191,17 @@
         }
       },
       "createdIds": [
-        "sketch418",
-        "pt419"
+        "sketch506",
+        "pt507"
       ],
       "label": "Create sketch",
-      "at": 1793059377402
+      "at": 1793063315799
     },
     {
-      "opId": "op420",
+      "opId": "op508",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch418",
+        "sketch": "sketch506",
         "segments": [
           {
             "x": 2.2,
@@ -1854,63 +2266,63 @@
         ]
       },
       "createdIds": [
-        "pt421",
-        "pt422",
-        "ln423",
-        "pt424",
-        "ln425",
-        "pt426",
-        "pt427",
-        "ar428",
-        "pt429",
-        "pt430",
-        "ar431",
-        "pt432",
-        "ln433",
-        "pt434",
-        "ln435",
-        "pt436",
-        "ln437",
-        "pt438",
-        "ln439",
-        "pt440",
-        "ln441",
-        "pt442",
-        "pt443",
-        "ar444",
-        "pt445",
-        "ln446",
-        "ln447"
+        "pt509",
+        "pt510",
+        "ln511",
+        "pt512",
+        "ln513",
+        "pt514",
+        "pt515",
+        "ar516",
+        "pt517",
+        "pt518",
+        "ar519",
+        "pt520",
+        "ln521",
+        "pt522",
+        "ln523",
+        "pt524",
+        "ln525",
+        "pt526",
+        "ln527",
+        "pt528",
+        "ln529",
+        "pt530",
+        "pt531",
+        "ar532",
+        "pt533",
+        "ln534",
+        "ln535"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377408
+      "at": 1793063315813
     },
     {
-      "opId": "op448",
+      "opId": "op536",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch418",
+        "sketch": "sketch506",
         "distance": "7",
         "symmetric": true,
         "operation": "join",
         "name": "Tongue 8"
       },
       "createdIds": [
-        "ext449"
+        "ext537"
       ],
       "label": "Extrude",
-      "at": 1793059377415
+      "at": 1793063315822
     },
     {
-      "opId": "op450",
+      "opId": "op538",
       "type": "sketch.create",
       "params": {
         "component": "cmp2",
         "name": "Pocket 1",
         "planeDef": {
           "origin": {
-            "x": -18.765459018926855,
-            "y": 13.60901366680568,
+            "x": -17.270846259441747,
+            "y": 13.73602822968846,
             "z": 0
           },
           "normal": {
@@ -1921,17 +2333,17 @@
         }
       },
       "createdIds": [
-        "sketch451",
-        "pt452"
+        "sketch539",
+        "pt540"
       ],
       "label": "Create sketch",
-      "at": 1793059377424
+      "at": 1793063315830
     },
     {
-      "opId": "op453",
+      "opId": "op541",
       "type": "sketch.addProfile",
       "params": {
-        "sketch": "sketch451",
+        "sketch": "sketch539",
         "segments": [
           {
             "x": 3.35,
@@ -1952,36 +2364,139 @@
         ]
       },
       "createdIds": [
-        "pt454",
-        "pt455",
-        "ln456",
-        "pt457",
-        "ln458",
-        "pt459",
-        "ln460",
-        "ln461"
+        "pt542",
+        "pt543",
+        "ln544",
+        "pt545",
+        "ln546",
+        "pt547",
+        "ln548",
+        "ln549"
       ],
       "label": "Profile (lines + arcs)",
-      "at": 1793059377432
+      "at": 1793063315838
     },
     {
-      "opId": "op462",
+      "opId": "op550",
       "type": "feature.extrude",
       "params": {
-        "sketch": "sketch451",
+        "sketch": "sketch539",
         "distance": "8",
         "symmetric": true,
         "operation": "cut",
         "name": "Pocket 1"
       },
       "createdIds": [
-        "ext463"
+        "ext551"
       ],
       "label": "Extrude",
-      "at": 1793059377439
+      "at": 1793063315846
     },
     {
-      "opId": "op464",
+      "opId": "op552",
+      "type": "sketch.create",
+      "params": {
+        "component": "cmp2",
+        "name": "Key 1",
+        "planeDef": {
+          "origin": {
+            "x": -23.838971001409668,
+            "y": 13.177858571516932,
+            "z": 0
+          },
+          "normal": {
+            "x": -0.996408506323407,
+            "y": -0.0846763752551864,
+            "z": 0
+          }
+        }
+      },
+      "createdIds": [
+        "sketch553",
+        "pt554"
+      ],
+      "label": "Create sketch",
+      "at": 1793063315854
+    },
+    {
+      "opId": "op555",
+      "type": "sketch.addProfile",
+      "params": {
+        "sketch": "sketch553",
+        "segments": [
+          {
+            "x": 2.2,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 12
+          },
+          {
+            "x": 4.45,
+            "y": 17.4
+          },
+          {
+            "x": 3.85,
+            "y": 18
+          },
+          {
+            "x": 3.35,
+            "y": 18
+          },
+          {
+            "x": 2.85,
+            "y": 17.5
+          },
+          {
+            "x": 2.85,
+            "y": 14
+          },
+          {
+            "x": 2.2,
+            "y": 14
+          }
+        ]
+      },
+      "createdIds": [
+        "pt556",
+        "pt557",
+        "ln558",
+        "pt559",
+        "ln560",
+        "pt561",
+        "ln562",
+        "pt563",
+        "ln564",
+        "pt565",
+        "ln566",
+        "pt567",
+        "ln568",
+        "pt569",
+        "ln570",
+        "ln571"
+      ],
+      "label": "Profile (lines + arcs)",
+      "at": 1793063315862
+    },
+    {
+      "opId": "op572",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch553",
+        "distance": "4.6",
+        "symmetric": true,
+        "operation": "join",
+        "name": "Key 1"
+      },
+      "createdIds": [
+        "ext573"
+      ],
+      "label": "Extrude",
+      "at": 1793063315871
+    },
+    {
+      "opId": "op574",
       "type": "component.connector",
       "params": {
         "component": "cmp2",
@@ -1994,10 +2509,10 @@
       },
       "createdIds": [],
       "label": "Add connector",
-      "at": 1793059377446
+      "at": 1793063315879
     },
     {
-      "opId": "op465",
+      "opId": "op575",
       "type": "component.connector",
       "params": {
         "component": "cmp2",
@@ -2010,10 +2525,10 @@
       },
       "createdIds": [],
       "label": "Add connector",
-      "at": 1793059377460
+      "at": 1793063315888
     },
     {
-      "opId": "op466",
+      "opId": "op576",
       "type": "assembly.pattern",
       "params": {
         "source": "cmp2",
@@ -2021,16 +2536,16 @@
         "name": "Box"
       },
       "createdIds": [
-        "apat467"
+        "apat577"
       ],
       "label": "Pattern components (jointed)",
-      "at": 1793059377467
+      "at": 1793063315896
     },
     {
-      "opId": "op468",
+      "opId": "op578",
       "type": "joint.template",
       "params": {
-        "pattern": "apat467",
+        "pattern": "apat577",
         "kind": "rigid",
         "base": {
           "role": "root",
@@ -2049,16 +2564,16 @@
         "name": "Bottom"
       },
       "createdIds": [
-        "jtpl469"
+        "jtpl579"
       ],
       "label": "Joint template",
-      "at": 1793059377473
+      "at": 1793063315910
     },
     {
-      "opId": "op470",
+      "opId": "op580",
       "type": "joint.template",
       "params": {
-        "pattern": "apat467",
+        "pattern": "apat577",
         "kind": "revolute",
         "base": {
           "role": "root",
@@ -2083,10 +2598,10 @@
         "name": "Top (flipped)"
       },
       "createdIds": [
-        "jtpl471"
+        "jtpl581"
       ],
       "label": "Joint template",
-      "at": 1793059377480
+      "at": 1793063315918
     }
   ],
   "timelineGroups": []
