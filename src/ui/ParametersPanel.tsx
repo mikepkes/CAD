@@ -3,8 +3,8 @@ import { useStore } from "../model/store";
 import { isValidParamName } from "../model/parameters";
 import type { Parameter } from "../core/document";
 
-/** The control shown for a parameter's value: a checkbox for a yes/no switch, a dropdown when it has a list of
- *  acceptable values, a slider when it has both extents, else the raw
+/** The control shown for a parameter's value: a checkbox for a yes/no switch, a dropdown when it has named
+ *  choices or a list of acceptable values, a slider when it has both extents, else the raw
  *  expression field. (This is the control the future customize mode reuses.) */
 function ParamControl({ p }: { p: Parameter }) {
   const setParameterExpr = useStore((s) => s.setParameterExpr);
@@ -19,7 +19,7 @@ function ParamControl({ p }: { p: Parameter }) {
         onChange={(e) => setParameterExpr(p.name, e.target.value)}
       >
         {!p.values.some((v) => Math.abs(v - p.value) < 1e-9) && <option value="">{fmt(p.value)}…</option>}
-        {p.values.map((v) => <option key={v} value={String(v)}>{fmt(v)}</option>)}
+        {p.values.map((v) => <option key={v} value={String(v)}>{p.options?.[v] ?? fmt(v)}</option>)}
       </select>
     );
   }
@@ -52,18 +52,25 @@ function ParamControl({ p }: { p: Parameter }) {
 }
 
 /** Inline editor for a parameter's extents: unbounded, a min/max range, a
- *  comma-separated list of acceptable values (never both), or a checkbox. */
+ *  comma-separated list of acceptable values (never both), a checkbox, or named
+ *  choices. */
 function BoundsEditor({ p, onClose }: { p: Parameter; onClose: () => void }) {
   const setParameterBounds = useStore((s) => s.setParameterBounds);
-  const initial: "none" | "range" | "list" | "boolean" = p.boolean ? "boolean" : p.values?.length ? "list" : (p.min != null || p.max != null) ? "range" : "none";
+  const initial: "none" | "range" | "list" | "boolean" | "options" = p.boolean ? "boolean" : p.options?.length ? "options" : p.values?.length ? "list" : (p.min != null || p.max != null) ? "range" : "none";
   const [mode, setMode] = useState(initial);
   const [min, setMin] = useState(p.min != null ? String(p.min) : "");
   const [max, setMax] = useState(p.max != null ? String(p.max) : "");
   const [list, setList] = useState(p.values?.join(", ") ?? "");
+  const [names, setNames] = useState(p.options?.join(", ") ?? "");
 
   const apply = () => {
     if (mode === "none") setParameterBounds(p.name, { clear: true });
     else if (mode === "boolean") setParameterBounds(p.name, { boolean: true });
+    else if (mode === "options") {
+      const opts = names.split(",").map((s) => s.trim()).filter(Boolean);
+      if (opts.length < 2 || new Set(opts).size !== opts.length) return; // needs two or more distinct names
+      setParameterBounds(p.name, { options: opts });
+    }
     else if (mode === "range") {
       const mn = min.trim() === "" ? undefined : Number(min);
       const mx = max.trim() === "" ? undefined : Number(max);
@@ -81,9 +88,9 @@ function BoundsEditor({ p, onClose }: { p: Parameter; onClose: () => void }) {
   return (
     <div className="param-bounds">
       <div className="param-bounds-modes">
-        {(["none", "range", "list", "boolean"] as const).map((m) => (
+        {(["none", "range", "list", "boolean", "options"] as const).map((m) => (
           <button key={m} className={`chip ${mode === m ? "active" : ""}`} onClick={() => setMode(m)}>
-            {m === "none" ? "Unbounded" : m === "range" ? "Range" : m === "list" ? "Values" : "Checkbox"}
+            {m === "none" ? "Unbounded" : m === "range" ? "Range" : m === "list" ? "Values" : m === "boolean" ? "Checkbox" : "Choices"}
           </button>
         ))}
       </div>
@@ -94,6 +101,14 @@ function BoundsEditor({ p, onClose }: { p: Parameter; onClose: () => void }) {
         </div>
       )}
       {mode === "boolean" && <div className="param-bounds-note">A yes/no switch: 1 when checked, 0 when not. Use it in expressions, e.g. a count of <code>1 + {p.name}</code>.</div>}
+      {mode === "options" && (
+        <>
+          <div className="param-bounds-fields">
+            <input type="text" placeholder="e.g. PLA, PETG, TPU" value={names} onChange={(e) => setNames(e.target.value)} />
+          </div>
+          <div className="param-bounds-note">A dropdown of names; the value is the chosen one's index (0, 1, 2…). Use it with <code>pick</code>, e.g. <code>pick({p.name}, 0.8, 1.1, 1.4)</code>.</div>
+        </>
+      )}
       {mode === "list" && (
         <div className="param-bounds-fields">
           <input type="text" placeholder="e.g. 3, 4, 5, 6, 8" value={list} onChange={(e) => setList(e.target.value)} />

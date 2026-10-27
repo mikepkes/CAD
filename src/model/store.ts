@@ -208,7 +208,7 @@ export interface AppState {
   renameParameter: (name: string, newName: string) => Promise<void>;
   deleteParameter: (name: string) => Promise<void>;
   /** Set or clear a parameter's extents (min/max) or acceptable values (enum). */
-  setParameterBounds: (name: string, bounds: { min?: number; max?: number; values?: number[]; boolean?: boolean; clear?: boolean }) => Promise<void>;
+  setParameterBounds: (name: string, bounds: { min?: number; max?: number; values?: number[]; boolean?: boolean; options?: string[]; clear?: boolean }) => Promise<void>;
 
   // constraints/dimensions by id (mapped to their creating operation)
   editDimension: (constraintId: string, expr: string) => Promise<void>;
@@ -674,12 +674,17 @@ export const useStore = create<AppState>((set, get) => {
         ? {}
         : bounds.boolean
           ? { boolean: true }
+          : bounds.options
+            ? { options: bounds.options }
           : bounds.values != null
             ? { values: bounds.values }
             : { ...(bounds.min != null ? { min: bounds.min } : {}), ...(bounds.max != null ? { max: bounds.max } : {}) };
       // a switch is 0 or 1: a value other than that snaps to 1 if non-zero, else 0
+      // and a named choice is one of 0 … n−1: snap to the nearest
       const current = get().session.doc.parameters.find((p) => p.name === name)?.value ?? 0;
-      const expression = bounds.boolean && current !== 0 && current !== 1 ? (current !== 0 ? "1" : "0") : op?.params.expression;
+      const choice = bounds.options && Math.min(bounds.options.length - 1, Math.max(0, Math.round(Number.isFinite(current) ? current : 0)));
+      const expression = bounds.boolean && current !== 0 && current !== 1 ? (current !== 0 ? "1" : "0")
+        : choice != null && choice !== current ? String(choice) : op?.params.expression;
       if (op) await get().editOperation(op.opId, { name: op.params.name, expression, ...extra });
       else await runDispatch("parameter.setBounds", { name, ...(bounds.clear ? { clear: true } : extra) });
     },

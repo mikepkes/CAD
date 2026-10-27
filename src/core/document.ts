@@ -28,6 +28,9 @@ export interface Parameter {
   values?: number[];
   /** A yes/no switch: values [0, 1], shown as a checkbox (1 = checked). */
   boolean?: boolean;
+  /** Named choices (an enum): values [0 … n−1], shown as a dropdown of these
+   *  names; the value is the chosen index (use it with pick()). */
+  options?: string[];
   /** Set when the resolved value falls outside the extents / enum. */
   warning?: string;
 }
@@ -53,6 +56,9 @@ export interface Component {
   connectors?: Record<string, Connector>;
   /** Material assigned to this component (bodies inherit; nearest ancestor wins). */
   materialId?: string;
+  /** Instead of one material: the one a parameter picks, materials[value of `by`]
+   *  (e.g. a named-choice "material" parameter). */
+  materialChoice?: { by: string; materials: string[] };
 }
 
 /** How a feature combines with the running bodies (Fusion-style). */
@@ -555,6 +561,11 @@ export function materialForComponent(doc: CadDocument, componentId: string | und
     seen.add(id);
     const c = doc.components[id];
     if (!c) break;
+    if (c.materialChoice) {
+      const v = doc.parameters.find((p) => p.name === c.materialChoice!.by)?.value ?? 0;
+      const m = doc.materials[c.materialChoice.materials[Math.round(v)]];
+      if (m) return m;
+    }
     if (c.materialId && doc.materials[c.materialId]) return doc.materials[c.materialId];
     id = c.parentId ?? undefined;
   }

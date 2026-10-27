@@ -18,6 +18,8 @@ export interface Parameter {
   values?: number[];
   /** A yes/no switch: values [0, 1], shown as a checkbox (1 = checked). */
   boolean?: boolean;
+  /** Named choices (an enum): values [0 … n−1], shown as a dropdown of these names. */
+  options?: string[];
   warning?: string;
 }
 

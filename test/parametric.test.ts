@@ -7,6 +7,7 @@ import { placeComponentSketches, resolveComponentWorld } from "../src/core/recom
 import { resolveParameters } from "../src/model/parameters";
 import { applyPoint } from "../src/math/transform";
 import { to3d, resolveSketchPlane } from "../src/geometry/plane";
+import { materialForComponent } from "../src/core/document";
 import type { CadSession } from "../src/core/command/session";
 import type { SketchPoint } from "../src/sketch/types";
 
@@ -31,6 +32,24 @@ describe("expression-positioned sketch points", () => {
     pt = s.doc.sketches[sk].entities[p] as SketchPoint;
     expect([pt.x, pt.y]).toEqual([30, 16]);
     expect(end).toBe(p); // the line's end IS the parametric point
+  });
+
+  // Regression: the solver started an arc from its stored radius, so when its
+  // expression-positioned centre and ends moved apart, the arc's own rules read
+  // as conflicting (an over-constrained sketch) even though the geometry agreed.
+  it("an arc on them changes radius with the parameters, without a conflict", async () => {
+    const s = realSession();
+    await dis(s, "parameter.add", { name: "c", expression: "0.25" });
+    const sk = (await dis(s, "sketch.create", { plane: "XY" }))[0];
+    const a = (await dis(s, "sketch.addPoint", { sketch: sk, x: "2", y: "4" }))[0];
+    const b = (await dis(s, "sketch.addPoint", { sketch: sk, x: "2.5 + c", y: "4" }))[0];
+    const arc = (await dis(s, "sketch.addArc", { sketch: sk, center: { x: "2.25 + c/2", y: "4" }, start: { ref: a }, end: { ref: b }, ccw: false }))[0];
+    for (const c of ["0.25", "0.2", "0.4"]) {
+      await dis(s, "parameter.set", { name: "c", expression: c });
+      await s.recompute();
+      expect(s.doc.sketches[sk].status.conflicting, `c = ${c}`).toBe(false);
+      expect((s.doc.sketches[sk].entities[arc] as unknown as { r: number }).r).toBeCloseTo(0.25 + Number(c) / 2, 9);
+    }
   });
 
   it("rejects a coordinate that doesn't evaluate", async () => {
@@ -125,5 +144,61 @@ describe("boolean parameters", () => {
   it("take no extents or value list", async () => {
     const s = realSession();
     expect((await s.dispatch("parameter.add", { name: "b", expression: "1", boolean: true, min: 0, max: 1 })).ok).toBe(false);
+  });
+});
+
+describe("named-choice parameters", () => {
+  it("are a dropdown of names whose index drives pick()", async () => {
+    const s = realSession();
+    await dis(s, "parameter.add", { name: "material", expression: "1", options: ["PLA", "PETG", "TPU"] });
+    await dis(s, "parameter.add", { name: "barb", expression: "pick(material, 0.6, 0.9, 1.1)" });
+    await s.recompute();
+    const p = (n: string) => s.doc.parameters.find((q) => q.name === n)!;
+    expect(p("material")).toMatchObject({ options: ["PLA", "PETG", "TPU"], values: [0, 1, 2], value: 1 });
+    expect(p("barb").value).toBe(0.9);
+    await dis(s, "parameter.set", { name: "material", expression: "2" });
+    await s.recompute();
+    expect(p("barb").value).toBe(1.1);
+    // out of range: pick fails rather than guessing
+    await dis(s, "parameter.set", { name: "material", expression: "5" });
+    await s.recompute();
+    expect(p("barb").error).toMatch(/pick/);
+  });
+
+  it("need two or more distinct names and nothing else bounding them", async () => {
+    const s = realSession();
+    expect((await s.dispatch("parameter.add", { name: "a", expression: "0", options: ["PLA"] })).ok).toBe(false);
+    expect((await s.dispatch("parameter.add", { name: "b", expression: "0", options: ["PLA", "PLA"] })).ok).toBe(false);
+    expect((await s.dispatch("parameter.add", { name: "c", expression: "0", options: ["PLA", "ABS"], min: 0 })).ok).toBe(false);
+  });
+
+  it("can be made from an existing parameter, snapping its value to a choice", async () => {
+    const s = realSession();
+    await dis(s, "parameter.add", { name: "m", expression: "7", min: 0, max: 10 });
+    await dis(s, "parameter.setBounds", { name: "m", options: ["PLA", "PETG", "TPU"] });
+    await s.recompute();
+    expect(s.doc.parameters.find((q) => q.name === "m")).toMatchObject({ options: ["PLA", "PETG", "TPU"], values: [0, 1, 2], value: 2 });
+    expect(s.doc.parameters.find((q) => q.name === "m")!.min).toBeUndefined();
+    await dis(s, "parameter.setBounds", { name: "m", min: 0, max: 3 }); // and back to a range
+    expect(s.doc.parameters.find((q) => q.name === "m")!.options).toBeUndefined();
+  });
+
+  it("can pick a component's material", async () => {
+    const s = realSession();
+    await dis(s, "parameter.add", { name: "material", expression: "0", options: ["PLA", "TPU"] });
+    const comp = (await dis(s, "component.create", { name: "Part" }))[0];
+    const pla = (await dis(s, "material.create", { name: "PLA", kind: "plastic", color: "#5b8def" }))[0];
+    const tpu = (await dis(s, "material.create", { name: "TPU", kind: "plastic", color: "#f2c14e" }))[0];
+    await dis(s, "material.assign", { component: comp, materials: [pla, tpu], by: "material" });
+    await s.recompute();
+    expect(materialForComponent(s.doc, comp)?.name).toBe("PLA");
+    await dis(s, "parameter.set", { name: "material", expression: "1" });
+    await s.recompute();
+    expect(materialForComponent(s.doc, comp)?.name).toBe("TPU");
+    // a plain assignment replaces the choice
+    await dis(s, "material.assign", { component: comp, material: pla });
+    await s.recompute();
+    expect(materialForComponent(s.doc, comp)?.name).toBe("PLA");
+    expect((await s.dispatch("material.assign", { component: comp, materials: [pla], by: "nope" })).ok).toBe(false);
   });
 });

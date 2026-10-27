@@ -23,6 +23,12 @@ const FUNCS: Record<string, (...a: number[]) => number> = {
   // degrees <-> radians helpers (angles in sketches are stored in radians)
   rad: (d: number) => (d * Math.PI) / 180,
   deg: (r: number) => (r * 180) / Math.PI,
+  // pick(i, a0, a1, …) → a_i: one value per choice of a named-choice parameter
+  pick: (i: number, ...xs: number[]) => {
+    const k = Math.round(i);
+    if (!(k >= 0 && k < xs.length)) throw new Error(`pick: choice ${i} is not one of 0…${xs.length - 1}`);
+    return xs[k];
+  },
 };
 
 const CONSTS: Record<string, number> = {

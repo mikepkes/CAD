@@ -99,7 +99,9 @@ export class PlaneGCSSolver implements ConstraintSolver {
         c_id: a.center,
         start_id: a.start,
         end_id: a.end,
-        radius: a.r,
+        // seed from the points, not the stored radius: when expression-positioned
+        // points move, a stale radius makes the arc's own rules look conflicting
+        radius: Math.hypot(s.x - ctr.x, s.y - ctr.y) || a.r,
         start_angle: startAngle,
         end_angle: endAngle,
       });

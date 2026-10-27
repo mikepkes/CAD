@@ -82,7 +82,7 @@ describe("co-rotational 2D beam", () => {
     expect(longer.elements[0].maxStrain).toBeCloseTo(0.027, 3);
   });
 
-  // v2 as built (test/starbox.build.test.ts): 7 mm wide, free from z = 4, its back
+  // v2 as built (test/starbox.model.ts): 7 mm wide, free from z = 4, its back
   // a 3-point arc through thickness 3.5 @ z 3.5, 2.675 @ z 12.25, 2.4 @ z 21.
   it("worked example: the v2 star box tongue (long, tapered, curved back)", () => {
     const pts = [[3.5, 3.5], [2.675, 12.25], [2.4, 21]];
