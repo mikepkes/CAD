@@ -22,6 +22,12 @@ articulates (drag `theta` to collapse/extend it). Patterning a component and
 keeping it jointed is something Fusion 360 cannot do — see
 [Parametric jointed assemblies](#parametric-jointed-assemblies-prototype) below.
 
+And **https://mikepkes.github.io/CAD/?mode=customize&example=starbox** — a
+snap-together TPU **star box**: two copies of one androgynous half clip
+together, with a snap and an anti-twist key on every edge. Drag `width` and
+`height` to size it. It opens on the single half you print (print it twice);
+tick `fullBox` to see the closed box.
+
 A **local-first, browser-based parametric CAD** app. It runs entirely in the
 browser (static, GitHub-Pages-servable) and is built so the geometry is
 **math-exact and CNC/3D-print ready**, not just a pretty picture. The long-term
