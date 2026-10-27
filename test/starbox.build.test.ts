@@ -27,7 +27,13 @@ const rTip = 3.5, rValley = 2.5;   // rounded tips/valleys: nothing sharp for a 
 const wall = 2.6, floor = 2, H = 14; // half height → 28mm closed
 const rBase = 1.5;                 // outer bottom-edge round
 const clr = 0.25;                  // tongue-to-mating-wall clearance
-const tT = 2, wT = 6, L = 7;       // tongue thickness, width, rise above the rim
+// Tongue: rooted near the floor for a long free span, thick at the root and
+// thinning toward the barb along a curved back, so bending strain (∝ t/L²) is low
+// and spread over many print layers instead of peaking at one. v1 (2 mm thick,
+// free only above z = 13.4) reached ~10.8% strain across the layers and broke.
+const tRoot = 3.5, tTip = 2.4, wT = 7, L = 7; // root/tip thickness, width, rise above the rim
+const zRoot = 4;                   // where the tongue leaves the wall (free span above)
+const relief = 0.35;               // cut into the own wall behind the tongue: a 0.6 mm printable gap
 const bh = 1.1;                    // barb protrusion: the undercut that holds the box shut
 // Features sit toward the valley end of each edge: inside a 46° tip the inner
 // bands of neighbouring edges converge, and the mating tongue would collide.
@@ -57,15 +63,40 @@ function insetStar(d: number): P2[] {
 // Profiles in an edge-perpendicular plane: (inward distance from the outer star
 // line, height). A sketch on planeDef{normal: edge direction} has u = the edge's
 // left (= inward for a CCW star) and v = +Z, so these are sketch coords directly.
-const a = wall + clr, b = a + tT, z0 = H - 6;
+type Seg = P2 & { via?: P2 };
+const a = wall + clr;
 const zb1 = H + L - 2.4, zb0 = zb1 - 0.6;
-// tongue + barb: 45° retaining face (prints without support), shallow lead-in ramp
-const TONGUE: P2[] = [
-  [wall - 0.4, z0], [b, z0], [b, H + L], [a + 0.3, H + L],
-  [a - bh, zb1], [a - bh, zb0], [a, zb0 - bh], [a, H - 0.6], [wall - 0.4, H - 0.6],
-].map(([x, y]) => ({ x, y }));
+const rFil = 1.5; // floor-to-back fillet
+// Tongue + barb: 45° retaining face (prints without support), shallow lead-in
+// ramp, a curved back (a 3-point arc whose thickness falls fastest near the
+// root), a filleted foot on the floor, and a rounded top to the relief slot.
+const TONGUE: Seg[] = [
+  { x: wall - 0.4, y: floor - 0.5 },
+  { x: a + tRoot + rFil, y: floor - 0.5 },
+  { x: a + tRoot + rFil, y: floor },
+  { x: a + tRoot, y: floor + rFil, via: { x: a + tRoot + rFil * (1 - Math.SQRT1_2), y: floor + rFil * (1 - Math.SQRT1_2) } },
+  { x: a + tTip, y: H + L, via: { x: a + tTip + (tRoot - tTip) * 0.25, y: (floor + rFil + H + L) / 2 } },
+  { x: a + 0.3, y: H + L },
+  { x: a - bh, y: zb1 },
+  { x: a - bh, y: zb0 },
+  { x: a, y: zb0 - bh },
+  { x: a, y: zRoot },
+  // the relief slot's rounded end (a half circle across the 0.6 mm gap)
+  { x: wall - relief, y: zRoot, via: { x: (wall - relief + a) / 2, y: zRoot - (a - wall + relief) / 2 } },
+  { x: wall - 0.4, y: zRoot },
+];
+// Relief: cut into the own wall behind the tongue (before the tongue is joined),
+// so the tongue stands free of its own wall by a printable 0.6 mm, ending in the
+// same half circle the tongue's foot fills up to.
+const RELIEF: Seg[] = [
+  { x: a + 0.5, y: H + 0.5 },
+  { x: wall - relief, y: H + 0.5 },
+  { x: wall - relief, y: zRoot },
+  { x: a, y: zRoot, via: { x: (wall - relief + a) / 2, y: zRoot - (a - wall + relief) / 2 } },
+  { x: a + 0.5, y: zRoot },
+];
 // pocket = the barb grown by ~0.2mm, then mapped through the flip (z → 2H - z)
-const POCKET: P2[] = [
+const POCKET: Seg[] = [
   [a + 0.5, zb0 - bh - 0.75], [a - bh - 0.3, zb0 + 0.05], [a - bh - 0.3, zb1 + 0.4], [a + 0.5, H + L + 0.9],
 ].map(([x, z]) => ({ x, y: 2 * H - z }));
 
@@ -88,10 +119,10 @@ async function roundedStar(s: CadSession, sketch: string, pts: P2[], rT: number,
 }
 
 /** Sketch `profile` on the plane through `at` normal to edge k, extrude it `width` symmetrically. */
-async function edgeFeature(s: CadSession, comp: string, k: number, at: P2, profile: P2[], width: number, operation: "join" | "cut", name: string) {
+async function edgeFeature(s: CadSession, comp: string, k: number, at: P2, profile: Seg[], width: number, operation: "join" | "cut", name: string) {
   const u = dirOf(k);
   const sid = (await dis(s, "sketch.create", { component: comp, name, planeDef: { origin: { x: at.x, y: at.y, z: 0 }, normal: { x: u.x, y: u.y, z: 0 } } }))[0];
-  await dis(s, "sketch.addPolyline", { sketch: sid, points: profile });
+  await dis(s, "sketch.addProfile", { sketch: sid, segments: profile });
   await dis(s, "feature.extrude", { sketch: sid, distance: String(width), symmetric: true, operation, name });
 }
 
@@ -113,6 +144,7 @@ async function buildStarBox(s: CadSession, opts: { pockets?: boolean } = {}): Pr
   for (const k of MALE) {
     const A = V[k], B = V[k + 1], u = dirOf(k);
     const c = { x: (A.x + B.x) / 2 + sAlong * u.x, y: (A.y + B.y) / 2 + sAlong * u.y };
+    await edgeFeature(s, half, k, c, RELIEF, wT + 1, "cut", `Relief ${k}`);
     await edgeFeature(s, half, k, c, TONGUE, wT, "join", `Tongue ${k}`);
     // the mirror edge's pocket sits where the flipped copy's tongue lands: x → -x
     if (opts.pockets !== false) await edgeFeature(s, half, 9 - k, { x: -c.x, y: c.y }, POCKET, wT + 1, "cut", `Pocket ${9 - k}`);
@@ -162,8 +194,8 @@ describe("androgynous snap-together star box", () => {
       const p = body.mesh!.positions;
       for (let i = 0; i < p.length; i++) { lo[i % 3] = Math.min(lo[i % 3], p[i]); hi[i % 3] = Math.max(hi[i % 3], p[i]); }
       // shell + 5 tongues − cavity − 5 pockets − base round
-      expect(meshVolume(p, body.mesh!.indices)).toBeGreaterThan(11000);
-      expect(meshVolume(p, body.mesh!.indices)).toBeLessThan(11700);
+      expect(meshVolume(p, body.mesh!.indices)).toBeGreaterThan(12000);
+      expect(meshVolume(p, body.mesh!.indices)).toBeLessThan(12600);
     }
     expect(hi[0] - lo[0]).toBeCloseTo(64, 0);
     expect(hi[1] - lo[1]).toBeCloseTo(61.2, 0);
