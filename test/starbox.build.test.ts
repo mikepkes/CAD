@@ -11,7 +11,8 @@ import { fileURLToPath } from "node:url";
 import { realSession, sessionFromDoc } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { deserializeDocument, serializeDocument } from "../src/core/persistence";
-import { collideFeatures, evaluateFeatures } from "../src/core/features";
+import { collideFeatures, evaluateFeatures, exportFeatureBlob } from "../src/core/features";
+import { importSTEP, measureVolume } from "replicad";
 import { expandAssembly, instanceSolids } from "../src/core/assembly";
 import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/model/parameters";
@@ -35,9 +36,16 @@ const tRoot = 3.5, tTip = 2.4, wT = 7, L = 7; // root/tip thickness, width, rise
 const zRoot = 4;                   // where the tongue leaves the wall (free span above)
 const relief = 0.35;               // cut into the own wall behind the tongue: a 0.6 mm printable gap
 const bh = 1.1;                    // barb protrusion: the undercut that holds the box shut
-// Features sit toward the valley end of each edge: inside a 46° tip the inner
+// Tongues sit toward the valley end of each edge: inside a 46° tip the inner
 // bands of neighbouring edges converge, and the mating tongue would collide.
-const sAlong = 5;
+const sAlong = 6.5;
+// Anti-twist keys: short, stiff, barb-free tabs on the tip half of every edge
+// that carries a pocket. With all tongues on edges of one handedness, a twist one
+// way slid every mating wall off its barb at once (v2 turned 3° freely and came
+// apart). A key bears on the mating wall in the opposite direction to the clip on
+// the same edge, so every edge resists both ways. Keys are short (4 mm) so they
+// clear the other half's keys near the narrow tips.
+const tKey = 1.6, wKey = 4.6, hKey = 4, keyTipDist = 13.3; // thickness, width, rise, centre distance from the tip
 
 type P2 = { x: number; y: number };
 const V: P2[] = Array.from({ length: 2 * N }, (_, i) => {
@@ -100,6 +108,20 @@ const POCKET: Seg[] = [
   [a + 0.5, zb0 - bh - 0.75], [a - bh - 0.3, zb0 + 0.05], [a - bh - 0.3, zb1 + 0.4], [a + 0.5, H + L + 0.9],
 ].map(([x, z]) => ({ x, y: 2 * H - z }));
 
+// Key: rises hKey above the rim inside the mating wall (outer face at the same
+// clearance as a tongue), fused to the own rim below; chamfered at the top so it
+// leads into the mating wall.
+const KEY: Seg[] = [
+  { x: wall - 0.4, y: H - 2 },
+  { x: a + tKey, y: H - 2 },
+  { x: a + tKey, y: H + hKey - 0.6 },
+  { x: a + tKey - 0.6, y: H + hKey },
+  { x: a + 0.5, y: H + hKey },
+  { x: a, y: H + hKey - 0.5 },
+  { x: a, y: H },
+  { x: wall - 0.4, y: H },
+];
+
 // The flip (180° about the Y axis at rim height) maps edge k to edge 9-k, so the
 // even edges hit one edge of each mirror pair: tongues there, pockets opposite.
 const MALE = [0, 2, 4, 6, 8];
@@ -126,7 +148,7 @@ async function edgeFeature(s: CadSession, comp: string, k: number, at: P2, profi
   await dis(s, "feature.extrude", { sketch: sid, distance: String(width), symmetric: true, operation, name });
 }
 
-async function buildStarBox(s: CadSession, opts: { pockets?: boolean } = {}): Promise<void> {
+async function buildStarBox(s: CadSession, opts: { pockets?: boolean; keys?: boolean } = {}): Promise<void> {
   const half = (await dis(s, "component.create", { name: "Star half" }))[0];
   const tpu = (await dis(s, "material.create", { name: "TPU", kind: "plastic", finish: "matte", color: "#f2c14e" }))[0];
   await dis(s, "material.assign", { material: tpu, component: half });
@@ -148,6 +170,11 @@ async function buildStarBox(s: CadSession, opts: { pockets?: boolean } = {}): Pr
     await edgeFeature(s, half, k, c, TONGUE, wT, "join", `Tongue ${k}`);
     // the mirror edge's pocket sits where the flipped copy's tongue lands: x → -x
     if (opts.pockets !== false) await edgeFeature(s, half, 9 - k, { x: -c.x, y: c.y }, POCKET, wT + 1, "cut", `Pocket ${9 - k}`);
+    // ...and a key on that edge's tip half (odd edges run valley → tip)
+    if (opts.keys !== false) {
+      const j = 9 - k, tip = V[(j + 1) % V.length], uj = dirOf(j);
+      await edgeFeature(s, half, j, { x: tip.x - keyTipDist * uj.x, y: tip.y - keyTipDist * uj.y }, KEY, wKey, "join", `Key ${j}`);
+    }
   }
 
   await dis(s, "component.connector", { component: half, name: "seat", origin: { x: 0, y: 0, z: 0 } });
@@ -163,6 +190,19 @@ function expanded(s: CadSession): { doc: CadDocument; scope: ReturnType<typeof r
   const doc = expandAssembly(s.doc, scope);
   placeComponentSketches(doc, scope);
   return { doc, scope };
+}
+
+/** Interference (mm³) between the half and a flipped copy twisted by each angle
+ *  (degrees) about the vertical axis — how far the closed box can be wrung. */
+async function twistOverlaps(s: CadSession, angles: number[]): Promise<number[]> {
+  const scope = resolveParameters(s.doc.parameters).scope;
+  placeComponentSketches(s.doc, scope);
+  const src = Object.values(evaluateFeatures(s.doc, scope)).filter((b) => b.mesh);
+  const half = await importSTEP(exportFeatureBlob(s.doc, scope, src[0].featureId, "step")!);
+  return angles.map((th) => {
+    const top = half.clone().rotate(180, [0, 0, H], [0, 1, 0]).rotate(th, [0, 0, 0], [0, 0, 1]);
+    try { return measureVolume(half.clone().intersect(top)); } catch { return 0; } // disjoint
+  });
 }
 
 /** Closed-mesh volume (divergence theorem). */
@@ -235,6 +275,28 @@ describe("androgynous snap-together star box", () => {
     const c = collideFeatures(doc, scope);
     expect(c.buildError).toBeUndefined();
     expect(c.maxOverlap).toBeLessThan(0.05);
+  }, 180000);
+
+  it("twisting the closed box either way binds: each edge has a clip and an opposing key", async () => {
+    const s = realSession();
+    await buildStarBox(s);
+    await s.recompute();
+    const [neg, zero, pos] = await twistOverlaps(s, [-1.5, 0, 1.5]);
+    console.log(`twist with keys: -1.5° ${neg.toFixed(2)} mm³, 0° ${zero.toFixed(2)}, +1.5° ${pos.toFixed(2)}`);
+    expect(zero).toBeLessThan(0.05);
+    expect(neg).toBeGreaterThan(1);
+    expect(pos).toBeGreaterThan(1);
+  }, 180000);
+
+  // The v2 failure, kept as a check that the keys are what fixes it.
+  it("without the keys, a twist one way slides every barb free", async () => {
+    const s = realSession();
+    await buildStarBox(s, { keys: false });
+    await s.recompute();
+    const [neg, pos] = await twistOverlaps(s, [-1.5, 3]);
+    console.log(`twist without keys: -1.5° ${neg.toFixed(2)} mm³, +3° ${pos.toFixed(2)}`);
+    expect(neg).toBeGreaterThan(1);
+    expect(pos).toBeLessThan(0.05);
   }, 180000);
 
   it("the snaps engage: without the pockets every barb digs into the mating wall", async () => {
