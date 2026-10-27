@@ -70,6 +70,71 @@ exports[`bundled examples > examples/scissor.json > replays, builds on both geom
 ]
 `;
 
+exports[`bundled examples > public/examples/fourbar.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext100",
+    "max": [
+      3,
+      40,
+      6,
+    ],
+    "min": [
+      -36,
+      0,
+      0,
+    ],
+    "name": "Hinge O2 (crank half)",
+    "volume": 3120,
+  },
+  {
+    "body": "ext170",
+    "max": [
+      64,
+      58,
+      6,
+    ],
+    "min": [
+      -4,
+      40,
+      0,
+    ],
+    "name": "Hinge A (coupler half)",
+    "volume": 2515.6,
+  },
+  {
+    "body": "ext240",
+    "max": [
+      102,
+      50,
+      6,
+    ],
+    "min": [
+      57,
+      0,
+      0,
+    ],
+    "name": "Hinge O4 (rocker half)",
+    "volume": 2442.6,
+  },
+  {
+    "body": "ext30",
+    "max": [
+      72,
+      0,
+      6,
+    ],
+    "min": [
+      -12,
+      -16,
+      0,
+    ],
+    "name": "Base",
+    "volume": 4632,
+  },
+]
+`;
+
 exports[`bundled examples > public/examples/gyroscope.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {

@@ -7,6 +7,7 @@
 // again, so it never churns through the values a drag passed through.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flexureState, flexureSweep, hasFlexures } from "../sim/flexure";
 import { Viewport } from "./Viewport";
 import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
@@ -91,6 +92,44 @@ function MotionBadge() {
   );
 }
 
+/** Live hinge readout for a compliant mechanism: how hard each flexure is
+ *  working (strain against its material's limit), what it takes to hold this
+ *  pose, and the energy stored. Pure math on the solved pose — no rebuild — so it
+ *  follows the slider. */
+function FlexureReadout() {
+  const doc = useStore((s) => s.session.doc);
+  useStore((s) => s.rev);
+  if (!hasFlexures(doc)) return null;
+  // the drive: a flexure/revolute joint that isn't solved, driven by a bare parameter
+  const drive = Object.values(doc.joints).find((j) => (j.kind === "flexure" || j.kind === "revolute") && !j.solve && !j.closes && doc.parameters.some((p) => p.name === j.valueExpr.trim()));
+  const param = drive ? doc.parameters.find((p) => p.name === drive.valueExpr.trim()) : undefined;
+  const st = param ? flexureSweep(doc, param.name, [param.value])[0] : { ...flexureState(doc), effort: NaN };
+  const over = st.utilisation > 1;
+  return (
+    <div className="cz-flex" title="Each flexure is a thin strip that bends instead of a pin. Its bar shows the peak strain against the material's limit.">
+      <div className="cz-flex-head">
+        <span>Flexures</span>
+        <span className={over || st.error ? "cz-flex-bad" : "cz-flex-ok"}>{st.error ? "can't reach this pose" : over ? "over the strain limit" : "within the strain limit"}</span>
+      </div>
+      {st.flexures.map((f) => {
+        const u = f.allowable ? f.strain / f.allowable : 0;
+        return (
+          <div className="cz-flex-row" key={f.joint}>
+            <span className="cz-flex-name">{f.name}</span>
+            <span className="cz-flex-bar"><span className={u > 1 ? "over" : ""} style={{ width: `${Math.min(100, u * 100)}%` }} /></span>
+            <span className="cz-flex-val">{(f.strain * 100).toFixed(1)}%</span>
+          </div>
+        );
+      })}
+      <div className="cz-flex-foot">
+        {st.flexures[0]?.allowable != null && <span>limit {(st.flexures[0].allowable * 100).toFixed(0)}%</span>}
+        {Number.isFinite(st.effort) && <span>input torque {Math.abs(st.effort).toFixed(0)} N·mm</span>}
+        <span>stored {st.energy.toFixed(1)} mJ</span>
+      </div>
+    </div>
+  );
+}
+
 export function CustomizeApp() {
   const loadDocument = useStore((s) => s.loadDocument);
   const ensureKernel = useStore((s) => s.ensureKernel);
@@ -161,6 +200,7 @@ export function CustomizeApp() {
           {open && (
             <div className="cz-controls">
               {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} step={p.step} values={p.values} onEdit={onEdit} />)}
+              <FlexureReadout />
               <button
                 className="cz-share"
                 title="Save the model as an STL (all parts in one file), or share it to Files / AirDrop / another app on a phone"

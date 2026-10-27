@@ -125,10 +125,9 @@ or the box to be very stiff to close. Lengthening the tongue's free span (detach
 it from the wall lower down) is the cheapest fix; strain falls with 1/L².
 
 ## Proposed phases
-1. **Materials + PRBM flexure joint.** Mechanical material presets with
-   anisotropy, `flexure` joints, an equilibrium solve over the joint graph driven
-   by a parameter, strain pass/fail in the motion study. Examples: a living-hinge
-   box, a compliant parallel guide.
+1. **Materials + PRBM flexure joint.** *Largely done* (see below). Remaining:
+   print anisotropy (Z properties + build direction) and force-driven
+   equilibrium (apply a load, solve the pose) rather than displacement-driven.
 2. **Beam flexures in assemblies.** Promote `beam2d` to 3D, couple to rigid
    components via connectors, flexure-from-geometry, skinned rendering,
    force–displacement plots, golden curves in the harness.
@@ -136,6 +135,35 @@ it from the wall lower down) is the cheapest fix; strain falls with 1/L².
    continuation. Examples: the star box snaps (computed closing force), a
    bistable switch.
 4. **Solid FE check** for roots, plates and non-beam flexures.
+
+## Built so far: flexure joints, closed loops, the compliant four-bar
+
+- **Mechanical materials.** `material.create` takes `youngsModulus` (MPa) and
+  `allowableStrain`; they live on `Material.mechanical`.
+- **Flexure joints.** `joint.create { kind: "flexure", flexure: {length, width,
+  thickness} }` moves like a revolute and is modelled as a small-length
+  flexural pivot (`src/sim/flexure.ts`): k = E·I/L, ε = t·φ/2L — matched exactly
+  by the beam solver under a pure moment (`test/flexure.test.ts`).
+- **Closed loops.** Any joint can be `solve: true` (its value is found) and a
+  joint with `closes: true` closes a loop by making its two connectors meet
+  (`resolveComponentWorld` → `closeLoops`: damped Gauss–Newton seeded from the
+  last solution, so a mechanism stays on its assembly branch). Checked against
+  the analytic four-bar position solution; a pose that can't close is flagged.
+- **Studies.** `flexureState` / `flexureSweep` read each hinge's rotation,
+  strain vs allowable, stored energy, and the drive effort dU/d(drive) (the
+  input torque). Exact on a parallelogram: torque = 4kθ.
+- **Customize mode** shows a live hinge readout (strain bars against the
+  limit, input torque, stored energy), and "Save / share for printing" exports a
+  flexure model unbent and fused into one solid (`exportFusedBlob`).
+- **Examples harness.** A model with flexures must close every loop and keep
+  every hinge under its allowable strain across its drive range.
+- **Example: `public/examples/fourbar.json`** (`test/fourbar.build.test.ts`).
+  A one-piece TPU four-bar printed flat: crank 40, coupler 60.8, rocker 50,
+  ground 60 mm, 4 × 1 mm hinge strips. ±20° at the finger pad swings the
+  pointer 31.7°; at full push: 163 N·mm (≈ 4.5 N at the pad), peak strain 4.4%
+  against 8%. Each hinge strip is split at its pivot between the two links it
+  joins, so the rendered hinge kinks about its centre — the PRBM picture;
+  skinned bending is phase 2.
 
 ## Open questions
 - Which mechanisms matter first? Snap fits and living hinges point at phases 1 + 3;

@@ -377,7 +377,7 @@ export interface TimelineGroup {
 export interface Joint {
   id: string;
   name: string;
-  kind: "rigid" | "revolute" | "slider" | "pin-slot";
+  kind: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure";
   base: string;  // base component id (root = ground)
   moved: string; // the component this joint places
   /** Connector point on each component, in that component's LOCAL coordinates. */
@@ -398,7 +398,28 @@ export interface Joint {
   slotPoint?: { x: number; y: number; z: number };
   /** The slot line's direction, in slotBase-local coordinates. */
   slotDir?: { x: number; y: number; z: number };
+  // ---- closed loops ----
+  /** The value is an unknown, solved so every `closes` joint's connectors meet
+   *  (valueExpr is only the first seed; the last solution seeds the next solve). */
+  solve?: boolean;
+  /** Closes a loop instead of placing `moved` (which another joint places): its
+   *  two connectors must coincide. Its valueValue reports the resulting relative
+   *  rotation of moved vs base about `axis` (degrees, from the as-modelled pose). */
+  closes?: boolean;
+  /** flexure only: the compliant hinge's section. Moves like a revolute joint;
+   *  modelled as a small-length flexural pivot (src/sim/flexure.ts). */
+  flexure?: FlexureSection;
   error?: string;
+}
+
+/** A thin flexure strip (mm): `length` along the strip, `thickness` in the
+ *  bending direction, `width` across it (along the hinge axis). `material`
+ *  defaults to the moved component's. */
+export interface FlexureSection {
+  length: number;
+  width: number;
+  thickness: number;
+  material?: string;
 }
 
 /** A named attachment frame on a component, in that component's LOCAL coordinates.
@@ -473,6 +494,15 @@ export interface Material {
   ringScale?: number;
   grainContrast?: number;
   poreStrength?: number;
+  /** Mechanical properties, for flexures and other compliant analysis. */
+  mechanical?: MechanicalProps;
+}
+
+export interface MechanicalProps {
+  /** Young's modulus (MPa). */
+  E: number;
+  /** Peak strain a flexure may see in service (fraction, e.g. 0.08 = 8%). */
+  allowableStrain: number;
 }
 
 export interface CadDocument {

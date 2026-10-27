@@ -821,6 +821,30 @@ export function exportFeatureBlob(doc: CadDocument, scope: Scope, featureId: str
   }
 }
 
+/**
+ * Export EVERY body fused into one solid, at the pose the doc's sketches are
+ * placed in — the print file for a one-piece part modelled as several moving
+ * components (a compliant mechanism: links joined by flexures print as one).
+ */
+export function exportFusedBlob(doc: CadDocument, scope: Scope, format: "stl" | "step"): Blob | null {
+  if (!isKernelReady()) return null;
+  const { bodies } = evaluateBodies(doc, scope);
+  const partials: Shape3D[] = []; // fuse results (the operands stay owned by their bodies)
+  try {
+    let fused: Shape3D | null = null;
+    for (const b of bodies) {
+      fused = fused ? fuseShapes(fused, b.shape) : b.shape;
+      if (fused !== b.shape) partials.push(fused);
+    }
+    return fused ? blobOfShape(fused, format) : null;
+  } catch {
+    return null;
+  } finally {
+    for (const s of partials) s.delete();
+    for (const b of bodies) b.shape.delete();
+  }
+}
+
 /** Export bytes (transferable) — the worker-safe form of exportFeatureBlob. */
 export async function exportFeatureBytes(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step"): Promise<Uint8Array | null> {
   const blob = exportFeatureBlob(doc, scope, featureId, format);

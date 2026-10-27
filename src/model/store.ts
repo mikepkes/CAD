@@ -21,6 +21,7 @@ import { solveDrag } from "../core/drag";
 import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
 import type { SolidEval } from "../core/features";
 import { GeometryBackend, InlineGeometryBackend } from "../core/geometry/backend";
+import { hasFlexures } from "../sim/flexure";
 import { WorkerGeometryBackend } from "../core/geometry/worker-backend";
 import { runMotionStudy, driveParams, MotionStatus, MotionResult } from "./motionStudy";
 import { meshesToStlBinary } from "../core/export/stl";
@@ -971,7 +972,12 @@ export const useStore = create<AppState>((set, get) => {
         .filter((s) => s.mesh)
         .map((s) => ({ positions: s.mesh!.positions, indices: s.mesh!.indices }));
       if (!meshes.length) { set({ toast: { kind: "info", text: "Nothing to export yet." } }); return; }
-      const file = new File([meshesToStlBinary(meshes)], `${name || "model"}.stl`, { type: "model/stl" });
+      // A compliant mechanism prints unbent and in one piece, whatever pose the
+      // sliders show; anything else exports as it stands.
+      const doc = get().session.doc;
+      const stl = hasFlexures(doc) ? await geometry.exportBytes(doc, null, "stl") : meshesToStlBinary(meshes);
+      if (!stl) { set({ toast: { kind: "error", text: "Export failed." } }); return; }
+      const file = new File([stl as BlobPart], `${name || "model"}.stl`, { type: "model/stl" });
       const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
       // Native share sheet (phones) → Save to Files / AirDrop / another app.
       if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {

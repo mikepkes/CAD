@@ -1,0 +1,1614 @@
+{
+  "format": "chisel-cad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 303,
+  "rollbackIndex": 74,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "theta",
+        "expression": "0",
+        "min": -20,
+        "max": 20,
+        "step": 1
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1793069773064
+    },
+    {
+      "opId": "op3",
+      "type": "material.create",
+      "params": {
+        "name": "TPU for AMS",
+        "kind": "plastic",
+        "finish": "matte",
+        "color": "#e9b949",
+        "youngsModulus": 1190,
+        "allowableStrain": 0.08
+      },
+      "createdIds": [
+        "mat4"
+      ],
+      "label": "Create material",
+      "at": 1793069773067
+    },
+    {
+      "opId": "op5",
+      "type": "component.create",
+      "params": {
+        "name": "Ground"
+      },
+      "createdIds": [
+        "cmp6"
+      ],
+      "label": "New component",
+      "at": 1793069773067
+    },
+    {
+      "opId": "op7",
+      "type": "material.assign",
+      "params": {
+        "material": "mat4",
+        "component": "cmp6"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793069773068
+    },
+    {
+      "opId": "op8",
+      "type": "component.create",
+      "params": {
+        "name": "Crank"
+      },
+      "createdIds": [
+        "cmp9"
+      ],
+      "label": "New component",
+      "at": 1793069773068
+    },
+    {
+      "opId": "op10",
+      "type": "material.assign",
+      "params": {
+        "material": "mat4",
+        "component": "cmp9"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793069773069
+    },
+    {
+      "opId": "op11",
+      "type": "component.create",
+      "params": {
+        "name": "Coupler"
+      },
+      "createdIds": [
+        "cmp12"
+      ],
+      "label": "New component",
+      "at": 1793069773069
+    },
+    {
+      "opId": "op13",
+      "type": "material.assign",
+      "params": {
+        "material": "mat4",
+        "component": "cmp12"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793069773069
+    },
+    {
+      "opId": "op14",
+      "type": "component.create",
+      "params": {
+        "name": "Rocker"
+      },
+      "createdIds": [
+        "cmp15"
+      ],
+      "label": "New component",
+      "at": 1793069773069
+    },
+    {
+      "opId": "op16",
+      "type": "material.assign",
+      "params": {
+        "material": "mat4",
+        "component": "cmp15"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793069773070
+    },
+    {
+      "opId": "op17",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp6",
+        "name": "Base"
+      },
+      "createdIds": [
+        "sketch18",
+        "pt19"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773071
+    },
+    {
+      "opId": "op20",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch18",
+        "points": [
+          {
+            "x": -12,
+            "y": -16
+          },
+          {
+            "x": 72,
+            "y": -16
+          },
+          {
+            "x": 72,
+            "y": -8
+          },
+          {
+            "x": -12,
+            "y": -8
+          }
+        ]
+      },
+      "createdIds": [
+        "pt21",
+        "pt22",
+        "pt23",
+        "pt24",
+        "ln25",
+        "ln26",
+        "ln27",
+        "ln28"
+      ],
+      "label": "Polyline",
+      "at": 1793069773166
+    },
+    {
+      "opId": "op29",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch18",
+        "distance": "6",
+        "operation": "new",
+        "name": "Base"
+      },
+      "createdIds": [
+        "ext30"
+      ],
+      "label": "Extrude",
+      "at": 1793069773167
+    },
+    {
+      "opId": "op31",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp6",
+        "name": "Pedestal O2"
+      },
+      "createdIds": [
+        "sketch32",
+        "pt33"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773168
+    },
+    {
+      "opId": "op34",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch32",
+        "points": [
+          {
+            "x": -4,
+            "y": -8.2
+          },
+          {
+            "x": 4,
+            "y": -8.2
+          },
+          {
+            "x": 4,
+            "y": -2
+          },
+          {
+            "x": -4,
+            "y": -2
+          }
+        ]
+      },
+      "createdIds": [
+        "pt35",
+        "pt36",
+        "pt37",
+        "pt38",
+        "ln39",
+        "ln40",
+        "ln41",
+        "ln42"
+      ],
+      "label": "Polyline",
+      "at": 1793069773168
+    },
+    {
+      "opId": "op43",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch32",
+        "distance": "6",
+        "operation": "join",
+        "name": "Pedestal O2"
+      },
+      "createdIds": [
+        "ext44"
+      ],
+      "label": "Extrude",
+      "at": 1793069773169
+    },
+    {
+      "opId": "op45",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp6",
+        "name": "Pedestal O4"
+      },
+      "createdIds": [
+        "sketch46",
+        "pt47"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773170
+    },
+    {
+      "opId": "op48",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch46",
+        "points": [
+          {
+            "x": 56,
+            "y": -8.2
+          },
+          {
+            "x": 64,
+            "y": -8.2
+          },
+          {
+            "x": 64,
+            "y": -2
+          },
+          {
+            "x": 56,
+            "y": -2
+          }
+        ]
+      },
+      "createdIds": [
+        "pt49",
+        "pt50",
+        "pt51",
+        "pt52",
+        "ln53",
+        "ln54",
+        "ln55",
+        "ln56"
+      ],
+      "label": "Polyline",
+      "at": 1793069773171
+    },
+    {
+      "opId": "op57",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch46",
+        "distance": "6",
+        "operation": "join",
+        "name": "Pedestal O4"
+      },
+      "createdIds": [
+        "ext58"
+      ],
+      "label": "Extrude",
+      "at": 1793069773171
+    },
+    {
+      "opId": "op59",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp6",
+        "name": "Hinge O2 (ground half)"
+      },
+      "createdIds": [
+        "sketch60",
+        "pt61"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773172
+    },
+    {
+      "opId": "op62",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch60",
+        "points": [
+          {
+            "x": -0.5,
+            "y": -2.2
+          },
+          {
+            "x": 0.5,
+            "y": -2.2
+          },
+          {
+            "x": 0.5,
+            "y": 0
+          },
+          {
+            "x": -0.5,
+            "y": 0
+          }
+        ]
+      },
+      "createdIds": [
+        "pt63",
+        "pt64",
+        "pt65",
+        "pt66",
+        "ln67",
+        "ln68",
+        "ln69",
+        "ln70"
+      ],
+      "label": "Polyline",
+      "at": 1793069773172
+    },
+    {
+      "opId": "op71",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch60",
+        "distance": "6",
+        "operation": "join",
+        "name": "Hinge O2 (ground half)"
+      },
+      "createdIds": [
+        "ext72"
+      ],
+      "label": "Extrude",
+      "at": 1793069773173
+    },
+    {
+      "opId": "op73",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp6",
+        "name": "Hinge O4 (ground half)"
+      },
+      "createdIds": [
+        "sketch74",
+        "pt75"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773174
+    },
+    {
+      "opId": "op76",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch74",
+        "points": [
+          {
+            "x": 59.5,
+            "y": -2.2
+          },
+          {
+            "x": 60.5,
+            "y": -2.2
+          },
+          {
+            "x": 60.5,
+            "y": 0
+          },
+          {
+            "x": 59.5,
+            "y": 0
+          }
+        ]
+      },
+      "createdIds": [
+        "pt77",
+        "pt78",
+        "pt79",
+        "pt80",
+        "ln81",
+        "ln82",
+        "ln83",
+        "ln84"
+      ],
+      "label": "Polyline",
+      "at": 1793069773175
+    },
+    {
+      "opId": "op85",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch74",
+        "distance": "6",
+        "operation": "join",
+        "name": "Hinge O4 (ground half)"
+      },
+      "createdIds": [
+        "ext86"
+      ],
+      "label": "Extrude",
+      "at": 1793069773175
+    },
+    {
+      "opId": "op87",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp9",
+        "name": "Hinge O2 (crank half)"
+      },
+      "createdIds": [
+        "sketch88",
+        "pt89"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773176
+    },
+    {
+      "opId": "op90",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch88",
+        "points": [
+          {
+            "x": -0.5,
+            "y": 0
+          },
+          {
+            "x": 0.5,
+            "y": 0
+          },
+          {
+            "x": 0.5,
+            "y": 2.2
+          },
+          {
+            "x": -0.5,
+            "y": 2.2
+          }
+        ]
+      },
+      "createdIds": [
+        "pt91",
+        "pt92",
+        "pt93",
+        "pt94",
+        "ln95",
+        "ln96",
+        "ln97",
+        "ln98"
+      ],
+      "label": "Polyline",
+      "at": 1793069773177
+    },
+    {
+      "opId": "op99",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch88",
+        "distance": "6",
+        "operation": "new",
+        "name": "Hinge O2 (crank half)"
+      },
+      "createdIds": [
+        "ext100"
+      ],
+      "label": "Extrude",
+      "at": 1793069773178
+    },
+    {
+      "opId": "op101",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp9",
+        "name": "Crank bar"
+      },
+      "createdIds": [
+        "sketch102",
+        "pt103"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773179
+    },
+    {
+      "opId": "op104",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch102",
+        "points": [
+          {
+            "x": -3,
+            "y": 2
+          },
+          {
+            "x": 3,
+            "y": 2
+          },
+          {
+            "x": 3,
+            "y": 38
+          },
+          {
+            "x": -3,
+            "y": 38
+          }
+        ]
+      },
+      "createdIds": [
+        "pt105",
+        "pt106",
+        "pt107",
+        "pt108",
+        "ln109",
+        "ln110",
+        "ln111",
+        "ln112"
+      ],
+      "label": "Polyline",
+      "at": 1793069773180
+    },
+    {
+      "opId": "op113",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch102",
+        "distance": "6",
+        "operation": "join",
+        "name": "Crank bar"
+      },
+      "createdIds": [
+        "ext114"
+      ],
+      "label": "Extrude",
+      "at": 1793069773181
+    },
+    {
+      "opId": "op115",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp9",
+        "name": "Hinge A (crank half)"
+      },
+      "createdIds": [
+        "sketch116",
+        "pt117"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773182
+    },
+    {
+      "opId": "op118",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch116",
+        "points": [
+          {
+            "x": -0.5,
+            "y": 37.8
+          },
+          {
+            "x": 0.5,
+            "y": 37.8
+          },
+          {
+            "x": 0.5,
+            "y": 40
+          },
+          {
+            "x": -0.5,
+            "y": 40
+          }
+        ]
+      },
+      "createdIds": [
+        "pt119",
+        "pt120",
+        "pt121",
+        "pt122",
+        "ln123",
+        "ln124",
+        "ln125",
+        "ln126"
+      ],
+      "label": "Polyline",
+      "at": 1793069773183
+    },
+    {
+      "opId": "op127",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch116",
+        "distance": "6",
+        "operation": "join",
+        "name": "Hinge A (crank half)"
+      },
+      "createdIds": [
+        "ext128"
+      ],
+      "label": "Extrude",
+      "at": 1793069773184
+    },
+    {
+      "opId": "op129",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp9",
+        "name": "Lever"
+      },
+      "createdIds": [
+        "sketch130",
+        "pt131"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773186
+    },
+    {
+      "opId": "op132",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch130",
+        "points": [
+          {
+            "x": -26,
+            "y": 19
+          },
+          {
+            "x": -2.9,
+            "y": 19
+          },
+          {
+            "x": -2.9,
+            "y": 23
+          },
+          {
+            "x": -26,
+            "y": 23
+          }
+        ]
+      },
+      "createdIds": [
+        "pt133",
+        "pt134",
+        "pt135",
+        "pt136",
+        "ln137",
+        "ln138",
+        "ln139",
+        "ln140"
+      ],
+      "label": "Polyline",
+      "at": 1793069773187
+    },
+    {
+      "opId": "op141",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch130",
+        "distance": "6",
+        "operation": "join",
+        "name": "Lever"
+      },
+      "createdIds": [
+        "ext142"
+      ],
+      "label": "Extrude",
+      "at": 1793069773188
+    },
+    {
+      "opId": "op143",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp9",
+        "name": "Finger pad"
+      },
+      "createdIds": [
+        "sketch144",
+        "pt145"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773190
+    },
+    {
+      "opId": "op146",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch144",
+        "points": [
+          {
+            "x": -36,
+            "y": 12
+          },
+          {
+            "x": -24,
+            "y": 12
+          },
+          {
+            "x": -24,
+            "y": 30
+          },
+          {
+            "x": -36,
+            "y": 30
+          }
+        ]
+      },
+      "createdIds": [
+        "pt147",
+        "pt148",
+        "pt149",
+        "pt150",
+        "ln151",
+        "ln152",
+        "ln153",
+        "ln154"
+      ],
+      "label": "Polyline",
+      "at": 1793069773191
+    },
+    {
+      "opId": "op155",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch144",
+        "distance": "6",
+        "operation": "join",
+        "name": "Finger pad"
+      },
+      "createdIds": [
+        "ext156"
+      ],
+      "label": "Extrude",
+      "at": 1793069773193
+    },
+    {
+      "opId": "op157",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp12",
+        "name": "Hinge A (coupler half)"
+      },
+      "createdIds": [
+        "sketch158",
+        "pt159"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773194
+    },
+    {
+      "opId": "op160",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch158",
+        "points": [
+          {
+            "x": -0.5,
+            "y": 40
+          },
+          {
+            "x": 0.5,
+            "y": 40
+          },
+          {
+            "x": 0.5,
+            "y": 42.2
+          },
+          {
+            "x": -0.5,
+            "y": 42.2
+          }
+        ]
+      },
+      "createdIds": [
+        "pt161",
+        "pt162",
+        "pt163",
+        "pt164",
+        "ln165",
+        "ln166",
+        "ln167",
+        "ln168"
+      ],
+      "label": "Polyline",
+      "at": 1793069773196
+    },
+    {
+      "opId": "op169",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch158",
+        "distance": "6",
+        "operation": "new",
+        "name": "Hinge A (coupler half)"
+      },
+      "createdIds": [
+        "ext170"
+      ],
+      "label": "Extrude",
+      "at": 1793069773197
+    },
+    {
+      "opId": "op171",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp12",
+        "name": "Block A"
+      },
+      "createdIds": [
+        "sketch172",
+        "pt173"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773199
+    },
+    {
+      "opId": "op174",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch172",
+        "points": [
+          {
+            "x": -4,
+            "y": 42
+          },
+          {
+            "x": 4,
+            "y": 42
+          },
+          {
+            "x": 4,
+            "y": 48
+          },
+          {
+            "x": -4,
+            "y": 48
+          }
+        ]
+      },
+      "createdIds": [
+        "pt175",
+        "pt176",
+        "pt177",
+        "pt178",
+        "ln179",
+        "ln180",
+        "ln181",
+        "ln182"
+      ],
+      "label": "Polyline",
+      "at": 1793069773200
+    },
+    {
+      "opId": "op183",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch172",
+        "distance": "6",
+        "operation": "join",
+        "name": "Block A"
+      },
+      "createdIds": [
+        "ext184"
+      ],
+      "label": "Extrude",
+      "at": 1793069773202
+    },
+    {
+      "opId": "op185",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp12",
+        "name": "Hinge B (coupler half)"
+      },
+      "createdIds": [
+        "sketch186",
+        "pt187"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773204
+    },
+    {
+      "opId": "op188",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch186",
+        "points": [
+          {
+            "x": 59.5,
+            "y": 50
+          },
+          {
+            "x": 60.5,
+            "y": 50
+          },
+          {
+            "x": 60.5,
+            "y": 52.2
+          },
+          {
+            "x": 59.5,
+            "y": 52.2
+          }
+        ]
+      },
+      "createdIds": [
+        "pt189",
+        "pt190",
+        "pt191",
+        "pt192",
+        "ln193",
+        "ln194",
+        "ln195",
+        "ln196"
+      ],
+      "label": "Polyline",
+      "at": 1793069773206
+    },
+    {
+      "opId": "op197",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch186",
+        "distance": "6",
+        "operation": "join",
+        "name": "Hinge B (coupler half)"
+      },
+      "createdIds": [
+        "ext198"
+      ],
+      "label": "Extrude",
+      "at": 1793069773207
+    },
+    {
+      "opId": "op199",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp12",
+        "name": "Block B"
+      },
+      "createdIds": [
+        "sketch200",
+        "pt201"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773209
+    },
+    {
+      "opId": "op202",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch200",
+        "points": [
+          {
+            "x": 56,
+            "y": 52
+          },
+          {
+            "x": 64,
+            "y": 52
+          },
+          {
+            "x": 64,
+            "y": 58
+          },
+          {
+            "x": 56,
+            "y": 58
+          }
+        ]
+      },
+      "createdIds": [
+        "pt203",
+        "pt204",
+        "pt205",
+        "pt206",
+        "ln207",
+        "ln208",
+        "ln209",
+        "ln210"
+      ],
+      "label": "Polyline",
+      "at": 1793069773210
+    },
+    {
+      "opId": "op211",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch200",
+        "distance": "6",
+        "operation": "join",
+        "name": "Block B"
+      },
+      "createdIds": [
+        "ext212"
+      ],
+      "label": "Extrude",
+      "at": 1793069773212
+    },
+    {
+      "opId": "op213",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp12",
+        "name": "Coupler bar"
+      },
+      "createdIds": [
+        "sketch214",
+        "pt215"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773214
+    },
+    {
+      "opId": "op216",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch214",
+        "points": [
+          {
+            "x": -0.4931969619160719,
+            "y": 47.95918177149643
+          },
+          {
+            "x": 0.4931969619160719,
+            "y": 42.04081822850357
+          },
+          {
+            "x": 60.49319696191607,
+            "y": 52.04081822850357
+          },
+          {
+            "x": 59.50680303808393,
+            "y": 57.95918177149643
+          }
+        ]
+      },
+      "createdIds": [
+        "pt217",
+        "pt218",
+        "pt219",
+        "pt220",
+        "ln221",
+        "ln222",
+        "ln223",
+        "ln224"
+      ],
+      "label": "Polyline",
+      "at": 1793069773224
+    },
+    {
+      "opId": "op225",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch214",
+        "distance": "6",
+        "operation": "join",
+        "name": "Coupler bar"
+      },
+      "createdIds": [
+        "ext226"
+      ],
+      "label": "Extrude",
+      "at": 1793069773227
+    },
+    {
+      "opId": "op227",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp15",
+        "name": "Hinge O4 (rocker half)"
+      },
+      "createdIds": [
+        "sketch228",
+        "pt229"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773229
+    },
+    {
+      "opId": "op230",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch228",
+        "points": [
+          {
+            "x": 59.5,
+            "y": 0
+          },
+          {
+            "x": 60.5,
+            "y": 0
+          },
+          {
+            "x": 60.5,
+            "y": 2.2
+          },
+          {
+            "x": 59.5,
+            "y": 2.2
+          }
+        ]
+      },
+      "createdIds": [
+        "pt231",
+        "pt232",
+        "pt233",
+        "pt234",
+        "ln235",
+        "ln236",
+        "ln237",
+        "ln238"
+      ],
+      "label": "Polyline",
+      "at": 1793069773231
+    },
+    {
+      "opId": "op239",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch228",
+        "distance": "6",
+        "operation": "new",
+        "name": "Hinge O4 (rocker half)"
+      },
+      "createdIds": [
+        "ext240"
+      ],
+      "label": "Extrude",
+      "at": 1793069773233
+    },
+    {
+      "opId": "op241",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp15",
+        "name": "Rocker bar"
+      },
+      "createdIds": [
+        "sketch242",
+        "pt243"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773236
+    },
+    {
+      "opId": "op244",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch242",
+        "points": [
+          {
+            "x": 57,
+            "y": 2
+          },
+          {
+            "x": 63,
+            "y": 2
+          },
+          {
+            "x": 63,
+            "y": 48
+          },
+          {
+            "x": 57,
+            "y": 48
+          }
+        ]
+      },
+      "createdIds": [
+        "pt245",
+        "pt246",
+        "pt247",
+        "pt248",
+        "ln249",
+        "ln250",
+        "ln251",
+        "ln252"
+      ],
+      "label": "Polyline",
+      "at": 1793069773238
+    },
+    {
+      "opId": "op253",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch242",
+        "distance": "6",
+        "operation": "join",
+        "name": "Rocker bar"
+      },
+      "createdIds": [
+        "ext254"
+      ],
+      "label": "Extrude",
+      "at": 1793069773240
+    },
+    {
+      "opId": "op255",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp15",
+        "name": "Hinge B (rocker half)"
+      },
+      "createdIds": [
+        "sketch256",
+        "pt257"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773242
+    },
+    {
+      "opId": "op258",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch256",
+        "points": [
+          {
+            "x": 59.5,
+            "y": 47.8
+          },
+          {
+            "x": 60.5,
+            "y": 47.8
+          },
+          {
+            "x": 60.5,
+            "y": 50
+          },
+          {
+            "x": 59.5,
+            "y": 50
+          }
+        ]
+      },
+      "createdIds": [
+        "pt259",
+        "pt260",
+        "pt261",
+        "pt262",
+        "ln263",
+        "ln264",
+        "ln265",
+        "ln266"
+      ],
+      "label": "Polyline",
+      "at": 1793069773244
+    },
+    {
+      "opId": "op267",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch256",
+        "distance": "6",
+        "operation": "join",
+        "name": "Hinge B (rocker half)"
+      },
+      "createdIds": [
+        "ext268"
+      ],
+      "label": "Extrude",
+      "at": 1793069773246
+    },
+    {
+      "opId": "op269",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp15",
+        "name": "Pointer arm"
+      },
+      "createdIds": [
+        "sketch270",
+        "pt271"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773248
+    },
+    {
+      "opId": "op272",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch270",
+        "points": [
+          {
+            "x": 62.9,
+            "y": 28.5
+          },
+          {
+            "x": 92,
+            "y": 28.5
+          },
+          {
+            "x": 92,
+            "y": 31.5
+          },
+          {
+            "x": 62.9,
+            "y": 31.5
+          }
+        ]
+      },
+      "createdIds": [
+        "pt273",
+        "pt274",
+        "pt275",
+        "pt276",
+        "ln277",
+        "ln278",
+        "ln279",
+        "ln280"
+      ],
+      "label": "Polyline",
+      "at": 1793069773250
+    },
+    {
+      "opId": "op281",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch270",
+        "distance": "6",
+        "operation": "join",
+        "name": "Pointer arm"
+      },
+      "createdIds": [
+        "ext282"
+      ],
+      "label": "Extrude",
+      "at": 1793069773252
+    },
+    {
+      "opId": "op283",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp15",
+        "name": "Pointer tip"
+      },
+      "createdIds": [
+        "sketch284",
+        "pt285"
+      ],
+      "label": "Create sketch",
+      "at": 1793069773254
+    },
+    {
+      "opId": "op286",
+      "type": "sketch.addPolyline",
+      "params": {
+        "sketch": "sketch284",
+        "points": [
+          {
+            "x": 91.9,
+            "y": 26
+          },
+          {
+            "x": 102,
+            "y": 30
+          },
+          {
+            "x": 91.9,
+            "y": 34
+          }
+        ]
+      },
+      "createdIds": [
+        "pt287",
+        "pt288",
+        "pt289",
+        "ln290",
+        "ln291",
+        "ln292"
+      ],
+      "label": "Polyline",
+      "at": 1793069773256
+    },
+    {
+      "opId": "op293",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch284",
+        "distance": "6",
+        "operation": "join",
+        "name": "Pointer tip"
+      },
+      "createdIds": [
+        "ext294"
+      ],
+      "label": "Extrude",
+      "at": 1793069773258
+    },
+    {
+      "opId": "op295",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "flexure": {
+          "length": 4,
+          "width": 6,
+          "thickness": 1
+        },
+        "base": "cmp6",
+        "moved": "cmp9",
+        "baseOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "value": "theta",
+        "name": "Hinge O2"
+      },
+      "createdIds": [
+        "jnt296"
+      ],
+      "label": "Joint",
+      "at": 1793069773260
+    },
+    {
+      "opId": "op297",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "flexure": {
+          "length": 4,
+          "width": 6,
+          "thickness": 1
+        },
+        "base": "cmp9",
+        "moved": "cmp12",
+        "baseOrigin": {
+          "x": 0,
+          "y": 40,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 40,
+          "z": 0
+        },
+        "solve": true,
+        "name": "Hinge A"
+      },
+      "createdIds": [
+        "jnt298"
+      ],
+      "label": "Joint",
+      "at": 1793069773263
+    },
+    {
+      "opId": "op299",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "flexure": {
+          "length": 4,
+          "width": 6,
+          "thickness": 1
+        },
+        "base": "cmp6",
+        "moved": "cmp15",
+        "baseOrigin": {
+          "x": 60,
+          "y": 0,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 60,
+          "y": 0,
+          "z": 0
+        },
+        "solve": true,
+        "name": "Hinge O4"
+      },
+      "createdIds": [
+        "jnt300"
+      ],
+      "label": "Joint",
+      "at": 1793069773266
+    },
+    {
+      "opId": "op301",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "flexure": {
+          "length": 4,
+          "width": 6,
+          "thickness": 1
+        },
+        "base": "cmp12",
+        "moved": "cmp15",
+        "baseOrigin": {
+          "x": 60,
+          "y": 50,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 60,
+          "y": 50,
+          "z": 0
+        },
+        "closes": true,
+        "name": "Hinge B"
+      },
+      "createdIds": [
+        "jnt302"
+      ],
+      "label": "Joint",
+      "at": 1793069773268
+    }
+  ],
+  "timelineGroups": []
+}
