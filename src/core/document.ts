@@ -26,6 +26,8 @@ export interface Parameter {
   /** Optional discrete set of acceptable values (an enum). Mutually exclusive
    *  with min/max. */
   values?: number[];
+  /** A yes/no switch: values [0, 1], shown as a checkbox (1 = checked). */
+  boolean?: boolean;
   /** Set when the resolved value falls outside the extents / enum. */
   warning?: string;
 }

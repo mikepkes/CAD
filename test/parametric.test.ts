@@ -90,3 +90,26 @@ describe("expression connector origins", () => {
     expect(b.z).toBeCloseTo(14, 9);
   });
 });
+
+describe("boolean parameters", () => {
+  it("are 0/1 switches that drive expressions, and stop being switches when given new extents", async () => {
+    const s = realSession();
+    await dis(s, "parameter.add", { name: "both", expression: "1", boolean: true });
+    await dis(s, "parameter.add", { name: "count", expression: "1 + both" });
+    await s.recompute();
+    const p = () => s.doc.parameters.find((q) => q.name === "both")!;
+    expect(p()).toMatchObject({ boolean: true, values: [0, 1], value: 1 });
+    expect(s.doc.parameters.find((q) => q.name === "count")!.value).toBe(2);
+    await dis(s, "parameter.set", { name: "both", expression: "0" });
+    await s.recompute();
+    expect(s.doc.parameters.find((q) => q.name === "count")!.value).toBe(1);
+    await dis(s, "parameter.setBounds", { name: "both", min: 0, max: 5 });
+    expect(p().boolean).toBeUndefined();
+    expect(p().values).toBeUndefined();
+  });
+
+  it("take no extents or value list", async () => {
+    const s = realSession();
+    expect((await s.dispatch("parameter.add", { name: "b", expression: "1", boolean: true, min: 0, max: 1 })).ok).toBe(false);
+  });
+});

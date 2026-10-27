@@ -3,11 +3,14 @@ import { useStore } from "../model/store";
 import { isValidParamName } from "../model/parameters";
 import type { Parameter } from "../core/document";
 
-/** The control shown for a parameter's value: a dropdown when it has a list of
+/** The control shown for a parameter's value: a checkbox for a yes/no switch, a dropdown when it has a list of
  *  acceptable values, a slider when it has both extents, else the raw
  *  expression field. (This is the control the future customize mode reuses.) */
 function ParamControl({ p }: { p: Parameter }) {
   const setParameterExpr = useStore((s) => s.setParameterExpr);
+  if (p.boolean) {
+    return <input type="checkbox" className="param-check" checked={p.value !== 0} onChange={(e) => setParameterExpr(p.name, e.target.checked ? "1" : "0")} />;
+  }
   if (p.values && p.values.length) {
     return (
       <select

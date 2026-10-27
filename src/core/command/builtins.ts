@@ -244,6 +244,7 @@ export const BUILTINS: CommandDef<any>[] = [
         max: { type: "number", description: "Optional upper extent." },
         step: { type: "number", exclusiveMinimum: 0, description: "Optional increment: the slider snaps to multiples of this. `step: 1` makes the parameter integer-only." },
         values: { type: "array", items: { type: "number" }, description: "Optional set of acceptable values (an enum). Mutually exclusive with min/max." },
+        boolean: { type: "boolean", description: "A yes/no switch: the value is 1 (checked) or 0, shown as a checkbox. Use it in expressions, e.g. a pattern count of `1 + showBoth`. Implies values [0, 1]." },
       },
     },
     examples: [
@@ -251,12 +252,14 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A bounded parameter (slider 20–120)", params: { name: "width", expression: "60", min: 20, max: 120 } },
       { note: "An integer count (slider steps by 1)", params: { name: "stages", expression: "3", min: 1, max: 8, step: 1 } },
       { note: "A pick-list parameter", params: { name: "thread", expression: "3", values: [3, 4, 5, 6, 8] } },
+      { note: "A checkbox (1 = checked)", params: { name: "showLid", expression: "1", boolean: true } },
     ],
-    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[] }, ctx) {
+    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean }, ctx) {
       if (draft.parameters.some((x) => x.name === p.name)) throw new Error(`Parameter "${p.name}" exists`);
-      const bounds = normalizeBounds(p);
+      if (p.boolean && (p.min != null || p.max != null || p.step != null || p.values)) throw new Error("a boolean parameter takes no extents or value list");
+      const bounds = normalizeBounds(p.boolean ? { values: [0, 1] } : p);
       const id = ctx.alloc("param");
-      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}) });
+      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}), ...(p.boolean ? { boolean: true } : {}) });
       return { createdIds: [id], message: `Added parameter ${p.name}` };
     },
   },
@@ -287,7 +290,7 @@ export const BUILTINS: CommandDef<any>[] = [
     apply(draft, p: { name: string; min?: number; max?: number; step?: number; values?: number[]; clear?: boolean }) {
       const param = draft.parameters.find((x) => x.name === p.name);
       if (!param) throw new Error(`No parameter "${p.name}"`);
-      delete param.min; delete param.max; delete param.step; delete param.values;
+      delete param.min; delete param.max; delete param.step; delete param.values; delete param.boolean; // new extents replace a checkbox
       if (!p.clear) {
         const bounds = normalizeBounds(p);
         Object.assign(param, bounds);
