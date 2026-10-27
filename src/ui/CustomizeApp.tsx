@@ -30,8 +30,8 @@ function modelUrl(): string | null {
 
 /** One bounded parameter. Shows its own local value instantly while dragging
  *  (so the slider never lags the model), reporting changes up via `onEdit`. */
-function Control({ name, value, expr, min, max, step: paramStep, values, onEdit }: {
-  name: string; value: number; expr: string; min?: number; max?: number; step?: number; values?: number[];
+function Control({ name, value, expr, min, max, step: paramStep, values, boolean, onEdit }: {
+  name: string; value: number; expr: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean;
   onEdit: (name: string, value: string, flush: boolean) => void;
 }) {
   const [local, setLocal] = useState(value);
@@ -39,6 +39,14 @@ function Control({ name, value, expr, min, max, step: paramStep, values, onEdit 
   useEffect(() => { if (!dragging.current) setLocal(value); }, [value]); // follow external changes when idle
 
   const label = <span className="cz-row-name" title={expr}>{name}</span>;
+  if (boolean) {
+    return (
+      <label className="cz-row">
+        {label}
+        <input className="cz-check" type="checkbox" checked={value !== 0} onChange={(e) => onEdit(name, e.target.checked ? "1" : "0", true)} />
+      </label>
+    );
+  }
   if (values && values.length) {
     return (
       <label className="cz-row">
@@ -199,7 +207,7 @@ export function CustomizeApp() {
           </button>
           {open && (
             <div className="cz-controls">
-              {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} step={p.step} values={p.values} onEdit={onEdit} />)}
+              {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} step={p.step} values={p.values} boolean={p.boolean} onEdit={onEdit} />)}
               <FlexureReadout />
               <button
                 className="cz-share"

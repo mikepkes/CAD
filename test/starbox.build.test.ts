@@ -216,6 +216,8 @@ async function buildStarBox(s: CadSession, opts: { pockets?: boolean; keys?: boo
   await dis(s, "parameter.add", { name: "height", expression: String(HEIGHT), min: HEIGHT_RANGE[0], max: HEIGHT_RANGE[1], step: 1 });
   await dis(s, "parameter.add", { name: "R", expression: R_EXPR });     // sharp-tip radius
   await dis(s, "parameter.add", { name: "H", expression: "height/2" }); // one half's height
+  // checked: the closed box (both halves); unchecked: one half, as you print it
+  await dis(s, "parameter.add", { name: "fullBox", expression: "1", boolean: true });
   const half = (await dis(s, "component.create", { name: "Star half" }))[0];
   const tpu = (await dis(s, "material.create", { name: "TPU", kind: "plastic", finish: "matte", color: "#f2c14e" }))[0];
   await dis(s, "material.assign", { material: tpu, component: half });
@@ -249,7 +251,7 @@ async function buildStarBox(s: CadSession, opts: { pockets?: boolean; keys?: boo
   // seated at the closed height and turned half a turn about the ground's Y axis,
   // a point at z lands at height − z: the copy's rim meets this rim
   await dis(s, "component.connector", { component: half, name: "flip", origin: { x: 0, y: 0, z: "height" } });
-  const pair = (await dis(s, "assembly.pattern", { source: half, count: 2, name: "Box" }))[0];
+  const pair = (await dis(s, "assembly.pattern", { source: half, count: "1 + fullBox", name: "Box" }))[0];
   await dis(s, "joint.template", { pattern: pair, kind: "rigid", base: { role: "root", origin: { x: 0, y: 0, z: 0 } }, moved: { role: "self", component: half, port: "seat" }, appliesTo: "first", name: "Bottom" });
   // the same part, flipped onto the first about the star's symmetry axis
   await dis(s, "joint.template", { pattern: pair, kind: "revolute", base: { role: "root", origin: { x: 0, y: 0, z: 0 } }, moved: { role: "self", component: half, port: "flip" }, axis: { x: 0, y: 1, z: 0 }, value: "180", appliesTo: "rest", name: "Top (flipped)" });
@@ -394,6 +396,25 @@ describe("androgynous snap-together star box", () => {
       expect(pos).toBeGreaterThan(1);
     }, 300000);
   }
+
+  it("the fullBox checkbox shows the closed box, or one half as printed when unchecked", async () => {
+    const s = realSession();
+    await buildStarBox(s);
+    await s.recompute();
+    const box = () => {
+      const { doc, scope } = expanded(s);
+      const bodies = Object.values(evaluateFeatures(doc, scope)).filter((b) => b.mesh);
+      let zMax = -Infinity;
+      for (const b of bodies) for (let i = 2; i < b.mesh!.positions.length; i += 3) zMax = Math.max(zMax, b.mesh!.positions[i]);
+      return { bodies: bodies.length, zMax };
+    };
+    expect(s.doc.parameters.find((p) => p.name === "fullBox")).toMatchObject({ boolean: true, values: [0, 1], value: 1 });
+    expect(box()).toEqual({ bodies: 2, zMax: expect.closeTo(HEIGHT, 1) });
+    await dis(s, "parameter.set", { name: "fullBox", expression: "0" });
+    await s.recompute();
+    // one half, open side up, with its tongues standing above the rim
+    expect(box()).toEqual({ bodies: 1, zMax: expect.closeTo(HEIGHT / 2 + L, 1) });
+  }, 180000);
 
   it("the snaps engage: without the pockets every barb digs into the mating wall", async () => {
     const s = realSession();

@@ -16,6 +16,8 @@ export interface Parameter {
    *  makes it integer-only. Measured from `min` when set, else from 0. */
   step?: number;
   values?: number[];
+  /** A yes/no switch: values [0, 1], shown as a checkbox (1 = checked). */
+  boolean?: boolean;
   warning?: string;
 }
 
