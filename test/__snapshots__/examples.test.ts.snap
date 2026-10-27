@@ -889,20 +889,5 @@ exports[`bundled examples > public/examples/starbox.json > replays, builds on bo
     "name": "Shell",
     "volume": 12501.6,
   },
-  {
-    "body": "apat1166#1__ext110",
-    "max": [
-      32,
-      33.5,
-      28,
-    ],
-    "min": [
-      -32,
-      -27.7,
-      7,
-    ],
-    "name": "Shell",
-    "volume": 12501.6,
-  },
 ]
 `;

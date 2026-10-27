@@ -216,8 +216,8 @@ async function buildStarBox(s: CadSession, opts: { pockets?: boolean; keys?: boo
   await dis(s, "parameter.add", { name: "height", expression: String(HEIGHT), min: HEIGHT_RANGE[0], max: HEIGHT_RANGE[1], step: 1 });
   await dis(s, "parameter.add", { name: "R", expression: R_EXPR });     // sharp-tip radius
   await dis(s, "parameter.add", { name: "H", expression: "height/2" }); // one half's height
-  // checked: the closed box (both halves); unchecked: one half, as you print it
-  await dis(s, "parameter.add", { name: "fullBox", expression: "1", boolean: true });
+  // checked: the closed box (both halves); unchecked (the default): one half, as you print it
+  await dis(s, "parameter.add", { name: "fullBox", expression: "0", boolean: true });
   const half = (await dis(s, "component.create", { name: "Star half" }))[0];
   const tpu = (await dis(s, "material.create", { name: "TPU", kind: "plastic", finish: "matte", color: "#f2c14e" }))[0];
   await dis(s, "material.assign", { material: tpu, component: half });
@@ -255,6 +255,12 @@ async function buildStarBox(s: CadSession, opts: { pockets?: boolean; keys?: boo
   await dis(s, "joint.template", { pattern: pair, kind: "rigid", base: { role: "root", origin: { x: 0, y: 0, z: 0 } }, moved: { role: "self", component: half, port: "seat" }, appliesTo: "first", name: "Bottom" });
   // the same part, flipped onto the first about the star's symmetry axis
   await dis(s, "joint.template", { pattern: pair, kind: "revolute", base: { role: "root", origin: { x: 0, y: 0, z: 0 } }, moved: { role: "self", component: half, port: "flip" }, axis: { x: 0, y: 1, z: 0 }, value: "180", appliesTo: "rest", name: "Top (flipped)" });
+}
+
+/** Tick the fullBox checkbox: show both halves, closed. */
+async function closeBox(s: CadSession): Promise<void> {
+  await dis(s, "parameter.set", { name: "fullBox", expression: "1" });
+  await s.recompute();
 }
 
 function expanded(s: CadSession): { doc: CadDocument; scope: ReturnType<typeof resolveParameters>["scope"] } {
@@ -298,6 +304,7 @@ describe("androgynous snap-together star box", () => {
     await buildStarBox(s);
     await s.recompute();
     if (OUT) writeFileSync(`${OUT}/starbox.chisel.json`, serializeDocument(s.doc));
+    await closeBox(s);
 
     const { doc, scope } = expanded(s);
     const bodies = Object.values(evaluateFeatures(doc, scope)).filter((b) => b.mesh);
@@ -325,7 +332,7 @@ describe("androgynous snap-together star box", () => {
   it("the rebuild path builds the same two halves as the mesh-instancing path", async () => {
     const s = realSession();
     await buildStarBox(s);
-    await s.recompute();
+    await closeBox(s);
     const { doc, scope } = expanded(s);
     const rebuilt = evaluateFeatures(doc, scope);
     placeComponentSketches(s.doc, scope);
@@ -343,6 +350,10 @@ describe("androgynous snap-together star box", () => {
     const json = readFileSync(fileURLToPath(new URL("../public/examples/starbox.json", import.meta.url)), "utf8");
     const s = sessionFromDoc(deserializeDocument(json));
     await s.recompute(); // replays operations → derived state, as the app's load path does
+    // it opens on one half, as printed; ticking fullBox closes the box
+    const shown = () => { const { doc, scope } = expanded(s); return Object.values(evaluateFeatures(doc, scope)).filter((b) => b.mesh).length; };
+    expect(shown()).toBe(1);
+    await closeBox(s);
     const { doc, scope } = expanded(s);
     expect(Object.values(evaluateFeatures(doc, scope)).filter((b) => b.mesh).length).toBe(2);
     const c = collideFeatures(doc, scope);
@@ -380,7 +391,7 @@ describe("androgynous snap-together star box", () => {
       await buildStarBox(s);
       await dis(s, "parameter.set", { name: "width", expression: String(width) });
       await dis(s, "parameter.set", { name: "height", expression: String(height) });
-      await s.recompute();
+      await closeBox(s);
       const { doc, scope } = expanded(s);
       const bodies = Object.values(evaluateFeatures(doc, scope)).filter((b) => b.mesh);
       expect(bodies.length).toBe(2);
@@ -397,7 +408,7 @@ describe("androgynous snap-together star box", () => {
     }, 300000);
   }
 
-  it("the fullBox checkbox shows the closed box, or one half as printed when unchecked", async () => {
+  it("the fullBox checkbox shows one half as printed by default, or the closed box when checked", async () => {
     const s = realSession();
     await buildStarBox(s);
     await s.recompute();
@@ -408,18 +419,17 @@ describe("androgynous snap-together star box", () => {
       for (const b of bodies) for (let i = 2; i < b.mesh!.positions.length; i += 3) zMax = Math.max(zMax, b.mesh!.positions[i]);
       return { bodies: bodies.length, zMax };
     };
-    expect(s.doc.parameters.find((p) => p.name === "fullBox")).toMatchObject({ boolean: true, values: [0, 1], value: 1 });
-    expect(box()).toEqual({ bodies: 2, zMax: expect.closeTo(HEIGHT, 1) });
-    await dis(s, "parameter.set", { name: "fullBox", expression: "0" });
-    await s.recompute();
+    expect(s.doc.parameters.find((p) => p.name === "fullBox")).toMatchObject({ boolean: true, values: [0, 1], value: 0 });
     // one half, open side up, with its tongues standing above the rim
     expect(box()).toEqual({ bodies: 1, zMax: expect.closeTo(HEIGHT / 2 + L, 1) });
+    await closeBox(s);
+    expect(box()).toEqual({ bodies: 2, zMax: expect.closeTo(HEIGHT, 1) });
   }, 180000);
 
   it("the snaps engage: without the pockets every barb digs into the mating wall", async () => {
     const s = realSession();
     await buildStarBox(s, { pockets: false });
-    await s.recompute();
+    await closeBox(s);
     const { doc, scope } = expanded(s);
     const c = collideFeatures(doc, scope);
     // ~9mm³ of barb sits behind the 2.15mm lip at each of the 10 snaps
