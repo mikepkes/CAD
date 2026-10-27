@@ -10,6 +10,7 @@ import { compileSketch } from "./solver/compile";
 import { compileExpr, Scope } from "../math/expr";
 import { planeById, offsetPlane, WorkPlane } from "../geometry/plane";
 import { Rigid, IDENTITY, translation, compose, invert, applyPoint, applyVec, rotationAbout } from "../math/transform";
+import { Vec3 } from "../math/vec";
 import { Joint } from "./document";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchLine, SketchPoint } from "../sketch/types";
 
@@ -139,12 +140,15 @@ const DEG = Math.PI / 180;
  *  its connector (the bearing) would drift off its mate. */
 function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope): Rigid {
   let value = j.valueValue;
-  try { const v = compileExpr(j.valueExpr).eval(scope); if (Number.isFinite(v)) value = v; } catch { /* keep last */ }
+  // a solved joint keeps the loop solve's value (its expression is only the first seed)
+  if (!j.solve) {
+    try { const v = compileExpr(j.valueExpr).eval(scope); if (Number.isFinite(v)) value = v; } catch { /* keep last */ }
+  }
   j.valueValue = value;
   // Seat `moved` so its connector coincides with the base connector (base-local).
   const seat = translation({ x: j.baseOrigin.x - j.movedOrigin.x, y: j.baseOrigin.y - j.movedOrigin.y, z: j.baseOrigin.z - j.movedOrigin.z });
   let motion: Rigid;
-  if (j.kind === "revolute") {
+  if (j.kind === "revolute" || j.kind === "flexure") {
     motion = rotationAbout(j.axis, value * DEG, j.baseOrigin); // about the base-local connector
   } else if (j.kind === "slider") {
     const m = Math.hypot(j.axis.x, j.axis.y, j.axis.z) || 1;
@@ -198,35 +202,120 @@ function jointWorldPinSlot(baseWorld: Rigid, slotBaseWorld: Rigid, j: Joint): Ri
 }
 
 /** Resolve every component's world frame — from its joint if it has one, else
- *  its static placement composed down the parent chain. */
+ *  its static placement composed down the parent chain — then close any loops. */
 export function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<string, Rigid> {
   const jointByMoved = new Map<string, Joint>();
+  const closures: Joint[] = [];
   for (const j of Object.values(doc.joints)) {
     j.error = undefined;
     if (!doc.components[j.base]) { j.error = `joint base "${j.base}" not found`; continue; }
     if (!doc.components[j.moved]) { j.error = `joint moved "${j.moved}" not found`; continue; }
-    jointByMoved.set(j.moved, j);
+    if (j.closes) closures.push(j); // a constraint, not a placement
+    else jointByMoved.set(j.moved, j);
   }
-  const world = new Map<string, Rigid>();
-  const active = new Set<string>();
-  const resolve = (id: string): Rigid => {
-    const cached = world.get(id);
-    if (cached) return cached;
-    const c = doc.components[id];
-    if (!c || active.has(id)) return IDENTITY; // missing or cycle
-    active.add(id);
-    const j = jointByMoved.get(id);
-    let W: Rigid;
-    if (j && j.kind === "pin-slot") W = jointWorldPinSlot(resolve(j.base), resolve(j.slotBase ?? j.base), j);
-    else if (j) W = jointWorld(resolve(j.base), j, scope);
-    else if (c.parentId) W = compose(resolve(c.parentId), translation(c.transform.position));
-    else W = IDENTITY;
-    active.delete(id);
-    world.set(id, W);
-    return W;
+  const tree = (): Map<string, Rigid> => {
+    const world = new Map<string, Rigid>();
+    const active = new Set<string>();
+    const resolve = (id: string): Rigid => {
+      const cached = world.get(id);
+      if (cached) return cached;
+      const c = doc.components[id];
+      if (!c || active.has(id)) return IDENTITY; // missing or cycle
+      active.add(id);
+      const j = jointByMoved.get(id);
+      let W: Rigid;
+      if (j && j.kind === "pin-slot") W = jointWorldPinSlot(resolve(j.base), resolve(j.slotBase ?? j.base), j);
+      else if (j) W = jointWorld(resolve(j.base), j, scope);
+      else if (c.parentId) W = compose(resolve(c.parentId), translation(c.transform.position));
+      else W = IDENTITY;
+      active.delete(id);
+      world.set(id, W);
+      return W;
+    };
+    for (const id of Object.keys(doc.components)) resolve(id);
+    return world;
   };
-  for (const id of Object.keys(doc.components)) resolve(id);
-  return world;
+  return closures.length ? closeLoops(doc, closures, tree) : tree();
+}
+
+/** Where a closing joint's two connectors sit in the world, as one residual
+ *  vector (base point − moved point, per closure). Zero when every loop closes. */
+function loopResidual(closures: Joint[], W: Map<string, Rigid>): number[] {
+  const out: number[] = [];
+  for (const c of closures) {
+    const p = applyPoint(W.get(c.base) ?? IDENTITY, c.baseOrigin), q = applyPoint(W.get(c.moved) ?? IDENTITY, c.movedOrigin);
+    out.push(p.x - q.x, p.y - q.y, p.z - q.z);
+  }
+  return out;
+}
+
+/** Solve the `solve` joints so every closing joint's connectors meet — damped
+ *  Gauss–Newton (Levenberg–Marquardt) on the coincidence residual with a
+ *  finite-difference Jacobian, seeded from the last solution so a mechanism
+ *  stays on the assembly branch it is on as its drive moves. Then record each
+ *  closing joint's resulting relative rotation (its valueValue). */
+function closeLoops(doc: CadDocument, closures: Joint[], tree: () => Map<string, Rigid>): Map<string, Rigid> {
+  const unknowns = Object.values(doc.joints).filter((j) => j.solve && !j.closes && !j.error);
+  const norm = (r: number[]) => Math.sqrt(r.reduce((a, v) => a + v * v, 0));
+  let W = tree();
+  let r = loopResidual(closures, W);
+  let lambda = 1e-3;
+  const h = 1e-5; // degrees (or mm for a slider)
+  for (let it = 0; it < 100 && unknowns.length && norm(r) > 1e-10; it++) {
+    const x0 = unknowns.map((j) => j.valueValue);
+    const J = unknowns.map((j, k) => {
+      j.valueValue = x0[k] + h;
+      const rk = loopResidual(closures, tree());
+      j.valueValue = x0[k];
+      return rk.map((v, i) => (v - r[i]) / h);
+    });
+    // (JᵀJ + λ·diag(JᵀJ)) dx = −Jᵀr
+    const n = unknowns.length;
+    const A = Array.from({ length: n }, (_, a) => Array.from({ length: n }, (_, b) => J[a].reduce((acc, v, i) => acc + v * J[b][i], 0)));
+    const g = J.map((col) => -col.reduce((acc, v, i) => acc + v * r[i], 0));
+    for (let a = 0; a < n; a++) A[a][a] *= 1 + lambda;
+    const dx = solveSmall(A, g);
+    if (!dx) break;
+    unknowns.forEach((j, k) => { j.valueValue = x0[k] + dx[k]; });
+    const W2 = tree(), r2 = loopResidual(closures, W2);
+    if (norm(r2) < norm(r)) { W = W2; r = r2; lambda = Math.max(1e-9, lambda / 3); }
+    else { unknowns.forEach((j, k) => { j.valueValue = x0[k]; }); lambda *= 4; if (lambda > 1e8) break; }
+  }
+  const closed = norm(r) <= 1e-6;
+  for (const c of closures) {
+    c.error = closed ? undefined : "loop does not close at this drive value";
+    c.valueValue = relativeRotation(W.get(c.base) ?? IDENTITY, W.get(c.moved) ?? IDENTITY, c.axis);
+  }
+  return W;
+}
+
+/** Rotation (degrees) of `moved` relative to `base` about base-local `axis`. */
+function relativeRotation(base: Rigid, moved: Rigid, axis: Vec3): number {
+  const rel = compose(invert(base), moved);
+  const m = Math.hypot(axis.x, axis.y, axis.z) || 1;
+  const n = { x: axis.x / m, y: axis.y / m, z: axis.z / m };
+  // any vector perpendicular to the axis, and where the relative rotation takes it
+  const t = Math.abs(n.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const d = t.x * n.x + t.y * n.y + t.z * n.z;
+  const e = { x: t.x - d * n.x, y: t.y - d * n.y, z: t.z - d * n.z };
+  const f = applyVec(rel, e);
+  const cr = { x: e.y * f.z - e.z * f.y, y: e.z * f.x - e.x * f.z, z: e.x * f.y - e.y * f.x };
+  return (Math.atan2(cr.x * n.x + cr.y * n.y + cr.z * n.z, e.x * f.x + e.y * f.y + e.z * f.z) * 180) / Math.PI;
+}
+
+/** Solve a small dense system (Gaussian elimination, partial pivoting); null if singular. */
+function solveSmall(A: number[][], b: number[]): number[] | null {
+  const n = b.length, M = A.map((row, i) => [...row, b[i]]);
+  for (let k = 0; k < n; k++) {
+    let p = k;
+    for (let i = k + 1; i < n; i++) if (Math.abs(M[i][k]) > Math.abs(M[p][k])) p = i;
+    if (Math.abs(M[p][k]) < 1e-14) return null;
+    [M[k], M[p]] = [M[p], M[k]];
+    for (let i = k + 1; i < n; i++) { const f = M[i][k] / M[k][k]; for (let c = k; c <= n; c++) M[i][c] -= f * M[k][c]; }
+  }
+  const x = new Array(n).fill(0);
+  for (let k = n - 1; k >= 0; k--) { let v = M[k][n]; for (let c = k + 1; c < n; c++) v -= M[k][c] * x[c]; x[k] = v / M[k][k]; }
+  return x;
 }
 
 const isIdentity = (W: Rigid): boolean =>

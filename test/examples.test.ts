@@ -5,7 +5,8 @@
 //      geometry snapshot;
 //   2. sit without interpenetration at rest, and stay clear while every joint-
 //      driving parameter is swept (bounded ones across their range, a bare
-//      revolute drive through 360°);
+//      revolute drive through 360°) — and, with flexures, close every loop and
+//      keep each hinge under its material's allowable strain throughout;
 //   3. build without error at the min and max of every customize slider.
 // An example under examples/ or public/examples/ is picked up automatically; its
 // first run writes the snapshot to commit alongside it.
@@ -19,6 +20,7 @@ import { evaluateFeatures } from "../src/core/features";
 import { expandAssembly } from "../src/core/assembly";
 import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/model/parameters";
+import { flexureState, hasFlexures } from "../src/sim/flexure";
 import type { SolidEval, CollisionResult } from "../src/core/features";
 import type { CadDocument } from "../src/core/document";
 
@@ -144,7 +146,16 @@ describe("bundled examples", () => {
         for (const { name, values } of samples) {
           // the other drives stay at their saved values
           const others = Object.fromEntries(samples.filter((m) => m.name !== name).map((m) => [m.name, String(s.doc.parameters.find((p) => p.name === m.name)!.value)]));
-          for (const v of values) check(await backend.collide(s.doc, { ...others, [name]: String(v) }), `${name} = ${r1(v)}`);
+          for (const v of values) {
+            const overrides = { ...others, [name]: String(v) };
+            check(await backend.collide(s.doc, overrides), `${name} = ${r1(v)}`);
+            // a compliant mechanism also has to close its loops and keep every hinge under its strain limit
+            if (hasFlexures(s.doc)) {
+              const f = flexureState(s.doc, overrides);
+              expect(f.error, `${name} = ${r1(v)}`).toBeUndefined();
+              expect(f.utilisation, `flexure strain / allowable at ${name} = ${r1(v)}`).toBeLessThan(1);
+            }
+          }
         }
         if (known) expect(trace).toMatchSnapshot();
       }, 600000);

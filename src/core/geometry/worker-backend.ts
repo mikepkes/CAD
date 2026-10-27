@@ -57,7 +57,7 @@ export class WorkerGeometryBackend implements GeometryBackend {
     if (r.kind === "edges") return r.edges;
     throw new Error(r.kind === "error" ? r.message : "edges failed");
   }
-  async exportBytes(doc: CadDocument, featureId: string, format: ExportFormat): Promise<Uint8Array | null> {
+  async exportBytes(doc: CadDocument, featureId: string | null, format: ExportFormat): Promise<Uint8Array | null> {
     const r = await this.send({ kind: "export", doc, featureId, format });
     if (r.kind === "export") return r.bytes;
     throw new Error(r.kind === "error" ? r.message : "export failed");

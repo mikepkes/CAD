@@ -9,7 +9,8 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../../model/parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
-import { evaluateFeatures, featureEdges, exportFeatureBytes, collideFeatures, CollisionResult, GeometryCache, SolidEval } from "../features";
+import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, collideFeatures, CollisionResult, GeometryCache, SolidEval } from "../features";
+import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches } from "../recompute";
 import { expandAssembly, hasAssemblyPatterns, instanceSolids } from "../assembly";
 import { Scope } from "../../math/expr";
@@ -41,8 +42,9 @@ export interface GeometryBackend {
   evaluate(doc: CadDocument): Promise<EvaluateResult>;
   /** World-space B-rep edges of one feature's solid (for projection into a sketch). */
   edges(doc: CadDocument, featureId: string): Promise<Edge3D[]>;
-  /** STL/STEP bytes for one feature's solid. */
-  exportBytes(doc: CadDocument, featureId: string, format: ExportFormat): Promise<Uint8Array | null>;
+  /** STL/STEP bytes for one feature's solid, or (featureId null) the whole model
+   *  fused into one print-ready solid. */
+  exportBytes(doc: CadDocument, featureId: string | null, format: ExportFormat): Promise<Uint8Array | null>;
   /** Measure body-body interpenetration at a configuration (param `overrides`
    *  set the pose), for the motion study's pass/fail. */
   collide(doc: CadDocument, overrides?: Record<string, string>): Promise<CollisionResult>;
@@ -85,12 +87,30 @@ function poseDoc(doc: CadDocument, overrides?: Record<string, string>): CadDocum
   return posed;
 }
 
+/** The whole model as one solid, for printing. A compliant mechanism prints in
+ *  its as-modelled (unbent) pose — joints dropped, so every link sits where it
+ *  was drawn — with its links fused through their flexure strips; anything else
+ *  prints as it stands. */
+async function exportModelBytes(doc: CadDocument, format: ExportFormat): Promise<Uint8Array | null> {
+  let printed = doc;
+  if (hasFlexures(doc)) {
+    const sketches: CadDocument["sketches"] = {};
+    for (const [id, sk] of Object.entries(doc.sketches)) sketches[id] = { ...sk };
+    printed = { ...doc, joints: {}, sketches };
+    placeComponentSketches(printed, scopeOf(printed));
+  }
+  const scope = scopeOf(printed);
+  const geo = geometryDoc(printed, scope);
+  const blob = exportFusedBlob(geo, scopeOf(geo), format);
+  return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
+}
+
 // ---- shared job protocol (used by both worker adapters) --------------------
 
 export type GeometryRequest =
   | { id: number; kind: "evaluate"; doc: CadDocument }
   | { id: number; kind: "edges"; doc: CadDocument; featureId: string }
-  | { id: number; kind: "export"; doc: CadDocument; featureId: string; format: ExportFormat }
+  | { id: number; kind: "export"; doc: CadDocument; featureId: string | null; format: ExportFormat }
   | { id: number; kind: "collide"; doc: CadDocument; overrides?: Record<string, string> };
 
 export type GeometryResponse =
@@ -140,7 +160,9 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       const result = collideFeatures(doc, scopeOf(doc));
       return { res: { id: req.id, kind: "collide", result }, transfer: [] };
     }
-    const bytes = await exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format);
+    const bytes = req.featureId === null
+      ? await exportModelBytes(req.doc, req.format)
+      : await exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format);
     return { res: { id: req.id, kind: "export", bytes }, transfer: bytes ? [bytes.buffer as ArrayBuffer] : [] };
   } catch (e) {
     return { res: { id: req.id, kind: "error", message: (e as Error).message }, transfer: [] };
@@ -167,7 +189,8 @@ export class InlineGeometryBackend implements GeometryBackend {
     const scope = scopeOf(doc);
     return featureEdges(geometryDoc(doc, scope), scope, featureId);
   }
-  async exportBytes(doc: CadDocument, featureId: string, format: ExportFormat): Promise<Uint8Array | null> {
+  async exportBytes(doc: CadDocument, featureId: string | null, format: ExportFormat): Promise<Uint8Array | null> {
+    if (featureId === null) return exportModelBytes(doc, format);
     const scope = scopeOf(doc);
     return exportFeatureBytes(geometryDoc(doc, scope), scope, featureId, format);
   }

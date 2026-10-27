@@ -361,13 +361,24 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Joint",
     summary: "Position a component relative to another (rigid / revolute / slider).",
     description:
-      "Joins the `moved` component to `base` (default root) so a connector point on each — given in that component's LOCAL coordinates — coincides, then applies the joint motion. `rigid` fixes it; `revolute` leaves free rotation about `axis` (base-local) by `value` degrees; `slider` leaves free translation along `axis` by `value`. `pin-slot` rotates about `axis` but SOLVES the angle so the moved-body point `pin` stays on the slot line (`slotPoint`+`slotDir` in `slotBase`'s frame) — a 1-DOF mechanism constraint, so the kernel finds the angle instead of you supplying trig. `value` is a parametric expression (a seed for pin-slot). Returns the joint id.",
+      "Joins the `moved` component to `base` (default root) so a connector point on each — given in that component's LOCAL coordinates — coincides, then applies the joint motion. `rigid` fixes it; `revolute` leaves free rotation about `axis` (base-local) by `value` degrees; `slider` leaves free translation along `axis` by `value`. `pin-slot` rotates about `axis` but SOLVES the angle so the moved-body point `pin` stays on the slot line (`slotPoint`+`slotDir` in `slotBase`'s frame) — a 1-DOF mechanism constraint, so the kernel finds the angle instead of you supplying trig. `value` is a parametric expression (a seed for pin-slot). " +
+      "`flexure` is a compliant hinge: it moves like `revolute` but carries a `flexure` section {length, width, thickness} so its strain, stiffness and stored energy can be computed (a small-length flexural pivot; the hinge material is the moved component's, or `flexure.material`). " +
+      "Closed loops (a four-bar): give the undriven joints `solve: true` (their value is found, `value` only seeds it) and close the loop with one more joint that has `closes: true` — it places nothing; its two connectors are made to coincide. Returns the joint id.",
     paramsSchema: {
       type: "object",
       required: ["moved", "baseOrigin", "movedOrigin"],
       additionalProperties: false,
       properties: {
-        kind: { type: "string", enum: ["rigid", "revolute", "slider", "pin-slot"], description: "Joint type (default rigid)." },
+        kind: { type: "string", enum: ["rigid", "revolute", "slider", "pin-slot", "flexure"], description: "Joint type (default rigid)." },
+        solve: { type: "boolean", description: "The value is solved so every closing joint's connectors meet (closed loops); `value` only seeds it." },
+        closes: { type: "boolean", description: "Close a loop: place nothing, constrain the two connectors to coincide. `moved` must be placed by another joint." },
+        flexure: {
+          type: "object",
+          required: ["length", "width", "thickness"],
+          additionalProperties: false,
+          description: "flexure only: the hinge strip (mm). length along the strip, thickness in the bending direction, width along the hinge axis.",
+          properties: { length: { type: "number", exclusiveMinimum: 0 }, width: { type: "number", exclusiveMinimum: 0 }, thickness: { type: "number", exclusiveMinimum: 0 }, material: { type: "string", description: "Hinge material id (default: the moved component's)." } },
+        },
         base: { type: "string", description: "Base component id. Defaults to the root (ground)." },
         moved: { type: "string", description: "Component to position." },
         baseOrigin: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
@@ -385,7 +396,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Pin a bracket to the base at its origin", params: { moved: "cmp3", baseOrigin: { x: 40, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 } } },
       { note: "Revolute joint spun 30°", params: { kind: "revolute", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 20 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "30" } },
     ],
-    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot"; base?: string; moved: string; baseOrigin: Vec3; movedOrigin: Vec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; name?: string }, ctx) {
+    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure"; base?: string; moved: string; baseOrigin: Vec3; movedOrigin: Vec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number; width: number; thickness: number; material?: string }; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
@@ -395,6 +406,10 @@ export const BUILTINS: CommandDef<any>[] = [
         if (!p.pin || !p.slotPoint || !p.slotDir) throw new Error("pin-slot joint needs pin, slotPoint and slotDir");
         if (p.slotBase && !draft.components[p.slotBase]) throw new Error(`No slotBase component "${p.slotBase}"`);
       }
+      if (kind === "flexure" && !p.flexure) throw new Error("flexure joint needs a flexure section {length, width, thickness}");
+      if (p.flexure?.material && !draft.materials[p.flexure.material]) throw new Error(`No material "${p.flexure.material}"`);
+      if (p.closes && p.solve) throw new Error("a closing joint is the constraint; give `solve` to the joints it determines");
+      if (p.closes && !Object.values(draft.joints).some((j) => j.moved === p.moved && !j.closes)) throw new Error("a closing joint's moved component must already be placed by another joint");
       const id = ctx.alloc("jnt");
       const count = Object.keys(draft.joints).length + 1;
       const v3 = (q: Vec3) => ({ x: q.x, y: q.y, z: q.z });
@@ -410,6 +425,9 @@ export const BUILTINS: CommandDef<any>[] = [
         valueExpr: String(p.value ?? "0"),
         valueValue: 0,
         ...(kind === "pin-slot" ? { pin: v3(p.pin!), slotBase: p.slotBase ?? base, slotPoint: v3(p.slotPoint!), slotDir: v3(p.slotDir!) } : {}),
+        ...(p.solve ? { solve: true } : {}),
+        ...(p.closes ? { closes: true } : {}),
+        ...(kind === "flexure" ? { flexure: { length: p.flexure!.length, width: p.flexure!.width, thickness: p.flexure!.thickness, ...(p.flexure!.material ? { material: p.flexure!.material } : {}) } } : {}),
       };
       return { createdIds: [id], message: `${draft.joints[id].kind} joint` };
     },
@@ -522,10 +540,13 @@ export const BUILTINS: CommandDef<any>[] = [
         ringScale: { type: "number", exclusiveMinimum: 0, description: "wood: growth-ring spacing (mm)." },
         grainContrast: { type: "number", minimum: 0, maximum: 1 },
         poreStrength: { type: "number", minimum: 0, maximum: 1 },
+        youngsModulus: { type: "number", exclusiveMinimum: 0, description: "Mechanical: Young's modulus (MPa), for flexure analysis." },
+        allowableStrain: { type: "number", exclusiveMinimum: 0, description: "Mechanical: the peak strain a flexure may see in service (fraction, e.g. 0.08). Needs youngsModulus." },
       },
     },
     examples: [
       { note: "White oak", params: { name: "Oak", kind: "wood", species: "white-oak" } },
+      { note: "A flexible print (Bambu TPU for AMS, printed flat)", params: { name: "TPU", kind: "plastic", finish: "matte", youngsModulus: 1190, allowableStrain: 0.08 } },
       { note: "A steel screw", params: { name: "Steel", kind: "metal", finish: "satin", color: "#8a8f96" } },
     ],
     apply(draft, p: { name: string; kind: Material["kind"]; [k: string]: unknown }, ctx) {
@@ -534,6 +555,8 @@ export const BUILTINS: CommandDef<any>[] = [
       for (const k of ["species", "finish", "color", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength"] as const) {
         if (p[k] !== undefined) (m as unknown as Record<string, unknown>)[k] = p[k];
       }
+      if ((p.youngsModulus === undefined) !== (p.allowableStrain === undefined)) throw new Error("mechanical properties need both youngsModulus and allowableStrain");
+      if (p.youngsModulus !== undefined) m.mechanical = { E: p.youngsModulus as number, allowableStrain: p.allowableStrain as number };
       draft.materials[id] = m;
       return { createdIds: [id], message: `Material ${p.name}` };
     },
