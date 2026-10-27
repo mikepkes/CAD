@@ -160,16 +160,22 @@ describe("bundled examples", () => {
         if (known) expect(trace).toMatchSnapshot();
       }, 600000);
 
+      // Through the same path as the slider: set the parameter and recompute, so
+      // sketches re-solve and expression-positioned geometry moves.
       it("builds at the ends of every customize slider", async () => {
         const s = await load(ex.url);
-        for (const p of s.doc.parameters) {
+        for (const p of [...s.doc.parameters]) {
           const ends = p.values?.length ? [Math.min(...p.values), Math.max(...p.values)] : p.min != null && p.max != null ? [p.min, p.max] : [];
           for (const v of ends) {
-            const c = await backend.collide(s.doc, { [p.name]: String(v) });
+            const r = await s.dispatch("parameter.set", { name: p.name, expression: String(v) });
+            expect(r.ok, `${p.name} = ${v}: ${r.error}`).toBe(true);
+            for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `${p.name} = ${v}: sketch ${sk.name} conflicts`).toBe(false);
+            const c = await backend.collide(s.doc);
             expect(c.buildError, `${p.name} = ${v}`).toBeUndefined();
           }
+          await s.dispatch("parameter.set", { name: p.name, expression: p.expr }); // back to its saved value
         }
-      }, 600000);
+      }, 900000);
     });
   }
 });

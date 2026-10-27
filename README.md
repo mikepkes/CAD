@@ -201,7 +201,7 @@ straight from a URL:
 ?mode=customize&example=gyroscope      # a bundled example (public/examples/<name>.json)
 ?mode=customize&example=scissor        # a parametric scissor lift (linkage count is a slider)
 ?mode=customize&example=scissor-jointed # the scissor as a jointed assembly (count + articulates)
-?mode=customize&example=starbox        # snap-together TPU star box: one part, patterned twice (one flipped)
+?mode=customize&example=starbox        # snap-together TPU star box: width + height sliders, one part patterned twice (one flipped)
 ?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```

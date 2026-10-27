@@ -343,11 +343,16 @@ export type SketchFeature = ExtrudeFeature | RevolveFeature;
 export interface DatumPlane {
   id: string;
   name: string;
-  kind: "offset";
-  /** Base plane: "XY"/"XZ"/"YZ" or another datum plane id. */
+  /** offset: parallel to `base` at `offsetExpr`. frame: through `originExpr`
+   *  (expressions in the parameters) with normal `normal`; its in-plane axes are
+   *  chosen as for a face sketch (u horizontal when the normal is, v = +Z). */
+  kind: "offset" | "frame";
+  /** Base plane: "XY"/"XZ"/"YZ" or another datum plane id (offset only). */
   base: string;
   offsetExpr: string;
   offsetValue: number;
+  originExpr?: { x: string; y: string; z: string };
+  normal?: { x: number; y: number; z: number };
   /** Resolved world frame (set during recompute). */
   plane?: WorkPlane;
   /** Set if the datum could not be resolved (e.g. dangling base). */
@@ -427,6 +432,9 @@ export interface FlexureSection {
  *  pattern's joints can say "instance i's `top` meets instance i-1's `bottom`". */
 export interface Connector {
   origin: { x: number; y: number; z: number };
+  /** Parametric origin: expressions in the parameters, evaluated where the
+   *  connector is used (`origin` keeps the value at creation as a fallback). */
+  originExpr?: { x: string; y: string; z: string };
   axis?: { x: number; y: number; z: number };
 }
 

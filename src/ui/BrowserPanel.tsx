@@ -251,9 +251,9 @@ export function BrowserPanel() {
       </div>
       <div className="tree">
         {datums.map((d) => (
-          <div key={d.id} className="tree-row" style={{ paddingLeft: 22 }} onClick={() => startSketch(d.id)} title={d.error ? `Unresolved: ${d.error}` : `Offset ${d.offsetExpr} from ${d.base} — click to sketch on it`}>
+          <div key={d.id} className="tree-row" style={{ paddingLeft: 22 }} onClick={() => startSketch(d.id)} title={d.error ? `Unresolved: ${d.error}` : d.kind === "frame" ? `Through (${d.originExpr?.x}, ${d.originExpr?.y}, ${d.originExpr?.z}) — click to sketch on it` : `Offset ${d.offsetExpr} from ${d.base} — click to sketch on it`}>
             <span className="tree-icon" style={{ color: "#c9a227" }}>▱</span>
-            <span className="tree-label">{d.name} <span className="muted-inline">· {d.base} +{d.offsetExpr}</span></span>
+            <span className="tree-label">{d.name} <span className="muted-inline">· {d.kind === "frame" ? "point + normal" : `${d.base} +${d.offsetExpr}`}</span></span>
             {d.error && <span className="dof-dot bad" />}
           </div>
         ))}
