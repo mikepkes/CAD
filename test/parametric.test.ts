@@ -108,6 +108,20 @@ describe("boolean parameters", () => {
     expect(p().values).toBeUndefined();
   });
 
+  it("can be made from an existing parameter, snapping its value to 0 or 1", async () => {
+    const s = realSession();
+    await dis(s, "parameter.add", { name: "lid", expression: "7", min: 0, max: 10 });
+    await dis(s, "parameter.add", { name: "off", expression: "0.5 - 0.5" });
+    await dis(s, "parameter.setBounds", { name: "lid", boolean: true });
+    await dis(s, "parameter.setBounds", { name: "off", boolean: true });
+    await s.recompute();
+    const p = (n: string) => s.doc.parameters.find((q) => q.name === n)!;
+    expect(p("lid")).toMatchObject({ boolean: true, values: [0, 1], value: 1 });
+    expect(p("lid").min).toBeUndefined();
+    expect(p("off")).toMatchObject({ boolean: true, value: 0 });
+    expect((await s.dispatch("parameter.setBounds", { name: "lid", boolean: true, max: 3 })).ok).toBe(false);
+  });
+
   it("take no extents or value list", async () => {
     const s = realSession();
     expect((await s.dispatch("parameter.add", { name: "b", expression: "1", boolean: true, min: 0, max: 1 })).ok).toBe(false);

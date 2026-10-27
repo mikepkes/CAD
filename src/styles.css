@@ -1291,6 +1291,8 @@ body {
 .cz-row-val { font-size: 12px; color: var(--text-dim); font-family: ui-monospace, monospace; text-align: right; }
 .cz-range { width: 100%; accent-color: var(--accent); }
 .cz-check { justify-self: start; width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.param-bounds-note { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+.param-bounds-note code { font-family: ui-monospace, monospace; white-space: nowrap; }
 .param-check { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 .cz-select {
   width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);

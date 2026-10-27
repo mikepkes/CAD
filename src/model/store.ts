@@ -208,7 +208,7 @@ export interface AppState {
   renameParameter: (name: string, newName: string) => Promise<void>;
   deleteParameter: (name: string) => Promise<void>;
   /** Set or clear a parameter's extents (min/max) or acceptable values (enum). */
-  setParameterBounds: (name: string, bounds: { min?: number; max?: number; values?: number[]; clear?: boolean }) => Promise<void>;
+  setParameterBounds: (name: string, bounds: { min?: number; max?: number; values?: number[]; boolean?: boolean; clear?: boolean }) => Promise<void>;
 
   // constraints/dimensions by id (mapped to their creating operation)
   editDimension: (constraintId: string, expr: string) => Promise<void>;
@@ -672,10 +672,15 @@ export const useStore = create<AppState>((set, get) => {
       // Rebuild the parameter.add params so the new extents replace the old ones.
       const extra = bounds.clear
         ? {}
-        : bounds.values != null
-          ? { values: bounds.values }
-          : { ...(bounds.min != null ? { min: bounds.min } : {}), ...(bounds.max != null ? { max: bounds.max } : {}) };
-      if (op) await get().editOperation(op.opId, { name: op.params.name, expression: op.params.expression, ...extra });
+        : bounds.boolean
+          ? { boolean: true }
+          : bounds.values != null
+            ? { values: bounds.values }
+            : { ...(bounds.min != null ? { min: bounds.min } : {}), ...(bounds.max != null ? { max: bounds.max } : {}) };
+      // a switch is 0 or 1: a value other than that snaps to 1 if non-zero, else 0
+      const current = get().session.doc.parameters.find((p) => p.name === name)?.value ?? 0;
+      const expression = bounds.boolean && current !== 0 && current !== 1 ? (current !== 0 ? "1" : "0") : op?.params.expression;
+      if (op) await get().editOperation(op.opId, { name: op.params.name, expression, ...extra });
       else await runDispatch("parameter.setBounds", { name, ...(bounds.clear ? { clear: true } : extra) });
     },
     deleteParameter: async (name) => {

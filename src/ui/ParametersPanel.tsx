@@ -51,11 +51,11 @@ function ParamControl({ p }: { p: Parameter }) {
   );
 }
 
-/** Inline editor for a parameter's extents: unbounded, a min/max range, or a
- *  comma-separated list of acceptable values (never both). */
+/** Inline editor for a parameter's extents: unbounded, a min/max range, a
+ *  comma-separated list of acceptable values (never both), or a checkbox. */
 function BoundsEditor({ p, onClose }: { p: Parameter; onClose: () => void }) {
   const setParameterBounds = useStore((s) => s.setParameterBounds);
-  const initial: "none" | "range" | "list" = p.values?.length ? "list" : (p.min != null || p.max != null) ? "range" : "none";
+  const initial: "none" | "range" | "list" | "boolean" = p.boolean ? "boolean" : p.values?.length ? "list" : (p.min != null || p.max != null) ? "range" : "none";
   const [mode, setMode] = useState(initial);
   const [min, setMin] = useState(p.min != null ? String(p.min) : "");
   const [max, setMax] = useState(p.max != null ? String(p.max) : "");
@@ -63,6 +63,7 @@ function BoundsEditor({ p, onClose }: { p: Parameter; onClose: () => void }) {
 
   const apply = () => {
     if (mode === "none") setParameterBounds(p.name, { clear: true });
+    else if (mode === "boolean") setParameterBounds(p.name, { boolean: true });
     else if (mode === "range") {
       const mn = min.trim() === "" ? undefined : Number(min);
       const mx = max.trim() === "" ? undefined : Number(max);
@@ -80,9 +81,9 @@ function BoundsEditor({ p, onClose }: { p: Parameter; onClose: () => void }) {
   return (
     <div className="param-bounds">
       <div className="param-bounds-modes">
-        {(["none", "range", "list"] as const).map((m) => (
+        {(["none", "range", "list", "boolean"] as const).map((m) => (
           <button key={m} className={`chip ${mode === m ? "active" : ""}`} onClick={() => setMode(m)}>
-            {m === "none" ? "Unbounded" : m === "range" ? "Range" : "Values"}
+            {m === "none" ? "Unbounded" : m === "range" ? "Range" : m === "list" ? "Values" : "Checkbox"}
           </button>
         ))}
       </div>
@@ -92,6 +93,7 @@ function BoundsEditor({ p, onClose }: { p: Parameter; onClose: () => void }) {
           <input type="number" placeholder="max" value={max} onChange={(e) => setMax(e.target.value)} />
         </div>
       )}
+      {mode === "boolean" && <div className="param-bounds-note">A yes/no switch: 1 when checked, 0 when not. Use it in expressions, e.g. a count of <code>1 + {p.name}</code>.</div>}
       {mode === "list" && (
         <div className="param-bounds-fields">
           <input type="text" placeholder="e.g. 3, 4, 5, 6, 8" value={list} onChange={(e) => setList(e.target.value)} />

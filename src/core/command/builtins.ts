@@ -279,6 +279,7 @@ export const BUILTINS: CommandDef<any>[] = [
         max: { type: "number" },
         step: { type: "number", exclusiveMinimum: 0, description: "Snap increment (1 = integer-only)." },
         values: { type: "array", items: { type: "number" } },
+        boolean: { type: "boolean", description: "Make it a yes/no switch (a checkbox): values [0, 1]; a value other than 0 or 1 snaps to 1 if non-zero, else 0." },
         clear: { type: "boolean", description: "Remove all extents / values." },
       },
     },
@@ -286,12 +287,18 @@ export const BUILTINS: CommandDef<any>[] = [
       { params: { name: "width", min: 20, max: 120 } },
       { note: "Integer-only count", params: { name: "stages", min: 1, max: 8, step: 1 } },
       { note: "Make unbounded", params: { name: "width", clear: true } },
+      { note: "Make it a checkbox", params: { name: "showLid", boolean: true } },
     ],
-    apply(draft, p: { name: string; min?: number; max?: number; step?: number; values?: number[]; clear?: boolean }) {
+    apply(draft, p: { name: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; clear?: boolean }) {
       const param = draft.parameters.find((x) => x.name === p.name);
       if (!param) throw new Error(`No parameter "${p.name}"`);
       delete param.min; delete param.max; delete param.step; delete param.values; delete param.boolean; // new extents replace a checkbox
-      if (!p.clear) {
+      if (p.boolean) {
+        if (p.min != null || p.max != null || p.step != null || p.values) throw new Error("a boolean parameter takes no extents or value list");
+        Object.assign(param, { values: [0, 1], boolean: true });
+        const v = resolveParameters(draft.parameters).scope[param.name] ?? 0; // param.value is stale until recompute
+        if (v !== 0 && v !== 1) param.expr = v !== 0 ? "1" : "0";
+      } else if (!p.clear) {
         const bounds = normalizeBounds(p);
         Object.assign(param, bounds);
         if (p.step != null && !bounds.values) param.step = p.step;
