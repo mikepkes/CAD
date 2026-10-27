@@ -875,7 +875,7 @@ exports[`bundled examples > public/examples/scissor-jointed.json > replays, buil
 exports[`bundled examples > public/examples/starbox.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
-    "body": "apat577#0__ext73",
+    "body": "apat1164#0__ext108",
     "max": [
       32,
       33.5,
@@ -883,14 +883,14 @@ exports[`bundled examples > public/examples/starbox.json > replays, builds on bo
     ],
     "min": [
       -32,
-      -27.8,
+      -27.7,
       -0,
     ],
     "name": "Shell",
-    "volume": 12510.4,
+    "volume": 12501.6,
   },
   {
-    "body": "apat577#1__ext73",
+    "body": "apat1164#1__ext108",
     "max": [
       32,
       33.5,
@@ -898,11 +898,11 @@ exports[`bundled examples > public/examples/starbox.json > replays, builds on bo
     ],
     "min": [
       -32,
-      -27.8,
+      -27.7,
       7,
     ],
     "name": "Shell",
-    "volume": 12510.4,
+    "volume": 12501.6,
   },
 ]
 `;

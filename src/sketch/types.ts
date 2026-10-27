@@ -20,6 +20,10 @@ export interface SketchPoint {
   x: number;
   y: number;
   fixed?: boolean; // locked in the solver (e.g. the sketch origin)
+  /** Parametric position: expressions in the document's parameters, re-evaluated
+   *  on every recompute (the point is fixed there). */
+  xExpr?: string;
+  yExpr?: string;
   construction?: boolean;
   // true when the point exists only as another entity's defining point
   // (line end, circle center) and should not render as a standalone node.

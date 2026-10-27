@@ -8,7 +8,7 @@ import { resolveParameters } from "../model/parameters";
 import { ConstraintSolver, SolveDiagnosis } from "./solver/model";
 import { compileSketch } from "./solver/compile";
 import { compileExpr, Scope } from "../math/expr";
-import { planeById, offsetPlane, WorkPlane } from "../geometry/plane";
+import { planeById, offsetPlane, makePlaneFromNormal, WorkPlane } from "../geometry/plane";
 import { Rigid, IDENTITY, translation, compose, invert, applyPoint, applyVec, rotationAbout } from "../math/transform";
 import { Vec3 } from "../math/vec";
 import { Joint } from "./document";
@@ -39,6 +39,7 @@ export async function recompute(
   const evals: Evaluations = {};
 
   for (const sketch of Object.values(doc.sketches)) {
+    placeParametricPoints(sketch, scope);
     const { model, warnings, dimensionValues } = compileSketch(sketch, scope);
 
     // Update stored dimension values regardless of solve outcome.
@@ -102,6 +103,20 @@ export async function recompute(
   }
 
   return evals;
+}
+
+/** Move every expression-positioned point to its parameters' current value
+ *  (they are fixed, so the solve builds the rest of the sketch around them). A
+ *  coordinate that no longer evaluates keeps its last position. */
+function placeParametricPoints(sk: Sketch, scope: Scope): void {
+  for (const e of Object.values(sk.entities)) {
+    if (e.kind !== "point" || (e.xExpr === undefined && e.yExpr === undefined)) continue;
+    for (const [axis, expr] of [["x", e.xExpr], ["y", e.yExpr]] as const) {
+      if (expr === undefined) continue;
+      try { const v = compileExpr(expr).eval(scope); if (Number.isFinite(v)) e[axis] = v; } catch { /* keep last */ }
+    }
+    e.fixed = true;
+  }
 }
 
 /** Resolve datum planes, then set every sketch's world plane from its owning
@@ -337,6 +352,14 @@ function resolveDatumPlanes(doc: CadDocument, scope: Scope) {
     let progress = false;
     for (const dp of datums) {
       if (dp.plane) continue;
+      if (dp.kind === "frame" && dp.originExpr && dp.normal) {
+        const ev = (e: string) => { try { const v = compileExpr(e).eval(scope); return Number.isFinite(v) ? v : NaN; } catch { return NaN; } };
+        const o = { x: ev(dp.originExpr.x), y: ev(dp.originExpr.y), z: ev(dp.originExpr.z) };
+        if (![o.x, o.y, o.z].every(Number.isFinite)) { dp.error = "plane origin does not evaluate"; continue; }
+        dp.plane = { ...makePlaneFromNormal(o, dp.normal, dp.name), id: "datum" };
+        progress = true;
+        continue;
+      }
       const base = ["XY", "XZ", "YZ"].includes(dp.base) ? planeById(dp.base) : doc.planes[dp.base]?.plane;
       if (!base) continue; // base is an unresolved datum — try next pass
       let off = dp.offsetValue;
@@ -347,7 +370,7 @@ function resolveDatumPlanes(doc: CadDocument, scope: Scope) {
     }
     if (!progress) break;
   }
-  for (const dp of datums) if (!dp.plane) dp.error = `Base plane "${dp.base}" not found`;
+  for (const dp of datums) if (!dp.plane) dp.error ??= `Base plane "${dp.base}" not found`;
 }
 
 /** Measure a dimension's current geometric value from solved entities. */

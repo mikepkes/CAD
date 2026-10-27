@@ -15,7 +15,7 @@
 // "self/prev/root + port", and the expander resolves it to a concrete id the
 // same way every rebuild.
 
-import { CadDocument, FeatureDef, Joint, RoleRef, SketchFeature } from "./document";
+import { CadDocument, Connector, FeatureDef, Joint, RoleRef, SketchFeature } from "./document";
 import { Scope, compileExpr } from "../math/expr";
 import { Sketch } from "../sketch/types";
 import { Rigid, IDENTITY, compose, invert, applyPoint, applyVec } from "../math/transform";
@@ -74,6 +74,13 @@ function featureBodies(doc: CadDocument): Map<string, string | undefined> {
     out.set(f.id, "body" in f && f.body && f.body !== "last" ? f.body : last);
   }
   return out;
+}
+
+/** A connector's origin now: its expressions in the current parameters, else the stored point. */
+function connectorOrigin(c: Connector, scope: Scope): Vec3 {
+  if (!c.originExpr) return c.origin;
+  const ev = (e: string, fallback: number) => { try { const v = compileExpr(e).eval(scope); return Number.isFinite(v) ? v : fallback; } catch { return fallback; } };
+  return { x: ev(c.originExpr.x, c.origin.x), y: ev(c.originExpr.y, c.origin.y), z: ev(c.originExpr.z, c.origin.z) };
 }
 
 /** Replace standalone `i` identifiers (not inside `pi`, `sin`, …) with the index. */
@@ -166,7 +173,7 @@ export function expandAssembly(doc: CadDocument, scope: Scope, opts: { framesOnl
       if (idx < 0 || idx >= n) return null;
       if (!r.component || !subCompSet.has(r.component)) return null;
       const conn = r.port ? doc.components[r.component]?.connectors?.[r.port] : undefined;
-      const origin = conn ? conn.origin : (r.origin ?? { x: 0, y: 0, z: 0 });
+      const origin = conn ? connectorOrigin(conn, scope) : (r.origin ?? { x: 0, y: 0, z: 0 });
       return { comp: iid(idx, r.component), origin: { x: origin.x, y: origin.y, z: origin.z } };
     };
 

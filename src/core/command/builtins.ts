@@ -13,6 +13,8 @@ import { CommandRegistry } from "./registry";
 import { CommandContext, CommandDef, JSONSchema } from "./types";
 import { makePlaneFromNormal, offsetPlane, planeById, WorkPlane } from "../../geometry/plane";
 import { Vec3 } from "../../math/vec";
+import { compileExpr } from "../../math/expr";
+import { resolveParameters } from "../../model/parameters";
 import { ProjectedCurve } from "../geometry/project";
 import { blendCorner, copyEntities, extendCurve, offsetCurve, trimCurve, Vec } from "./sketch-ops";
 import { gearOutline, GearType } from "../geometry/gear";
@@ -22,9 +24,9 @@ const PLANE_ENUM = ["XY", "XZ", "YZ"];
 // A point given either as coordinates (creates a new point) or a ref to an
 // existing point id (reuses it — which is how coincidence is expressed).
 const POINT_REF_SCHEMA: JSONSchema = {
-  description: "A point: either {x,y} to create one, or {ref: <pointId>} to reuse an existing one.",
+  description: "A point: either {x,y} to create one, or {ref: <pointId>} to reuse an existing one. x/y may be expressions in the parameters (e.g. \"width/2 - 3\"): such a point is fixed there and follows the parameters.",
   oneOf: [
-    { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
+    { type: "object", required: ["x", "y"], properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] } } },
     { type: "object", required: ["ref"], properties: { ref: { type: "string" } } },
   ],
 };
@@ -34,7 +36,7 @@ const CONSTRUCTION_SCHEMA: JSONSchema = {
   description: "Construction (reference) geometry: drawn dashed and excluded from filled profiles / extrusion.",
 };
 
-type PointRef = { x: number; y: number } | { ref: string };
+type PointRef = { x: number | string; y: number | string } | { ref: string };
 type EdgeSelectorParams = import("../document").EdgeSelector;
 type FaceSelectorParams = import("../document").FaceSelector;
 type ThreadSpecParams = import("../document").ThreadSpec;
@@ -150,14 +152,30 @@ function sketchOf(doc: CadDocument, id: unknown): Sketch {
   return sk;
 }
 
-function resolvePoint(sk: Sketch, ref: PointRef, ctx: CommandContext): string {
+function resolvePoint(sk: Sketch, ref: PointRef, ctx: CommandContext, draft?: CadDocument): string {
   if ("ref" in ref) {
     if (!sk.entities[ref.ref]) throw new Error(`No entity "${ref.ref}" in sketch`);
     return ref.ref;
   }
+  // evaluate before allocating: a failed command must not have created ids
+  const pt = draft ? parametricPoint(draft, "", ref.x, ref.y) : { id: "", kind: "point" as const, x: Number(ref.x), y: Number(ref.y) };
   const id = ctx.alloc("pt");
-  sk.entities[id] = { id, kind: "point", x: ref.x, y: ref.y };
+  sk.entities[id] = { ...pt, id };
   return id;
+}
+
+/** A point at (x, y), where either may be an expression in the parameters: such
+ *  a point is fixed at its evaluated position and re-evaluated every recompute. */
+function parametricPoint(draft: CadDocument, id: string, x: number | string, y: number | string, fixed?: boolean): SketchPoint {
+  if (typeof x === "number" && typeof y === "number") return { id, kind: "point", x, y, ...(fixed ? { fixed } : {}) };
+  const scope = resolveParameters(draft.parameters).scope;
+  const ev = (v: number | string) => {
+    if (typeof v === "number") return v;
+    const n = compileExpr(v).eval(scope);
+    if (!Number.isFinite(n)) throw new Error(`point coordinate "${v}" is not a number`);
+    return n;
+  };
+  return { id, kind: "point", x: ev(x), y: ev(y), fixed: true, xExpr: String(x), yExpr: String(y) };
 }
 
 // Arc geometry for sketch.addProfile.
@@ -445,16 +463,26 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         component: { type: "string" },
         name: { type: "string", description: "Connector name, unique on this component." },
-        origin: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+        origin: { type: "object", required: ["x", "y", "z"], description: "Each coordinate a number or an expression in the parameters (e.g. \"height\").", properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, z: { type: ["number", "string"] } } },
         axis: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "Optional reference axis (local)." },
       },
     },
-    examples: [{ params: { component: "cmp3", name: "top", origin: { x: 60, y: 0, z: 0 } } }],
-    apply(draft, p: { component: string; name: string; origin: Vec3; axis?: Vec3 }) {
+    examples: [{ params: { component: "cmp3", name: "top", origin: { x: 60, y: 0, z: 0 } } }, { note: "A connector that follows a parameter", params: { component: "cmp3", name: "lid", origin: { x: 0, y: 0, z: "height" } } }],
+    apply(draft, p: { component: string; name: string; origin: { x: number | string; y: number | string; z: number | string }; axis?: Vec3 }) {
       const c = draft.components[p.component];
       if (!c) throw new Error(`No component "${p.component}"`);
       c.connectors = c.connectors ?? {};
-      c.connectors[p.name] = { origin: { x: p.origin.x, y: p.origin.y, z: p.origin.z }, ...(p.axis ? { axis: { x: p.axis.x, y: p.axis.y, z: p.axis.z } } : {}) };
+      const o = p.origin;
+      const parametric = [o.x, o.y, o.z].some((v) => typeof v === "string");
+      const scope = resolveParameters(draft.parameters).scope;
+      const ev = (v: number | string) => (typeof v === "number" ? v : compileExpr(v).eval(scope));
+      const origin = { x: ev(o.x), y: ev(o.y), z: ev(o.z) };
+      if (![origin.x, origin.y, origin.z].every(Number.isFinite)) throw new Error("connector origin does not evaluate to a number");
+      c.connectors[p.name] = {
+        origin,
+        ...(parametric ? { originExpr: { x: String(o.x), y: String(o.y), z: String(o.z) } } : {}),
+        ...(p.axis ? { axis: { x: p.axis.x, y: p.axis.y, z: p.axis.z } } : {}),
+      };
       return { message: `Connector ${p.name} on ${c.name}` };
     },
   },
@@ -664,25 +692,42 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Offset plane",
     summary: "Create a reusable datum plane offset from a base plane.",
     description:
-      "Creates a parametric datum/reference plane offset from a base plane (an origin plane XY/XZ/YZ or another datum plane id) by `offset` along its normal. Reusable: sketch on it with sketch.create {datum: <id>}, and editing the offset propagates to everything built on it. Returns the plane id.",
+      "Creates a parametric datum/reference plane: offset from a base plane (an origin plane XY/XZ/YZ or another datum plane id) by `offset` along its normal, or through an `origin` point (x/y/z may be parameter expressions) with a `normal` direction — e.g. a plane square to a slanted edge at a point that moves with the model's size. Its in-plane axes follow face sketches: u horizontal when the normal is, v up. Reusable: sketch on it with sketch.create {datum: <id>}; editing the parameters moves everything built on it. Returns the plane id.",
     paramsSchema: {
       type: "object",
-      required: ["base", "offset"],
       additionalProperties: false,
       properties: {
-        base: { type: "string", description: "Base plane: XY/XZ/YZ or a datum plane id." },
-        offset: { type: "string", description: "Offset distance expression, e.g. '20' or 'height/2'." },
+        base: { type: "string", description: "Offset plane: base plane, XY/XZ/YZ or a datum plane id." },
+        offset: { type: "string", description: "Offset plane: distance expression, e.g. '20' or 'height/2'." },
+        origin: { type: "object", required: ["x", "y", "z"], description: "Point-and-normal plane: a point on it; each coordinate a number or an expression.", properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, z: { type: ["number", "string"] } } },
+        normal: { type: "object", required: ["x", "y", "z"], description: "Point-and-normal plane: its normal.", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
         name: { type: "string" },
       },
     },
-    examples: [{ note: "A plane 25mm above XY", params: { base: "XY", offset: "25" } }],
-    apply(draft, p: { base: string; offset: string | number; name?: string }, ctx) {
+    examples: [
+      { note: "A plane 25mm above XY", params: { base: "XY", offset: "25" } },
+      { note: "A plane square to a 30° edge, at a point that scales with `size`", params: { origin: { x: "size*0.5", y: "size*0.2", z: 0 }, normal: { x: 0.866, y: 0.5, z: 0 } } },
+    ],
+    apply(draft, p: { base?: string; offset?: string | number; origin?: { x: number | string; y: number | string; z: number | string }; normal?: Vec3; name?: string }, ctx) {
+      const name = p.name ?? `Plane ${Object.keys(draft.planes).length + 1}`;
+      if (p.origin || p.normal) {
+        if (!p.origin || !p.normal) throw new Error("a point-and-normal plane needs both origin and normal");
+        if (Math.hypot(p.normal.x, p.normal.y, p.normal.z) < 1e-12) throw new Error("plane normal is zero");
+        const scope = resolveParameters(draft.parameters).scope;
+        for (const v of [p.origin.x, p.origin.y, p.origin.z]) {
+          if (typeof v === "string" && !Number.isFinite(compileExpr(v).eval(scope))) throw new Error(`plane origin "${v}" is not a number`);
+        }
+        const id = ctx.alloc("pl");
+        const o = p.origin;
+        draft.planes[id] = { id, name, kind: "frame", base: "", offsetExpr: "0", offsetValue: 0, originExpr: { x: String(o.x), y: String(o.y), z: String(o.z) }, normal: { x: p.normal.x, y: p.normal.y, z: p.normal.z } };
+        return { createdIds: [id], message: "Point-and-normal plane" };
+      }
+      if (p.base === undefined || p.offset === undefined) throw new Error("an offset plane needs base and offset");
       if (!["XY", "XZ", "YZ"].includes(p.base) && !draft.planes[p.base]) throw new Error(`No base plane "${p.base}"`);
       const id = ctx.alloc("pl");
-      const count = Object.keys(draft.planes).length + 1;
       draft.planes[id] = {
         id,
-        name: p.name ?? `Plane ${count}`,
+        name,
         kind: "offset",
         base: p.base,
         offsetExpr: String(p.offset),
@@ -697,22 +742,23 @@ export const BUILTINS: CommandDef<any>[] = [
     type: "sketch.addPoint",
     title: "Add point",
     summary: "Add a free point to a sketch.",
-    description: "Adds a point at (x,y). Set fixed=true to lock it.",
+    description: "Adds a point at (x,y). Set fixed=true to lock it. x/y may be expressions in the parameters (e.g. \"width/2\"): the point is then fixed there and follows the parameters on every rebuild.",
     paramsSchema: {
       type: "object",
       required: ["sketch", "x", "y"],
       additionalProperties: false,
       properties: {
         sketch: { type: "string" },
-        x: { type: "number" },
-        y: { type: "number" },
+        x: { type: ["number", "string"] },
+        y: { type: ["number", "string"] },
         fixed: { type: "boolean" },
       },
     },
-    apply(draft, p: { sketch: string; x: number; y: number; fixed?: boolean }, ctx) {
+    apply(draft, p: { sketch: string; x: number | string; y: number | string; fixed?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
+      const pt = parametricPoint(draft, "", p.x, p.y, p.fixed); // evaluate before allocating
       const id = ctx.alloc("pt");
-      sk.entities[id] = { id, kind: "point", x: p.x, y: p.y, fixed: p.fixed };
+      sk.entities[id] = { ...pt, id };
       return { createdIds: [id], affectedSketchId: sk.id };
     },
   },
@@ -738,8 +784,8 @@ export const BUILTINS: CommandDef<any>[] = [
     ],
     apply(draft, p: { sketch: string; start: PointRef; end: PointRef; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
-      const a = resolvePoint(sk, p.start, ctx);
-      const b = resolvePoint(sk, p.end, ctx);
+      const a = resolvePoint(sk, p.start, ctx, draft);
+      const b = resolvePoint(sk, p.end, ctx, draft);
       const id = ctx.alloc("ln");
       sk.entities[id] = { id, kind: "line", p1: a, p2: b, construction: !!p.construction };
       return { createdIds: [id, a, b], affectedSketchId: sk.id };
@@ -763,7 +809,7 @@ export const BUILTINS: CommandDef<any>[] = [
     },
     apply(draft, p: { sketch: string; center: PointRef; radius: number; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
-      const c = resolvePoint(sk, p.center, ctx);
+      const c = resolvePoint(sk, p.center, ctx, draft);
       const id = ctx.alloc("ci");
       sk.entities[id] = { id, kind: "circle", center: c, r: p.radius, construction: !!p.construction };
       return { createdIds: [id, c], affectedSketchId: sk.id };
@@ -790,7 +836,7 @@ export const BUILTINS: CommandDef<any>[] = [
     },
     apply(draft, p: { sketch: string; center: PointRef; rx: number; ry: number; rotation?: number; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
-      const c = resolvePoint(sk, p.center, ctx);
+      const c = resolvePoint(sk, p.center, ctx, draft);
       const id = ctx.alloc("el");
       sk.entities[id] = { id, kind: "ellipse", center: c, rx: p.rx, ry: p.ry, rotation: p.rotation ?? 0, construction: !!p.construction };
       return { createdIds: [id, c], affectedSketchId: sk.id };
@@ -877,7 +923,7 @@ export const BUILTINS: CommandDef<any>[] = [
       const sk = sketchOf(draft, p.sketch);
       const closed = p.closed !== false;
       if (p.points.length < (closed ? 3 : 2)) throw new Error(`polyline needs at least ${closed ? 3 : 2} points`);
-      const ids = p.points.map((pt) => resolvePoint(sk, pt, ctx));
+      const ids = p.points.map((pt) => resolvePoint(sk, pt, ctx, draft));
       const lines: string[] = [];
       const count = closed ? ids.length : ids.length - 1;
       for (let i = 0; i < count; i++) {
@@ -1033,7 +1079,7 @@ export const BUILTINS: CommandDef<any>[] = [
     apply(draft, p: { sketch: string; center: PointRef; outerRadius: number; innerRadius: number; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
       if (!(p.innerRadius < p.outerRadius)) throw new Error("innerRadius must be smaller than outerRadius");
-      const c = resolvePoint(sk, p.center, ctx);
+      const c = resolvePoint(sk, p.center, ctx, draft);
       const outer = ctx.alloc("ci"); sk.entities[outer] = { id: outer, kind: "circle", center: c, r: p.outerRadius, construction: !!p.construction };
       const inner = ctx.alloc("ci"); sk.entities[inner] = { id: inner, kind: "circle", center: c, r: p.innerRadius, construction: !!p.construction };
       return { createdIds: [outer, inner, c], affectedSketchId: sk.id, message: "Ring" };
@@ -1059,7 +1105,7 @@ export const BUILTINS: CommandDef<any>[] = [
     apply(draft, p: { sketch: string; points: PointRef[]; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
       if (p.points.length < 2) throw new Error("a spline needs at least 2 points");
-      const ids = p.points.map((pt) => resolvePoint(sk, pt, ctx));
+      const ids = p.points.map((pt) => resolvePoint(sk, pt, ctx, draft));
       // Interior through-points are part of the curve, not standalone nodes.
       for (const id of ids.slice(1, -1)) (sk.entities[id] as SketchPoint).implicit = true;
       const id = ctx.alloc("sp");
@@ -1347,9 +1393,9 @@ export const BUILTINS: CommandDef<any>[] = [
     },
     apply(draft, p: { sketch: string; center: PointRef; start: PointRef; end: PointRef; ccw?: boolean; construction?: boolean }, ctx) {
       const sk = sketchOf(draft, p.sketch);
-      const c = resolvePoint(sk, p.center, ctx);
-      const s = resolvePoint(sk, p.start, ctx);
-      const e = resolvePoint(sk, p.end, ctx);
+      const c = resolvePoint(sk, p.center, ctx, draft);
+      const s = resolvePoint(sk, p.start, ctx, draft);
+      const e = resolvePoint(sk, p.end, ctx, draft);
       const cp = sk.entities[c] as SketchPoint;
       const sp = sk.entities[s] as SketchPoint;
       const r = Math.hypot(sp.x - cp.x, sp.y - cp.y);
