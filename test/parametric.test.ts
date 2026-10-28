@@ -219,3 +219,25 @@ describe("expression flexure strips", () => {
     expect((await s.dispatch("joint.create", { kind: "flexure", base: a, moved: b, baseOrigin: o, movedOrigin: o, flexure: { length: "t - 2", width: 6, thickness: 1 } })).ok).toBe(false);
   });
 });
+
+describe("expression joint connectors", () => {
+  it("move a joint's pivot with the parameters", async () => {
+    const s = realSession();
+    await dis(s, "parameter.add", { name: "arm", expression: "40" });
+    const a = (await dis(s, "component.create", { name: "A" }))[0];
+    const b = (await dis(s, "component.create", { name: "B" }))[0];
+    const piv = { x: 0, y: "arm", z: 0 };
+    const j = (await dis(s, "joint.create", { kind: "revolute", base: a, moved: b, baseOrigin: piv, movedOrigin: piv, value: "90" }))[0];
+    expect(s.doc.joints[j].baseOrigin).toEqual({ x: 0, y: 40, z: 0 });
+    // B turns 90° about (0, arm): its point (arm, arm) lands at (0, 2·arm)
+    const where = async (arm: number) => {
+      await dis(s, "parameter.set", { name: "arm", expression: String(arm) });
+      await s.recompute();
+      return applyPoint(resolveComponentWorld(s.doc, resolveParameters(s.doc.parameters).scope).get(b)!, { x: arm, y: arm, z: 0 });
+    };
+    const p = await where(25);
+    expect(p.x).toBeCloseTo(0, 9); expect(p.y).toBeCloseTo(50, 9);
+    expect((await s.dispatch("joint.create", { kind: "revolute", base: a, moved: b, baseOrigin: { x: "nope", y: 0, z: 0 }, movedOrigin: o0 })).ok).toBe(false);
+  });
+});
+const o0 = { x: 0, y: 0, z: 0 };

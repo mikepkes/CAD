@@ -32,6 +32,18 @@ sized with the beam solver to stay within the material's strain limit across
 the print layers. It opens on the single half you print (print it twice); tick
 `fullBox` to see the closed box.
 
+And **https://mikepkes.github.io/CAD/?mode=customize&example=fourbar** — a
+**compliant mechanism**: a four-bar linkage printed flat as one piece, its four
+"joints" thin strips of plastic that bend instead of pins.
+- **Push it:** drag `theta` to push the finger pad, and the pointer swings while
+  a live readout shows each hinge's strain against the material's limit, the
+  input torque and the stored energy.
+- **Reshape it:** change the linkage with `crank`, `rocker` and `ground`. A
+  longer crank or a shorter rocker makes the pointer swing further.
+- **Pick a material:** choose what you print it in from `material`, and the
+  hinge strips resize so they stay within its strain limit.
+- **How it works:** see [docs/COMPLIANT.md](docs/COMPLIANT.md).
+
 A **local-first, browser-based parametric CAD** app. It runs entirely in the
 browser (static, GitHub-Pages-servable) and is built so the geometry is
 **math-exact and CNC/3D-print ready**, not just a pretty picture. The long-term
@@ -212,7 +224,7 @@ straight from a URL:
 ?mode=customize&example=scissor        # a parametric scissor lift (linkage count is a slider)
 ?mode=customize&example=scissor-jointed # the scissor as a jointed assembly (count + articulates)
 ?mode=customize&example=starbox        # snap-together star box: width + height sliders, print material dropdown; opens on the one printable half, tick fullBox for both (one flipped)
-?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain, print material dropdown
+?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain; link-length sliders, print material dropdown
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```
 

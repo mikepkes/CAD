@@ -195,7 +195,15 @@ snap; μ per material):
   every hinge under its allowable strain across its drive range.
 - **Example: `public/examples/fourbar.json`** (`test/fourbar.build.test.ts`).
   A one-piece TPU four-bar printed flat: crank 40, coupler 60.8, rocker 50,
-  ground 60 mm, 4 × 1 mm hinge strips. ±20° at the finger pad swings the
+  ground 60 mm, 4 × 1 mm hinge strips.
+  - **Link-length sliders:** `crank` 30–45, `rocker` 45–65 and `ground`
+    45–80 mm. The coupler follows from them, and joint pivots are expression
+    connectors.
+  - **Swing:** the pointer swings ~crank/rocker as far as the input, 18–40° for
+    ±20° in.
+  - **Why those ranges:** they keep the crank no longer than the shortest
+    rocker, so no hinge turns more than ~21.5°. At every corner, in every
+    material, the loop closes and the hinges stay within the strain limit. ±20° at the finger pad swings the
   pointer 31.7°; at full push: 163 N·mm (≈ 4.5 N at the pad), peak strain 4.4%
   against 8%. Each hinge strip is split at its pivot between the two links it
   joins, so the rendered hinge kinks about its centre — the PRBM picture;

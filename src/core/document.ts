@@ -422,6 +422,9 @@ export interface Joint {
   /** flexure only: the compliant hinge's section. Moves like a revolute joint;
    *  modelled as a small-length flexural pivot (src/sim/flexure.ts). */
   flexure?: FlexureSection;
+  /** Connector points given as expressions in the parameters (per coordinate);
+   *  baseOrigin / movedOrigin hold their last evaluation. */
+  originExprs?: { base?: Partial<Record<"x" | "y" | "z", string>>; moved?: Partial<Record<"x" | "y" | "z", string>> };
   error?: string;
 }
 
