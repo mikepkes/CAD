@@ -195,11 +195,44 @@ snap; μ per material):
   every hinge under its allowable strain across its drive range.
 - **Example: `public/examples/fourbar.json`** (`test/fourbar.build.test.ts`).
   A one-piece TPU four-bar printed flat: crank 40, coupler 60.8, rocker 50,
-  ground 60 mm, 4 × 1 mm hinge strips. ±20° at the finger pad swings the
+  ground 60 mm, 4 × 1 mm hinge strips.
+  - **Link-length sliders:** `crank` 30–45, `rocker` 45–65 and `ground`
+    45–80 mm. The coupler follows from them, and joint pivots are expression
+    connectors.
+  - **Swing:** the pointer swings ~crank/rocker as far as the input, 18–40° for
+    ±20° in.
+  - **Why those ranges:** they keep the crank no longer than the shortest
+    rocker, so no hinge turns more than ~21.5°. At every corner, in every
+    material, the loop closes and the hinges stay within the strain limit. ±20° at the finger pad swings the
   pointer 31.7°; at full push: 163 N·mm (≈ 4.5 N at the pad), peak strain 4.4%
   against 8%. Each hinge strip is split at its pivot between the two links it
   joins, so the rendered hinge kinks about its centre — the PRBM picture;
   skinned bending is phase 2.
+- **Its `material` choice** resizes the hinge strips for what it's printed in.
+  The strip thickness and length are expressions (`flexure: { length: "hingeL",
+  thickness: "hingeT" }`), and each link's material follows the choice:
+  - **Sizing:** every hinge turns through the same ~20° whatever the material
+    (the pivots fix the kinematics), and strain is ε = t·φ/2L. So each strip is
+    sized to stay at ~80% of its material's limit.
+  - **Stiff plastics:** get the thinnest strip that prints well (0.8 mm) and a
+    longer one.
+  - **Result:** hinge stiffness k = E·w·t³/12L stays within 2× of the TPU part's
+    for every material but TPU 95A, which gets a thicker strip so it still
+    springs back.
+
+  | In the layer plane | E (MPa) | strain limit | strip t × L (mm) | k (N·mm/rad) | peak strain at ±20° | torque at +20° |
+  |---|---|---|---|---|---|---|
+  | PLA | 3000 | 2 % | 0.8 × 8.5 | 90 | 1.68 % | 99 N·mm |
+  | PETG | 1900 | 3 % | 0.8 × 6 | 81 | 2.39 % | 89 N·mm |
+  | ABS / ASA | 2000 | 2.5 % | 0.8 × 7 | 73 | 2.05 % | 80 N·mm |
+  | Nylon | 1200 | 5 % | 1 × 4.5 | 133 | 3.98 % | 146 N·mm |
+  | PP | 1000 | 10 % | 1 × 4 | 125 | 4.47 % | 137 N·mm |
+  | TPU 68D (as designed) | 1190 | 8 % | 1 × 4 | 149 | 4.4 % | 163 N·mm |
+  | TPU 95A | 26 | 15 % | 2.4 × 4 | 45 | 10.7 % | 49 N·mm |
+
+  These are typical FDM values; tune them to your filament. PP is the classic
+  living-hinge plastic. PLA hinges fatigue: expect hundreds of flexes, not
+  thousands.
 
 ## Open questions
 - Which mechanisms matter first? Snap fits and living hinges point at phases 1 + 3;

@@ -52,20 +52,21 @@ const flexureJoints = (doc: CadDocument): Joint[] => Object.values(doc.joints).f
 
 export const hasFlexures = (doc: CadDocument): boolean => flexureJoints(doc).length > 0;
 
-function propsOf(doc: CadDocument, j: Joint): MechanicalProps | undefined {
-  const m = j.flexure!.material ? doc.materials[j.flexure!.material] : materialForComponent(doc, j.moved);
+function propsOf(doc: CadDocument, j: Joint, scope: Record<string, number>): MechanicalProps | undefined {
+  const m = j.flexure!.material ? doc.materials[j.flexure!.material] : materialForComponent(doc, j.moved, scope);
   return m?.mechanical;
 }
 
 /** Pose the mechanism with these parameter overrides and read every hinge. */
 export function flexureState(doc: CadDocument, overrides: Record<string, string> = {}): FlexureState {
   const parameters = doc.parameters.map((p) => (overrides[p.name] != null ? { ...p, expr: overrides[p.name] } : p));
-  resolveComponentWorld(doc, resolveParameters(parameters).scope); // poses and closes the loops (joint values)
+  const scope = resolveParameters(parameters).scope;
+  resolveComponentWorld(doc, scope); // poses and closes the loops (joint values) and sizes the strips
   const flexures: FlexureReading[] = [];
   let energy = 0, utilisation = 0;
   let error = Object.values(doc.joints).find((j) => j.error)?.error;
   for (const j of flexureJoints(doc)) {
-    const props = propsOf(doc, j);
+    const props = propsOf(doc, j, scope);
     const angle = j.valueValue;
     const strain = flexureStrain(j.flexure!, angle);
     if (!props) { error ??= `flexure "${j.name}" has no material stiffness`; flexures.push({ joint: j.id, name: j.name, angle, strain, moment: NaN }); continue; }

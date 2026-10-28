@@ -225,6 +225,37 @@ function normalizeBounds(p: { min?: number; max?: number; values?: number[] }): 
   return out;
 }
 
+type ExprVec3 = { x: number | string; y: number | string; z: number | string };
+/** A point whose coordinates may be expressions: evaluated now, the expressions
+ *  kept (so it follows the parameters). */
+function exprPoint(o: ExprVec3, scope: Record<string, number>, what: string): { value: { x: number; y: number; z: number }; exprs?: Partial<Record<"x" | "y" | "z", string>> } {
+  const value = { x: 0, y: 0, z: 0 };
+  const exprs: Partial<Record<"x" | "y" | "z", string>> = {};
+  for (const k of ["x", "y", "z"] as const) {
+    const v = o[k];
+    const n = typeof v === "number" ? v : compileExpr(String(v)).eval(scope);
+    if (!Number.isFinite(n)) throw new Error(`${what}.${k} does not evaluate (${v})`);
+    if (typeof v === "string") exprs[k] = v;
+    value[k] = n;
+  }
+  return Object.keys(exprs).length ? { value, exprs } : { value };
+}
+
+/** A flexure strip's dimensions: numbers as given, expressions evaluated (and
+ *  kept, so they follow the parameters). Each must come out positive. */
+function flexureSection(f: { length: number | string; width: number | string; thickness: number | string }, scope: Record<string, number>): { length: number; width: number; thickness: number; exprs?: Partial<Record<"length" | "width" | "thickness", string>> } {
+  const out = { length: 0, width: 0, thickness: 0 };
+  const exprs: Partial<Record<"length" | "width" | "thickness", string>> = {};
+  for (const k of ["length", "width", "thickness"] as const) {
+    const v = f[k];
+    const n = typeof v === "number" ? v : compileExpr(String(v)).eval(scope);
+    if (typeof v === "string") exprs[k] = v;
+    if (!(Number.isFinite(n) && n > 0)) throw new Error(`flexure ${k} must be positive (got ${v} = ${n})`);
+    out[k] = n;
+  }
+  return Object.keys(exprs).length ? { ...out, exprs } : out;
+}
+
 /** A named choice's names: at least two, distinct, and nothing else bounding it. */
 function checkOptions(p: { min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[] }): string[] {
   if (p.min != null || p.max != null || p.step != null || p.values || p.boolean) throw new Error("a named choice takes no extents, value list or checkbox");
@@ -425,13 +456,13 @@ export const BUILTINS: CommandDef<any>[] = [
           type: "object",
           required: ["length", "width", "thickness"],
           additionalProperties: false,
-          description: "flexure only: the hinge strip (mm). length along the strip, thickness in the bending direction, width along the hinge axis.",
-          properties: { length: { type: "number", exclusiveMinimum: 0 }, width: { type: "number", exclusiveMinimum: 0 }, thickness: { type: "number", exclusiveMinimum: 0 }, material: { type: "string", description: "Hinge material id (default: the moved component's)." } },
+          description: "flexure only: the hinge strip (mm). length along the strip, thickness in the bending direction, width along the hinge axis. Each may be a number or an expression in the parameters, e.g. \"hingeT\".",
+          properties: { length: { type: ["number", "string"] }, width: { type: ["number", "string"] }, thickness: { type: ["number", "string"] }, material: { type: "string", description: "Hinge material id (default: the moved component's)." } },
         },
         base: { type: "string", description: "Base component id. Defaults to the root (ground)." },
         moved: { type: "string", description: "Component to position." },
-        baseOrigin: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
-        movedOrigin: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+        baseOrigin: { type: "object", required: ["x", "y", "z"], description: "Each coordinate a number or an expression in the parameters.", properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, z: { type: ["number", "string"] } } },
+        movedOrigin: { type: "object", required: ["x", "y", "z"], description: "Each coordinate a number or an expression in the parameters.", properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, z: { type: ["number", "string"] } } },
         axis: { type: "object", description: "Joint axis in base-local coords (default +Z).", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
         value: { type: "string", description: "Motion expression: degrees (revolute) or length (slider); a seed for pin-slot." },
         pin: { type: "object", description: "pin-slot: the moved-local point constrained to the slot.", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
@@ -445,7 +476,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Pin a bracket to the base at its origin", params: { moved: "cmp3", baseOrigin: { x: 40, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 } } },
       { note: "Revolute joint spun 30°", params: { kind: "revolute", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 20 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "30" } },
     ],
-    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure"; base?: string; moved: string; baseOrigin: Vec3; movedOrigin: Vec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number; width: number; thickness: number; material?: string }; name?: string }, ctx) {
+    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure"; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
@@ -457,6 +488,11 @@ export const BUILTINS: CommandDef<any>[] = [
       }
       if (kind === "flexure" && !p.flexure) throw new Error("flexure joint needs a flexure section {length, width, thickness}");
       if (p.flexure?.material && !draft.materials[p.flexure.material]) throw new Error(`No material "${p.flexure.material}"`);
+      // a flexure dimension may be an expression: evaluate it now (and reject it before allocating)
+      const scope = resolveParameters(draft.parameters).scope;
+      const section = kind === "flexure" ? flexureSection(p.flexure!, scope) : undefined;
+      // so may a connector point
+      const baseO = exprPoint(p.baseOrigin, scope, "baseOrigin"), movedO = exprPoint(p.movedOrigin, scope, "movedOrigin");
       if (p.closes && p.solve) throw new Error("a closing joint is the constraint; give `solve` to the joints it determines");
       if (p.closes && !Object.values(draft.joints).some((j) => j.moved === p.moved && !j.closes)) throw new Error("a closing joint's moved component must already be placed by another joint");
       const id = ctx.alloc("jnt");
@@ -468,15 +504,16 @@ export const BUILTINS: CommandDef<any>[] = [
         kind,
         base,
         moved: p.moved,
-        baseOrigin: v3(p.baseOrigin),
-        movedOrigin: v3(p.movedOrigin),
+        baseOrigin: baseO.value,
+        movedOrigin: movedO.value,
+        ...(baseO.exprs || movedO.exprs ? { originExprs: { ...(baseO.exprs ? { base: baseO.exprs } : {}), ...(movedO.exprs ? { moved: movedO.exprs } : {}) } } : {}),
         axis: p.axis ?? { x: 0, y: 0, z: 1 },
         valueExpr: String(p.value ?? "0"),
         valueValue: 0,
         ...(kind === "pin-slot" ? { pin: v3(p.pin!), slotBase: p.slotBase ?? base, slotPoint: v3(p.slotPoint!), slotDir: v3(p.slotDir!) } : {}),
         ...(p.solve ? { solve: true } : {}),
         ...(p.closes ? { closes: true } : {}),
-        ...(kind === "flexure" ? { flexure: { length: p.flexure!.length, width: p.flexure!.width, thickness: p.flexure!.thickness, ...(p.flexure!.material ? { material: p.flexure!.material } : {}) } } : {}),
+        ...(section ? { flexure: { ...section, ...(p.flexure!.material ? { material: p.flexure!.material } : {}) } } : {}),
       };
       return { createdIds: [id], message: `${draft.joints[id].kind} joint` };
     },
