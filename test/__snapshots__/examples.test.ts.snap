@@ -73,7 +73,7 @@ exports[`bundled examples > examples/scissor.json > replays, builds on both geom
 exports[`bundled examples > public/examples/fourbar.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
-    "body": "ext100",
+    "body": "ext160",
     "max": [
       3,
       40,
@@ -88,7 +88,7 @@ exports[`bundled examples > public/examples/fourbar.json > replays, builds on bo
     "volume": 3120,
   },
   {
-    "body": "ext170",
+    "body": "ext265",
     "max": [
       64,
       58,
@@ -103,7 +103,7 @@ exports[`bundled examples > public/examples/fourbar.json > replays, builds on bo
     "volume": 2515.6,
   },
   {
-    "body": "ext240",
+    "body": "ext370",
     "max": [
       102,
       50,
@@ -118,7 +118,7 @@ exports[`bundled examples > public/examples/fourbar.json > replays, builds on bo
     "volume": 2442.6,
   },
   {
-    "body": "ext30",
+    "body": "ext55",
     "max": [
       72,
       0,

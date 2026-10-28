@@ -212,7 +212,7 @@ straight from a URL:
 ?mode=customize&example=scissor        # a parametric scissor lift (linkage count is a slider)
 ?mode=customize&example=scissor-jointed # the scissor as a jointed assembly (count + articulates)
 ?mode=customize&example=starbox        # snap-together star box: width + height sliders, print material dropdown; opens on the one printable half, tick fullBox for both (one flipped)
-?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain
+?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain, print material dropdown
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```
 

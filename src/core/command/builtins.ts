@@ -225,6 +225,21 @@ function normalizeBounds(p: { min?: number; max?: number; values?: number[] }): 
   return out;
 }
 
+/** A flexure strip's dimensions: numbers as given, expressions evaluated (and
+ *  kept, so they follow the parameters). Each must come out positive. */
+function flexureSection(f: { length: number | string; width: number | string; thickness: number | string }, scope: Record<string, number>): { length: number; width: number; thickness: number; exprs?: Partial<Record<"length" | "width" | "thickness", string>> } {
+  const out = { length: 0, width: 0, thickness: 0 };
+  const exprs: Partial<Record<"length" | "width" | "thickness", string>> = {};
+  for (const k of ["length", "width", "thickness"] as const) {
+    const v = f[k];
+    const n = typeof v === "number" ? v : compileExpr(String(v)).eval(scope);
+    if (typeof v === "string") exprs[k] = v;
+    if (!(Number.isFinite(n) && n > 0)) throw new Error(`flexure ${k} must be positive (got ${v} = ${n})`);
+    out[k] = n;
+  }
+  return Object.keys(exprs).length ? { ...out, exprs } : out;
+}
+
 /** A named choice's names: at least two, distinct, and nothing else bounding it. */
 function checkOptions(p: { min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[] }): string[] {
   if (p.min != null || p.max != null || p.step != null || p.values || p.boolean) throw new Error("a named choice takes no extents, value list or checkbox");
@@ -425,8 +440,8 @@ export const BUILTINS: CommandDef<any>[] = [
           type: "object",
           required: ["length", "width", "thickness"],
           additionalProperties: false,
-          description: "flexure only: the hinge strip (mm). length along the strip, thickness in the bending direction, width along the hinge axis.",
-          properties: { length: { type: "number", exclusiveMinimum: 0 }, width: { type: "number", exclusiveMinimum: 0 }, thickness: { type: "number", exclusiveMinimum: 0 }, material: { type: "string", description: "Hinge material id (default: the moved component's)." } },
+          description: "flexure only: the hinge strip (mm). length along the strip, thickness in the bending direction, width along the hinge axis. Each may be a number or an expression in the parameters, e.g. \"hingeT\".",
+          properties: { length: { type: ["number", "string"] }, width: { type: ["number", "string"] }, thickness: { type: ["number", "string"] }, material: { type: "string", description: "Hinge material id (default: the moved component's)." } },
         },
         base: { type: "string", description: "Base component id. Defaults to the root (ground)." },
         moved: { type: "string", description: "Component to position." },
@@ -445,7 +460,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Pin a bracket to the base at its origin", params: { moved: "cmp3", baseOrigin: { x: 40, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 } } },
       { note: "Revolute joint spun 30°", params: { kind: "revolute", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 20 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "30" } },
     ],
-    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure"; base?: string; moved: string; baseOrigin: Vec3; movedOrigin: Vec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number; width: number; thickness: number; material?: string }; name?: string }, ctx) {
+    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure"; base?: string; moved: string; baseOrigin: Vec3; movedOrigin: Vec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
@@ -457,6 +472,8 @@ export const BUILTINS: CommandDef<any>[] = [
       }
       if (kind === "flexure" && !p.flexure) throw new Error("flexure joint needs a flexure section {length, width, thickness}");
       if (p.flexure?.material && !draft.materials[p.flexure.material]) throw new Error(`No material "${p.flexure.material}"`);
+      // a flexure dimension may be an expression: evaluate it now (and reject it before allocating)
+      const section = kind === "flexure" ? flexureSection(p.flexure!, resolveParameters(draft.parameters).scope) : undefined;
       if (p.closes && p.solve) throw new Error("a closing joint is the constraint; give `solve` to the joints it determines");
       if (p.closes && !Object.values(draft.joints).some((j) => j.moved === p.moved && !j.closes)) throw new Error("a closing joint's moved component must already be placed by another joint");
       const id = ctx.alloc("jnt");
@@ -476,7 +493,7 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(kind === "pin-slot" ? { pin: v3(p.pin!), slotBase: p.slotBase ?? base, slotPoint: v3(p.slotPoint!), slotDir: v3(p.slotDir!) } : {}),
         ...(p.solve ? { solve: true } : {}),
         ...(p.closes ? { closes: true } : {}),
-        ...(kind === "flexure" ? { flexure: { length: p.flexure!.length, width: p.flexure!.width, thickness: p.flexure!.thickness, ...(p.flexure!.material ? { material: p.flexure!.material } : {}) } } : {}),
+        ...(section ? { flexure: { ...section, ...(p.flexure!.material ? { material: p.flexure!.material } : {}) } } : {}),
       };
       return { createdIds: [id], message: `${draft.joints[id].kind} joint` };
     },

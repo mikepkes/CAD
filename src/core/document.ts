@@ -433,6 +433,9 @@ export interface FlexureSection {
   width: number;
   thickness: number;
   material?: string;
+  /** Dimensions given as expressions in the parameters (e.g. one per print
+   *  material); the numbers above are their last evaluation. */
+  exprs?: Partial<Record<"length" | "width" | "thickness", string>>;
 }
 
 /** A named attachment frame on a component, in that component's LOCAL coordinates.
@@ -553,8 +556,10 @@ export interface CadDocument {
 }
 
 /** The material that applies to `componentId`: its own, else the nearest ancestor's
- *  (root may hold the document default). Undefined → the viewport's plain default. */
-export function materialForComponent(doc: CadDocument, componentId: string | undefined): Material | undefined {
+ *  (root may hold the document default). Undefined → the viewport's plain default.
+ *  A material picked by a parameter reads it from `scope` when given (e.g. a
+ *  study's overrides), else from the document's last evaluation. */
+export function materialForComponent(doc: CadDocument, componentId: string | undefined, scope?: Record<string, number>): Material | undefined {
   let id = componentId;
   const seen = new Set<string>();
   while (id && !seen.has(id)) {
@@ -562,7 +567,7 @@ export function materialForComponent(doc: CadDocument, componentId: string | und
     const c = doc.components[id];
     if (!c) break;
     if (c.materialChoice) {
-      const v = doc.parameters.find((p) => p.name === c.materialChoice!.by)?.value ?? 0;
+      const v = scope?.[c.materialChoice.by] ?? doc.parameters.find((p) => p.name === c.materialChoice!.by)?.value ?? 0;
       const m = doc.materials[c.materialChoice.materials[Math.round(v)]];
       if (m) return m;
     }

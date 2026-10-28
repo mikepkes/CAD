@@ -223,6 +223,10 @@ export function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<strin
   const closures: Joint[] = [];
   for (const j of Object.values(doc.joints)) {
     j.error = undefined;
+    // flexure dimensions given as expressions follow the parameters
+    if (j.flexure?.exprs) for (const [k, e] of Object.entries(j.flexure.exprs) as ["length" | "width" | "thickness", string][]) {
+      try { const v = compileExpr(e).eval(scope); if (Number.isFinite(v) && v > 0) j.flexure[k] = v; } catch { /* keep last */ }
+    }
     if (!doc.components[j.base]) { j.error = `joint base "${j.base}" not found`; continue; }
     if (!doc.components[j.moved]) { j.error = `joint moved "${j.moved}" not found`; continue; }
     if (j.closes) closures.push(j); // a constraint, not a placement

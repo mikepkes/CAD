@@ -202,3 +202,20 @@ describe("named-choice parameters", () => {
     expect((await s.dispatch("material.assign", { component: comp, materials: [pla], by: "nope" })).ok).toBe(false);
   });
 });
+
+describe("expression flexure strips", () => {
+  it("size the hinge from the parameters, and reject a strip that isn't positive", async () => {
+    const s = realSession();
+    await dis(s, "parameter.add", { name: "t", expression: "1" });
+    const a = (await dis(s, "component.create", { name: "A" }))[0];
+    const b = (await dis(s, "component.create", { name: "B" }))[0];
+    const o = { x: 0, y: 0, z: 0 };
+    const j = (await dis(s, "joint.create", { kind: "flexure", base: a, moved: b, baseOrigin: o, movedOrigin: o, flexure: { length: "4*t", width: 6, thickness: "t" } }))[0];
+    expect(s.doc.joints[j].flexure).toMatchObject({ length: 4, width: 6, thickness: 1 });
+    await dis(s, "parameter.set", { name: "t", expression: "0.8" });
+    await s.recompute();
+    expect(s.doc.joints[j].flexure!.length).toBeCloseTo(3.2, 12);
+    expect(s.doc.joints[j].flexure!.thickness).toBe(0.8);
+    expect((await s.dispatch("joint.create", { kind: "flexure", base: a, moved: b, baseOrigin: o, movedOrigin: o, flexure: { length: "t - 2", width: 6, thickness: 1 } })).ok).toBe(false);
+  });
+});
