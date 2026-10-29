@@ -160,6 +160,12 @@ export interface Sketch {
    * template's: instanceWorld · inverse(templateWorld).
    */
   templatePlane?: { plane: WorkPlane; componentId: string };
+  /**
+   * An offset or explicit plane, as drawn in its component (as modelled): the
+   * component's placement carries it, as it does an origin-plane sketch's, so
+   * a sketch lifted off a moving part's floor moves with the part.
+   */
+  localPlane?: WorkPlane;
   originPointId: EntityId;
   entities: Record<EntityId, SketchEntity>;
   constraints: Record<ConstraintId, Constraint>;

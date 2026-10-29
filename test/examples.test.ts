@@ -38,7 +38,7 @@ const EXAMPLES = DIRS.flatMap((d) => {
 const KNOWN_OVERLAPS: Record<string, string> = {
   "public/examples/roubo.json":
     "clearance cuts are missing: rail/leg tenons sit in legs and top with no mortise, the vise screw passes " +
-    "Leg FL with no bore, the crisscross arms pass the chop with no slot, pins have no holes, handles no bores",
+    "Leg FL with no bore, pins have no holes, handles no bores",
 };
 
 const r1 = (v: number | undefined) => (v == null ? null : Math.round(v * 10) / 10);
