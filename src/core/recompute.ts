@@ -168,6 +168,14 @@ function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope): Rigid {
   } else if (j.kind === "slider") {
     const m = Math.hypot(j.axis.x, j.axis.y, j.axis.z) || 1;
     motion = translation({ x: (j.axis.x / m) * value, y: (j.axis.y / m) * value, z: (j.axis.z / m) * value });
+  } else if (j.kind === "planar") {
+    const pv = (j.planarValue ??= { x: 0, y: 0, angle: 0 });
+    for (const k of ["x", "y", "angle"] as const) {
+      const e = j.planar?.[k];
+      if (e !== undefined) try { const v = compileExpr(e).eval(scope); if (Number.isFinite(v)) pv[k] = v; } catch { /* keep last */ }
+    }
+    // turn about the connector, then shift
+    motion = compose(translation({ x: pv.x, y: pv.y, z: 0 }), rotationAbout({ x: 0, y: 0, z: 1 }, pv.angle * DEG, j.baseOrigin));
   } else {
     motion = IDENTITY; // rigid
   }
@@ -218,7 +226,27 @@ function jointWorldPinSlot(baseWorld: Rigid, slotBaseWorld: Rigid, j: Joint): Ri
 
 /** Resolve every component's world frame — from its joint if it has one, else
  *  its static placement composed down the parent chain — then close any loops. */
-export function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<string, Rigid> {
+/** Settles a document's free planar axes (minimum stored energy) and returns
+ *  the settled placement; `place` re-places the parts for the axes as they
+ *  stand. Supplied by the compliance layer (src/sim/flexure.ts), which owns the
+ *  energy model; without it, free axes stay where they last were. */
+export type EnergySettler = (doc: CadDocument, scope: Scope, place: () => Map<string, Rigid>) => Map<string, Rigid> | undefined;
+let settler: EnergySettler | undefined;
+export function setEnergySettler(fn: EnergySettler): void { settler = fn; }
+/** Any planar joint with an axis left free to settle. */
+export const hasFreeAxes = (doc: CadDocument): boolean =>
+  Object.values(doc.joints).some((j) => j.kind === "planar" && (["x", "y", "angle"] as const).some((k) => j.planar?.[k] === undefined));
+
+/** Place every component. With `settle` (the default), free planar axes are
+ *  then settled at minimum stored energy; without it they stay as they are
+ *  (what a settler itself, or a probe around a settled pose, wants). */
+export function resolveComponentWorld(doc: CadDocument, scope: Scope, opts: { settle?: boolean } = {}): Map<string, Rigid> {
+  const place = () => placeComponents(doc, scope);
+  if (opts.settle !== false && settler && hasFreeAxes(doc)) return settler(doc, scope, place) ?? place();
+  return place();
+}
+
+function placeComponents(doc: CadDocument, scope: Scope): Map<string, Rigid> {
   const jointByMoved = new Map<string, Joint>();
   const closures: Joint[] = [];
   for (const j of Object.values(doc.joints)) {

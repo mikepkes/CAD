@@ -67,6 +67,18 @@ strips also resize for it. How it works is in
     plunger rides a parallelogram guide, and pushrods turn the jaw levers, so
     each jaw tip moves about 3.7× as far as the plunger.
   - **Try:** `jaw` changes the lever length.
+- **XY stage:** https://mikepkes.github.io/CAD/?mode=customize&example=xystage
+  - **What it is:** a platform that moves in X and Y on thin blades, with two
+    inputs. A carriage hangs in the frame on four vertical blades and moves in
+    X; the platform hangs in the carriage on four horizontal blades and moves in
+    Y.
+  - **The physics:** the blades are solved as beams. Each stage's sideways
+    drift and turn aren't set by any input, so Chisel lets them settle where
+    the stored energy is least.
+  - **The redundancy:** the blades on either side hold each stage centred
+    against each other, so they must stretch. That makes the stage stiffen with
+    travel, which is why precision stages use double parallelograms instead.
+  - **Try:** `blade` length and `thickness`.
 - **Snap fits:** the star box above. Its tongues are cantilever springs, sized
   per material with the same beam solver.
 
@@ -253,6 +265,7 @@ straight from a URL:
 ?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain; link-length sliders, print material dropdown
 ?mode=customize&example=bistable       # bistable switch: curved beams that snap between two rest positions; span / rise / thickness sliders
 ?mode=customize&example=gripper        # compliant gripper: 10 hinges, 3 loops, amplified jaws; jaw length slider
+?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```
 

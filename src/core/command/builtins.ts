@@ -444,13 +444,20 @@ export const BUILTINS: CommandDef<any>[] = [
       "Joins the `moved` component to `base` (default root) so a connector point on each — given in that component's LOCAL coordinates — coincides, then applies the joint motion. `rigid` fixes it; `revolute` leaves free rotation about `axis` (base-local) by `value` degrees; `slider` leaves free translation along `axis` by `value`. `pin-slot` rotates about `axis` but SOLVES the angle so the moved-body point `pin` stays on the slot line (`slotPoint`+`slotDir` in `slotBase`'s frame) — a 1-DOF mechanism constraint, so the kernel finds the angle instead of you supplying trig. `value` is a parametric expression (a seed for pin-slot). " +
       "`flexure` is a compliant hinge: it moves like `revolute` but carries a `flexure` section {length, width, thickness} so its strain, stiffness and stored energy can be computed (a small-length flexural pivot; the hinge material is the moved component's, or `flexure.material`). " +
       "`beam` is a long compliant strip clamped from `baseOrigin` (on base) to `movedOrigin` (on moved), both in the parts' as-modelled coordinates: it places nothing (other joints place both parts) but its energy, force and strain are solved as a large-deflection beam as they move — e.g. the curved beams of a bistable switch. Give `beam` {width, thickness, profile: straight|cosine}. " +
+      "`planar` lets `moved` translate and turn in the base's XY plane: `planar` {x, y, angle} gives each axis an expression to drive it, and an axis left out is free — it settles where the stored elastic energy (beams, flexures) is least, so a part floats on its compliant supports (e.g. a flexure stage's parasitic drift). " +
       "Closed loops (a four-bar): give the undriven joints `solve: true` (their value is found, `value` only seeds it) and close the loop with one more joint that has `closes: true` — it places nothing; its two connectors are made to coincide. Returns the joint id.",
     paramsSchema: {
       type: "object",
       required: ["moved", "baseOrigin", "movedOrigin"],
       additionalProperties: false,
       properties: {
-        kind: { type: "string", enum: ["rigid", "revolute", "slider", "pin-slot", "flexure", "beam"], description: "Joint type (default rigid)." },
+        kind: { type: "string", enum: ["rigid", "revolute", "slider", "pin-slot", "flexure", "beam", "planar"], description: "Joint type (default rigid)." },
+        planar: {
+          type: "object",
+          additionalProperties: false,
+          description: "planar only: an expression for each driven axis — x, y (mm, in the base frame) and angle (°, about the connector). An axis left out settles at minimum stored energy.",
+          properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, angle: { type: ["number", "string"] } },
+        },
         beam: {
           type: "object",
           required: ["width", "thickness"],
@@ -484,7 +491,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Pin a bracket to the base at its origin", params: { moved: "cmp3", baseOrigin: { x: 40, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 } } },
       { note: "Revolute joint spun 30°", params: { kind: "revolute", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 20 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "30" } },
     ],
-    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam"; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
+    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam" | "planar"; planar?: Partial<Record<"x" | "y" | "angle", number | string>>; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
@@ -496,6 +503,17 @@ export const BUILTINS: CommandDef<any>[] = [
       }
       if (kind === "flexure" && !p.flexure) throw new Error("flexure joint needs a flexure section {length, width, thickness}");
       if (kind === "beam" && !p.beam) throw new Error("beam joint needs a beam section {width, thickness}");
+      let planar: Partial<Record<"x" | "y" | "angle", string>> | undefined;
+      if (kind === "planar") {
+        planar = {};
+        for (const k of ["x", "y", "angle"] as const) {
+          const v = p.planar?.[k];
+          if (v === undefined) continue;
+          const n = compileExpr(String(v)).eval(resolveParameters(draft.parameters).scope); // rejects a bad expression before anything is made
+          if (!Number.isFinite(n)) throw new Error(`planar ${k} does not evaluate (${v})`);
+          planar[k] = String(v);
+        }
+      }
       if (p.beam?.material && !draft.materials[p.beam.material]) throw new Error(`No material "${p.beam.material}"`);
       if (p.flexure?.material && !draft.materials[p.flexure.material]) throw new Error(`No material "${p.flexure.material}"`);
       // a flexure dimension may be an expression: evaluate it now (and reject it before allocating)
@@ -533,6 +551,7 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.closes ? { closes: true } : {}),
         ...(section ? { flexure: { ...section, ...(p.flexure!.material ? { material: p.flexure!.material } : {}) } } : {}),
         ...(beam ? { beam } : {}),
+        ...(planar ? { planar, planarValue: { x: 0, y: 0, angle: 0 } } : {}),
       };
       return { createdIds: [id], message: `${draft.joints[id].kind} joint` };
     },

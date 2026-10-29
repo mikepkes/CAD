@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flexureEquilibria, flexureState, flexureSweep, hasFlexures, isAngularDrive, type EquilibriumStudy } from "../sim/flexure";
 import { compileExpr } from "../math/expr";
+import type { Parameter } from "../core/document";
 import { Viewport } from "./Viewport";
 import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
@@ -105,23 +106,26 @@ function MotionBadge() {
  *  working (strain against its material's limit), what it takes to hold this
  *  pose, and the energy stored. Pure math on the solved pose — no rebuild — so it
  *  follows the slider. */
-/** The parameter that drives a compliant mechanism: a placing joint (not solved,
- *  not closing a loop) whose motion follows a bounded parameter. */
-function driveOf(doc: ReturnType<typeof useStore.getState>["session"]["doc"]) {
+/** The parameters that drive a compliant mechanism: bounded parameters that a
+ *  placing joint's motion follows (a planar joint can have one per axis). */
+function drivesOf(doc: ReturnType<typeof useStore.getState>["session"]["doc"]) {
+  const out: Parameter[] = [];
   for (const j of Object.values(doc.joints)) {
     if (j.solve || j.closes || j.kind === "beam" || j.kind === "rigid") continue;
-    let deps: string[] = [];
-    try { deps = compileExpr(j.valueExpr).deps; } catch { continue; }
-    const p = doc.parameters.find((q) => deps.includes(q.name) && q.min != null && q.max != null);
-    if (p) return p;
+    for (const e of j.kind === "planar" ? Object.values(j.planar ?? {}) : [j.valueExpr]) {
+      let deps: string[] = [];
+      try { deps = compileExpr(String(e)).deps; } catch { continue; }
+      for (const p of doc.parameters) if (deps.includes(p.name) && p.min != null && p.max != null && !out.includes(p)) out.push(p);
+    }
   }
-  return undefined;
+  return out;
 }
 
 function FlexureReadout() {
   const doc = useStore((s) => s.session.doc);
   const rev = useStore((s) => s.rev);
-  const param = hasFlexures(doc) ? driveOf(doc) : undefined;
+  const drives = hasFlexures(doc) ? drivesOf(doc) : [];
+  const param = drives[0];
   // Where it rests along its drive (a bistable switch has two): a sweep of the
   // whole range, so it waits until the controls have been still for a moment.
   const [rest, setRest] = useState<{ key: string; study: EquilibriumStudy } | null>(null);
@@ -132,7 +136,10 @@ function FlexureReadout() {
     return () => clearTimeout(t);
   }, [key, rev]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!hasFlexures(doc)) return null;
+  // the effort at each drive; the first drive's sweep runs last, leaving it posed as it stands
+  const efforts = drives.slice(1).map((d) => ({ d, effort: flexureSweep(doc, d.name, [d.value])[0].effort }));
   const st = param ? flexureSweep(doc, param.name, [param.value])[0] : { ...flexureState(doc), effort: NaN };
+  if (param) efforts.unshift({ d: param, effort: st.effort });
   const over = st.utilisation > 1;
   const angular = param ? isAngularDrive(doc, param.name) : false;
   const unit = angular ? "°" : " mm"; // a non-angle drive is a length
@@ -156,7 +163,9 @@ function FlexureReadout() {
       })}
       <div className="cz-flex-foot">
         {st.flexures[0]?.allowable != null && <span>limit {(st.flexures[0].allowable * 100).toFixed(0)}%</span>}
-        {Number.isFinite(st.effort) && <span>{angular ? `input torque ${Math.abs(st.effort).toFixed(0)} N·mm` : `input force ${Math.abs(st.effort).toFixed(1)} N`}</span>}
+        {efforts.length > 1
+          ? efforts.map(({ d, effort }) => <span key={d.name}>{isAngularDrive(doc, d.name) ? `${d.name} torque ${Math.abs(effort).toFixed(0)} N·mm` : `${d.name} force ${Math.abs(effort).toFixed(1)} N`}</span>)
+          : Number.isFinite(st.effort) && <span>{angular ? `input torque ${Math.abs(st.effort).toFixed(0)} N·mm` : `input force ${Math.abs(st.effort).toFixed(1)} N`}</span>}
         <span>stored {st.energy.toFixed(1)} mJ</span>
       </div>
       {param && study && stable.length > 0 && (

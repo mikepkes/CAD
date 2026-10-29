@@ -1051,3 +1051,53 @@ exports[`bundled examples > public/examples/starbox.json > replays, builds on bo
   },
 ]
 `;
+
+exports[`bundled examples > public/examples/xystage.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext1094",
+    "max": [
+      12,
+      12,
+      6,
+    ],
+    "min": [
+      -12,
+      -12,
+      0,
+    ],
+    "name": "Platform",
+    "volume": 3456,
+  },
+  {
+    "body": "ext54",
+    "max": [
+      66,
+      66,
+      6,
+    ],
+    "min": [
+      -66,
+      -66,
+      0,
+    ],
+    "name": "Frame top",
+    "volume": 18835.2,
+  },
+  {
+    "body": "ext574",
+    "max": [
+      54,
+      24,
+      6,
+    ],
+    "min": [
+      -54,
+      -24,
+      0,
+    ],
+    "name": "Carriage top",
+    "volume": 11059.2,
+  },
+]
+`;

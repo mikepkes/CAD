@@ -1,0 +1,8918 @@
+{
+  "format": "chisel-cad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 1115,
+  "rollbackIndex": 550,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "x",
+        "expression": "0",
+        "min": -2,
+        "max": 2,
+        "step": 0.1
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1793233036061
+    },
+    {
+      "opId": "op3",
+      "type": "parameter.add",
+      "params": {
+        "name": "y",
+        "expression": "0",
+        "min": -2,
+        "max": 2,
+        "step": 0.1
+      },
+      "createdIds": [
+        "param4"
+      ],
+      "label": "Add parameter",
+      "at": 1793233036063
+    },
+    {
+      "opId": "op5",
+      "type": "parameter.add",
+      "params": {
+        "name": "blade",
+        "expression": "36",
+        "min": 24,
+        "max": 44,
+        "step": 1
+      },
+      "createdIds": [
+        "param6"
+      ],
+      "label": "Add parameter",
+      "at": 1793233036063
+    },
+    {
+      "opId": "op7",
+      "type": "parameter.add",
+      "params": {
+        "name": "thickness",
+        "expression": "0.8",
+        "min": 0.6,
+        "max": 1.2,
+        "step": 0.1
+      },
+      "createdIds": [
+        "param8"
+      ],
+      "label": "Add parameter",
+      "at": 1793233036063
+    },
+    {
+      "opId": "op9",
+      "type": "parameter.add",
+      "params": {
+        "name": "material",
+        "expression": "5",
+        "options": [
+          "PLA",
+          "PETG",
+          "ABS / ASA",
+          "Nylon",
+          "PP (polypropylene)",
+          "TPU 68D (TPU for AMS)",
+          "TPU 95A"
+        ]
+      },
+      "createdIds": [
+        "param10"
+      ],
+      "label": "Add parameter",
+      "at": 1793233036064
+    },
+    {
+      "opId": "op11",
+      "type": "material.create",
+      "params": {
+        "name": "PLA",
+        "kind": "plastic",
+        "finish": "matte",
+        "color": "#5b8def",
+        "youngsModulus": 3000,
+        "allowableStrain": 0.02
+      },
+      "createdIds": [
+        "mat12"
+      ],
+      "label": "Create material",
+      "at": 1793233036064
+    },
+    {
+      "opId": "op13",
+      "type": "material.create",
+      "params": {
+        "name": "PETG",
+        "kind": "plastic",
+        "finish": "gloss",
+        "color": "#3fb6a8",
+        "youngsModulus": 1900,
+        "allowableStrain": 0.03
+      },
+      "createdIds": [
+        "mat14"
+      ],
+      "label": "Create material",
+      "at": 1793233036064
+    },
+    {
+      "opId": "op15",
+      "type": "material.create",
+      "params": {
+        "name": "ABS / ASA",
+        "kind": "plastic",
+        "finish": "satin",
+        "color": "#e05a4f",
+        "youngsModulus": 2000,
+        "allowableStrain": 0.025
+      },
+      "createdIds": [
+        "mat16"
+      ],
+      "label": "Create material",
+      "at": 1793233036065
+    },
+    {
+      "opId": "op17",
+      "type": "material.create",
+      "params": {
+        "name": "Nylon",
+        "kind": "plastic",
+        "finish": "satin",
+        "color": "#e8e2d0",
+        "youngsModulus": 1200,
+        "allowableStrain": 0.05
+      },
+      "createdIds": [
+        "mat18"
+      ],
+      "label": "Create material",
+      "at": 1793233036065
+    },
+    {
+      "opId": "op19",
+      "type": "material.create",
+      "params": {
+        "name": "PP (polypropylene)",
+        "kind": "plastic",
+        "finish": "satin",
+        "color": "#d9dde3",
+        "youngsModulus": 1000,
+        "allowableStrain": 0.1
+      },
+      "createdIds": [
+        "mat20"
+      ],
+      "label": "Create material",
+      "at": 1793233036066
+    },
+    {
+      "opId": "op21",
+      "type": "material.create",
+      "params": {
+        "name": "TPU 68D (TPU for AMS)",
+        "kind": "plastic",
+        "finish": "matte",
+        "color": "#e9b949",
+        "youngsModulus": 1190,
+        "allowableStrain": 0.08
+      },
+      "createdIds": [
+        "mat22"
+      ],
+      "label": "Create material",
+      "at": 1793233036066
+    },
+    {
+      "opId": "op23",
+      "type": "material.create",
+      "params": {
+        "name": "TPU 95A",
+        "kind": "plastic",
+        "finish": "matte",
+        "color": "#f28c4e",
+        "youngsModulus": 26,
+        "allowableStrain": 0.15
+      },
+      "createdIds": [
+        "mat24"
+      ],
+      "label": "Create material",
+      "at": 1793233036066
+    },
+    {
+      "opId": "op25",
+      "type": "component.create",
+      "params": {
+        "name": "Frame"
+      },
+      "createdIds": [
+        "cmp26"
+      ],
+      "label": "New component",
+      "at": 1793233036066
+    },
+    {
+      "opId": "op27",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp26",
+        "materials": [
+          "mat12",
+          "mat14",
+          "mat16",
+          "mat18",
+          "mat20",
+          "mat22",
+          "mat24"
+        ],
+        "by": "material"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793233036067
+    },
+    {
+      "opId": "op28",
+      "type": "component.create",
+      "params": {
+        "name": "X carriage"
+      },
+      "createdIds": [
+        "cmp29"
+      ],
+      "label": "New component",
+      "at": 1793233036067
+    },
+    {
+      "opId": "op30",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp29",
+        "materials": [
+          "mat12",
+          "mat14",
+          "mat16",
+          "mat18",
+          "mat20",
+          "mat22",
+          "mat24"
+        ],
+        "by": "material"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793233036067
+    },
+    {
+      "opId": "op31",
+      "type": "component.create",
+      "params": {
+        "name": "Platform"
+      },
+      "createdIds": [
+        "cmp32"
+      ],
+      "label": "New component",
+      "at": 1793233036067
+    },
+    {
+      "opId": "op33",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp32",
+        "materials": [
+          "mat12",
+          "mat14",
+          "mat16",
+          "mat18",
+          "mat20",
+          "mat22",
+          "mat24"
+        ],
+        "by": "material"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793233036068
+    },
+    {
+      "opId": "op34",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp26",
+        "name": "Frame top"
+      },
+      "createdIds": [
+        "sketch35",
+        "pt36"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036068
+    },
+    {
+      "opId": "op37",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch35",
+        "x": "-((12 + blade + 6) + 12)",
+        "y": "(24 + blade)"
+      },
+      "createdIds": [
+        "pt38"
+      ],
+      "label": "Add point",
+      "at": 1793233036094
+    },
+    {
+      "opId": "op39",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch35",
+        "x": "((12 + blade + 6) + 12)",
+        "y": "(24 + blade)"
+      },
+      "createdIds": [
+        "pt40"
+      ],
+      "label": "Add point",
+      "at": 1793233036095
+    },
+    {
+      "opId": "op41",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch35",
+        "x": "((12 + blade + 6) + 12)",
+        "y": "(24 + blade + 6)"
+      },
+      "createdIds": [
+        "pt42"
+      ],
+      "label": "Add point",
+      "at": 1793233036096
+    },
+    {
+      "opId": "op43",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch35",
+        "x": "-((12 + blade + 6) + 12)",
+        "y": "(24 + blade + 6)"
+      },
+      "createdIds": [
+        "pt44"
+      ],
+      "label": "Add point",
+      "at": 1793233036096
+    },
+    {
+      "opId": "op45",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch35",
+        "start": {
+          "ref": "pt38"
+        },
+        "end": {
+          "ref": "pt40"
+        }
+      },
+      "createdIds": [
+        "ln46"
+      ],
+      "label": "Add line",
+      "at": 1793233036097
+    },
+    {
+      "opId": "op47",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch35",
+        "start": {
+          "ref": "pt40"
+        },
+        "end": {
+          "ref": "pt42"
+        }
+      },
+      "createdIds": [
+        "ln48"
+      ],
+      "label": "Add line",
+      "at": 1793233036098
+    },
+    {
+      "opId": "op49",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch35",
+        "start": {
+          "ref": "pt42"
+        },
+        "end": {
+          "ref": "pt44"
+        }
+      },
+      "createdIds": [
+        "ln50"
+      ],
+      "label": "Add line",
+      "at": 1793233036099
+    },
+    {
+      "opId": "op51",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch35",
+        "start": {
+          "ref": "pt44"
+        },
+        "end": {
+          "ref": "pt38"
+        }
+      },
+      "createdIds": [
+        "ln52"
+      ],
+      "label": "Add line",
+      "at": 1793233036099
+    },
+    {
+      "opId": "op53",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch35",
+        "distance": "6",
+        "operation": "new",
+        "name": "Frame top"
+      },
+      "createdIds": [
+        "ext54"
+      ],
+      "label": "Extrude",
+      "at": 1793233036100
+    },
+    {
+      "opId": "op55",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp26",
+        "name": "Frame bottom"
+      },
+      "createdIds": [
+        "sketch56",
+        "pt57"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036101
+    },
+    {
+      "opId": "op58",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch56",
+        "x": "-((12 + blade + 6) + 12)",
+        "y": "-(24 + blade + 6)"
+      },
+      "createdIds": [
+        "pt59"
+      ],
+      "label": "Add point",
+      "at": 1793233036102
+    },
+    {
+      "opId": "op60",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch56",
+        "x": "((12 + blade + 6) + 12)",
+        "y": "-(24 + blade + 6)"
+      },
+      "createdIds": [
+        "pt61"
+      ],
+      "label": "Add point",
+      "at": 1793233036102
+    },
+    {
+      "opId": "op62",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch56",
+        "x": "((12 + blade + 6) + 12)",
+        "y": "-(24 + blade)"
+      },
+      "createdIds": [
+        "pt63"
+      ],
+      "label": "Add point",
+      "at": 1793233036103
+    },
+    {
+      "opId": "op64",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch56",
+        "x": "-((12 + blade + 6) + 12)",
+        "y": "-(24 + blade)"
+      },
+      "createdIds": [
+        "pt65"
+      ],
+      "label": "Add point",
+      "at": 1793233036104
+    },
+    {
+      "opId": "op66",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch56",
+        "start": {
+          "ref": "pt59"
+        },
+        "end": {
+          "ref": "pt61"
+        }
+      },
+      "createdIds": [
+        "ln67"
+      ],
+      "label": "Add line",
+      "at": 1793233036105
+    },
+    {
+      "opId": "op68",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch56",
+        "start": {
+          "ref": "pt61"
+        },
+        "end": {
+          "ref": "pt63"
+        }
+      },
+      "createdIds": [
+        "ln69"
+      ],
+      "label": "Add line",
+      "at": 1793233036105
+    },
+    {
+      "opId": "op70",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch56",
+        "start": {
+          "ref": "pt63"
+        },
+        "end": {
+          "ref": "pt65"
+        }
+      },
+      "createdIds": [
+        "ln71"
+      ],
+      "label": "Add line",
+      "at": 1793233036106
+    },
+    {
+      "opId": "op72",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch56",
+        "start": {
+          "ref": "pt65"
+        },
+        "end": {
+          "ref": "pt59"
+        }
+      },
+      "createdIds": [
+        "ln73"
+      ],
+      "label": "Add line",
+      "at": 1793233036107
+    },
+    {
+      "opId": "op74",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch56",
+        "distance": "6",
+        "operation": "join",
+        "name": "Frame bottom"
+      },
+      "createdIds": [
+        "ext75"
+      ],
+      "label": "Extrude",
+      "at": 1793233036112
+    },
+    {
+      "opId": "op76",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp26",
+        "name": "Frame left"
+      },
+      "createdIds": [
+        "sketch77",
+        "pt78"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036113
+    },
+    {
+      "opId": "op79",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch77",
+        "x": "-((12 + blade + 6) + 12)",
+        "y": "-(24 + blade)"
+      },
+      "createdIds": [
+        "pt80"
+      ],
+      "label": "Add point",
+      "at": 1793233036113
+    },
+    {
+      "opId": "op81",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch77",
+        "x": "-((12 + blade + 6) + 6)",
+        "y": "-(24 + blade)"
+      },
+      "createdIds": [
+        "pt82"
+      ],
+      "label": "Add point",
+      "at": 1793233036114
+    },
+    {
+      "opId": "op83",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch77",
+        "x": "-((12 + blade + 6) + 6)",
+        "y": "(24 + blade)"
+      },
+      "createdIds": [
+        "pt84"
+      ],
+      "label": "Add point",
+      "at": 1793233036115
+    },
+    {
+      "opId": "op85",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch77",
+        "x": "-((12 + blade + 6) + 12)",
+        "y": "(24 + blade)"
+      },
+      "createdIds": [
+        "pt86"
+      ],
+      "label": "Add point",
+      "at": 1793233036116
+    },
+    {
+      "opId": "op87",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch77",
+        "start": {
+          "ref": "pt80"
+        },
+        "end": {
+          "ref": "pt82"
+        }
+      },
+      "createdIds": [
+        "ln88"
+      ],
+      "label": "Add line",
+      "at": 1793233036117
+    },
+    {
+      "opId": "op89",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch77",
+        "start": {
+          "ref": "pt82"
+        },
+        "end": {
+          "ref": "pt84"
+        }
+      },
+      "createdIds": [
+        "ln90"
+      ],
+      "label": "Add line",
+      "at": 1793233036118
+    },
+    {
+      "opId": "op91",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch77",
+        "start": {
+          "ref": "pt84"
+        },
+        "end": {
+          "ref": "pt86"
+        }
+      },
+      "createdIds": [
+        "ln92"
+      ],
+      "label": "Add line",
+      "at": 1793233036119
+    },
+    {
+      "opId": "op93",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch77",
+        "start": {
+          "ref": "pt86"
+        },
+        "end": {
+          "ref": "pt80"
+        }
+      },
+      "createdIds": [
+        "ln94"
+      ],
+      "label": "Add line",
+      "at": 1793233036120
+    },
+    {
+      "opId": "op95",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch77",
+        "distance": "6",
+        "operation": "join",
+        "name": "Frame left"
+      },
+      "createdIds": [
+        "ext96"
+      ],
+      "label": "Extrude",
+      "at": 1793233036121
+    },
+    {
+      "opId": "op97",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp26",
+        "name": "Frame right"
+      },
+      "createdIds": [
+        "sketch98",
+        "pt99"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036122
+    },
+    {
+      "opId": "op100",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch98",
+        "x": "((12 + blade + 6) + 6)",
+        "y": "-(24 + blade)"
+      },
+      "createdIds": [
+        "pt101"
+      ],
+      "label": "Add point",
+      "at": 1793233036123
+    },
+    {
+      "opId": "op102",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch98",
+        "x": "((12 + blade + 6) + 12)",
+        "y": "-(24 + blade)"
+      },
+      "createdIds": [
+        "pt103"
+      ],
+      "label": "Add point",
+      "at": 1793233036124
+    },
+    {
+      "opId": "op104",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch98",
+        "x": "((12 + blade + 6) + 12)",
+        "y": "(24 + blade)"
+      },
+      "createdIds": [
+        "pt105"
+      ],
+      "label": "Add point",
+      "at": 1793233036125
+    },
+    {
+      "opId": "op106",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch98",
+        "x": "((12 + blade + 6) + 6)",
+        "y": "(24 + blade)"
+      },
+      "createdIds": [
+        "pt107"
+      ],
+      "label": "Add point",
+      "at": 1793233036126
+    },
+    {
+      "opId": "op108",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch98",
+        "start": {
+          "ref": "pt101"
+        },
+        "end": {
+          "ref": "pt103"
+        }
+      },
+      "createdIds": [
+        "ln109"
+      ],
+      "label": "Add line",
+      "at": 1793233036126
+    },
+    {
+      "opId": "op110",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch98",
+        "start": {
+          "ref": "pt103"
+        },
+        "end": {
+          "ref": "pt105"
+        }
+      },
+      "createdIds": [
+        "ln111"
+      ],
+      "label": "Add line",
+      "at": 1793233036128
+    },
+    {
+      "opId": "op112",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch98",
+        "start": {
+          "ref": "pt105"
+        },
+        "end": {
+          "ref": "pt107"
+        }
+      },
+      "createdIds": [
+        "ln113"
+      ],
+      "label": "Add line",
+      "at": 1793233036129
+    },
+    {
+      "opId": "op114",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch98",
+        "start": {
+          "ref": "pt107"
+        },
+        "end": {
+          "ref": "pt101"
+        }
+      },
+      "createdIds": [
+        "ln115"
+      ],
+      "label": "Add line",
+      "at": 1793233036130
+    },
+    {
+      "opId": "op116",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch98",
+        "distance": "6",
+        "operation": "join",
+        "name": "Frame right"
+      },
+      "createdIds": [
+        "ext117"
+      ],
+      "label": "Extrude",
+      "at": 1793233036131
+    },
+    {
+      "opId": "op118",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp26",
+        "name": "X blade top left"
+      },
+      "createdIds": [
+        "sketch119",
+        "pt120"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036134
+    },
+    {
+      "opId": "op121",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*1 + (-14)*0 + 0*x - thickness/2",
+        "y": "((24 + blade))*1 + (24)*0"
+      },
+      "createdIds": [
+        "pt122"
+      ],
+      "label": "Add point",
+      "at": 1793233036136
+    },
+    {
+      "opId": "op123",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.916666666667 + (-14)*0.0833333333333 + 0.0196759259259*x - thickness/2",
+        "y": "((24 + blade))*0.916666666667 + (24)*0.0833333333333"
+      },
+      "createdIds": [
+        "pt124"
+      ],
+      "label": "Add point",
+      "at": 1793233036139
+    },
+    {
+      "opId": "op125",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.833333333333 + (-14)*0.166666666667 + 0.0740740740741*x - thickness/2",
+        "y": "((24 + blade))*0.833333333333 + (24)*0.166666666667"
+      },
+      "createdIds": [
+        "pt126"
+      ],
+      "label": "Add point",
+      "at": 1793233036145
+    },
+    {
+      "opId": "op127",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.75 + (-14)*0.25 + 0.15625*x - thickness/2",
+        "y": "((24 + blade))*0.75 + (24)*0.25"
+      },
+      "createdIds": [
+        "pt128"
+      ],
+      "label": "Add point",
+      "at": 1793233036147
+    },
+    {
+      "opId": "op129",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.666666666667 + (-14)*0.333333333333 + 0.259259259259*x - thickness/2",
+        "y": "((24 + blade))*0.666666666667 + (24)*0.333333333333"
+      },
+      "createdIds": [
+        "pt130"
+      ],
+      "label": "Add point",
+      "at": 1793233036150
+    },
+    {
+      "opId": "op131",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.583333333333 + (-14)*0.416666666667 + 0.376157407407*x - thickness/2",
+        "y": "((24 + blade))*0.583333333333 + (24)*0.416666666667"
+      },
+      "createdIds": [
+        "pt132"
+      ],
+      "label": "Add point",
+      "at": 1793233036152
+    },
+    {
+      "opId": "op133",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.5 + (-14)*0.5 + 0.5*x - thickness/2",
+        "y": "((24 + blade))*0.5 + (24)*0.5"
+      },
+      "createdIds": [
+        "pt134"
+      ],
+      "label": "Add point",
+      "at": 1793233036154
+    },
+    {
+      "opId": "op135",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.416666666667 + (-14)*0.583333333333 + 0.623842592593*x - thickness/2",
+        "y": "((24 + blade))*0.416666666667 + (24)*0.583333333333"
+      },
+      "createdIds": [
+        "pt136"
+      ],
+      "label": "Add point",
+      "at": 1793233036156
+    },
+    {
+      "opId": "op137",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.333333333333 + (-14)*0.666666666667 + 0.740740740741*x - thickness/2",
+        "y": "((24 + blade))*0.333333333333 + (24)*0.666666666667"
+      },
+      "createdIds": [
+        "pt138"
+      ],
+      "label": "Add point",
+      "at": 1793233036157
+    },
+    {
+      "opId": "op139",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.25 + (-14)*0.75 + 0.84375*x - thickness/2",
+        "y": "((24 + blade))*0.25 + (24)*0.75"
+      },
+      "createdIds": [
+        "pt140"
+      ],
+      "label": "Add point",
+      "at": 1793233036158
+    },
+    {
+      "opId": "op141",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.166666666667 + (-14)*0.833333333333 + 0.925925925926*x - thickness/2",
+        "y": "((24 + blade))*0.166666666667 + (24)*0.833333333333"
+      },
+      "createdIds": [
+        "pt142"
+      ],
+      "label": "Add point",
+      "at": 1793233036160
+    },
+    {
+      "opId": "op143",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.0833333333333 + (-14)*0.916666666667 + 0.980324074074*x - thickness/2",
+        "y": "((24 + blade))*0.0833333333333 + (24)*0.916666666667"
+      },
+      "createdIds": [
+        "pt144"
+      ],
+      "label": "Add point",
+      "at": 1793233036161
+    },
+    {
+      "opId": "op145",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0 + (-14)*1 + 1*x - thickness/2",
+        "y": "((24 + blade))*0 + (24)*1"
+      },
+      "createdIds": [
+        "pt146"
+      ],
+      "label": "Add point",
+      "at": 1793233036163
+    },
+    {
+      "opId": "op147",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0 + (-14)*1 + 1*x + thickness/2",
+        "y": "((24 + blade))*0 + (24)*1"
+      },
+      "createdIds": [
+        "pt148"
+      ],
+      "label": "Add point",
+      "at": 1793233036164
+    },
+    {
+      "opId": "op149",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.0833333333333 + (-14)*0.916666666667 + 0.980324074074*x + thickness/2",
+        "y": "((24 + blade))*0.0833333333333 + (24)*0.916666666667"
+      },
+      "createdIds": [
+        "pt150"
+      ],
+      "label": "Add point",
+      "at": 1793233036166
+    },
+    {
+      "opId": "op151",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.166666666667 + (-14)*0.833333333333 + 0.925925925926*x + thickness/2",
+        "y": "((24 + blade))*0.166666666667 + (24)*0.833333333333"
+      },
+      "createdIds": [
+        "pt152"
+      ],
+      "label": "Add point",
+      "at": 1793233036168
+    },
+    {
+      "opId": "op153",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.25 + (-14)*0.75 + 0.84375*x + thickness/2",
+        "y": "((24 + blade))*0.25 + (24)*0.75"
+      },
+      "createdIds": [
+        "pt154"
+      ],
+      "label": "Add point",
+      "at": 1793233036172
+    },
+    {
+      "opId": "op155",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.333333333333 + (-14)*0.666666666667 + 0.740740740741*x + thickness/2",
+        "y": "((24 + blade))*0.333333333333 + (24)*0.666666666667"
+      },
+      "createdIds": [
+        "pt156"
+      ],
+      "label": "Add point",
+      "at": 1793233036174
+    },
+    {
+      "opId": "op157",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.416666666667 + (-14)*0.583333333333 + 0.623842592593*x + thickness/2",
+        "y": "((24 + blade))*0.416666666667 + (24)*0.583333333333"
+      },
+      "createdIds": [
+        "pt158"
+      ],
+      "label": "Add point",
+      "at": 1793233036176
+    },
+    {
+      "opId": "op159",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.5 + (-14)*0.5 + 0.5*x + thickness/2",
+        "y": "((24 + blade))*0.5 + (24)*0.5"
+      },
+      "createdIds": [
+        "pt160"
+      ],
+      "label": "Add point",
+      "at": 1793233036178
+    },
+    {
+      "opId": "op161",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.583333333333 + (-14)*0.416666666667 + 0.376157407407*x + thickness/2",
+        "y": "((24 + blade))*0.583333333333 + (24)*0.416666666667"
+      },
+      "createdIds": [
+        "pt162"
+      ],
+      "label": "Add point",
+      "at": 1793233036179
+    },
+    {
+      "opId": "op163",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.666666666667 + (-14)*0.333333333333 + 0.259259259259*x + thickness/2",
+        "y": "((24 + blade))*0.666666666667 + (24)*0.333333333333"
+      },
+      "createdIds": [
+        "pt164"
+      ],
+      "label": "Add point",
+      "at": 1793233036181
+    },
+    {
+      "opId": "op165",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.75 + (-14)*0.25 + 0.15625*x + thickness/2",
+        "y": "((24 + blade))*0.75 + (24)*0.25"
+      },
+      "createdIds": [
+        "pt166"
+      ],
+      "label": "Add point",
+      "at": 1793233036183
+    },
+    {
+      "opId": "op167",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.833333333333 + (-14)*0.166666666667 + 0.0740740740741*x + thickness/2",
+        "y": "((24 + blade))*0.833333333333 + (24)*0.166666666667"
+      },
+      "createdIds": [
+        "pt168"
+      ],
+      "label": "Add point",
+      "at": 1793233036185
+    },
+    {
+      "opId": "op169",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*0.916666666667 + (-14)*0.0833333333333 + 0.0196759259259*x + thickness/2",
+        "y": "((24 + blade))*0.916666666667 + (24)*0.0833333333333"
+      },
+      "createdIds": [
+        "pt170"
+      ],
+      "label": "Add point",
+      "at": 1793233036187
+    },
+    {
+      "opId": "op171",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch119",
+        "x": "(-14)*1 + (-14)*0 + 0*x + thickness/2",
+        "y": "((24 + blade))*1 + (24)*0"
+      },
+      "createdIds": [
+        "pt172"
+      ],
+      "label": "Add point",
+      "at": 1793233036189
+    },
+    {
+      "opId": "op173",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt122"
+        },
+        "end": {
+          "ref": "pt124"
+        }
+      },
+      "createdIds": [
+        "ln174"
+      ],
+      "label": "Add line",
+      "at": 1793233036193
+    },
+    {
+      "opId": "op175",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt124"
+        },
+        "end": {
+          "ref": "pt126"
+        }
+      },
+      "createdIds": [
+        "ln176"
+      ],
+      "label": "Add line",
+      "at": 1793233036195
+    },
+    {
+      "opId": "op177",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt126"
+        },
+        "end": {
+          "ref": "pt128"
+        }
+      },
+      "createdIds": [
+        "ln178"
+      ],
+      "label": "Add line",
+      "at": 1793233036197
+    },
+    {
+      "opId": "op179",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt128"
+        },
+        "end": {
+          "ref": "pt130"
+        }
+      },
+      "createdIds": [
+        "ln180"
+      ],
+      "label": "Add line",
+      "at": 1793233036199
+    },
+    {
+      "opId": "op181",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt130"
+        },
+        "end": {
+          "ref": "pt132"
+        }
+      },
+      "createdIds": [
+        "ln182"
+      ],
+      "label": "Add line",
+      "at": 1793233036201
+    },
+    {
+      "opId": "op183",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt132"
+        },
+        "end": {
+          "ref": "pt134"
+        }
+      },
+      "createdIds": [
+        "ln184"
+      ],
+      "label": "Add line",
+      "at": 1793233036203
+    },
+    {
+      "opId": "op185",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt134"
+        },
+        "end": {
+          "ref": "pt136"
+        }
+      },
+      "createdIds": [
+        "ln186"
+      ],
+      "label": "Add line",
+      "at": 1793233036205
+    },
+    {
+      "opId": "op187",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt136"
+        },
+        "end": {
+          "ref": "pt138"
+        }
+      },
+      "createdIds": [
+        "ln188"
+      ],
+      "label": "Add line",
+      "at": 1793233036207
+    },
+    {
+      "opId": "op189",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt138"
+        },
+        "end": {
+          "ref": "pt140"
+        }
+      },
+      "createdIds": [
+        "ln190"
+      ],
+      "label": "Add line",
+      "at": 1793233036211
+    },
+    {
+      "opId": "op191",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt140"
+        },
+        "end": {
+          "ref": "pt142"
+        }
+      },
+      "createdIds": [
+        "ln192"
+      ],
+      "label": "Add line",
+      "at": 1793233036213
+    },
+    {
+      "opId": "op193",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt142"
+        },
+        "end": {
+          "ref": "pt144"
+        }
+      },
+      "createdIds": [
+        "ln194"
+      ],
+      "label": "Add line",
+      "at": 1793233036215
+    },
+    {
+      "opId": "op195",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt144"
+        },
+        "end": {
+          "ref": "pt146"
+        }
+      },
+      "createdIds": [
+        "ln196"
+      ],
+      "label": "Add line",
+      "at": 1793233036217
+    },
+    {
+      "opId": "op197",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt146"
+        },
+        "end": {
+          "ref": "pt148"
+        }
+      },
+      "createdIds": [
+        "ln198"
+      ],
+      "label": "Add line",
+      "at": 1793233036219
+    },
+    {
+      "opId": "op199",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt148"
+        },
+        "end": {
+          "ref": "pt150"
+        }
+      },
+      "createdIds": [
+        "ln200"
+      ],
+      "label": "Add line",
+      "at": 1793233036221
+    },
+    {
+      "opId": "op201",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt150"
+        },
+        "end": {
+          "ref": "pt152"
+        }
+      },
+      "createdIds": [
+        "ln202"
+      ],
+      "label": "Add line",
+      "at": 1793233036223
+    },
+    {
+      "opId": "op203",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt152"
+        },
+        "end": {
+          "ref": "pt154"
+        }
+      },
+      "createdIds": [
+        "ln204"
+      ],
+      "label": "Add line",
+      "at": 1793233036225
+    },
+    {
+      "opId": "op205",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt154"
+        },
+        "end": {
+          "ref": "pt156"
+        }
+      },
+      "createdIds": [
+        "ln206"
+      ],
+      "label": "Add line",
+      "at": 1793233036226
+    },
+    {
+      "opId": "op207",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt156"
+        },
+        "end": {
+          "ref": "pt158"
+        }
+      },
+      "createdIds": [
+        "ln208"
+      ],
+      "label": "Add line",
+      "at": 1793233036231
+    },
+    {
+      "opId": "op209",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt158"
+        },
+        "end": {
+          "ref": "pt160"
+        }
+      },
+      "createdIds": [
+        "ln210"
+      ],
+      "label": "Add line",
+      "at": 1793233036233
+    },
+    {
+      "opId": "op211",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt160"
+        },
+        "end": {
+          "ref": "pt162"
+        }
+      },
+      "createdIds": [
+        "ln212"
+      ],
+      "label": "Add line",
+      "at": 1793233036235
+    },
+    {
+      "opId": "op213",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt162"
+        },
+        "end": {
+          "ref": "pt164"
+        }
+      },
+      "createdIds": [
+        "ln214"
+      ],
+      "label": "Add line",
+      "at": 1793233036237
+    },
+    {
+      "opId": "op215",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt164"
+        },
+        "end": {
+          "ref": "pt166"
+        }
+      },
+      "createdIds": [
+        "ln216"
+      ],
+      "label": "Add line",
+      "at": 1793233036239
+    },
+    {
+      "opId": "op217",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt166"
+        },
+        "end": {
+          "ref": "pt168"
+        }
+      },
+      "createdIds": [
+        "ln218"
+      ],
+      "label": "Add line",
+      "at": 1793233036241
+    },
+    {
+      "opId": "op219",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt168"
+        },
+        "end": {
+          "ref": "pt170"
+        }
+      },
+      "createdIds": [
+        "ln220"
+      ],
+      "label": "Add line",
+      "at": 1793233036242
+    },
+    {
+      "opId": "op221",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt170"
+        },
+        "end": {
+          "ref": "pt172"
+        }
+      },
+      "createdIds": [
+        "ln222"
+      ],
+      "label": "Add line",
+      "at": 1793233036244
+    },
+    {
+      "opId": "op223",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch119",
+        "start": {
+          "ref": "pt172"
+        },
+        "end": {
+          "ref": "pt122"
+        }
+      },
+      "createdIds": [
+        "ln224"
+      ],
+      "label": "Add line",
+      "at": 1793233036246
+    },
+    {
+      "opId": "op225",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch119",
+        "distance": "6",
+        "operation": "join",
+        "name": "X blade top left"
+      },
+      "createdIds": [
+        "ext226"
+      ],
+      "label": "Extrude",
+      "at": 1793233036250
+    },
+    {
+      "opId": "op227",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp26",
+        "name": "X blade top right"
+      },
+      "createdIds": [
+        "sketch228",
+        "pt229"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036252
+    },
+    {
+      "opId": "op230",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*1 + (14)*0 + 0*x - thickness/2",
+        "y": "((24 + blade))*1 + (24)*0"
+      },
+      "createdIds": [
+        "pt231"
+      ],
+      "label": "Add point",
+      "at": 1793233036254
+    },
+    {
+      "opId": "op232",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.916666666667 + (14)*0.0833333333333 + 0.0196759259259*x - thickness/2",
+        "y": "((24 + blade))*0.916666666667 + (24)*0.0833333333333"
+      },
+      "createdIds": [
+        "pt233"
+      ],
+      "label": "Add point",
+      "at": 1793233036256
+    },
+    {
+      "opId": "op234",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.833333333333 + (14)*0.166666666667 + 0.0740740740741*x - thickness/2",
+        "y": "((24 + blade))*0.833333333333 + (24)*0.166666666667"
+      },
+      "createdIds": [
+        "pt235"
+      ],
+      "label": "Add point",
+      "at": 1793233036259
+    },
+    {
+      "opId": "op236",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.75 + (14)*0.25 + 0.15625*x - thickness/2",
+        "y": "((24 + blade))*0.75 + (24)*0.25"
+      },
+      "createdIds": [
+        "pt237"
+      ],
+      "label": "Add point",
+      "at": 1793233036260
+    },
+    {
+      "opId": "op238",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.666666666667 + (14)*0.333333333333 + 0.259259259259*x - thickness/2",
+        "y": "((24 + blade))*0.666666666667 + (24)*0.333333333333"
+      },
+      "createdIds": [
+        "pt239"
+      ],
+      "label": "Add point",
+      "at": 1793233036262
+    },
+    {
+      "opId": "op240",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.583333333333 + (14)*0.416666666667 + 0.376157407407*x - thickness/2",
+        "y": "((24 + blade))*0.583333333333 + (24)*0.416666666667"
+      },
+      "createdIds": [
+        "pt241"
+      ],
+      "label": "Add point",
+      "at": 1793233036264
+    },
+    {
+      "opId": "op242",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.5 + (14)*0.5 + 0.5*x - thickness/2",
+        "y": "((24 + blade))*0.5 + (24)*0.5"
+      },
+      "createdIds": [
+        "pt243"
+      ],
+      "label": "Add point",
+      "at": 1793233036272
+    },
+    {
+      "opId": "op244",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.416666666667 + (14)*0.583333333333 + 0.623842592593*x - thickness/2",
+        "y": "((24 + blade))*0.416666666667 + (24)*0.583333333333"
+      },
+      "createdIds": [
+        "pt245"
+      ],
+      "label": "Add point",
+      "at": 1793233036275
+    },
+    {
+      "opId": "op246",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.333333333333 + (14)*0.666666666667 + 0.740740740741*x - thickness/2",
+        "y": "((24 + blade))*0.333333333333 + (24)*0.666666666667"
+      },
+      "createdIds": [
+        "pt247"
+      ],
+      "label": "Add point",
+      "at": 1793233036277
+    },
+    {
+      "opId": "op248",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.25 + (14)*0.75 + 0.84375*x - thickness/2",
+        "y": "((24 + blade))*0.25 + (24)*0.75"
+      },
+      "createdIds": [
+        "pt249"
+      ],
+      "label": "Add point",
+      "at": 1793233036280
+    },
+    {
+      "opId": "op250",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.166666666667 + (14)*0.833333333333 + 0.925925925926*x - thickness/2",
+        "y": "((24 + blade))*0.166666666667 + (24)*0.833333333333"
+      },
+      "createdIds": [
+        "pt251"
+      ],
+      "label": "Add point",
+      "at": 1793233036282
+    },
+    {
+      "opId": "op252",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.0833333333333 + (14)*0.916666666667 + 0.980324074074*x - thickness/2",
+        "y": "((24 + blade))*0.0833333333333 + (24)*0.916666666667"
+      },
+      "createdIds": [
+        "pt253"
+      ],
+      "label": "Add point",
+      "at": 1793233036284
+    },
+    {
+      "opId": "op254",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0 + (14)*1 + 1*x - thickness/2",
+        "y": "((24 + blade))*0 + (24)*1"
+      },
+      "createdIds": [
+        "pt255"
+      ],
+      "label": "Add point",
+      "at": 1793233036286
+    },
+    {
+      "opId": "op256",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0 + (14)*1 + 1*x + thickness/2",
+        "y": "((24 + blade))*0 + (24)*1"
+      },
+      "createdIds": [
+        "pt257"
+      ],
+      "label": "Add point",
+      "at": 1793233036291
+    },
+    {
+      "opId": "op258",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.0833333333333 + (14)*0.916666666667 + 0.980324074074*x + thickness/2",
+        "y": "((24 + blade))*0.0833333333333 + (24)*0.916666666667"
+      },
+      "createdIds": [
+        "pt259"
+      ],
+      "label": "Add point",
+      "at": 1793233036294
+    },
+    {
+      "opId": "op260",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.166666666667 + (14)*0.833333333333 + 0.925925925926*x + thickness/2",
+        "y": "((24 + blade))*0.166666666667 + (24)*0.833333333333"
+      },
+      "createdIds": [
+        "pt261"
+      ],
+      "label": "Add point",
+      "at": 1793233036298
+    },
+    {
+      "opId": "op262",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.25 + (14)*0.75 + 0.84375*x + thickness/2",
+        "y": "((24 + blade))*0.25 + (24)*0.75"
+      },
+      "createdIds": [
+        "pt263"
+      ],
+      "label": "Add point",
+      "at": 1793233036300
+    },
+    {
+      "opId": "op264",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.333333333333 + (14)*0.666666666667 + 0.740740740741*x + thickness/2",
+        "y": "((24 + blade))*0.333333333333 + (24)*0.666666666667"
+      },
+      "createdIds": [
+        "pt265"
+      ],
+      "label": "Add point",
+      "at": 1793233036303
+    },
+    {
+      "opId": "op266",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.416666666667 + (14)*0.583333333333 + 0.623842592593*x + thickness/2",
+        "y": "((24 + blade))*0.416666666667 + (24)*0.583333333333"
+      },
+      "createdIds": [
+        "pt267"
+      ],
+      "label": "Add point",
+      "at": 1793233036305
+    },
+    {
+      "opId": "op268",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.5 + (14)*0.5 + 0.5*x + thickness/2",
+        "y": "((24 + blade))*0.5 + (24)*0.5"
+      },
+      "createdIds": [
+        "pt269"
+      ],
+      "label": "Add point",
+      "at": 1793233036308
+    },
+    {
+      "opId": "op270",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.583333333333 + (14)*0.416666666667 + 0.376157407407*x + thickness/2",
+        "y": "((24 + blade))*0.583333333333 + (24)*0.416666666667"
+      },
+      "createdIds": [
+        "pt271"
+      ],
+      "label": "Add point",
+      "at": 1793233036312
+    },
+    {
+      "opId": "op272",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.666666666667 + (14)*0.333333333333 + 0.259259259259*x + thickness/2",
+        "y": "((24 + blade))*0.666666666667 + (24)*0.333333333333"
+      },
+      "createdIds": [
+        "pt273"
+      ],
+      "label": "Add point",
+      "at": 1793233036315
+    },
+    {
+      "opId": "op274",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.75 + (14)*0.25 + 0.15625*x + thickness/2",
+        "y": "((24 + blade))*0.75 + (24)*0.25"
+      },
+      "createdIds": [
+        "pt275"
+      ],
+      "label": "Add point",
+      "at": 1793233036317
+    },
+    {
+      "opId": "op276",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.833333333333 + (14)*0.166666666667 + 0.0740740740741*x + thickness/2",
+        "y": "((24 + blade))*0.833333333333 + (24)*0.166666666667"
+      },
+      "createdIds": [
+        "pt277"
+      ],
+      "label": "Add point",
+      "at": 1793233036320
+    },
+    {
+      "opId": "op278",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*0.916666666667 + (14)*0.0833333333333 + 0.0196759259259*x + thickness/2",
+        "y": "((24 + blade))*0.916666666667 + (24)*0.0833333333333"
+      },
+      "createdIds": [
+        "pt279"
+      ],
+      "label": "Add point",
+      "at": 1793233036322
+    },
+    {
+      "opId": "op280",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch228",
+        "x": "(14)*1 + (14)*0 + 0*x + thickness/2",
+        "y": "((24 + blade))*1 + (24)*0"
+      },
+      "createdIds": [
+        "pt281"
+      ],
+      "label": "Add point",
+      "at": 1793233036326
+    },
+    {
+      "opId": "op282",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt231"
+        },
+        "end": {
+          "ref": "pt233"
+        }
+      },
+      "createdIds": [
+        "ln283"
+      ],
+      "label": "Add line",
+      "at": 1793233036329
+    },
+    {
+      "opId": "op284",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt233"
+        },
+        "end": {
+          "ref": "pt235"
+        }
+      },
+      "createdIds": [
+        "ln285"
+      ],
+      "label": "Add line",
+      "at": 1793233036331
+    },
+    {
+      "opId": "op286",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt235"
+        },
+        "end": {
+          "ref": "pt237"
+        }
+      },
+      "createdIds": [
+        "ln287"
+      ],
+      "label": "Add line",
+      "at": 1793233036334
+    },
+    {
+      "opId": "op288",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt237"
+        },
+        "end": {
+          "ref": "pt239"
+        }
+      },
+      "createdIds": [
+        "ln289"
+      ],
+      "label": "Add line",
+      "at": 1793233036336
+    },
+    {
+      "opId": "op290",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt239"
+        },
+        "end": {
+          "ref": "pt241"
+        }
+      },
+      "createdIds": [
+        "ln291"
+      ],
+      "label": "Add line",
+      "at": 1793233036339
+    },
+    {
+      "opId": "op292",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt241"
+        },
+        "end": {
+          "ref": "pt243"
+        }
+      },
+      "createdIds": [
+        "ln293"
+      ],
+      "label": "Add line",
+      "at": 1793233036343
+    },
+    {
+      "opId": "op294",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt243"
+        },
+        "end": {
+          "ref": "pt245"
+        }
+      },
+      "createdIds": [
+        "ln295"
+      ],
+      "label": "Add line",
+      "at": 1793233036346
+    },
+    {
+      "opId": "op296",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt245"
+        },
+        "end": {
+          "ref": "pt247"
+        }
+      },
+      "createdIds": [
+        "ln297"
+      ],
+      "label": "Add line",
+      "at": 1793233036349
+    },
+    {
+      "opId": "op298",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt247"
+        },
+        "end": {
+          "ref": "pt249"
+        }
+      },
+      "createdIds": [
+        "ln299"
+      ],
+      "label": "Add line",
+      "at": 1793233036351
+    },
+    {
+      "opId": "op300",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt249"
+        },
+        "end": {
+          "ref": "pt251"
+        }
+      },
+      "createdIds": [
+        "ln301"
+      ],
+      "label": "Add line",
+      "at": 1793233036355
+    },
+    {
+      "opId": "op302",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt251"
+        },
+        "end": {
+          "ref": "pt253"
+        }
+      },
+      "createdIds": [
+        "ln303"
+      ],
+      "label": "Add line",
+      "at": 1793233036360
+    },
+    {
+      "opId": "op304",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt253"
+        },
+        "end": {
+          "ref": "pt255"
+        }
+      },
+      "createdIds": [
+        "ln305"
+      ],
+      "label": "Add line",
+      "at": 1793233036363
+    },
+    {
+      "opId": "op306",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt255"
+        },
+        "end": {
+          "ref": "pt257"
+        }
+      },
+      "createdIds": [
+        "ln307"
+      ],
+      "label": "Add line",
+      "at": 1793233036366
+    },
+    {
+      "opId": "op308",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt257"
+        },
+        "end": {
+          "ref": "pt259"
+        }
+      },
+      "createdIds": [
+        "ln309"
+      ],
+      "label": "Add line",
+      "at": 1793233036369
+    },
+    {
+      "opId": "op310",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt259"
+        },
+        "end": {
+          "ref": "pt261"
+        }
+      },
+      "createdIds": [
+        "ln311"
+      ],
+      "label": "Add line",
+      "at": 1793233036372
+    },
+    {
+      "opId": "op312",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt261"
+        },
+        "end": {
+          "ref": "pt263"
+        }
+      },
+      "createdIds": [
+        "ln313"
+      ],
+      "label": "Add line",
+      "at": 1793233036375
+    },
+    {
+      "opId": "op314",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt263"
+        },
+        "end": {
+          "ref": "pt265"
+        }
+      },
+      "createdIds": [
+        "ln315"
+      ],
+      "label": "Add line",
+      "at": 1793233036379
+    },
+    {
+      "opId": "op316",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt265"
+        },
+        "end": {
+          "ref": "pt267"
+        }
+      },
+      "createdIds": [
+        "ln317"
+      ],
+      "label": "Add line",
+      "at": 1793233036382
+    },
+    {
+      "opId": "op318",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt267"
+        },
+        "end": {
+          "ref": "pt269"
+        }
+      },
+      "createdIds": [
+        "ln319"
+      ],
+      "label": "Add line",
+      "at": 1793233036384
+    },
+    {
+      "opId": "op320",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt269"
+        },
+        "end": {
+          "ref": "pt271"
+        }
+      },
+      "createdIds": [
+        "ln321"
+      ],
+      "label": "Add line",
+      "at": 1793233036387
+    },
+    {
+      "opId": "op322",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt271"
+        },
+        "end": {
+          "ref": "pt273"
+        }
+      },
+      "createdIds": [
+        "ln323"
+      ],
+      "label": "Add line",
+      "at": 1793233036389
+    },
+    {
+      "opId": "op324",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt273"
+        },
+        "end": {
+          "ref": "pt275"
+        }
+      },
+      "createdIds": [
+        "ln325"
+      ],
+      "label": "Add line",
+      "at": 1793233036394
+    },
+    {
+      "opId": "op326",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt275"
+        },
+        "end": {
+          "ref": "pt277"
+        }
+      },
+      "createdIds": [
+        "ln327"
+      ],
+      "label": "Add line",
+      "at": 1793233036397
+    },
+    {
+      "opId": "op328",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt277"
+        },
+        "end": {
+          "ref": "pt279"
+        }
+      },
+      "createdIds": [
+        "ln329"
+      ],
+      "label": "Add line",
+      "at": 1793233036399
+    },
+    {
+      "opId": "op330",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt279"
+        },
+        "end": {
+          "ref": "pt281"
+        }
+      },
+      "createdIds": [
+        "ln331"
+      ],
+      "label": "Add line",
+      "at": 1793233036402
+    },
+    {
+      "opId": "op332",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch228",
+        "start": {
+          "ref": "pt281"
+        },
+        "end": {
+          "ref": "pt231"
+        }
+      },
+      "createdIds": [
+        "ln333"
+      ],
+      "label": "Add line",
+      "at": 1793233036405
+    },
+    {
+      "opId": "op334",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch228",
+        "distance": "6",
+        "operation": "join",
+        "name": "X blade top right"
+      },
+      "createdIds": [
+        "ext335"
+      ],
+      "label": "Extrude",
+      "at": 1793233036407
+    },
+    {
+      "opId": "op336",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp26",
+        "name": "X blade bottom left"
+      },
+      "createdIds": [
+        "sketch337",
+        "pt338"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036412
+    },
+    {
+      "opId": "op339",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*1 + (-14)*0 + 0*x - thickness/2",
+        "y": "(-(24 + blade))*1 + (-24)*0"
+      },
+      "createdIds": [
+        "pt340"
+      ],
+      "label": "Add point",
+      "at": 1793233036415
+    },
+    {
+      "opId": "op341",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.916666666667 + (-14)*0.0833333333333 + 0.0196759259259*x - thickness/2",
+        "y": "(-(24 + blade))*0.916666666667 + (-24)*0.0833333333333"
+      },
+      "createdIds": [
+        "pt342"
+      ],
+      "label": "Add point",
+      "at": 1793233036419
+    },
+    {
+      "opId": "op343",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.833333333333 + (-14)*0.166666666667 + 0.0740740740741*x - thickness/2",
+        "y": "(-(24 + blade))*0.833333333333 + (-24)*0.166666666667"
+      },
+      "createdIds": [
+        "pt344"
+      ],
+      "label": "Add point",
+      "at": 1793233036423
+    },
+    {
+      "opId": "op345",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.75 + (-14)*0.25 + 0.15625*x - thickness/2",
+        "y": "(-(24 + blade))*0.75 + (-24)*0.25"
+      },
+      "createdIds": [
+        "pt346"
+      ],
+      "label": "Add point",
+      "at": 1793233036426
+    },
+    {
+      "opId": "op347",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.666666666667 + (-14)*0.333333333333 + 0.259259259259*x - thickness/2",
+        "y": "(-(24 + blade))*0.666666666667 + (-24)*0.333333333333"
+      },
+      "createdIds": [
+        "pt348"
+      ],
+      "label": "Add point",
+      "at": 1793233036432
+    },
+    {
+      "opId": "op349",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.583333333333 + (-14)*0.416666666667 + 0.376157407407*x - thickness/2",
+        "y": "(-(24 + blade))*0.583333333333 + (-24)*0.416666666667"
+      },
+      "createdIds": [
+        "pt350"
+      ],
+      "label": "Add point",
+      "at": 1793233036434
+    },
+    {
+      "opId": "op351",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.5 + (-14)*0.5 + 0.5*x - thickness/2",
+        "y": "(-(24 + blade))*0.5 + (-24)*0.5"
+      },
+      "createdIds": [
+        "pt352"
+      ],
+      "label": "Add point",
+      "at": 1793233036437
+    },
+    {
+      "opId": "op353",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.416666666667 + (-14)*0.583333333333 + 0.623842592593*x - thickness/2",
+        "y": "(-(24 + blade))*0.416666666667 + (-24)*0.583333333333"
+      },
+      "createdIds": [
+        "pt354"
+      ],
+      "label": "Add point",
+      "at": 1793233036440
+    },
+    {
+      "opId": "op355",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.333333333333 + (-14)*0.666666666667 + 0.740740740741*x - thickness/2",
+        "y": "(-(24 + blade))*0.333333333333 + (-24)*0.666666666667"
+      },
+      "createdIds": [
+        "pt356"
+      ],
+      "label": "Add point",
+      "at": 1793233036443
+    },
+    {
+      "opId": "op357",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.25 + (-14)*0.75 + 0.84375*x - thickness/2",
+        "y": "(-(24 + blade))*0.25 + (-24)*0.75"
+      },
+      "createdIds": [
+        "pt358"
+      ],
+      "label": "Add point",
+      "at": 1793233036448
+    },
+    {
+      "opId": "op359",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.166666666667 + (-14)*0.833333333333 + 0.925925925926*x - thickness/2",
+        "y": "(-(24 + blade))*0.166666666667 + (-24)*0.833333333333"
+      },
+      "createdIds": [
+        "pt360"
+      ],
+      "label": "Add point",
+      "at": 1793233036451
+    },
+    {
+      "opId": "op361",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.0833333333333 + (-14)*0.916666666667 + 0.980324074074*x - thickness/2",
+        "y": "(-(24 + blade))*0.0833333333333 + (-24)*0.916666666667"
+      },
+      "createdIds": [
+        "pt362"
+      ],
+      "label": "Add point",
+      "at": 1793233036454
+    },
+    {
+      "opId": "op363",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0 + (-14)*1 + 1*x - thickness/2",
+        "y": "(-(24 + blade))*0 + (-24)*1"
+      },
+      "createdIds": [
+        "pt364"
+      ],
+      "label": "Add point",
+      "at": 1793233036457
+    },
+    {
+      "opId": "op365",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0 + (-14)*1 + 1*x + thickness/2",
+        "y": "(-(24 + blade))*0 + (-24)*1"
+      },
+      "createdIds": [
+        "pt366"
+      ],
+      "label": "Add point",
+      "at": 1793233036462
+    },
+    {
+      "opId": "op367",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.0833333333333 + (-14)*0.916666666667 + 0.980324074074*x + thickness/2",
+        "y": "(-(24 + blade))*0.0833333333333 + (-24)*0.916666666667"
+      },
+      "createdIds": [
+        "pt368"
+      ],
+      "label": "Add point",
+      "at": 1793233036466
+    },
+    {
+      "opId": "op369",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.166666666667 + (-14)*0.833333333333 + 0.925925925926*x + thickness/2",
+        "y": "(-(24 + blade))*0.166666666667 + (-24)*0.833333333333"
+      },
+      "createdIds": [
+        "pt370"
+      ],
+      "label": "Add point",
+      "at": 1793233036471
+    },
+    {
+      "opId": "op371",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.25 + (-14)*0.75 + 0.84375*x + thickness/2",
+        "y": "(-(24 + blade))*0.25 + (-24)*0.75"
+      },
+      "createdIds": [
+        "pt372"
+      ],
+      "label": "Add point",
+      "at": 1793233036474
+    },
+    {
+      "opId": "op373",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.333333333333 + (-14)*0.666666666667 + 0.740740740741*x + thickness/2",
+        "y": "(-(24 + blade))*0.333333333333 + (-24)*0.666666666667"
+      },
+      "createdIds": [
+        "pt374"
+      ],
+      "label": "Add point",
+      "at": 1793233036478
+    },
+    {
+      "opId": "op375",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.416666666667 + (-14)*0.583333333333 + 0.623842592593*x + thickness/2",
+        "y": "(-(24 + blade))*0.416666666667 + (-24)*0.583333333333"
+      },
+      "createdIds": [
+        "pt376"
+      ],
+      "label": "Add point",
+      "at": 1793233036484
+    },
+    {
+      "opId": "op377",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.5 + (-14)*0.5 + 0.5*x + thickness/2",
+        "y": "(-(24 + blade))*0.5 + (-24)*0.5"
+      },
+      "createdIds": [
+        "pt378"
+      ],
+      "label": "Add point",
+      "at": 1793233036488
+    },
+    {
+      "opId": "op379",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.583333333333 + (-14)*0.416666666667 + 0.376157407407*x + thickness/2",
+        "y": "(-(24 + blade))*0.583333333333 + (-24)*0.416666666667"
+      },
+      "createdIds": [
+        "pt380"
+      ],
+      "label": "Add point",
+      "at": 1793233036491
+    },
+    {
+      "opId": "op381",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.666666666667 + (-14)*0.333333333333 + 0.259259259259*x + thickness/2",
+        "y": "(-(24 + blade))*0.666666666667 + (-24)*0.333333333333"
+      },
+      "createdIds": [
+        "pt382"
+      ],
+      "label": "Add point",
+      "at": 1793233036496
+    },
+    {
+      "opId": "op383",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.75 + (-14)*0.25 + 0.15625*x + thickness/2",
+        "y": "(-(24 + blade))*0.75 + (-24)*0.25"
+      },
+      "createdIds": [
+        "pt384"
+      ],
+      "label": "Add point",
+      "at": 1793233036501
+    },
+    {
+      "opId": "op385",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.833333333333 + (-14)*0.166666666667 + 0.0740740740741*x + thickness/2",
+        "y": "(-(24 + blade))*0.833333333333 + (-24)*0.166666666667"
+      },
+      "createdIds": [
+        "pt386"
+      ],
+      "label": "Add point",
+      "at": 1793233036504
+    },
+    {
+      "opId": "op387",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*0.916666666667 + (-14)*0.0833333333333 + 0.0196759259259*x + thickness/2",
+        "y": "(-(24 + blade))*0.916666666667 + (-24)*0.0833333333333"
+      },
+      "createdIds": [
+        "pt388"
+      ],
+      "label": "Add point",
+      "at": 1793233036508
+    },
+    {
+      "opId": "op389",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch337",
+        "x": "(-14)*1 + (-14)*0 + 0*x + thickness/2",
+        "y": "(-(24 + blade))*1 + (-24)*0"
+      },
+      "createdIds": [
+        "pt390"
+      ],
+      "label": "Add point",
+      "at": 1793233036512
+    },
+    {
+      "opId": "op391",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt340"
+        },
+        "end": {
+          "ref": "pt342"
+        }
+      },
+      "createdIds": [
+        "ln392"
+      ],
+      "label": "Add line",
+      "at": 1793233036517
+    },
+    {
+      "opId": "op393",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt342"
+        },
+        "end": {
+          "ref": "pt344"
+        }
+      },
+      "createdIds": [
+        "ln394"
+      ],
+      "label": "Add line",
+      "at": 1793233036521
+    },
+    {
+      "opId": "op395",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt344"
+        },
+        "end": {
+          "ref": "pt346"
+        }
+      },
+      "createdIds": [
+        "ln396"
+      ],
+      "label": "Add line",
+      "at": 1793233036525
+    },
+    {
+      "opId": "op397",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt346"
+        },
+        "end": {
+          "ref": "pt348"
+        }
+      },
+      "createdIds": [
+        "ln398"
+      ],
+      "label": "Add line",
+      "at": 1793233036528
+    },
+    {
+      "opId": "op399",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt348"
+        },
+        "end": {
+          "ref": "pt350"
+        }
+      },
+      "createdIds": [
+        "ln400"
+      ],
+      "label": "Add line",
+      "at": 1793233036533
+    },
+    {
+      "opId": "op401",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt350"
+        },
+        "end": {
+          "ref": "pt352"
+        }
+      },
+      "createdIds": [
+        "ln402"
+      ],
+      "label": "Add line",
+      "at": 1793233036537
+    },
+    {
+      "opId": "op403",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt352"
+        },
+        "end": {
+          "ref": "pt354"
+        }
+      },
+      "createdIds": [
+        "ln404"
+      ],
+      "label": "Add line",
+      "at": 1793233036541
+    },
+    {
+      "opId": "op405",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt354"
+        },
+        "end": {
+          "ref": "pt356"
+        }
+      },
+      "createdIds": [
+        "ln406"
+      ],
+      "label": "Add line",
+      "at": 1793233036544
+    },
+    {
+      "opId": "op407",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt356"
+        },
+        "end": {
+          "ref": "pt358"
+        }
+      },
+      "createdIds": [
+        "ln408"
+      ],
+      "label": "Add line",
+      "at": 1793233036553
+    },
+    {
+      "opId": "op409",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt358"
+        },
+        "end": {
+          "ref": "pt360"
+        }
+      },
+      "createdIds": [
+        "ln410"
+      ],
+      "label": "Add line",
+      "at": 1793233036556
+    },
+    {
+      "opId": "op411",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt360"
+        },
+        "end": {
+          "ref": "pt362"
+        }
+      },
+      "createdIds": [
+        "ln412"
+      ],
+      "label": "Add line",
+      "at": 1793233036560
+    },
+    {
+      "opId": "op413",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt362"
+        },
+        "end": {
+          "ref": "pt364"
+        }
+      },
+      "createdIds": [
+        "ln414"
+      ],
+      "label": "Add line",
+      "at": 1793233036565
+    },
+    {
+      "opId": "op415",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt364"
+        },
+        "end": {
+          "ref": "pt366"
+        }
+      },
+      "createdIds": [
+        "ln416"
+      ],
+      "label": "Add line",
+      "at": 1793233036568
+    },
+    {
+      "opId": "op417",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt366"
+        },
+        "end": {
+          "ref": "pt368"
+        }
+      },
+      "createdIds": [
+        "ln418"
+      ],
+      "label": "Add line",
+      "at": 1793233036572
+    },
+    {
+      "opId": "op419",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt368"
+        },
+        "end": {
+          "ref": "pt370"
+        }
+      },
+      "createdIds": [
+        "ln420"
+      ],
+      "label": "Add line",
+      "at": 1793233036576
+    },
+    {
+      "opId": "op421",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt370"
+        },
+        "end": {
+          "ref": "pt372"
+        }
+      },
+      "createdIds": [
+        "ln422"
+      ],
+      "label": "Add line",
+      "at": 1793233036581
+    },
+    {
+      "opId": "op423",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt372"
+        },
+        "end": {
+          "ref": "pt374"
+        }
+      },
+      "createdIds": [
+        "ln424"
+      ],
+      "label": "Add line",
+      "at": 1793233036585
+    },
+    {
+      "opId": "op425",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt374"
+        },
+        "end": {
+          "ref": "pt376"
+        }
+      },
+      "createdIds": [
+        "ln426"
+      ],
+      "label": "Add line",
+      "at": 1793233036589
+    },
+    {
+      "opId": "op427",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt376"
+        },
+        "end": {
+          "ref": "pt378"
+        }
+      },
+      "createdIds": [
+        "ln428"
+      ],
+      "label": "Add line",
+      "at": 1793233036594
+    },
+    {
+      "opId": "op429",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt378"
+        },
+        "end": {
+          "ref": "pt380"
+        }
+      },
+      "createdIds": [
+        "ln430"
+      ],
+      "label": "Add line",
+      "at": 1793233036601
+    },
+    {
+      "opId": "op431",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt380"
+        },
+        "end": {
+          "ref": "pt382"
+        }
+      },
+      "createdIds": [
+        "ln432"
+      ],
+      "label": "Add line",
+      "at": 1793233036604
+    },
+    {
+      "opId": "op433",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt382"
+        },
+        "end": {
+          "ref": "pt384"
+        }
+      },
+      "createdIds": [
+        "ln434"
+      ],
+      "label": "Add line",
+      "at": 1793233036608
+    },
+    {
+      "opId": "op435",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt384"
+        },
+        "end": {
+          "ref": "pt386"
+        }
+      },
+      "createdIds": [
+        "ln436"
+      ],
+      "label": "Add line",
+      "at": 1793233036611
+    },
+    {
+      "opId": "op437",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt386"
+        },
+        "end": {
+          "ref": "pt388"
+        }
+      },
+      "createdIds": [
+        "ln438"
+      ],
+      "label": "Add line",
+      "at": 1793233036617
+    },
+    {
+      "opId": "op439",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt388"
+        },
+        "end": {
+          "ref": "pt390"
+        }
+      },
+      "createdIds": [
+        "ln440"
+      ],
+      "label": "Add line",
+      "at": 1793233036621
+    },
+    {
+      "opId": "op441",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch337",
+        "start": {
+          "ref": "pt390"
+        },
+        "end": {
+          "ref": "pt340"
+        }
+      },
+      "createdIds": [
+        "ln442"
+      ],
+      "label": "Add line",
+      "at": 1793233036624
+    },
+    {
+      "opId": "op443",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch337",
+        "distance": "6",
+        "operation": "join",
+        "name": "X blade bottom left"
+      },
+      "createdIds": [
+        "ext444"
+      ],
+      "label": "Extrude",
+      "at": 1793233036628
+    },
+    {
+      "opId": "op445",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp26",
+        "name": "X blade bottom right"
+      },
+      "createdIds": [
+        "sketch446",
+        "pt447"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036634
+    },
+    {
+      "opId": "op448",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*1 + (14)*0 + 0*x - thickness/2",
+        "y": "(-(24 + blade))*1 + (-24)*0"
+      },
+      "createdIds": [
+        "pt449"
+      ],
+      "label": "Add point",
+      "at": 1793233036637
+    },
+    {
+      "opId": "op450",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.916666666667 + (14)*0.0833333333333 + 0.0196759259259*x - thickness/2",
+        "y": "(-(24 + blade))*0.916666666667 + (-24)*0.0833333333333"
+      },
+      "createdIds": [
+        "pt451"
+      ],
+      "label": "Add point",
+      "at": 1793233036641
+    },
+    {
+      "opId": "op452",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.833333333333 + (14)*0.166666666667 + 0.0740740740741*x - thickness/2",
+        "y": "(-(24 + blade))*0.833333333333 + (-24)*0.166666666667"
+      },
+      "createdIds": [
+        "pt453"
+      ],
+      "label": "Add point",
+      "at": 1793233036645
+    },
+    {
+      "opId": "op454",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.75 + (14)*0.25 + 0.15625*x - thickness/2",
+        "y": "(-(24 + blade))*0.75 + (-24)*0.25"
+      },
+      "createdIds": [
+        "pt455"
+      ],
+      "label": "Add point",
+      "at": 1793233036650
+    },
+    {
+      "opId": "op456",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.666666666667 + (14)*0.333333333333 + 0.259259259259*x - thickness/2",
+        "y": "(-(24 + blade))*0.666666666667 + (-24)*0.333333333333"
+      },
+      "createdIds": [
+        "pt457"
+      ],
+      "label": "Add point",
+      "at": 1793233036654
+    },
+    {
+      "opId": "op458",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.583333333333 + (14)*0.416666666667 + 0.376157407407*x - thickness/2",
+        "y": "(-(24 + blade))*0.583333333333 + (-24)*0.416666666667"
+      },
+      "createdIds": [
+        "pt459"
+      ],
+      "label": "Add point",
+      "at": 1793233036658
+    },
+    {
+      "opId": "op460",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.5 + (14)*0.5 + 0.5*x - thickness/2",
+        "y": "(-(24 + blade))*0.5 + (-24)*0.5"
+      },
+      "createdIds": [
+        "pt461"
+      ],
+      "label": "Add point",
+      "at": 1793233036663
+    },
+    {
+      "opId": "op462",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.416666666667 + (14)*0.583333333333 + 0.623842592593*x - thickness/2",
+        "y": "(-(24 + blade))*0.416666666667 + (-24)*0.583333333333"
+      },
+      "createdIds": [
+        "pt463"
+      ],
+      "label": "Add point",
+      "at": 1793233036667
+    },
+    {
+      "opId": "op464",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.333333333333 + (14)*0.666666666667 + 0.740740740741*x - thickness/2",
+        "y": "(-(24 + blade))*0.333333333333 + (-24)*0.666666666667"
+      },
+      "createdIds": [
+        "pt465"
+      ],
+      "label": "Add point",
+      "at": 1793233036670
+    },
+    {
+      "opId": "op466",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.25 + (14)*0.75 + 0.84375*x - thickness/2",
+        "y": "(-(24 + blade))*0.25 + (-24)*0.75"
+      },
+      "createdIds": [
+        "pt467"
+      ],
+      "label": "Add point",
+      "at": 1793233036674
+    },
+    {
+      "opId": "op468",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.166666666667 + (14)*0.833333333333 + 0.925925925926*x - thickness/2",
+        "y": "(-(24 + blade))*0.166666666667 + (-24)*0.833333333333"
+      },
+      "createdIds": [
+        "pt469"
+      ],
+      "label": "Add point",
+      "at": 1793233036680
+    },
+    {
+      "opId": "op470",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.0833333333333 + (14)*0.916666666667 + 0.980324074074*x - thickness/2",
+        "y": "(-(24 + blade))*0.0833333333333 + (-24)*0.916666666667"
+      },
+      "createdIds": [
+        "pt471"
+      ],
+      "label": "Add point",
+      "at": 1793233036684
+    },
+    {
+      "opId": "op472",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0 + (14)*1 + 1*x - thickness/2",
+        "y": "(-(24 + blade))*0 + (-24)*1"
+      },
+      "createdIds": [
+        "pt473"
+      ],
+      "label": "Add point",
+      "at": 1793233036689
+    },
+    {
+      "opId": "op474",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0 + (14)*1 + 1*x + thickness/2",
+        "y": "(-(24 + blade))*0 + (-24)*1"
+      },
+      "createdIds": [
+        "pt475"
+      ],
+      "label": "Add point",
+      "at": 1793233036695
+    },
+    {
+      "opId": "op476",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.0833333333333 + (14)*0.916666666667 + 0.980324074074*x + thickness/2",
+        "y": "(-(24 + blade))*0.0833333333333 + (-24)*0.916666666667"
+      },
+      "createdIds": [
+        "pt477"
+      ],
+      "label": "Add point",
+      "at": 1793233036699
+    },
+    {
+      "opId": "op478",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.166666666667 + (14)*0.833333333333 + 0.925925925926*x + thickness/2",
+        "y": "(-(24 + blade))*0.166666666667 + (-24)*0.833333333333"
+      },
+      "createdIds": [
+        "pt479"
+      ],
+      "label": "Add point",
+      "at": 1793233036703
+    },
+    {
+      "opId": "op480",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.25 + (14)*0.75 + 0.84375*x + thickness/2",
+        "y": "(-(24 + blade))*0.25 + (-24)*0.75"
+      },
+      "createdIds": [
+        "pt481"
+      ],
+      "label": "Add point",
+      "at": 1793233036707
+    },
+    {
+      "opId": "op482",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.333333333333 + (14)*0.666666666667 + 0.740740740741*x + thickness/2",
+        "y": "(-(24 + blade))*0.333333333333 + (-24)*0.666666666667"
+      },
+      "createdIds": [
+        "pt483"
+      ],
+      "label": "Add point",
+      "at": 1793233036713
+    },
+    {
+      "opId": "op484",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.416666666667 + (14)*0.583333333333 + 0.623842592593*x + thickness/2",
+        "y": "(-(24 + blade))*0.416666666667 + (-24)*0.583333333333"
+      },
+      "createdIds": [
+        "pt485"
+      ],
+      "label": "Add point",
+      "at": 1793233036717
+    },
+    {
+      "opId": "op486",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.5 + (14)*0.5 + 0.5*x + thickness/2",
+        "y": "(-(24 + blade))*0.5 + (-24)*0.5"
+      },
+      "createdIds": [
+        "pt487"
+      ],
+      "label": "Add point",
+      "at": 1793233036722
+    },
+    {
+      "opId": "op488",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.583333333333 + (14)*0.416666666667 + 0.376157407407*x + thickness/2",
+        "y": "(-(24 + blade))*0.583333333333 + (-24)*0.416666666667"
+      },
+      "createdIds": [
+        "pt489"
+      ],
+      "label": "Add point",
+      "at": 1793233036728
+    },
+    {
+      "opId": "op490",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.666666666667 + (14)*0.333333333333 + 0.259259259259*x + thickness/2",
+        "y": "(-(24 + blade))*0.666666666667 + (-24)*0.333333333333"
+      },
+      "createdIds": [
+        "pt491"
+      ],
+      "label": "Add point",
+      "at": 1793233036732
+    },
+    {
+      "opId": "op492",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.75 + (14)*0.25 + 0.15625*x + thickness/2",
+        "y": "(-(24 + blade))*0.75 + (-24)*0.25"
+      },
+      "createdIds": [
+        "pt493"
+      ],
+      "label": "Add point",
+      "at": 1793233036738
+    },
+    {
+      "opId": "op494",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.833333333333 + (14)*0.166666666667 + 0.0740740740741*x + thickness/2",
+        "y": "(-(24 + blade))*0.833333333333 + (-24)*0.166666666667"
+      },
+      "createdIds": [
+        "pt495"
+      ],
+      "label": "Add point",
+      "at": 1793233036744
+    },
+    {
+      "opId": "op496",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*0.916666666667 + (14)*0.0833333333333 + 0.0196759259259*x + thickness/2",
+        "y": "(-(24 + blade))*0.916666666667 + (-24)*0.0833333333333"
+      },
+      "createdIds": [
+        "pt497"
+      ],
+      "label": "Add point",
+      "at": 1793233036748
+    },
+    {
+      "opId": "op498",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch446",
+        "x": "(14)*1 + (14)*0 + 0*x + thickness/2",
+        "y": "(-(24 + blade))*1 + (-24)*0"
+      },
+      "createdIds": [
+        "pt499"
+      ],
+      "label": "Add point",
+      "at": 1793233036753
+    },
+    {
+      "opId": "op500",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt449"
+        },
+        "end": {
+          "ref": "pt451"
+        }
+      },
+      "createdIds": [
+        "ln501"
+      ],
+      "label": "Add line",
+      "at": 1793233036758
+    },
+    {
+      "opId": "op502",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt451"
+        },
+        "end": {
+          "ref": "pt453"
+        }
+      },
+      "createdIds": [
+        "ln503"
+      ],
+      "label": "Add line",
+      "at": 1793233036763
+    },
+    {
+      "opId": "op504",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt453"
+        },
+        "end": {
+          "ref": "pt455"
+        }
+      },
+      "createdIds": [
+        "ln505"
+      ],
+      "label": "Add line",
+      "at": 1793233036767
+    },
+    {
+      "opId": "op506",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt455"
+        },
+        "end": {
+          "ref": "pt457"
+        }
+      },
+      "createdIds": [
+        "ln507"
+      ],
+      "label": "Add line",
+      "at": 1793233036773
+    },
+    {
+      "opId": "op508",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt457"
+        },
+        "end": {
+          "ref": "pt459"
+        }
+      },
+      "createdIds": [
+        "ln509"
+      ],
+      "label": "Add line",
+      "at": 1793233036778
+    },
+    {
+      "opId": "op510",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt459"
+        },
+        "end": {
+          "ref": "pt461"
+        }
+      },
+      "createdIds": [
+        "ln511"
+      ],
+      "label": "Add line",
+      "at": 1793233036782
+    },
+    {
+      "opId": "op512",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt461"
+        },
+        "end": {
+          "ref": "pt463"
+        }
+      },
+      "createdIds": [
+        "ln513"
+      ],
+      "label": "Add line",
+      "at": 1793233036788
+    },
+    {
+      "opId": "op514",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt463"
+        },
+        "end": {
+          "ref": "pt465"
+        }
+      },
+      "createdIds": [
+        "ln515"
+      ],
+      "label": "Add line",
+      "at": 1793233036794
+    },
+    {
+      "opId": "op516",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt465"
+        },
+        "end": {
+          "ref": "pt467"
+        }
+      },
+      "createdIds": [
+        "ln517"
+      ],
+      "label": "Add line",
+      "at": 1793233036799
+    },
+    {
+      "opId": "op518",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt467"
+        },
+        "end": {
+          "ref": "pt469"
+        }
+      },
+      "createdIds": [
+        "ln519"
+      ],
+      "label": "Add line",
+      "at": 1793233036805
+    },
+    {
+      "opId": "op520",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt469"
+        },
+        "end": {
+          "ref": "pt471"
+        }
+      },
+      "createdIds": [
+        "ln521"
+      ],
+      "label": "Add line",
+      "at": 1793233036809
+    },
+    {
+      "opId": "op522",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt471"
+        },
+        "end": {
+          "ref": "pt473"
+        }
+      },
+      "createdIds": [
+        "ln523"
+      ],
+      "label": "Add line",
+      "at": 1793233036813
+    },
+    {
+      "opId": "op524",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt473"
+        },
+        "end": {
+          "ref": "pt475"
+        }
+      },
+      "createdIds": [
+        "ln525"
+      ],
+      "label": "Add line",
+      "at": 1793233036824
+    },
+    {
+      "opId": "op526",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt475"
+        },
+        "end": {
+          "ref": "pt477"
+        }
+      },
+      "createdIds": [
+        "ln527"
+      ],
+      "label": "Add line",
+      "at": 1793233036834
+    },
+    {
+      "opId": "op528",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt477"
+        },
+        "end": {
+          "ref": "pt479"
+        }
+      },
+      "createdIds": [
+        "ln529"
+      ],
+      "label": "Add line",
+      "at": 1793233036845
+    },
+    {
+      "opId": "op530",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt479"
+        },
+        "end": {
+          "ref": "pt481"
+        }
+      },
+      "createdIds": [
+        "ln531"
+      ],
+      "label": "Add line",
+      "at": 1793233036861
+    },
+    {
+      "opId": "op532",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt481"
+        },
+        "end": {
+          "ref": "pt483"
+        }
+      },
+      "createdIds": [
+        "ln533"
+      ],
+      "label": "Add line",
+      "at": 1793233036866
+    },
+    {
+      "opId": "op534",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt483"
+        },
+        "end": {
+          "ref": "pt485"
+        }
+      },
+      "createdIds": [
+        "ln535"
+      ],
+      "label": "Add line",
+      "at": 1793233036871
+    },
+    {
+      "opId": "op536",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt485"
+        },
+        "end": {
+          "ref": "pt487"
+        }
+      },
+      "createdIds": [
+        "ln537"
+      ],
+      "label": "Add line",
+      "at": 1793233036876
+    },
+    {
+      "opId": "op538",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt487"
+        },
+        "end": {
+          "ref": "pt489"
+        }
+      },
+      "createdIds": [
+        "ln539"
+      ],
+      "label": "Add line",
+      "at": 1793233036881
+    },
+    {
+      "opId": "op540",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt489"
+        },
+        "end": {
+          "ref": "pt491"
+        }
+      },
+      "createdIds": [
+        "ln541"
+      ],
+      "label": "Add line",
+      "at": 1793233036886
+    },
+    {
+      "opId": "op542",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt491"
+        },
+        "end": {
+          "ref": "pt493"
+        }
+      },
+      "createdIds": [
+        "ln543"
+      ],
+      "label": "Add line",
+      "at": 1793233036893
+    },
+    {
+      "opId": "op544",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt493"
+        },
+        "end": {
+          "ref": "pt495"
+        }
+      },
+      "createdIds": [
+        "ln545"
+      ],
+      "label": "Add line",
+      "at": 1793233036897
+    },
+    {
+      "opId": "op546",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt495"
+        },
+        "end": {
+          "ref": "pt497"
+        }
+      },
+      "createdIds": [
+        "ln547"
+      ],
+      "label": "Add line",
+      "at": 1793233036902
+    },
+    {
+      "opId": "op548",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt497"
+        },
+        "end": {
+          "ref": "pt499"
+        }
+      },
+      "createdIds": [
+        "ln549"
+      ],
+      "label": "Add line",
+      "at": 1793233036908
+    },
+    {
+      "opId": "op550",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch446",
+        "start": {
+          "ref": "pt499"
+        },
+        "end": {
+          "ref": "pt449"
+        }
+      },
+      "createdIds": [
+        "ln551"
+      ],
+      "label": "Add line",
+      "at": 1793233036914
+    },
+    {
+      "opId": "op552",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch446",
+        "distance": "6",
+        "operation": "join",
+        "name": "X blade bottom right"
+      },
+      "createdIds": [
+        "ext553"
+      ],
+      "label": "Extrude",
+      "at": 1793233036919
+    },
+    {
+      "opId": "op554",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp29",
+        "name": "Carriage top"
+      },
+      "createdIds": [
+        "sketch555",
+        "pt556"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036926
+    },
+    {
+      "opId": "op557",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch555",
+        "x": "-(12 + blade + 6)",
+        "y": "18"
+      },
+      "createdIds": [
+        "pt558"
+      ],
+      "label": "Add point",
+      "at": 1793233036931
+    },
+    {
+      "opId": "op559",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch555",
+        "x": "(12 + blade + 6)",
+        "y": "18"
+      },
+      "createdIds": [
+        "pt560"
+      ],
+      "label": "Add point",
+      "at": 1793233036936
+    },
+    {
+      "opId": "op561",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch555",
+        "x": "(12 + blade + 6)",
+        "y": "24"
+      },
+      "createdIds": [
+        "pt562"
+      ],
+      "label": "Add point",
+      "at": 1793233036943
+    },
+    {
+      "opId": "op563",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch555",
+        "x": "-(12 + blade + 6)",
+        "y": "24"
+      },
+      "createdIds": [
+        "pt564"
+      ],
+      "label": "Add point",
+      "at": 1793233036947
+    },
+    {
+      "opId": "op565",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch555",
+        "start": {
+          "ref": "pt558"
+        },
+        "end": {
+          "ref": "pt560"
+        }
+      },
+      "createdIds": [
+        "ln566"
+      ],
+      "label": "Add line",
+      "at": 1793233036952
+    },
+    {
+      "opId": "op567",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch555",
+        "start": {
+          "ref": "pt560"
+        },
+        "end": {
+          "ref": "pt562"
+        }
+      },
+      "createdIds": [
+        "ln568"
+      ],
+      "label": "Add line",
+      "at": 1793233036959
+    },
+    {
+      "opId": "op569",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch555",
+        "start": {
+          "ref": "pt562"
+        },
+        "end": {
+          "ref": "pt564"
+        }
+      },
+      "createdIds": [
+        "ln570"
+      ],
+      "label": "Add line",
+      "at": 1793233036963
+    },
+    {
+      "opId": "op571",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch555",
+        "start": {
+          "ref": "pt564"
+        },
+        "end": {
+          "ref": "pt558"
+        }
+      },
+      "createdIds": [
+        "ln572"
+      ],
+      "label": "Add line",
+      "at": 1793233036968
+    },
+    {
+      "opId": "op573",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch555",
+        "distance": "6",
+        "operation": "new",
+        "name": "Carriage top"
+      },
+      "createdIds": [
+        "ext574"
+      ],
+      "label": "Extrude",
+      "at": 1793233036975
+    },
+    {
+      "opId": "op575",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp29",
+        "name": "Carriage bottom"
+      },
+      "createdIds": [
+        "sketch576",
+        "pt577"
+      ],
+      "label": "Create sketch",
+      "at": 1793233036979
+    },
+    {
+      "opId": "op578",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch576",
+        "x": "-(12 + blade + 6)",
+        "y": "-24"
+      },
+      "createdIds": [
+        "pt579"
+      ],
+      "label": "Add point",
+      "at": 1793233036984
+    },
+    {
+      "opId": "op580",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch576",
+        "x": "(12 + blade + 6)",
+        "y": "-24"
+      },
+      "createdIds": [
+        "pt581"
+      ],
+      "label": "Add point",
+      "at": 1793233036991
+    },
+    {
+      "opId": "op582",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch576",
+        "x": "(12 + blade + 6)",
+        "y": "-18"
+      },
+      "createdIds": [
+        "pt583"
+      ],
+      "label": "Add point",
+      "at": 1793233036995
+    },
+    {
+      "opId": "op584",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch576",
+        "x": "-(12 + blade + 6)",
+        "y": "-18"
+      },
+      "createdIds": [
+        "pt585"
+      ],
+      "label": "Add point",
+      "at": 1793233037000
+    },
+    {
+      "opId": "op586",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch576",
+        "start": {
+          "ref": "pt579"
+        },
+        "end": {
+          "ref": "pt581"
+        }
+      },
+      "createdIds": [
+        "ln587"
+      ],
+      "label": "Add line",
+      "at": 1793233037006
+    },
+    {
+      "opId": "op588",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch576",
+        "start": {
+          "ref": "pt581"
+        },
+        "end": {
+          "ref": "pt583"
+        }
+      },
+      "createdIds": [
+        "ln589"
+      ],
+      "label": "Add line",
+      "at": 1793233037011
+    },
+    {
+      "opId": "op590",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch576",
+        "start": {
+          "ref": "pt583"
+        },
+        "end": {
+          "ref": "pt585"
+        }
+      },
+      "createdIds": [
+        "ln591"
+      ],
+      "label": "Add line",
+      "at": 1793233037016
+    },
+    {
+      "opId": "op592",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch576",
+        "start": {
+          "ref": "pt585"
+        },
+        "end": {
+          "ref": "pt579"
+        }
+      },
+      "createdIds": [
+        "ln593"
+      ],
+      "label": "Add line",
+      "at": 1793233037022
+    },
+    {
+      "opId": "op594",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch576",
+        "distance": "6",
+        "operation": "join",
+        "name": "Carriage bottom"
+      },
+      "createdIds": [
+        "ext595"
+      ],
+      "label": "Extrude",
+      "at": 1793233037027
+    },
+    {
+      "opId": "op596",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp29",
+        "name": "Carriage left"
+      },
+      "createdIds": [
+        "sketch597",
+        "pt598"
+      ],
+      "label": "Create sketch",
+      "at": 1793233037032
+    },
+    {
+      "opId": "op599",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch597",
+        "x": "-(12 + blade + 6)",
+        "y": "-18"
+      },
+      "createdIds": [
+        "pt600"
+      ],
+      "label": "Add point",
+      "at": 1793233037038
+    },
+    {
+      "opId": "op601",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch597",
+        "x": "-(12 + blade)",
+        "y": "-18"
+      },
+      "createdIds": [
+        "pt602"
+      ],
+      "label": "Add point",
+      "at": 1793233037043
+    },
+    {
+      "opId": "op603",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch597",
+        "x": "-(12 + blade)",
+        "y": "18"
+      },
+      "createdIds": [
+        "pt604"
+      ],
+      "label": "Add point",
+      "at": 1793233037048
+    },
+    {
+      "opId": "op605",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch597",
+        "x": "-(12 + blade + 6)",
+        "y": "18"
+      },
+      "createdIds": [
+        "pt606"
+      ],
+      "label": "Add point",
+      "at": 1793233037054
+    },
+    {
+      "opId": "op607",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch597",
+        "start": {
+          "ref": "pt600"
+        },
+        "end": {
+          "ref": "pt602"
+        }
+      },
+      "createdIds": [
+        "ln608"
+      ],
+      "label": "Add line",
+      "at": 1793233037059
+    },
+    {
+      "opId": "op609",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch597",
+        "start": {
+          "ref": "pt602"
+        },
+        "end": {
+          "ref": "pt604"
+        }
+      },
+      "createdIds": [
+        "ln610"
+      ],
+      "label": "Add line",
+      "at": 1793233037064
+    },
+    {
+      "opId": "op611",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch597",
+        "start": {
+          "ref": "pt604"
+        },
+        "end": {
+          "ref": "pt606"
+        }
+      },
+      "createdIds": [
+        "ln612"
+      ],
+      "label": "Add line",
+      "at": 1793233037070
+    },
+    {
+      "opId": "op613",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch597",
+        "start": {
+          "ref": "pt606"
+        },
+        "end": {
+          "ref": "pt600"
+        }
+      },
+      "createdIds": [
+        "ln614"
+      ],
+      "label": "Add line",
+      "at": 1793233037075
+    },
+    {
+      "opId": "op615",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch597",
+        "distance": "6",
+        "operation": "join",
+        "name": "Carriage left"
+      },
+      "createdIds": [
+        "ext616"
+      ],
+      "label": "Extrude",
+      "at": 1793233037082
+    },
+    {
+      "opId": "op617",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp29",
+        "name": "Carriage right"
+      },
+      "createdIds": [
+        "sketch618",
+        "pt619"
+      ],
+      "label": "Create sketch",
+      "at": 1793233037087
+    },
+    {
+      "opId": "op620",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch618",
+        "x": "(12 + blade)",
+        "y": "-18"
+      },
+      "createdIds": [
+        "pt621"
+      ],
+      "label": "Add point",
+      "at": 1793233037092
+    },
+    {
+      "opId": "op622",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch618",
+        "x": "(12 + blade + 6)",
+        "y": "-18"
+      },
+      "createdIds": [
+        "pt623"
+      ],
+      "label": "Add point",
+      "at": 1793233037099
+    },
+    {
+      "opId": "op624",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch618",
+        "x": "(12 + blade + 6)",
+        "y": "18"
+      },
+      "createdIds": [
+        "pt625"
+      ],
+      "label": "Add point",
+      "at": 1793233037104
+    },
+    {
+      "opId": "op626",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch618",
+        "x": "(12 + blade)",
+        "y": "18"
+      },
+      "createdIds": [
+        "pt627"
+      ],
+      "label": "Add point",
+      "at": 1793233037109
+    },
+    {
+      "opId": "op628",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch618",
+        "start": {
+          "ref": "pt621"
+        },
+        "end": {
+          "ref": "pt623"
+        }
+      },
+      "createdIds": [
+        "ln629"
+      ],
+      "label": "Add line",
+      "at": 1793233037116
+    },
+    {
+      "opId": "op630",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch618",
+        "start": {
+          "ref": "pt623"
+        },
+        "end": {
+          "ref": "pt625"
+        }
+      },
+      "createdIds": [
+        "ln631"
+      ],
+      "label": "Add line",
+      "at": 1793233037121
+    },
+    {
+      "opId": "op632",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch618",
+        "start": {
+          "ref": "pt625"
+        },
+        "end": {
+          "ref": "pt627"
+        }
+      },
+      "createdIds": [
+        "ln633"
+      ],
+      "label": "Add line",
+      "at": 1793233037126
+    },
+    {
+      "opId": "op634",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch618",
+        "start": {
+          "ref": "pt627"
+        },
+        "end": {
+          "ref": "pt621"
+        }
+      },
+      "createdIds": [
+        "ln635"
+      ],
+      "label": "Add line",
+      "at": 1793233037133
+    },
+    {
+      "opId": "op636",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch618",
+        "distance": "6",
+        "operation": "join",
+        "name": "Carriage right"
+      },
+      "createdIds": [
+        "ext637"
+      ],
+      "label": "Extrude",
+      "at": 1793233037139
+    },
+    {
+      "opId": "op638",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp29",
+        "name": "Y blade left top"
+      },
+      "createdIds": [
+        "sketch639",
+        "pt640"
+      ],
+      "label": "Create sketch",
+      "at": 1793233037144
+    },
+    {
+      "opId": "op641",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*1 + (-12)*0",
+        "y": "(8)*1 + (8)*0 + 0*y - thickness/2"
+      },
+      "createdIds": [
+        "pt642"
+      ],
+      "label": "Add point",
+      "at": 1793233037151
+    },
+    {
+      "opId": "op643",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.916666666667 + (-12)*0.0833333333333",
+        "y": "(8)*0.916666666667 + (8)*0.0833333333333 + 0.0196759259259*y - thickness/2"
+      },
+      "createdIds": [
+        "pt644"
+      ],
+      "label": "Add point",
+      "at": 1793233037156
+    },
+    {
+      "opId": "op645",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.833333333333 + (-12)*0.166666666667",
+        "y": "(8)*0.833333333333 + (8)*0.166666666667 + 0.0740740740741*y - thickness/2"
+      },
+      "createdIds": [
+        "pt646"
+      ],
+      "label": "Add point",
+      "at": 1793233037163
+    },
+    {
+      "opId": "op647",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.75 + (-12)*0.25",
+        "y": "(8)*0.75 + (8)*0.25 + 0.15625*y - thickness/2"
+      },
+      "createdIds": [
+        "pt648"
+      ],
+      "label": "Add point",
+      "at": 1793233037169
+    },
+    {
+      "opId": "op649",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.666666666667 + (-12)*0.333333333333",
+        "y": "(8)*0.666666666667 + (8)*0.333333333333 + 0.259259259259*y - thickness/2"
+      },
+      "createdIds": [
+        "pt650"
+      ],
+      "label": "Add point",
+      "at": 1793233037174
+    },
+    {
+      "opId": "op651",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.583333333333 + (-12)*0.416666666667",
+        "y": "(8)*0.583333333333 + (8)*0.416666666667 + 0.376157407407*y - thickness/2"
+      },
+      "createdIds": [
+        "pt652"
+      ],
+      "label": "Add point",
+      "at": 1793233037181
+    },
+    {
+      "opId": "op653",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.5 + (-12)*0.5",
+        "y": "(8)*0.5 + (8)*0.5 + 0.5*y - thickness/2"
+      },
+      "createdIds": [
+        "pt654"
+      ],
+      "label": "Add point",
+      "at": 1793233037187
+    },
+    {
+      "opId": "op655",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.416666666667 + (-12)*0.583333333333",
+        "y": "(8)*0.416666666667 + (8)*0.583333333333 + 0.623842592593*y - thickness/2"
+      },
+      "createdIds": [
+        "pt656"
+      ],
+      "label": "Add point",
+      "at": 1793233037192
+    },
+    {
+      "opId": "op657",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.333333333333 + (-12)*0.666666666667",
+        "y": "(8)*0.333333333333 + (8)*0.666666666667 + 0.740740740741*y - thickness/2"
+      },
+      "createdIds": [
+        "pt658"
+      ],
+      "label": "Add point",
+      "at": 1793233037199
+    },
+    {
+      "opId": "op659",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.25 + (-12)*0.75",
+        "y": "(8)*0.25 + (8)*0.75 + 0.84375*y - thickness/2"
+      },
+      "createdIds": [
+        "pt660"
+      ],
+      "label": "Add point",
+      "at": 1793233037205
+    },
+    {
+      "opId": "op661",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.166666666667 + (-12)*0.833333333333",
+        "y": "(8)*0.166666666667 + (8)*0.833333333333 + 0.925925925926*y - thickness/2"
+      },
+      "createdIds": [
+        "pt662"
+      ],
+      "label": "Add point",
+      "at": 1793233037212
+    },
+    {
+      "opId": "op663",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.0833333333333 + (-12)*0.916666666667",
+        "y": "(8)*0.0833333333333 + (8)*0.916666666667 + 0.980324074074*y - thickness/2"
+      },
+      "createdIds": [
+        "pt664"
+      ],
+      "label": "Add point",
+      "at": 1793233037218
+    },
+    {
+      "opId": "op665",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0 + (-12)*1",
+        "y": "(8)*0 + (8)*1 + 1*y - thickness/2"
+      },
+      "createdIds": [
+        "pt666"
+      ],
+      "label": "Add point",
+      "at": 1793233037223
+    },
+    {
+      "opId": "op667",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0 + (-12)*1",
+        "y": "(8)*0 + (8)*1 + 1*y + thickness/2"
+      },
+      "createdIds": [
+        "pt668"
+      ],
+      "label": "Add point",
+      "at": 1793233037230
+    },
+    {
+      "opId": "op669",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.0833333333333 + (-12)*0.916666666667",
+        "y": "(8)*0.0833333333333 + (8)*0.916666666667 + 0.980324074074*y + thickness/2"
+      },
+      "createdIds": [
+        "pt670"
+      ],
+      "label": "Add point",
+      "at": 1793233037236
+    },
+    {
+      "opId": "op671",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.166666666667 + (-12)*0.833333333333",
+        "y": "(8)*0.166666666667 + (8)*0.833333333333 + 0.925925925926*y + thickness/2"
+      },
+      "createdIds": [
+        "pt672"
+      ],
+      "label": "Add point",
+      "at": 1793233037243
+    },
+    {
+      "opId": "op673",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.25 + (-12)*0.75",
+        "y": "(8)*0.25 + (8)*0.75 + 0.84375*y + thickness/2"
+      },
+      "createdIds": [
+        "pt674"
+      ],
+      "label": "Add point",
+      "at": 1793233037248
+    },
+    {
+      "opId": "op675",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.333333333333 + (-12)*0.666666666667",
+        "y": "(8)*0.333333333333 + (8)*0.666666666667 + 0.740740740741*y + thickness/2"
+      },
+      "createdIds": [
+        "pt676"
+      ],
+      "label": "Add point",
+      "at": 1793233037254
+    },
+    {
+      "opId": "op677",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.416666666667 + (-12)*0.583333333333",
+        "y": "(8)*0.416666666667 + (8)*0.583333333333 + 0.623842592593*y + thickness/2"
+      },
+      "createdIds": [
+        "pt678"
+      ],
+      "label": "Add point",
+      "at": 1793233037261
+    },
+    {
+      "opId": "op679",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.5 + (-12)*0.5",
+        "y": "(8)*0.5 + (8)*0.5 + 0.5*y + thickness/2"
+      },
+      "createdIds": [
+        "pt680"
+      ],
+      "label": "Add point",
+      "at": 1793233037267
+    },
+    {
+      "opId": "op681",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.583333333333 + (-12)*0.416666666667",
+        "y": "(8)*0.583333333333 + (8)*0.416666666667 + 0.376157407407*y + thickness/2"
+      },
+      "createdIds": [
+        "pt682"
+      ],
+      "label": "Add point",
+      "at": 1793233037275
+    },
+    {
+      "opId": "op683",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.666666666667 + (-12)*0.333333333333",
+        "y": "(8)*0.666666666667 + (8)*0.333333333333 + 0.259259259259*y + thickness/2"
+      },
+      "createdIds": [
+        "pt684"
+      ],
+      "label": "Add point",
+      "at": 1793233037281
+    },
+    {
+      "opId": "op685",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.75 + (-12)*0.25",
+        "y": "(8)*0.75 + (8)*0.25 + 0.15625*y + thickness/2"
+      },
+      "createdIds": [
+        "pt686"
+      ],
+      "label": "Add point",
+      "at": 1793233037287
+    },
+    {
+      "opId": "op687",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.833333333333 + (-12)*0.166666666667",
+        "y": "(8)*0.833333333333 + (8)*0.166666666667 + 0.0740740740741*y + thickness/2"
+      },
+      "createdIds": [
+        "pt688"
+      ],
+      "label": "Add point",
+      "at": 1793233037296
+    },
+    {
+      "opId": "op689",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*0.916666666667 + (-12)*0.0833333333333",
+        "y": "(8)*0.916666666667 + (8)*0.0833333333333 + 0.0196759259259*y + thickness/2"
+      },
+      "createdIds": [
+        "pt690"
+      ],
+      "label": "Add point",
+      "at": 1793233037302
+    },
+    {
+      "opId": "op691",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch639",
+        "x": "(-(12 + blade))*1 + (-12)*0",
+        "y": "(8)*1 + (8)*0 + 0*y + thickness/2"
+      },
+      "createdIds": [
+        "pt692"
+      ],
+      "label": "Add point",
+      "at": 1793233037309
+    },
+    {
+      "opId": "op693",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt642"
+        },
+        "end": {
+          "ref": "pt644"
+        }
+      },
+      "createdIds": [
+        "ln694"
+      ],
+      "label": "Add line",
+      "at": 1793233037315
+    },
+    {
+      "opId": "op695",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt644"
+        },
+        "end": {
+          "ref": "pt646"
+        }
+      },
+      "createdIds": [
+        "ln696"
+      ],
+      "label": "Add line",
+      "at": 1793233037323
+    },
+    {
+      "opId": "op697",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt646"
+        },
+        "end": {
+          "ref": "pt648"
+        }
+      },
+      "createdIds": [
+        "ln698"
+      ],
+      "label": "Add line",
+      "at": 1793233037329
+    },
+    {
+      "opId": "op699",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt648"
+        },
+        "end": {
+          "ref": "pt650"
+        }
+      },
+      "createdIds": [
+        "ln700"
+      ],
+      "label": "Add line",
+      "at": 1793233037335
+    },
+    {
+      "opId": "op701",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt650"
+        },
+        "end": {
+          "ref": "pt652"
+        }
+      },
+      "createdIds": [
+        "ln702"
+      ],
+      "label": "Add line",
+      "at": 1793233037343
+    },
+    {
+      "opId": "op703",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt652"
+        },
+        "end": {
+          "ref": "pt654"
+        }
+      },
+      "createdIds": [
+        "ln704"
+      ],
+      "label": "Add line",
+      "at": 1793233037349
+    },
+    {
+      "opId": "op705",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt654"
+        },
+        "end": {
+          "ref": "pt656"
+        }
+      },
+      "createdIds": [
+        "ln706"
+      ],
+      "label": "Add line",
+      "at": 1793233037358
+    },
+    {
+      "opId": "op707",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt656"
+        },
+        "end": {
+          "ref": "pt658"
+        }
+      },
+      "createdIds": [
+        "ln708"
+      ],
+      "label": "Add line",
+      "at": 1793233037364
+    },
+    {
+      "opId": "op709",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt658"
+        },
+        "end": {
+          "ref": "pt660"
+        }
+      },
+      "createdIds": [
+        "ln710"
+      ],
+      "label": "Add line",
+      "at": 1793233037372
+    },
+    {
+      "opId": "op711",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt660"
+        },
+        "end": {
+          "ref": "pt662"
+        }
+      },
+      "createdIds": [
+        "ln712"
+      ],
+      "label": "Add line",
+      "at": 1793233037378
+    },
+    {
+      "opId": "op713",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt662"
+        },
+        "end": {
+          "ref": "pt664"
+        }
+      },
+      "createdIds": [
+        "ln714"
+      ],
+      "label": "Add line",
+      "at": 1793233037384
+    },
+    {
+      "opId": "op715",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt664"
+        },
+        "end": {
+          "ref": "pt666"
+        }
+      },
+      "createdIds": [
+        "ln716"
+      ],
+      "label": "Add line",
+      "at": 1793233037392
+    },
+    {
+      "opId": "op717",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt666"
+        },
+        "end": {
+          "ref": "pt668"
+        }
+      },
+      "createdIds": [
+        "ln718"
+      ],
+      "label": "Add line",
+      "at": 1793233037398
+    },
+    {
+      "opId": "op719",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt668"
+        },
+        "end": {
+          "ref": "pt670"
+        }
+      },
+      "createdIds": [
+        "ln720"
+      ],
+      "label": "Add line",
+      "at": 1793233037406
+    },
+    {
+      "opId": "op721",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt670"
+        },
+        "end": {
+          "ref": "pt672"
+        }
+      },
+      "createdIds": [
+        "ln722"
+      ],
+      "label": "Add line",
+      "at": 1793233037412
+    },
+    {
+      "opId": "op723",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt672"
+        },
+        "end": {
+          "ref": "pt674"
+        }
+      },
+      "createdIds": [
+        "ln724"
+      ],
+      "label": "Add line",
+      "at": 1793233037421
+    },
+    {
+      "opId": "op725",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt674"
+        },
+        "end": {
+          "ref": "pt676"
+        }
+      },
+      "createdIds": [
+        "ln726"
+      ],
+      "label": "Add line",
+      "at": 1793233037428
+    },
+    {
+      "opId": "op727",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt676"
+        },
+        "end": {
+          "ref": "pt678"
+        }
+      },
+      "createdIds": [
+        "ln728"
+      ],
+      "label": "Add line",
+      "at": 1793233037436
+    },
+    {
+      "opId": "op729",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt678"
+        },
+        "end": {
+          "ref": "pt680"
+        }
+      },
+      "createdIds": [
+        "ln730"
+      ],
+      "label": "Add line",
+      "at": 1793233037443
+    },
+    {
+      "opId": "op731",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt680"
+        },
+        "end": {
+          "ref": "pt682"
+        }
+      },
+      "createdIds": [
+        "ln732"
+      ],
+      "label": "Add line",
+      "at": 1793233037449
+    },
+    {
+      "opId": "op733",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt682"
+        },
+        "end": {
+          "ref": "pt684"
+        }
+      },
+      "createdIds": [
+        "ln734"
+      ],
+      "label": "Add line",
+      "at": 1793233037458
+    },
+    {
+      "opId": "op735",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt684"
+        },
+        "end": {
+          "ref": "pt686"
+        }
+      },
+      "createdIds": [
+        "ln736"
+      ],
+      "label": "Add line",
+      "at": 1793233037465
+    },
+    {
+      "opId": "op737",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt686"
+        },
+        "end": {
+          "ref": "pt688"
+        }
+      },
+      "createdIds": [
+        "ln738"
+      ],
+      "label": "Add line",
+      "at": 1793233037473
+    },
+    {
+      "opId": "op739",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt688"
+        },
+        "end": {
+          "ref": "pt690"
+        }
+      },
+      "createdIds": [
+        "ln740"
+      ],
+      "label": "Add line",
+      "at": 1793233037480
+    },
+    {
+      "opId": "op741",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt690"
+        },
+        "end": {
+          "ref": "pt692"
+        }
+      },
+      "createdIds": [
+        "ln742"
+      ],
+      "label": "Add line",
+      "at": 1793233037488
+    },
+    {
+      "opId": "op743",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch639",
+        "start": {
+          "ref": "pt692"
+        },
+        "end": {
+          "ref": "pt642"
+        }
+      },
+      "createdIds": [
+        "ln744"
+      ],
+      "label": "Add line",
+      "at": 1793233037494
+    },
+    {
+      "opId": "op745",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch639",
+        "distance": "6",
+        "operation": "join",
+        "name": "Y blade left top"
+      },
+      "createdIds": [
+        "ext746"
+      ],
+      "label": "Extrude",
+      "at": 1793233037501
+    },
+    {
+      "opId": "op747",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp29",
+        "name": "Y blade left bottom"
+      },
+      "createdIds": [
+        "sketch748",
+        "pt749"
+      ],
+      "label": "Create sketch",
+      "at": 1793233037509
+    },
+    {
+      "opId": "op750",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*1 + (-12)*0",
+        "y": "(-8)*1 + (-8)*0 + 0*y - thickness/2"
+      },
+      "createdIds": [
+        "pt751"
+      ],
+      "label": "Add point",
+      "at": 1793233037516
+    },
+    {
+      "opId": "op752",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.916666666667 + (-12)*0.0833333333333",
+        "y": "(-8)*0.916666666667 + (-8)*0.0833333333333 + 0.0196759259259*y - thickness/2"
+      },
+      "createdIds": [
+        "pt753"
+      ],
+      "label": "Add point",
+      "at": 1793233037524
+    },
+    {
+      "opId": "op754",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.833333333333 + (-12)*0.166666666667",
+        "y": "(-8)*0.833333333333 + (-8)*0.166666666667 + 0.0740740740741*y - thickness/2"
+      },
+      "createdIds": [
+        "pt755"
+      ],
+      "label": "Add point",
+      "at": 1793233037531
+    },
+    {
+      "opId": "op756",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.75 + (-12)*0.25",
+        "y": "(-8)*0.75 + (-8)*0.25 + 0.15625*y - thickness/2"
+      },
+      "createdIds": [
+        "pt757"
+      ],
+      "label": "Add point",
+      "at": 1793233037540
+    },
+    {
+      "opId": "op758",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.666666666667 + (-12)*0.333333333333",
+        "y": "(-8)*0.666666666667 + (-8)*0.333333333333 + 0.259259259259*y - thickness/2"
+      },
+      "createdIds": [
+        "pt759"
+      ],
+      "label": "Add point",
+      "at": 1793233037548
+    },
+    {
+      "opId": "op760",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.583333333333 + (-12)*0.416666666667",
+        "y": "(-8)*0.583333333333 + (-8)*0.416666666667 + 0.376157407407*y - thickness/2"
+      },
+      "createdIds": [
+        "pt761"
+      ],
+      "label": "Add point",
+      "at": 1793233037556
+    },
+    {
+      "opId": "op762",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.5 + (-12)*0.5",
+        "y": "(-8)*0.5 + (-8)*0.5 + 0.5*y - thickness/2"
+      },
+      "createdIds": [
+        "pt763"
+      ],
+      "label": "Add point",
+      "at": 1793233037563
+    },
+    {
+      "opId": "op764",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.416666666667 + (-12)*0.583333333333",
+        "y": "(-8)*0.416666666667 + (-8)*0.583333333333 + 0.623842592593*y - thickness/2"
+      },
+      "createdIds": [
+        "pt765"
+      ],
+      "label": "Add point",
+      "at": 1793233037569
+    },
+    {
+      "opId": "op766",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.333333333333 + (-12)*0.666666666667",
+        "y": "(-8)*0.333333333333 + (-8)*0.666666666667 + 0.740740740741*y - thickness/2"
+      },
+      "createdIds": [
+        "pt767"
+      ],
+      "label": "Add point",
+      "at": 1793233037578
+    },
+    {
+      "opId": "op768",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.25 + (-12)*0.75",
+        "y": "(-8)*0.25 + (-8)*0.75 + 0.84375*y - thickness/2"
+      },
+      "createdIds": [
+        "pt769"
+      ],
+      "label": "Add point",
+      "at": 1793233037585
+    },
+    {
+      "opId": "op770",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.166666666667 + (-12)*0.833333333333",
+        "y": "(-8)*0.166666666667 + (-8)*0.833333333333 + 0.925925925926*y - thickness/2"
+      },
+      "createdIds": [
+        "pt771"
+      ],
+      "label": "Add point",
+      "at": 1793233037593
+    },
+    {
+      "opId": "op772",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.0833333333333 + (-12)*0.916666666667",
+        "y": "(-8)*0.0833333333333 + (-8)*0.916666666667 + 0.980324074074*y - thickness/2"
+      },
+      "createdIds": [
+        "pt773"
+      ],
+      "label": "Add point",
+      "at": 1793233037600
+    },
+    {
+      "opId": "op774",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0 + (-12)*1",
+        "y": "(-8)*0 + (-8)*1 + 1*y - thickness/2"
+      },
+      "createdIds": [
+        "pt775"
+      ],
+      "label": "Add point",
+      "at": 1793233037608
+    },
+    {
+      "opId": "op776",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0 + (-12)*1",
+        "y": "(-8)*0 + (-8)*1 + 1*y + thickness/2"
+      },
+      "createdIds": [
+        "pt777"
+      ],
+      "label": "Add point",
+      "at": 1793233037615
+    },
+    {
+      "opId": "op778",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.0833333333333 + (-12)*0.916666666667",
+        "y": "(-8)*0.0833333333333 + (-8)*0.916666666667 + 0.980324074074*y + thickness/2"
+      },
+      "createdIds": [
+        "pt779"
+      ],
+      "label": "Add point",
+      "at": 1793233037623
+    },
+    {
+      "opId": "op780",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.166666666667 + (-12)*0.833333333333",
+        "y": "(-8)*0.166666666667 + (-8)*0.833333333333 + 0.925925925926*y + thickness/2"
+      },
+      "createdIds": [
+        "pt781"
+      ],
+      "label": "Add point",
+      "at": 1793233037629
+    },
+    {
+      "opId": "op782",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.25 + (-12)*0.75",
+        "y": "(-8)*0.25 + (-8)*0.75 + 0.84375*y + thickness/2"
+      },
+      "createdIds": [
+        "pt783"
+      ],
+      "label": "Add point",
+      "at": 1793233037638
+    },
+    {
+      "opId": "op784",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.333333333333 + (-12)*0.666666666667",
+        "y": "(-8)*0.333333333333 + (-8)*0.666666666667 + 0.740740740741*y + thickness/2"
+      },
+      "createdIds": [
+        "pt785"
+      ],
+      "label": "Add point",
+      "at": 1793233037644
+    },
+    {
+      "opId": "op786",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.416666666667 + (-12)*0.583333333333",
+        "y": "(-8)*0.416666666667 + (-8)*0.583333333333 + 0.623842592593*y + thickness/2"
+      },
+      "createdIds": [
+        "pt787"
+      ],
+      "label": "Add point",
+      "at": 1793233037652
+    },
+    {
+      "opId": "op788",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.5 + (-12)*0.5",
+        "y": "(-8)*0.5 + (-8)*0.5 + 0.5*y + thickness/2"
+      },
+      "createdIds": [
+        "pt789"
+      ],
+      "label": "Add point",
+      "at": 1793233037659
+    },
+    {
+      "opId": "op790",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.583333333333 + (-12)*0.416666666667",
+        "y": "(-8)*0.583333333333 + (-8)*0.416666666667 + 0.376157407407*y + thickness/2"
+      },
+      "createdIds": [
+        "pt791"
+      ],
+      "label": "Add point",
+      "at": 1793233037667
+    },
+    {
+      "opId": "op792",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.666666666667 + (-12)*0.333333333333",
+        "y": "(-8)*0.666666666667 + (-8)*0.333333333333 + 0.259259259259*y + thickness/2"
+      },
+      "createdIds": [
+        "pt793"
+      ],
+      "label": "Add point",
+      "at": 1793233037674
+    },
+    {
+      "opId": "op794",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.75 + (-12)*0.25",
+        "y": "(-8)*0.75 + (-8)*0.25 + 0.15625*y + thickness/2"
+      },
+      "createdIds": [
+        "pt795"
+      ],
+      "label": "Add point",
+      "at": 1793233037682
+    },
+    {
+      "opId": "op796",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.833333333333 + (-12)*0.166666666667",
+        "y": "(-8)*0.833333333333 + (-8)*0.166666666667 + 0.0740740740741*y + thickness/2"
+      },
+      "createdIds": [
+        "pt797"
+      ],
+      "label": "Add point",
+      "at": 1793233037689
+    },
+    {
+      "opId": "op798",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*0.916666666667 + (-12)*0.0833333333333",
+        "y": "(-8)*0.916666666667 + (-8)*0.0833333333333 + 0.0196759259259*y + thickness/2"
+      },
+      "createdIds": [
+        "pt799"
+      ],
+      "label": "Add point",
+      "at": 1793233037698
+    },
+    {
+      "opId": "op800",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch748",
+        "x": "(-(12 + blade))*1 + (-12)*0",
+        "y": "(-8)*1 + (-8)*0 + 0*y + thickness/2"
+      },
+      "createdIds": [
+        "pt801"
+      ],
+      "label": "Add point",
+      "at": 1793233037705
+    },
+    {
+      "opId": "op802",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt751"
+        },
+        "end": {
+          "ref": "pt753"
+        }
+      },
+      "createdIds": [
+        "ln803"
+      ],
+      "label": "Add line",
+      "at": 1793233037713
+    },
+    {
+      "opId": "op804",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt753"
+        },
+        "end": {
+          "ref": "pt755"
+        }
+      },
+      "createdIds": [
+        "ln805"
+      ],
+      "label": "Add line",
+      "at": 1793233037720
+    },
+    {
+      "opId": "op806",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt755"
+        },
+        "end": {
+          "ref": "pt757"
+        }
+      },
+      "createdIds": [
+        "ln807"
+      ],
+      "label": "Add line",
+      "at": 1793233037729
+    },
+    {
+      "opId": "op808",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt757"
+        },
+        "end": {
+          "ref": "pt759"
+        }
+      },
+      "createdIds": [
+        "ln809"
+      ],
+      "label": "Add line",
+      "at": 1793233037737
+    },
+    {
+      "opId": "op810",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt759"
+        },
+        "end": {
+          "ref": "pt761"
+        }
+      },
+      "createdIds": [
+        "ln811"
+      ],
+      "label": "Add line",
+      "at": 1793233037746
+    },
+    {
+      "opId": "op812",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt761"
+        },
+        "end": {
+          "ref": "pt763"
+        }
+      },
+      "createdIds": [
+        "ln813"
+      ],
+      "label": "Add line",
+      "at": 1793233037754
+    },
+    {
+      "opId": "op814",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt763"
+        },
+        "end": {
+          "ref": "pt765"
+        }
+      },
+      "createdIds": [
+        "ln815"
+      ],
+      "label": "Add line",
+      "at": 1793233037763
+    },
+    {
+      "opId": "op816",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt765"
+        },
+        "end": {
+          "ref": "pt767"
+        }
+      },
+      "createdIds": [
+        "ln817"
+      ],
+      "label": "Add line",
+      "at": 1793233037770
+    },
+    {
+      "opId": "op818",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt767"
+        },
+        "end": {
+          "ref": "pt769"
+        }
+      },
+      "createdIds": [
+        "ln819"
+      ],
+      "label": "Add line",
+      "at": 1793233037780
+    },
+    {
+      "opId": "op820",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt769"
+        },
+        "end": {
+          "ref": "pt771"
+        }
+      },
+      "createdIds": [
+        "ln821"
+      ],
+      "label": "Add line",
+      "at": 1793233037789
+    },
+    {
+      "opId": "op822",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt771"
+        },
+        "end": {
+          "ref": "pt773"
+        }
+      },
+      "createdIds": [
+        "ln823"
+      ],
+      "label": "Add line",
+      "at": 1793233037799
+    },
+    {
+      "opId": "op824",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt773"
+        },
+        "end": {
+          "ref": "pt775"
+        }
+      },
+      "createdIds": [
+        "ln825"
+      ],
+      "label": "Add line",
+      "at": 1793233037805
+    },
+    {
+      "opId": "op826",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt775"
+        },
+        "end": {
+          "ref": "pt777"
+        }
+      },
+      "createdIds": [
+        "ln827"
+      ],
+      "label": "Add line",
+      "at": 1793233037814
+    },
+    {
+      "opId": "op828",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt777"
+        },
+        "end": {
+          "ref": "pt779"
+        }
+      },
+      "createdIds": [
+        "ln829"
+      ],
+      "label": "Add line",
+      "at": 1793233037822
+    },
+    {
+      "opId": "op830",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt779"
+        },
+        "end": {
+          "ref": "pt781"
+        }
+      },
+      "createdIds": [
+        "ln831"
+      ],
+      "label": "Add line",
+      "at": 1793233037831
+    },
+    {
+      "opId": "op832",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt781"
+        },
+        "end": {
+          "ref": "pt783"
+        }
+      },
+      "createdIds": [
+        "ln833"
+      ],
+      "label": "Add line",
+      "at": 1793233037840
+    },
+    {
+      "opId": "op834",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt783"
+        },
+        "end": {
+          "ref": "pt785"
+        }
+      },
+      "createdIds": [
+        "ln835"
+      ],
+      "label": "Add line",
+      "at": 1793233037850
+    },
+    {
+      "opId": "op836",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt785"
+        },
+        "end": {
+          "ref": "pt787"
+        }
+      },
+      "createdIds": [
+        "ln837"
+      ],
+      "label": "Add line",
+      "at": 1793233037857
+    },
+    {
+      "opId": "op838",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt787"
+        },
+        "end": {
+          "ref": "pt789"
+        }
+      },
+      "createdIds": [
+        "ln839"
+      ],
+      "label": "Add line",
+      "at": 1793233037866
+    },
+    {
+      "opId": "op840",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt789"
+        },
+        "end": {
+          "ref": "pt791"
+        }
+      },
+      "createdIds": [
+        "ln841"
+      ],
+      "label": "Add line",
+      "at": 1793233037873
+    },
+    {
+      "opId": "op842",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt791"
+        },
+        "end": {
+          "ref": "pt793"
+        }
+      },
+      "createdIds": [
+        "ln843"
+      ],
+      "label": "Add line",
+      "at": 1793233037882
+    },
+    {
+      "opId": "op844",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt793"
+        },
+        "end": {
+          "ref": "pt795"
+        }
+      },
+      "createdIds": [
+        "ln845"
+      ],
+      "label": "Add line",
+      "at": 1793233037889
+    },
+    {
+      "opId": "op846",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt795"
+        },
+        "end": {
+          "ref": "pt797"
+        }
+      },
+      "createdIds": [
+        "ln847"
+      ],
+      "label": "Add line",
+      "at": 1793233037901
+    },
+    {
+      "opId": "op848",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt797"
+        },
+        "end": {
+          "ref": "pt799"
+        }
+      },
+      "createdIds": [
+        "ln849"
+      ],
+      "label": "Add line",
+      "at": 1793233037912
+    },
+    {
+      "opId": "op850",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt799"
+        },
+        "end": {
+          "ref": "pt801"
+        }
+      },
+      "createdIds": [
+        "ln851"
+      ],
+      "label": "Add line",
+      "at": 1793233037923
+    },
+    {
+      "opId": "op852",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch748",
+        "start": {
+          "ref": "pt801"
+        },
+        "end": {
+          "ref": "pt751"
+        }
+      },
+      "createdIds": [
+        "ln853"
+      ],
+      "label": "Add line",
+      "at": 1793233037932
+    },
+    {
+      "opId": "op854",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch748",
+        "distance": "6",
+        "operation": "join",
+        "name": "Y blade left bottom"
+      },
+      "createdIds": [
+        "ext855"
+      ],
+      "label": "Extrude",
+      "at": 1793233037942
+    },
+    {
+      "opId": "op856",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp29",
+        "name": "Y blade right top"
+      },
+      "createdIds": [
+        "sketch857",
+        "pt858"
+      ],
+      "label": "Create sketch",
+      "at": 1793233037949
+    },
+    {
+      "opId": "op859",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*1 + (12)*0",
+        "y": "(8)*1 + (8)*0 + 0*y - thickness/2"
+      },
+      "createdIds": [
+        "pt860"
+      ],
+      "label": "Add point",
+      "at": 1793233037959
+    },
+    {
+      "opId": "op861",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.916666666667 + (12)*0.0833333333333",
+        "y": "(8)*0.916666666667 + (8)*0.0833333333333 + 0.0196759259259*y - thickness/2"
+      },
+      "createdIds": [
+        "pt862"
+      ],
+      "label": "Add point",
+      "at": 1793233037966
+    },
+    {
+      "opId": "op863",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.833333333333 + (12)*0.166666666667",
+        "y": "(8)*0.833333333333 + (8)*0.166666666667 + 0.0740740740741*y - thickness/2"
+      },
+      "createdIds": [
+        "pt864"
+      ],
+      "label": "Add point",
+      "at": 1793233037975
+    },
+    {
+      "opId": "op865",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.75 + (12)*0.25",
+        "y": "(8)*0.75 + (8)*0.25 + 0.15625*y - thickness/2"
+      },
+      "createdIds": [
+        "pt866"
+      ],
+      "label": "Add point",
+      "at": 1793233037983
+    },
+    {
+      "opId": "op867",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.666666666667 + (12)*0.333333333333",
+        "y": "(8)*0.666666666667 + (8)*0.333333333333 + 0.259259259259*y - thickness/2"
+      },
+      "createdIds": [
+        "pt868"
+      ],
+      "label": "Add point",
+      "at": 1793233037992
+    },
+    {
+      "opId": "op869",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.583333333333 + (12)*0.416666666667",
+        "y": "(8)*0.583333333333 + (8)*0.416666666667 + 0.376157407407*y - thickness/2"
+      },
+      "createdIds": [
+        "pt870"
+      ],
+      "label": "Add point",
+      "at": 1793233038002
+    },
+    {
+      "opId": "op871",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.5 + (12)*0.5",
+        "y": "(8)*0.5 + (8)*0.5 + 0.5*y - thickness/2"
+      },
+      "createdIds": [
+        "pt872"
+      ],
+      "label": "Add point",
+      "at": 1793233038009
+    },
+    {
+      "opId": "op873",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.416666666667 + (12)*0.583333333333",
+        "y": "(8)*0.416666666667 + (8)*0.583333333333 + 0.623842592593*y - thickness/2"
+      },
+      "createdIds": [
+        "pt874"
+      ],
+      "label": "Add point",
+      "at": 1793233038018
+    },
+    {
+      "opId": "op875",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.333333333333 + (12)*0.666666666667",
+        "y": "(8)*0.333333333333 + (8)*0.666666666667 + 0.740740740741*y - thickness/2"
+      },
+      "createdIds": [
+        "pt876"
+      ],
+      "label": "Add point",
+      "at": 1793233038026
+    },
+    {
+      "opId": "op877",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.25 + (12)*0.75",
+        "y": "(8)*0.25 + (8)*0.75 + 0.84375*y - thickness/2"
+      },
+      "createdIds": [
+        "pt878"
+      ],
+      "label": "Add point",
+      "at": 1793233038035
+    },
+    {
+      "opId": "op879",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.166666666667 + (12)*0.833333333333",
+        "y": "(8)*0.166666666667 + (8)*0.833333333333 + 0.925925925926*y - thickness/2"
+      },
+      "createdIds": [
+        "pt880"
+      ],
+      "label": "Add point",
+      "at": 1793233038044
+    },
+    {
+      "opId": "op881",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.0833333333333 + (12)*0.916666666667",
+        "y": "(8)*0.0833333333333 + (8)*0.916666666667 + 0.980324074074*y - thickness/2"
+      },
+      "createdIds": [
+        "pt882"
+      ],
+      "label": "Add point",
+      "at": 1793233038054
+    },
+    {
+      "opId": "op883",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0 + (12)*1",
+        "y": "(8)*0 + (8)*1 + 1*y - thickness/2"
+      },
+      "createdIds": [
+        "pt884"
+      ],
+      "label": "Add point",
+      "at": 1793233038062
+    },
+    {
+      "opId": "op885",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0 + (12)*1",
+        "y": "(8)*0 + (8)*1 + 1*y + thickness/2"
+      },
+      "createdIds": [
+        "pt886"
+      ],
+      "label": "Add point",
+      "at": 1793233038071
+    },
+    {
+      "opId": "op887",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.0833333333333 + (12)*0.916666666667",
+        "y": "(8)*0.0833333333333 + (8)*0.916666666667 + 0.980324074074*y + thickness/2"
+      },
+      "createdIds": [
+        "pt888"
+      ],
+      "label": "Add point",
+      "at": 1793233038078
+    },
+    {
+      "opId": "op889",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.166666666667 + (12)*0.833333333333",
+        "y": "(8)*0.166666666667 + (8)*0.833333333333 + 0.925925925926*y + thickness/2"
+      },
+      "createdIds": [
+        "pt890"
+      ],
+      "label": "Add point",
+      "at": 1793233038088
+    },
+    {
+      "opId": "op891",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.25 + (12)*0.75",
+        "y": "(8)*0.25 + (8)*0.75 + 0.84375*y + thickness/2"
+      },
+      "createdIds": [
+        "pt892"
+      ],
+      "label": "Add point",
+      "at": 1793233038095
+    },
+    {
+      "opId": "op893",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.333333333333 + (12)*0.666666666667",
+        "y": "(8)*0.333333333333 + (8)*0.666666666667 + 0.740740740741*y + thickness/2"
+      },
+      "createdIds": [
+        "pt894"
+      ],
+      "label": "Add point",
+      "at": 1793233038105
+    },
+    {
+      "opId": "op895",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.416666666667 + (12)*0.583333333333",
+        "y": "(8)*0.416666666667 + (8)*0.583333333333 + 0.623842592593*y + thickness/2"
+      },
+      "createdIds": [
+        "pt896"
+      ],
+      "label": "Add point",
+      "at": 1793233038114
+    },
+    {
+      "opId": "op897",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.5 + (12)*0.5",
+        "y": "(8)*0.5 + (8)*0.5 + 0.5*y + thickness/2"
+      },
+      "createdIds": [
+        "pt898"
+      ],
+      "label": "Add point",
+      "at": 1793233038121
+    },
+    {
+      "opId": "op899",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.583333333333 + (12)*0.416666666667",
+        "y": "(8)*0.583333333333 + (8)*0.416666666667 + 0.376157407407*y + thickness/2"
+      },
+      "createdIds": [
+        "pt900"
+      ],
+      "label": "Add point",
+      "at": 1793233038130
+    },
+    {
+      "opId": "op901",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.666666666667 + (12)*0.333333333333",
+        "y": "(8)*0.666666666667 + (8)*0.333333333333 + 0.259259259259*y + thickness/2"
+      },
+      "createdIds": [
+        "pt902"
+      ],
+      "label": "Add point",
+      "at": 1793233038138
+    },
+    {
+      "opId": "op903",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.75 + (12)*0.25",
+        "y": "(8)*0.75 + (8)*0.25 + 0.15625*y + thickness/2"
+      },
+      "createdIds": [
+        "pt904"
+      ],
+      "label": "Add point",
+      "at": 1793233038148
+    },
+    {
+      "opId": "op905",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.833333333333 + (12)*0.166666666667",
+        "y": "(8)*0.833333333333 + (8)*0.166666666667 + 0.0740740740741*y + thickness/2"
+      },
+      "createdIds": [
+        "pt906"
+      ],
+      "label": "Add point",
+      "at": 1793233038155
+    },
+    {
+      "opId": "op907",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*0.916666666667 + (12)*0.0833333333333",
+        "y": "(8)*0.916666666667 + (8)*0.0833333333333 + 0.0196759259259*y + thickness/2"
+      },
+      "createdIds": [
+        "pt908"
+      ],
+      "label": "Add point",
+      "at": 1793233038166
+    },
+    {
+      "opId": "op909",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch857",
+        "x": "((12 + blade))*1 + (12)*0",
+        "y": "(8)*1 + (8)*0 + 0*y + thickness/2"
+      },
+      "createdIds": [
+        "pt910"
+      ],
+      "label": "Add point",
+      "at": 1793233038175
+    },
+    {
+      "opId": "op911",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt860"
+        },
+        "end": {
+          "ref": "pt862"
+        }
+      },
+      "createdIds": [
+        "ln912"
+      ],
+      "label": "Add line",
+      "at": 1793233038183
+    },
+    {
+      "opId": "op913",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt862"
+        },
+        "end": {
+          "ref": "pt864"
+        }
+      },
+      "createdIds": [
+        "ln914"
+      ],
+      "label": "Add line",
+      "at": 1793233038193
+    },
+    {
+      "opId": "op915",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt864"
+        },
+        "end": {
+          "ref": "pt866"
+        }
+      },
+      "createdIds": [
+        "ln916"
+      ],
+      "label": "Add line",
+      "at": 1793233038201
+    },
+    {
+      "opId": "op917",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt866"
+        },
+        "end": {
+          "ref": "pt868"
+        }
+      },
+      "createdIds": [
+        "ln918"
+      ],
+      "label": "Add line",
+      "at": 1793233038212
+    },
+    {
+      "opId": "op919",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt868"
+        },
+        "end": {
+          "ref": "pt870"
+        }
+      },
+      "createdIds": [
+        "ln920"
+      ],
+      "label": "Add line",
+      "at": 1793233038221
+    },
+    {
+      "opId": "op921",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt870"
+        },
+        "end": {
+          "ref": "pt872"
+        }
+      },
+      "createdIds": [
+        "ln922"
+      ],
+      "label": "Add line",
+      "at": 1793233038232
+    },
+    {
+      "opId": "op923",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt872"
+        },
+        "end": {
+          "ref": "pt874"
+        }
+      },
+      "createdIds": [
+        "ln924"
+      ],
+      "label": "Add line",
+      "at": 1793233038242
+    },
+    {
+      "opId": "op925",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt874"
+        },
+        "end": {
+          "ref": "pt876"
+        }
+      },
+      "createdIds": [
+        "ln926"
+      ],
+      "label": "Add line",
+      "at": 1793233038250
+    },
+    {
+      "opId": "op927",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt876"
+        },
+        "end": {
+          "ref": "pt878"
+        }
+      },
+      "createdIds": [
+        "ln928"
+      ],
+      "label": "Add line",
+      "at": 1793233038260
+    },
+    {
+      "opId": "op929",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt878"
+        },
+        "end": {
+          "ref": "pt880"
+        }
+      },
+      "createdIds": [
+        "ln930"
+      ],
+      "label": "Add line",
+      "at": 1793233038268
+    },
+    {
+      "opId": "op931",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt880"
+        },
+        "end": {
+          "ref": "pt882"
+        }
+      },
+      "createdIds": [
+        "ln932"
+      ],
+      "label": "Add line",
+      "at": 1793233038278
+    },
+    {
+      "opId": "op933",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt882"
+        },
+        "end": {
+          "ref": "pt884"
+        }
+      },
+      "createdIds": [
+        "ln934"
+      ],
+      "label": "Add line",
+      "at": 1793233038287
+    },
+    {
+      "opId": "op935",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt884"
+        },
+        "end": {
+          "ref": "pt886"
+        }
+      },
+      "createdIds": [
+        "ln936"
+      ],
+      "label": "Add line",
+      "at": 1793233038297
+    },
+    {
+      "opId": "op937",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt886"
+        },
+        "end": {
+          "ref": "pt888"
+        }
+      },
+      "createdIds": [
+        "ln938"
+      ],
+      "label": "Add line",
+      "at": 1793233038308
+    },
+    {
+      "opId": "op939",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt888"
+        },
+        "end": {
+          "ref": "pt890"
+        }
+      },
+      "createdIds": [
+        "ln940"
+      ],
+      "label": "Add line",
+      "at": 1793233038316
+    },
+    {
+      "opId": "op941",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt890"
+        },
+        "end": {
+          "ref": "pt892"
+        }
+      },
+      "createdIds": [
+        "ln942"
+      ],
+      "label": "Add line",
+      "at": 1793233038326
+    },
+    {
+      "opId": "op943",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt892"
+        },
+        "end": {
+          "ref": "pt894"
+        }
+      },
+      "createdIds": [
+        "ln944"
+      ],
+      "label": "Add line",
+      "at": 1793233038335
+    },
+    {
+      "opId": "op945",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt894"
+        },
+        "end": {
+          "ref": "pt896"
+        }
+      },
+      "createdIds": [
+        "ln946"
+      ],
+      "label": "Add line",
+      "at": 1793233038346
+    },
+    {
+      "opId": "op947",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt896"
+        },
+        "end": {
+          "ref": "pt898"
+        }
+      },
+      "createdIds": [
+        "ln948"
+      ],
+      "label": "Add line",
+      "at": 1793233038356
+    },
+    {
+      "opId": "op949",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt898"
+        },
+        "end": {
+          "ref": "pt900"
+        }
+      },
+      "createdIds": [
+        "ln950"
+      ],
+      "label": "Add line",
+      "at": 1793233038364
+    },
+    {
+      "opId": "op951",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt900"
+        },
+        "end": {
+          "ref": "pt902"
+        }
+      },
+      "createdIds": [
+        "ln952"
+      ],
+      "label": "Add line",
+      "at": 1793233038374
+    },
+    {
+      "opId": "op953",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt902"
+        },
+        "end": {
+          "ref": "pt904"
+        }
+      },
+      "createdIds": [
+        "ln954"
+      ],
+      "label": "Add line",
+      "at": 1793233038383
+    },
+    {
+      "opId": "op955",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt904"
+        },
+        "end": {
+          "ref": "pt906"
+        }
+      },
+      "createdIds": [
+        "ln956"
+      ],
+      "label": "Add line",
+      "at": 1793233038393
+    },
+    {
+      "opId": "op957",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt906"
+        },
+        "end": {
+          "ref": "pt908"
+        }
+      },
+      "createdIds": [
+        "ln958"
+      ],
+      "label": "Add line",
+      "at": 1793233038401
+    },
+    {
+      "opId": "op959",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt908"
+        },
+        "end": {
+          "ref": "pt910"
+        }
+      },
+      "createdIds": [
+        "ln960"
+      ],
+      "label": "Add line",
+      "at": 1793233038412
+    },
+    {
+      "opId": "op961",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch857",
+        "start": {
+          "ref": "pt910"
+        },
+        "end": {
+          "ref": "pt860"
+        }
+      },
+      "createdIds": [
+        "ln962"
+      ],
+      "label": "Add line",
+      "at": 1793233038423
+    },
+    {
+      "opId": "op963",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch857",
+        "distance": "6",
+        "operation": "join",
+        "name": "Y blade right top"
+      },
+      "createdIds": [
+        "ext964"
+      ],
+      "label": "Extrude",
+      "at": 1793233038432
+    },
+    {
+      "opId": "op965",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp29",
+        "name": "Y blade right bottom"
+      },
+      "createdIds": [
+        "sketch966",
+        "pt967"
+      ],
+      "label": "Create sketch",
+      "at": 1793233038442
+    },
+    {
+      "opId": "op968",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*1 + (12)*0",
+        "y": "(-8)*1 + (-8)*0 + 0*y - thickness/2"
+      },
+      "createdIds": [
+        "pt969"
+      ],
+      "label": "Add point",
+      "at": 1793233038450
+    },
+    {
+      "opId": "op970",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.916666666667 + (12)*0.0833333333333",
+        "y": "(-8)*0.916666666667 + (-8)*0.0833333333333 + 0.0196759259259*y - thickness/2"
+      },
+      "createdIds": [
+        "pt971"
+      ],
+      "label": "Add point",
+      "at": 1793233038460
+    },
+    {
+      "opId": "op972",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.833333333333 + (12)*0.166666666667",
+        "y": "(-8)*0.833333333333 + (-8)*0.166666666667 + 0.0740740740741*y - thickness/2"
+      },
+      "createdIds": [
+        "pt973"
+      ],
+      "label": "Add point",
+      "at": 1793233038470
+    },
+    {
+      "opId": "op974",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.75 + (12)*0.25",
+        "y": "(-8)*0.75 + (-8)*0.25 + 0.15625*y - thickness/2"
+      },
+      "createdIds": [
+        "pt975"
+      ],
+      "label": "Add point",
+      "at": 1793233038478
+    },
+    {
+      "opId": "op976",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.666666666667 + (12)*0.333333333333",
+        "y": "(-8)*0.666666666667 + (-8)*0.333333333333 + 0.259259259259*y - thickness/2"
+      },
+      "createdIds": [
+        "pt977"
+      ],
+      "label": "Add point",
+      "at": 1793233038488
+    },
+    {
+      "opId": "op978",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.583333333333 + (12)*0.416666666667",
+        "y": "(-8)*0.583333333333 + (-8)*0.416666666667 + 0.376157407407*y - thickness/2"
+      },
+      "createdIds": [
+        "pt979"
+      ],
+      "label": "Add point",
+      "at": 1793233038497
+    },
+    {
+      "opId": "op980",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.5 + (12)*0.5",
+        "y": "(-8)*0.5 + (-8)*0.5 + 0.5*y - thickness/2"
+      },
+      "createdIds": [
+        "pt981"
+      ],
+      "label": "Add point",
+      "at": 1793233038512
+    },
+    {
+      "opId": "op982",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.416666666667 + (12)*0.583333333333",
+        "y": "(-8)*0.416666666667 + (-8)*0.583333333333 + 0.623842592593*y - thickness/2"
+      },
+      "createdIds": [
+        "pt983"
+      ],
+      "label": "Add point",
+      "at": 1793233038527
+    },
+    {
+      "opId": "op984",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.333333333333 + (12)*0.666666666667",
+        "y": "(-8)*0.333333333333 + (-8)*0.666666666667 + 0.740740740741*y - thickness/2"
+      },
+      "createdIds": [
+        "pt985"
+      ],
+      "label": "Add point",
+      "at": 1793233038537
+    },
+    {
+      "opId": "op986",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.25 + (12)*0.75",
+        "y": "(-8)*0.25 + (-8)*0.75 + 0.84375*y - thickness/2"
+      },
+      "createdIds": [
+        "pt987"
+      ],
+      "label": "Add point",
+      "at": 1793233038547
+    },
+    {
+      "opId": "op988",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.166666666667 + (12)*0.833333333333",
+        "y": "(-8)*0.166666666667 + (-8)*0.833333333333 + 0.925925925926*y - thickness/2"
+      },
+      "createdIds": [
+        "pt989"
+      ],
+      "label": "Add point",
+      "at": 1793233038558
+    },
+    {
+      "opId": "op990",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.0833333333333 + (12)*0.916666666667",
+        "y": "(-8)*0.0833333333333 + (-8)*0.916666666667 + 0.980324074074*y - thickness/2"
+      },
+      "createdIds": [
+        "pt991"
+      ],
+      "label": "Add point",
+      "at": 1793233038568
+    },
+    {
+      "opId": "op992",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0 + (12)*1",
+        "y": "(-8)*0 + (-8)*1 + 1*y - thickness/2"
+      },
+      "createdIds": [
+        "pt993"
+      ],
+      "label": "Add point",
+      "at": 1793233038578
+    },
+    {
+      "opId": "op994",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0 + (12)*1",
+        "y": "(-8)*0 + (-8)*1 + 1*y + thickness/2"
+      },
+      "createdIds": [
+        "pt995"
+      ],
+      "label": "Add point",
+      "at": 1793233038586
+    },
+    {
+      "opId": "op996",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.0833333333333 + (12)*0.916666666667",
+        "y": "(-8)*0.0833333333333 + (-8)*0.916666666667 + 0.980324074074*y + thickness/2"
+      },
+      "createdIds": [
+        "pt997"
+      ],
+      "label": "Add point",
+      "at": 1793233038598
+    },
+    {
+      "opId": "op998",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.166666666667 + (12)*0.833333333333",
+        "y": "(-8)*0.166666666667 + (-8)*0.833333333333 + 0.925925925926*y + thickness/2"
+      },
+      "createdIds": [
+        "pt999"
+      ],
+      "label": "Add point",
+      "at": 1793233038607
+    },
+    {
+      "opId": "op1000",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.25 + (12)*0.75",
+        "y": "(-8)*0.25 + (-8)*0.75 + 0.84375*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1001"
+      ],
+      "label": "Add point",
+      "at": 1793233038618
+    },
+    {
+      "opId": "op1002",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.333333333333 + (12)*0.666666666667",
+        "y": "(-8)*0.333333333333 + (-8)*0.666666666667 + 0.740740740741*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1003"
+      ],
+      "label": "Add point",
+      "at": 1793233038629
+    },
+    {
+      "opId": "op1004",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.416666666667 + (12)*0.583333333333",
+        "y": "(-8)*0.416666666667 + (-8)*0.583333333333 + 0.623842592593*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1005"
+      ],
+      "label": "Add point",
+      "at": 1793233038639
+    },
+    {
+      "opId": "op1006",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.5 + (12)*0.5",
+        "y": "(-8)*0.5 + (-8)*0.5 + 0.5*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1007"
+      ],
+      "label": "Add point",
+      "at": 1793233038650
+    },
+    {
+      "opId": "op1008",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.583333333333 + (12)*0.416666666667",
+        "y": "(-8)*0.583333333333 + (-8)*0.416666666667 + 0.376157407407*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1009"
+      ],
+      "label": "Add point",
+      "at": 1793233038660
+    },
+    {
+      "opId": "op1010",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.666666666667 + (12)*0.333333333333",
+        "y": "(-8)*0.666666666667 + (-8)*0.333333333333 + 0.259259259259*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1011"
+      ],
+      "label": "Add point",
+      "at": 1793233038670
+    },
+    {
+      "opId": "op1012",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.75 + (12)*0.25",
+        "y": "(-8)*0.75 + (-8)*0.25 + 0.15625*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1013"
+      ],
+      "label": "Add point",
+      "at": 1793233038682
+    },
+    {
+      "opId": "op1014",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.833333333333 + (12)*0.166666666667",
+        "y": "(-8)*0.833333333333 + (-8)*0.166666666667 + 0.0740740740741*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1015"
+      ],
+      "label": "Add point",
+      "at": 1793233038693
+    },
+    {
+      "opId": "op1016",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*0.916666666667 + (12)*0.0833333333333",
+        "y": "(-8)*0.916666666667 + (-8)*0.0833333333333 + 0.0196759259259*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1017"
+      ],
+      "label": "Add point",
+      "at": 1793233038702
+    },
+    {
+      "opId": "op1018",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch966",
+        "x": "((12 + blade))*1 + (12)*0",
+        "y": "(-8)*1 + (-8)*0 + 0*y + thickness/2"
+      },
+      "createdIds": [
+        "pt1019"
+      ],
+      "label": "Add point",
+      "at": 1793233038714
+    },
+    {
+      "opId": "op1020",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt969"
+        },
+        "end": {
+          "ref": "pt971"
+        }
+      },
+      "createdIds": [
+        "ln1021"
+      ],
+      "label": "Add line",
+      "at": 1793233038723
+    },
+    {
+      "opId": "op1022",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt971"
+        },
+        "end": {
+          "ref": "pt973"
+        }
+      },
+      "createdIds": [
+        "ln1023"
+      ],
+      "label": "Add line",
+      "at": 1793233038734
+    },
+    {
+      "opId": "op1024",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt973"
+        },
+        "end": {
+          "ref": "pt975"
+        }
+      },
+      "createdIds": [
+        "ln1025"
+      ],
+      "label": "Add line",
+      "at": 1793233038745
+    },
+    {
+      "opId": "op1026",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt975"
+        },
+        "end": {
+          "ref": "pt977"
+        }
+      },
+      "createdIds": [
+        "ln1027"
+      ],
+      "label": "Add line",
+      "at": 1793233038755
+    },
+    {
+      "opId": "op1028",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt977"
+        },
+        "end": {
+          "ref": "pt979"
+        }
+      },
+      "createdIds": [
+        "ln1029"
+      ],
+      "label": "Add line",
+      "at": 1793233038767
+    },
+    {
+      "opId": "op1030",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt979"
+        },
+        "end": {
+          "ref": "pt981"
+        }
+      },
+      "createdIds": [
+        "ln1031"
+      ],
+      "label": "Add line",
+      "at": 1793233038779
+    },
+    {
+      "opId": "op1032",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt981"
+        },
+        "end": {
+          "ref": "pt983"
+        }
+      },
+      "createdIds": [
+        "ln1033"
+      ],
+      "label": "Add line",
+      "at": 1793233038788
+    },
+    {
+      "opId": "op1034",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt983"
+        },
+        "end": {
+          "ref": "pt985"
+        }
+      },
+      "createdIds": [
+        "ln1035"
+      ],
+      "label": "Add line",
+      "at": 1793233038799
+    },
+    {
+      "opId": "op1036",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt985"
+        },
+        "end": {
+          "ref": "pt987"
+        }
+      },
+      "createdIds": [
+        "ln1037"
+      ],
+      "label": "Add line",
+      "at": 1793233038810
+    },
+    {
+      "opId": "op1038",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt987"
+        },
+        "end": {
+          "ref": "pt989"
+        }
+      },
+      "createdIds": [
+        "ln1039"
+      ],
+      "label": "Add line",
+      "at": 1793233038819
+    },
+    {
+      "opId": "op1040",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt989"
+        },
+        "end": {
+          "ref": "pt991"
+        }
+      },
+      "createdIds": [
+        "ln1041"
+      ],
+      "label": "Add line",
+      "at": 1793233038830
+    },
+    {
+      "opId": "op1042",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt991"
+        },
+        "end": {
+          "ref": "pt993"
+        }
+      },
+      "createdIds": [
+        "ln1043"
+      ],
+      "label": "Add line",
+      "at": 1793233038841
+    },
+    {
+      "opId": "op1044",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt993"
+        },
+        "end": {
+          "ref": "pt995"
+        }
+      },
+      "createdIds": [
+        "ln1045"
+      ],
+      "label": "Add line",
+      "at": 1793233038850
+    },
+    {
+      "opId": "op1046",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt995"
+        },
+        "end": {
+          "ref": "pt997"
+        }
+      },
+      "createdIds": [
+        "ln1047"
+      ],
+      "label": "Add line",
+      "at": 1793233038862
+    },
+    {
+      "opId": "op1048",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt997"
+        },
+        "end": {
+          "ref": "pt999"
+        }
+      },
+      "createdIds": [
+        "ln1049"
+      ],
+      "label": "Add line",
+      "at": 1793233038873
+    },
+    {
+      "opId": "op1050",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt999"
+        },
+        "end": {
+          "ref": "pt1001"
+        }
+      },
+      "createdIds": [
+        "ln1051"
+      ],
+      "label": "Add line",
+      "at": 1793233038882
+    },
+    {
+      "opId": "op1052",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1001"
+        },
+        "end": {
+          "ref": "pt1003"
+        }
+      },
+      "createdIds": [
+        "ln1053"
+      ],
+      "label": "Add line",
+      "at": 1793233038895
+    },
+    {
+      "opId": "op1054",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1003"
+        },
+        "end": {
+          "ref": "pt1005"
+        }
+      },
+      "createdIds": [
+        "ln1055"
+      ],
+      "label": "Add line",
+      "at": 1793233038908
+    },
+    {
+      "opId": "op1056",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1005"
+        },
+        "end": {
+          "ref": "pt1007"
+        }
+      },
+      "createdIds": [
+        "ln1057"
+      ],
+      "label": "Add line",
+      "at": 1793233038919
+    },
+    {
+      "opId": "op1058",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1007"
+        },
+        "end": {
+          "ref": "pt1009"
+        }
+      },
+      "createdIds": [
+        "ln1059"
+      ],
+      "label": "Add line",
+      "at": 1793233038931
+    },
+    {
+      "opId": "op1060",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1009"
+        },
+        "end": {
+          "ref": "pt1011"
+        }
+      },
+      "createdIds": [
+        "ln1061"
+      ],
+      "label": "Add line",
+      "at": 1793233038942
+    },
+    {
+      "opId": "op1062",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1011"
+        },
+        "end": {
+          "ref": "pt1013"
+        }
+      },
+      "createdIds": [
+        "ln1063"
+      ],
+      "label": "Add line",
+      "at": 1793233038952
+    },
+    {
+      "opId": "op1064",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1013"
+        },
+        "end": {
+          "ref": "pt1015"
+        }
+      },
+      "createdIds": [
+        "ln1065"
+      ],
+      "label": "Add line",
+      "at": 1793233038963
+    },
+    {
+      "opId": "op1066",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1015"
+        },
+        "end": {
+          "ref": "pt1017"
+        }
+      },
+      "createdIds": [
+        "ln1067"
+      ],
+      "label": "Add line",
+      "at": 1793233038972
+    },
+    {
+      "opId": "op1068",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1017"
+        },
+        "end": {
+          "ref": "pt1019"
+        }
+      },
+      "createdIds": [
+        "ln1069"
+      ],
+      "label": "Add line",
+      "at": 1793233038984
+    },
+    {
+      "opId": "op1070",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch966",
+        "start": {
+          "ref": "pt1019"
+        },
+        "end": {
+          "ref": "pt969"
+        }
+      },
+      "createdIds": [
+        "ln1071"
+      ],
+      "label": "Add line",
+      "at": 1793233038995
+    },
+    {
+      "opId": "op1072",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch966",
+        "distance": "6",
+        "operation": "join",
+        "name": "Y blade right bottom"
+      },
+      "createdIds": [
+        "ext1073"
+      ],
+      "label": "Extrude",
+      "at": 1793233039004
+    },
+    {
+      "opId": "op1074",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp32",
+        "name": "Platform"
+      },
+      "createdIds": [
+        "sketch1075",
+        "pt1076"
+      ],
+      "label": "Create sketch",
+      "at": 1793233039015
+    },
+    {
+      "opId": "op1077",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch1075",
+        "x": "-12",
+        "y": "-12"
+      },
+      "createdIds": [
+        "pt1078"
+      ],
+      "label": "Add point",
+      "at": 1793233039026
+    },
+    {
+      "opId": "op1079",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch1075",
+        "x": "12",
+        "y": "-12"
+      },
+      "createdIds": [
+        "pt1080"
+      ],
+      "label": "Add point",
+      "at": 1793233039035
+    },
+    {
+      "opId": "op1081",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch1075",
+        "x": "12",
+        "y": "12"
+      },
+      "createdIds": [
+        "pt1082"
+      ],
+      "label": "Add point",
+      "at": 1793233039048
+    },
+    {
+      "opId": "op1083",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch1075",
+        "x": "-12",
+        "y": "12"
+      },
+      "createdIds": [
+        "pt1084"
+      ],
+      "label": "Add point",
+      "at": 1793233039061
+    },
+    {
+      "opId": "op1085",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch1075",
+        "start": {
+          "ref": "pt1078"
+        },
+        "end": {
+          "ref": "pt1080"
+        }
+      },
+      "createdIds": [
+        "ln1086"
+      ],
+      "label": "Add line",
+      "at": 1793233039073
+    },
+    {
+      "opId": "op1087",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch1075",
+        "start": {
+          "ref": "pt1080"
+        },
+        "end": {
+          "ref": "pt1082"
+        }
+      },
+      "createdIds": [
+        "ln1088"
+      ],
+      "label": "Add line",
+      "at": 1793233039084
+    },
+    {
+      "opId": "op1089",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch1075",
+        "start": {
+          "ref": "pt1082"
+        },
+        "end": {
+          "ref": "pt1084"
+        }
+      },
+      "createdIds": [
+        "ln1090"
+      ],
+      "label": "Add line",
+      "at": 1793233039098
+    },
+    {
+      "opId": "op1091",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch1075",
+        "start": {
+          "ref": "pt1084"
+        },
+        "end": {
+          "ref": "pt1078"
+        }
+      },
+      "createdIds": [
+        "ln1092"
+      ],
+      "label": "Add line",
+      "at": 1793233039110
+    },
+    {
+      "opId": "op1093",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch1075",
+        "distance": "6",
+        "operation": "new",
+        "name": "Platform"
+      },
+      "createdIds": [
+        "ext1094"
+      ],
+      "label": "Extrude",
+      "at": 1793233039124
+    },
+    {
+      "opId": "op1095",
+      "type": "joint.create",
+      "params": {
+        "kind": "planar",
+        "base": "cmp26",
+        "moved": "cmp29",
+        "baseOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "planar": {
+          "x": "x"
+        },
+        "name": "X stage"
+      },
+      "createdIds": [
+        "jnt1096"
+      ],
+      "label": "Joint",
+      "at": 1793233039138
+    },
+    {
+      "opId": "op1097",
+      "type": "joint.create",
+      "params": {
+        "kind": "planar",
+        "base": "cmp29",
+        "moved": "cmp32",
+        "baseOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "planar": {
+          "y": "y"
+        },
+        "name": "Y stage"
+      },
+      "createdIds": [
+        "jnt1098"
+      ],
+      "label": "Joint",
+      "at": 1793233039150
+    },
+    {
+      "opId": "op1099",
+      "type": "joint.create",
+      "params": {
+        "kind": "beam",
+        "base": "cmp26",
+        "moved": "cmp29",
+        "baseOrigin": {
+          "x": -14,
+          "y": "(24 + blade)",
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": -14,
+          "y": 24,
+          "z": 0
+        },
+        "beam": {
+          "width": 6,
+          "thickness": "thickness"
+        },
+        "name": "X blade top left"
+      },
+      "createdIds": [
+        "jnt1100"
+      ],
+      "label": "Joint",
+      "at": 1793233039163
+    },
+    {
+      "opId": "op1101",
+      "type": "joint.create",
+      "params": {
+        "kind": "beam",
+        "base": "cmp26",
+        "moved": "cmp29",
+        "baseOrigin": {
+          "x": 14,
+          "y": "(24 + blade)",
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 14,
+          "y": 24,
+          "z": 0
+        },
+        "beam": {
+          "width": 6,
+          "thickness": "thickness"
+        },
+        "name": "X blade top right"
+      },
+      "createdIds": [
+        "jnt1102"
+      ],
+      "label": "Joint",
+      "at": 1793233039190
+    },
+    {
+      "opId": "op1103",
+      "type": "joint.create",
+      "params": {
+        "kind": "beam",
+        "base": "cmp26",
+        "moved": "cmp29",
+        "baseOrigin": {
+          "x": -14,
+          "y": "-(24 + blade)",
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": -14,
+          "y": -24,
+          "z": 0
+        },
+        "beam": {
+          "width": 6,
+          "thickness": "thickness"
+        },
+        "name": "X blade bottom left"
+      },
+      "createdIds": [
+        "jnt1104"
+      ],
+      "label": "Joint",
+      "at": 1793233039201
+    },
+    {
+      "opId": "op1105",
+      "type": "joint.create",
+      "params": {
+        "kind": "beam",
+        "base": "cmp26",
+        "moved": "cmp29",
+        "baseOrigin": {
+          "x": 14,
+          "y": "-(24 + blade)",
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 14,
+          "y": -24,
+          "z": 0
+        },
+        "beam": {
+          "width": 6,
+          "thickness": "thickness"
+        },
+        "name": "X blade bottom right"
+      },
+      "createdIds": [
+        "jnt1106"
+      ],
+      "label": "Joint",
+      "at": 1793233039216
+    },
+    {
+      "opId": "op1107",
+      "type": "joint.create",
+      "params": {
+        "kind": "beam",
+        "base": "cmp29",
+        "moved": "cmp32",
+        "baseOrigin": {
+          "x": "-(12 + blade)",
+          "y": 8,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": -12,
+          "y": 8,
+          "z": 0
+        },
+        "beam": {
+          "width": 6,
+          "thickness": "thickness"
+        },
+        "name": "Y blade left top"
+      },
+      "createdIds": [
+        "jnt1108"
+      ],
+      "label": "Joint",
+      "at": 1793233039228
+    },
+    {
+      "opId": "op1109",
+      "type": "joint.create",
+      "params": {
+        "kind": "beam",
+        "base": "cmp29",
+        "moved": "cmp32",
+        "baseOrigin": {
+          "x": "-(12 + blade)",
+          "y": -8,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": -12,
+          "y": -8,
+          "z": 0
+        },
+        "beam": {
+          "width": 6,
+          "thickness": "thickness"
+        },
+        "name": "Y blade left bottom"
+      },
+      "createdIds": [
+        "jnt1110"
+      ],
+      "label": "Joint",
+      "at": 1793233039249
+    },
+    {
+      "opId": "op1111",
+      "type": "joint.create",
+      "params": {
+        "kind": "beam",
+        "base": "cmp29",
+        "moved": "cmp32",
+        "baseOrigin": {
+          "x": "(12 + blade)",
+          "y": 8,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 12,
+          "y": 8,
+          "z": 0
+        },
+        "beam": {
+          "width": 6,
+          "thickness": "thickness"
+        },
+        "name": "Y blade right top"
+      },
+      "createdIds": [
+        "jnt1112"
+      ],
+      "label": "Joint",
+      "at": 1793233039261
+    },
+    {
+      "opId": "op1113",
+      "type": "joint.create",
+      "params": {
+        "kind": "beam",
+        "base": "cmp29",
+        "moved": "cmp32",
+        "baseOrigin": {
+          "x": "(12 + blade)",
+          "y": -8,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 12,
+          "y": -8,
+          "z": 0
+        },
+        "beam": {
+          "width": 6,
+          "thickness": "thickness"
+        },
+        "name": "Y blade right bottom"
+      },
+      "createdIds": [
+        "jnt1114"
+      ],
+      "label": "Joint",
+      "at": 1793233039273
+    }
+  ],
+  "timelineGroups": []
+}

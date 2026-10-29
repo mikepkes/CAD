@@ -162,8 +162,9 @@ snap; μ per material):
 
 ## Proposed phases
 1. **Materials + PRBM flexure joint.** *Largely done* (see below). Remaining:
-   print anisotropy (Z properties + build direction) and force-driven
-   equilibrium (apply a load, solve the pose) rather than displacement-driven.
+   print anisotropy (Z properties + build direction). Equilibrium: undriven
+   axes settle at minimum energy (`planar` joints). Remaining: applying a load
+   rather than a displacement as the drive.
 2. **Beam flexures in assemblies.** *Started*: in-plane `beam` elements clamped
    between parts (see below). Remaining: 3D beams, flexure-from-geometry,
    rendering the solved shape (today a beam is drawn bent along the small-
@@ -297,6 +298,44 @@ snap; μ per material):
     0.19 mm (the guide's arc), and the push force rises linearly to 21 N.
   - **Tested:** every material at both jaw lengths stays within its limit, and
     the part clears itself through the stroke.
+
+## Built since: settling free axes, the XY stage
+
+- **Planar joints with free axes.** `joint.create { kind: "planar", planar: {
+  x?, y?, angle? } }` places a part in the base's plane.
+  - **Driven and free axes:** an axis given an expression is driven by it. One
+    left out is free and settles where the stored elastic energy (beams and
+    flexures) is least: the part floats on its compliant supports.
+  - **The solve:** Newton on the energy's gradient, damped so every step lowers
+    the energy. Each beam's part of the gradient is exact (its end force times
+    how its end moves with the axis), and the Hessian comes from differencing
+    that gradient. It is seeded from the last settled pose.
+  - **Architecture:** the compliance layer registers the settler with placement
+    (`setEnergySettler`), so every placement in the app, studies and exports
+    settles.
+  - **Studies:** a study's probes hold the free axes where they settled. At a
+    minimum the energy is flat along them, so the drive's effort is the partial
+    derivative.
+- **Checked on the blade parallelogram** (`test/settle.test.ts`), whose answers
+  are exact in linear theory:
+  - **Stiffness:** 24EI/L³.
+  - **Drift:** 0.6·δ²/L toward the base.
+  - **Tilt:** 2T²δ/(L·b²), from the opposite axial forces that balance the
+    blades' end moments.
+  - **Held level:** the same push is stiffer, since the blades must stretch.
+- **Example: `public/examples/xystage.json`** (`test/xystage.build.test.ts`).
+  - **Mechanism:** a carriage on four vertical blades (X) carries a platform on
+    four horizontal blades (Y): two inputs, eight `beam` elements, and four
+    free axes settled together.
+  - **Over-constrained:** each axis is held from both sides. The drifts cancel,
+    so the platform goes exactly where it's driven, square to well under
+    0.001°.
+  - **Stiffness:** a small push meets 4·12EI/L³. Further out it stiffens as the
+    blades stretch, 3.2 N at 2 mm against 0.63 N linear. That stays under the
+    inextensible bound of linear + 2.88·EA·δ³/L³, since a stretched blade
+    straightens a little.
+  - **Strain:** blades reach 0.74% at the corners of travel, within every
+    material's limit.
 
 ## Open questions
 - Which mechanisms matter first? Snap fits and living hinges point at phases 1 + 3;
