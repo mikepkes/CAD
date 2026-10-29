@@ -105,9 +105,11 @@ async function exportModelBytes(doc: CadDocument, format: ExportFormat): Promise
   let printed = doc;
   if (hasFlexures(doc)) {
     // at rest: every joint drive at 0, so geometry drawn to follow one (a bent
-    // beam) is unbent too
+    // beam) is unbent too. A drive is a slider (a bounded parameter) a joint's
+    // motion reads; a derived size it also reads (a hinge's length, setting
+    // where the pivots are) keeps its value, or the hinges would print at zero.
     const drives = Object.fromEntries(Object.values(doc.joints).filter((j) => !j.solve && !j.closes && j.kind !== "beam")
-      .flatMap((j) => doc.parameters.filter((p) => new RegExp(`\\b${p.name}\\b`).test([j.valueExpr, ...Object.values(j.planar ?? {})].join(" "))).map((p) => [p.name, "0"])));
+      .flatMap((j) => doc.parameters.filter((p) => p.min !== undefined && p.max !== undefined && new RegExp(`\\b${p.name}\\b`).test([j.valueExpr, ...Object.values(j.planar ?? {})].join(" "))).map((p) => [p.name, "0"])));
     printed = { ...poseDoc(doc, drives), joints: {} };
     placeComponentSketches(printed, scopeOf(printed));
   }
