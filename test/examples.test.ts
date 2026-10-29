@@ -163,6 +163,22 @@ describe("bundled examples", () => {
         if (known) expect(trace).toMatchSnapshot();
       }, 600000);
 
+      // The download: a compliant part prints at rest, as one piece, and all of
+      // it. (Its drives were zeroed for the print along with every size the
+      // drive's expression mentioned, so the gripper printed with no hinges.)
+      it("prints all of itself: the download holds every body", async () => {
+        const s = await load(ex.url);
+        if (!hasFlexures(s.doc)) return;
+        const bodies = Object.values((await backend.evaluate(s.doc)).solids).filter((b) => b.mesh);
+        const modelled = bodies.reduce((v, b) => v + meshVolume(b.mesh!.positions, b.mesh!.indices), 0);
+        const stl = (await backend.exportBytes(s.doc, null, "stl"))!;
+        const dv = new DataView(stl.buffer, stl.byteOffset, stl.byteLength), n = dv.getUint32(80, true);
+        const pos = new Float32Array(9 * n), idx = Uint32Array.from({ length: 3 * n }, (_, i) => i);
+        for (let t = 0; t < n; t++) for (let k = 0; k < 9; k++) pos[9 * t + k] = dv.getFloat32(84 + 50 * t + 12 + 4 * k, true);
+        const printed = meshVolume(pos, idx);
+        expect(Math.abs(printed - modelled) / modelled, `printed ${r1(printed)} mm³ of ${r1(modelled)}`).toBeLessThan(5e-3);
+      }, 300000);
+
       // Through the same path as the slider: set the parameter and recompute, so
       // sketches re-solve and expression-positioned geometry moves.
       it("builds at the ends of every customize slider", async () => {
