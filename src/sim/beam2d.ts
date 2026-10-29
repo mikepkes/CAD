@@ -10,7 +10,8 @@
 // reactions (the force it takes to drive that motion) and each element's peak
 // strain, for pass/fail against the material's allowable strain.
 //
-// Not wired into the app yet — see docs/COMPLIANT.md.
+// Wired into assemblies as `beam` elements (src/sim/flexure.ts): a strip clamped
+// between two parts whose energy and strain come from this solve.
 
 export type Dof = 0 | 1 | 2; // x, y, θ
 
@@ -37,6 +38,8 @@ export interface BeamResult {
   reactions: Record<string, number>;
   /** Per element: axial force N, end moments, and the peak fibre strain |N/EA| + |M|·c/EI. */
   elements: { N: number; M1: number; M2: number; maxStrain: number }[];
+  /** Elastic strain energy stored in the beam (N·mm = mJ). */
+  energy: number;
 }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -77,27 +80,34 @@ function element(m: BeamModel, e: BeamModel["elements"][number], u: Float64Array
     }
   }
   const maxStrain = Math.abs(N / EA) + (Math.max(Math.abs(M1), Math.abs(M2)) * e.c) / EI;
-  return { f, K, dofs: [i, i + 1, i + 2, j, j + 1, j + 2], N, M1, M2, maxStrain };
+  // the internal forces are this energy's gradient: dU/dL = N, dU/dθ1 = M1, dU/dθ2 = M2
+  const energy = (EA * (L - L0) ** 2) / (2 * L0) + ((2 * EI) / L0) * (t1 * t1 + t1 * t2 + t2 * t2);
+  return { f, K, dofs: [i, i + 1, i + 2, j, j + 1, j + 2], N, M1, M2, maxStrain, energy };
 }
 
-/** Solve A·x = b in place (Gaussian elimination with partial pivoting). */
+/** Solve A·x = b in place (Gaussian elimination with partial pivoting). A chain
+ *  of elements gives a banded matrix, so the work stays inside the band: the
+ *  pivot is sought within it, and a swapped-in row reaches at most twice as far. */
 function solveDense(A: number[][], b: number[]): number[] {
   const n = b.length;
+  let bw = 0;
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (A[r][c] !== 0) bw = Math.max(bw, Math.abs(r - c));
   for (let k = 0; k < n; k++) {
+    const last = Math.min(n - 1, k + bw), right = Math.min(n - 1, k + 2 * bw);
     let piv = k;
-    for (let r = k + 1; r < n; r++) if (Math.abs(A[r][k]) > Math.abs(A[piv][k])) piv = r;
+    for (let r = k + 1; r <= last; r++) if (Math.abs(A[r][k]) > Math.abs(A[piv][k])) piv = r;
     [A[k], A[piv]] = [A[piv], A[k]]; [b[k], b[piv]] = [b[piv], b[k]];
-    for (let r = k + 1; r < n; r++) {
+    for (let r = k + 1; r <= last; r++) {
       const f = A[r][k] / A[k][k];
       if (!f) continue;
-      for (let c = k; c < n; c++) A[r][c] -= f * A[k][c];
+      for (let c = k; c <= right; c++) A[r][c] -= f * A[k][c];
       b[r] -= f * b[k];
     }
   }
   const x = new Array(n).fill(0);
   for (let k = n - 1; k >= 0; k--) {
     let v = b[k];
-    for (let c = k + 1; c < n; c++) v -= A[k][c] * x[c];
+    for (let c = k + 1, right = Math.min(n - 1, k + 2 * bw); c <= right; c++) v -= A[k][c] * x[c];
     x[k] = v / A[k][k];
   }
   return x;
@@ -172,6 +182,7 @@ export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; 
     nodes: m.nodes.map((p, k) => ({ x: p.x + u[3 * k], y: p.y + u[3 * k + 1], theta: u[3 * k + 2] })),
     reactions,
     elements: els.map((e) => ({ N: e.N, M1: e.M1, M2: e.M2, maxStrain: e.maxStrain })),
+    energy: els.reduce((sum, e) => sum + e.energy, 0),
   };
 }
 

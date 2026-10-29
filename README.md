@@ -32,17 +32,43 @@ sized with the beam solver to stay within the material's strain limit across
 the print layers. It opens on the single half you print (print it twice); tick
 `fullBox` to see the closed box.
 
-And **https://mikepkes.github.io/CAD/?mode=customize&example=fourbar** — a
-**compliant mechanism**: a four-bar linkage printed flat as one piece, its four
-"joints" thin strips of plastic that bend instead of pins.
-- **Push it:** drag `theta` to push the finger pad, and the pointer swings while
-  a live readout shows each hinge's strain against the material's limit, the
-  input torque and the stored energy.
-- **Reshape it:** change the linkage with `crank`, `rocker` and `ground`. A
-  longer crank or a shorter rocker makes the pointer swing further.
-- **Pick a material:** choose what you print it in from `material`, and the
-  hinge strips resize so they stay within its strain limit.
-- **How it works:** see [docs/COMPLIANT.md](docs/COMPLIANT.md).
+### Compliant mechanisms
+
+Parts that move by **bending** instead of sliding on pins, printed flat as one
+piece. Chisel solves how they move and what the bending costs: the strain in
+every flexing strip against the material's limit, the force to drive it, and
+where it comes to rest. Each one has a `material` dropdown that checks the
+strain against what you print it in; in the four-bar and the gripper the hinge
+strips also resize for it. How it works is in
+[docs/COMPLIANT.md](docs/COMPLIANT.md).
+
+- **Four-bar linkage:** https://mikepkes.github.io/CAD/?mode=customize&example=fourbar
+  - **What it is:** four links joined by thin hinge strips.
+  - **Push it:** drag `theta` to push the finger pad and the pointer swings. A
+    live readout shows each hinge's strain, the input torque and the stored
+    energy.
+  - **Reshape it:** `crank`, `rocker` and `ground` change the linkage. A longer
+    crank or a shorter rocker makes the pointer swing further.
+- **Bistable switch:** https://mikepkes.github.io/CAD/?mode=customize&example=bistable
+  - **What it is:** two curved beams span a frame and carry a shuttle. Push its
+    button down and the beams snap through to their mirror shape, where it
+    stays until you push it back.
+  - **The readout:** both rest positions, the force to snap it over, and the
+    beams' strain on the way.
+  - **The physics:** the beams are solved as large-deflection beams. The snap
+    force matches the published result for this mechanism to within a few
+    percent.
+  - **Try:** `span`, `rise` and `thickness`. A shallow, thick arch stops being
+    bistable and just springs back.
+- **Gripper:** https://mikepkes.github.io/CAD/?mode=customize&example=gripper
+  - **What it is:** push the plunger and both jaws swing open; let go and they
+    spring shut on whatever is between them.
+  - **What it solves:** 8 parts, 10 hinges and 3 closed loops, together. The
+    plunger rides a parallelogram guide, and pushrods turn the jaw levers, so
+    each jaw tip moves about 3.7× as far as the plunger.
+  - **Try:** `jaw` changes the lever length.
+- **Snap fits:** the star box above. Its tongues are cantilever springs, sized
+  per material with the same beam solver.
 
 A **local-first, browser-based parametric CAD** app. It runs entirely in the
 browser (static, GitHub-Pages-servable) and is built so the geometry is
@@ -225,6 +251,8 @@ straight from a URL:
 ?mode=customize&example=scissor-jointed # the scissor as a jointed assembly (count + articulates)
 ?mode=customize&example=starbox        # snap-together star box: width + height sliders, print material dropdown; opens on the one printable half, tick fullBox for both (one flipped)
 ?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain; link-length sliders, print material dropdown
+?mode=customize&example=bistable       # bistable switch: curved beams that snap between two rest positions; span / rise / thickness sliders
+?mode=customize&example=gripper        # compliant gripper: 10 hinges, 3 loops, amplified jaws; jaw length slider
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```
 

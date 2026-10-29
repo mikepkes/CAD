@@ -7,7 +7,8 @@
 // again, so it never churns through the values a drag passed through.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { flexureState, flexureSweep, hasFlexures } from "../sim/flexure";
+import { flexureEquilibria, flexureState, flexureSweep, hasFlexures, isAngularDrive, type EquilibriumStudy } from "../sim/flexure";
+import { compileExpr } from "../math/expr";
 import { Viewport } from "./Viewport";
 import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
@@ -104,15 +105,39 @@ function MotionBadge() {
  *  working (strain against its material's limit), what it takes to hold this
  *  pose, and the energy stored. Pure math on the solved pose — no rebuild — so it
  *  follows the slider. */
+/** The parameter that drives a compliant mechanism: a placing joint (not solved,
+ *  not closing a loop) whose motion follows a bounded parameter. */
+function driveOf(doc: ReturnType<typeof useStore.getState>["session"]["doc"]) {
+  for (const j of Object.values(doc.joints)) {
+    if (j.solve || j.closes || j.kind === "beam" || j.kind === "rigid") continue;
+    let deps: string[] = [];
+    try { deps = compileExpr(j.valueExpr).deps; } catch { continue; }
+    const p = doc.parameters.find((q) => deps.includes(q.name) && q.min != null && q.max != null);
+    if (p) return p;
+  }
+  return undefined;
+}
+
 function FlexureReadout() {
   const doc = useStore((s) => s.session.doc);
-  useStore((s) => s.rev);
+  const rev = useStore((s) => s.rev);
+  const param = hasFlexures(doc) ? driveOf(doc) : undefined;
+  // Where it rests along its drive (a bistable switch has two): a sweep of the
+  // whole range, so it waits until the controls have been still for a moment.
+  const [rest, setRest] = useState<{ key: string; study: EquilibriumStudy } | null>(null);
+  const key = param ? JSON.stringify(doc.parameters.filter((q) => q.name !== param.name).map((q) => [q.name, q.expr])) : "";
+  useEffect(() => {
+    if (!param || rest?.key === key) return;
+    const t = setTimeout(() => setRest({ key, study: flexureEquilibria(doc, param.name, param.min!, param.max!, 32) }), 700);
+    return () => clearTimeout(t);
+  }, [key, rev]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!hasFlexures(doc)) return null;
-  // the drive: a flexure/revolute joint that isn't solved, driven by a bare parameter
-  const drive = Object.values(doc.joints).find((j) => (j.kind === "flexure" || j.kind === "revolute") && !j.solve && !j.closes && doc.parameters.some((p) => p.name === j.valueExpr.trim()));
-  const param = drive ? doc.parameters.find((p) => p.name === drive.valueExpr.trim()) : undefined;
   const st = param ? flexureSweep(doc, param.name, [param.value])[0] : { ...flexureState(doc), effort: NaN };
   const over = st.utilisation > 1;
+  const angular = param ? isAngularDrive(doc, param.name) : false;
+  const unit = angular ? "°" : " mm"; // a non-angle drive is a length
+  const study = rest?.key === key ? rest.study : undefined;
+  const stable = study?.states.filter((q) => q.stable) ?? [];
   return (
     <div className="cz-flex" title="Each flexure is a thin strip that bends instead of a pin. Its bar shows the peak strain against the material's limit.">
       <div className="cz-flex-head">
@@ -131,9 +156,17 @@ function FlexureReadout() {
       })}
       <div className="cz-flex-foot">
         {st.flexures[0]?.allowable != null && <span>limit {(st.flexures[0].allowable * 100).toFixed(0)}%</span>}
-        {Number.isFinite(st.effort) && <span>input torque {Math.abs(st.effort).toFixed(0)} N·mm</span>}
+        {Number.isFinite(st.effort) && <span>{angular ? `input torque ${Math.abs(st.effort).toFixed(0)} N·mm` : `input force ${Math.abs(st.effort).toFixed(1)} N`}</span>}
         <span>stored {st.energy.toFixed(1)} mJ</span>
       </div>
+      {param && study && stable.length > 0 && (
+        <div className="cz-flex-rest" title="Where it stays put when you let go: the effort is zero there and pushes back either way.">
+          {study.multistable
+            ? <><span className="cz-flex-ok">bistable</span> rests at {param.name} = {stable.map((q) => `${fmt(Math.round(q.value * 10) / 10)}${unit}`).join(" and ")}</>
+            : <>springs back to {param.name} = {fmt(Math.round(stable[0].value * 10) / 10)}{unit}</>}
+          {study.snap && <> · snaps over at {angular ? `${Math.abs(study.snap.effort).toFixed(0)} N·mm` : `${Math.abs(study.snap.effort).toFixed(1)} N`}</>}
+        </div>
+      )}
     </div>
   );
 }

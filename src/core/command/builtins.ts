@@ -443,13 +443,21 @@ export const BUILTINS: CommandDef<any>[] = [
     description:
       "Joins the `moved` component to `base` (default root) so a connector point on each — given in that component's LOCAL coordinates — coincides, then applies the joint motion. `rigid` fixes it; `revolute` leaves free rotation about `axis` (base-local) by `value` degrees; `slider` leaves free translation along `axis` by `value`. `pin-slot` rotates about `axis` but SOLVES the angle so the moved-body point `pin` stays on the slot line (`slotPoint`+`slotDir` in `slotBase`'s frame) — a 1-DOF mechanism constraint, so the kernel finds the angle instead of you supplying trig. `value` is a parametric expression (a seed for pin-slot). " +
       "`flexure` is a compliant hinge: it moves like `revolute` but carries a `flexure` section {length, width, thickness} so its strain, stiffness and stored energy can be computed (a small-length flexural pivot; the hinge material is the moved component's, or `flexure.material`). " +
+      "`beam` is a long compliant strip clamped from `baseOrigin` (on base) to `movedOrigin` (on moved), both in the parts' as-modelled coordinates: it places nothing (other joints place both parts) but its energy, force and strain are solved as a large-deflection beam as they move — e.g. the curved beams of a bistable switch. Give `beam` {width, thickness, profile: straight|cosine}. " +
       "Closed loops (a four-bar): give the undriven joints `solve: true` (their value is found, `value` only seeds it) and close the loop with one more joint that has `closes: true` — it places nothing; its two connectors are made to coincide. Returns the joint id.",
     paramsSchema: {
       type: "object",
       required: ["moved", "baseOrigin", "movedOrigin"],
       additionalProperties: false,
       properties: {
-        kind: { type: "string", enum: ["rigid", "revolute", "slider", "pin-slot", "flexure"], description: "Joint type (default rigid)." },
+        kind: { type: "string", enum: ["rigid", "revolute", "slider", "pin-slot", "flexure", "beam"], description: "Joint type (default rigid)." },
+        beam: {
+          type: "object",
+          required: ["width", "thickness"],
+          additionalProperties: false,
+          description: "beam only: the strip (mm). width out of the sketch plane, thickness in it; each a number or an expression. profile: straight (default) or cosine (an S leaving and arriving parallel to X).",
+          properties: { width: { type: ["number", "string"] }, thickness: { type: ["number", "string"] }, profile: { type: "string", enum: ["straight", "cosine"] }, material: { type: "string", description: "Strip material id (default: the base component's)." } },
+        },
         solve: { type: "boolean", description: "The value is solved so every closing joint's connectors meet (closed loops); `value` only seeds it." },
         closes: { type: "boolean", description: "Close a loop: place nothing, constrain the two connectors to coincide. `moved` must be placed by another joint." },
         flexure: {
@@ -476,7 +484,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Pin a bracket to the base at its origin", params: { moved: "cmp3", baseOrigin: { x: 40, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 } } },
       { note: "Revolute joint spun 30°", params: { kind: "revolute", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 20 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "30" } },
     ],
-    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure"; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
+    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam"; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
@@ -487,12 +495,22 @@ export const BUILTINS: CommandDef<any>[] = [
         if (p.slotBase && !draft.components[p.slotBase]) throw new Error(`No slotBase component "${p.slotBase}"`);
       }
       if (kind === "flexure" && !p.flexure) throw new Error("flexure joint needs a flexure section {length, width, thickness}");
+      if (kind === "beam" && !p.beam) throw new Error("beam joint needs a beam section {width, thickness}");
+      if (p.beam?.material && !draft.materials[p.beam.material]) throw new Error(`No material "${p.beam.material}"`);
       if (p.flexure?.material && !draft.materials[p.flexure.material]) throw new Error(`No material "${p.flexure.material}"`);
       // a flexure dimension may be an expression: evaluate it now (and reject it before allocating)
       const scope = resolveParameters(draft.parameters).scope;
       const section = kind === "flexure" ? flexureSection(p.flexure!, scope) : undefined;
       // so may a connector point
       const baseO = exprPoint(p.baseOrigin, scope, "baseOrigin"), movedO = exprPoint(p.movedOrigin, scope, "movedOrigin");
+      let beam: { width: number; thickness: number; profile: "straight" | "cosine"; material?: string; exprs?: Partial<Record<"width" | "thickness", string>> } | undefined;
+      if (kind === "beam") {
+        const sec = flexureSection({ length: 1, width: p.beam!.width, thickness: p.beam!.thickness }, scope);
+        const exprs = sec.exprs ? { ...(sec.exprs.width ? { width: sec.exprs.width } : {}), ...(sec.exprs.thickness ? { thickness: sec.exprs.thickness } : {}) } : undefined;
+        if (Math.hypot(movedO.value.x - baseO.value.x, movedO.value.y - baseO.value.y) < 1e-6) throw new Error("a beam needs two distinct ends");
+        if (p.beam!.profile === "cosine" && Math.abs(movedO.value.x - baseO.value.x) < 1e-6) throw new Error("a cosine beam needs its ends apart in X");
+        beam = { width: sec.width, thickness: sec.thickness, profile: p.beam!.profile ?? "straight", ...(p.beam!.material ? { material: p.beam!.material } : {}), ...(exprs ? { exprs } : {}) };
+      }
       if (p.closes && p.solve) throw new Error("a closing joint is the constraint; give `solve` to the joints it determines");
       if (p.closes && !Object.values(draft.joints).some((j) => j.moved === p.moved && !j.closes)) throw new Error("a closing joint's moved component must already be placed by another joint");
       const id = ctx.alloc("jnt");
@@ -514,6 +532,7 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.solve ? { solve: true } : {}),
         ...(p.closes ? { closes: true } : {}),
         ...(section ? { flexure: { ...section, ...(p.flexure!.material ? { material: p.flexure!.material } : {}) } } : {}),
+        ...(beam ? { beam } : {}),
       };
       return { createdIds: [id], message: `${draft.joints[id].kind} joint` };
     },

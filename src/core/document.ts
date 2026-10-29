@@ -390,7 +390,7 @@ export interface TimelineGroup {
 export interface Joint {
   id: string;
   name: string;
-  kind: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure";
+  kind: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam";
   base: string;  // base component id (root = ground)
   moved: string; // the component this joint places
   /** Connector point on each component, in that component's LOCAL coordinates. */
@@ -422,6 +422,12 @@ export interface Joint {
   /** flexure only: the compliant hinge's section. Moves like a revolute joint;
    *  modelled as a small-length flexural pivot (src/sim/flexure.ts). */
   flexure?: FlexureSection;
+  /** beam only: a long compliant strip clamped from `baseOrigin` (on base) to
+   *  `movedOrigin` (on moved). It places nothing — other joints place both
+   *  parts — but stores energy as they move apart, solved as a large-deflection
+   *  beam (src/sim/beam2d.ts). Both points are in the parts' as-modelled frames,
+   *  which must coincide (parts drawn in place). */
+  beam?: BeamSection;
   /** Connector points given as expressions in the parameters (per coordinate);
    *  baseOrigin / movedOrigin hold their last evaluation. */
   originExprs?: { base?: Partial<Record<"x" | "y" | "z", string>>; moved?: Partial<Record<"x" | "y" | "z", string>> };
@@ -439,6 +445,18 @@ export interface FlexureSection {
   /** Dimensions given as expressions in the parameters (e.g. one per print
    *  material); the numbers above are their last evaluation. */
   exprs?: Partial<Record<"length" | "width" | "thickness", string>>;
+}
+
+/** A beam element's strip: `width` (out of plane), `thickness` (in the bending
+ *  plane, XY). Its unstressed shape runs from the base point to the moved point:
+ *  straight, or "cosine" — a smooth S leaving and arriving parallel to X (half
+ *  of a clamped-clamped cosine beam, the curved-beam bistable's shape). */
+export interface BeamSection {
+  width: number;
+  thickness: number;
+  profile: "straight" | "cosine";
+  material?: string;
+  exprs?: Partial<Record<"width" | "thickness", string>>;
 }
 
 /** A named attachment frame on a component, in that component's LOCAL coordinates.
