@@ -11,7 +11,7 @@ import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
 import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, collideFeatures, CollisionResult, GeometryCache, SolidEval } from "../features";
 import { hasFlexures } from "../../sim/flexure";
-import { placeComponentSketches } from "../recompute";
+import { placeComponentSketches, placeParametricPoints } from "../recompute";
 import { expandAssembly, hasAssemblyPatterns, instanceSolids } from "../assembly";
 import { Scope } from "../../math/expr";
 
@@ -75,15 +75,22 @@ function evaluateForRender(doc: CadDocument, scope: Scope, cache?: GeometryCache
 }
 
 /** A pose of `doc` for a collision check: parameter expressions overridden and
- *  sketches re-placed in their components' frames for those values. Clones the
- *  parameters and sketches so re-placing their planes never disturbs the caller's
- *  live document (the worker gets a copy anyway; the inline backend does not). */
+ *  sketches re-placed in their components' frames for those values, with their
+ *  expression-positioned points moved too (geometry drawn to follow a drive,
+ *  like a beam that bends with it). Clones the parameters and sketches so
+ *  re-placing them never disturbs the caller's live document (the worker gets a
+ *  copy anyway; the inline backend does not). */
 function poseDoc(doc: CadDocument, overrides?: Record<string, string>): CadDocument {
   const parameters = doc.parameters.map((p) => (overrides?.[p.name] != null ? { ...p, expr: overrides[p.name] } : p));
+  const scope = resolveParameters(parameters).scope;
   const sketches: CadDocument["sketches"] = {};
-  for (const [id, sk] of Object.entries(doc.sketches)) sketches[id] = { ...sk };
+  for (const [id, sk] of Object.entries(doc.sketches)) {
+    const parametric = overrides && Object.values(sk.entities).some((e) => e.kind === "point" && (e.xExpr !== undefined || e.yExpr !== undefined));
+    sketches[id] = parametric ? { ...sk, entities: Object.fromEntries(Object.entries(sk.entities).map(([k, e]) => [k, { ...e }])) } : { ...sk };
+    if (parametric) placeParametricPoints(sketches[id], scope);
+  }
   const posed = { ...doc, parameters, sketches };
-  placeComponentSketches(posed, resolveParameters(parameters).scope);
+  placeComponentSketches(posed, scope);
   return posed;
 }
 
@@ -94,9 +101,11 @@ function poseDoc(doc: CadDocument, overrides?: Record<string, string>): CadDocum
 async function exportModelBytes(doc: CadDocument, format: ExportFormat): Promise<Uint8Array | null> {
   let printed = doc;
   if (hasFlexures(doc)) {
-    const sketches: CadDocument["sketches"] = {};
-    for (const [id, sk] of Object.entries(doc.sketches)) sketches[id] = { ...sk };
-    printed = { ...doc, joints: {}, sketches };
+    // at rest: every joint drive at 0, so geometry drawn to follow one (a bent
+    // beam) is unbent too
+    const drives = Object.fromEntries(Object.values(doc.joints).filter((j) => !j.solve && !j.closes && j.kind !== "beam")
+      .flatMap((j) => doc.parameters.filter((p) => new RegExp(`\\b${p.name}\\b`).test(j.valueExpr)).map((p) => [p.name, "0"])));
+    printed = { ...poseDoc(doc, drives), joints: {} };
     placeComponentSketches(printed, scopeOf(printed));
   }
   const scope = scopeOf(printed);

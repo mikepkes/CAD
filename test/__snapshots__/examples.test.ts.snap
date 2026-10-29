@@ -70,6 +70,41 @@ exports[`bundled examples > examples/scissor.json > replays, builds on both geom
 ]
 `;
 
+exports[`bundled examples > public/examples/bistable.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext51",
+    "max": [
+      44,
+      16,
+      6,
+    ],
+    "min": [
+      -44,
+      -28,
+      0,
+    ],
+    "name": "Base",
+    "volume": 6576,
+  },
+  {
+    "body": "ext678",
+    "max": [
+      9,
+      35.2,
+      6,
+    ],
+    "min": [
+      -9,
+      -6,
+      0,
+    ],
+    "name": "Shuttle",
+    "volume": 1915.2,
+  },
+]
+`;
+
 exports[`bundled examples > public/examples/fourbar.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
@@ -131,6 +166,131 @@ exports[`bundled examples > public/examples/fourbar.json > replays, builds on bo
     ],
     "name": "Base",
     "volume": 4632,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/gripper.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext216",
+    "max": [
+      22,
+      16,
+      6,
+    ],
+    "min": [
+      -22,
+      -60,
+      0,
+    ],
+    "name": "Stem",
+    "volume": 5328,
+  },
+  {
+    "body": "ext363",
+    "max": [
+      -6,
+      -37,
+      6,
+    ],
+    "min": [
+      -27,
+      -43,
+      0,
+    ],
+    "name": "Hinge guide -40 (link, frame end)",
+    "volume": 636,
+  },
+  {
+    "body": "ext426",
+    "max": [
+      -6,
+      -17,
+      6,
+    ],
+    "min": [
+      -27,
+      -23,
+      0,
+    ],
+    "name": "Hinge guide -20 (link, frame end)",
+    "volume": 636,
+  },
+  {
+    "body": "ext489",
+    "max": [
+      -15,
+      40,
+      6,
+    ],
+    "min": [
+      -21,
+      16,
+      0,
+    ],
+    "name": "Hinge rod (rod, plunger end)",
+    "volume": 744,
+  },
+  {
+    "body": "ext552",
+    "max": [
+      -3,
+      90,
+      6,
+    ],
+    "min": [
+      -35,
+      40,
+      0,
+    ],
+    "name": "Hinge rod (lever half)",
+    "volume": 3192,
+  },
+  {
+    "body": "ext657",
+    "max": [
+      21,
+      40,
+      6,
+    ],
+    "min": [
+      15,
+      16,
+      0,
+    ],
+    "name": "Hinge rod (rod, plunger end)",
+    "volume": 744,
+  },
+  {
+    "body": "ext69",
+    "max": [
+      35,
+      40,
+      6,
+    ],
+    "min": [
+      -35,
+      -80,
+      0,
+    ],
+    "name": "Base",
+    "volume": 10632,
+  },
+  {
+    "body": "ext720",
+    "max": [
+      35,
+      90,
+      6,
+    ],
+    "min": [
+      3,
+      40,
+      0,
+    ],
+    "name": "Hinge rod (lever half)",
+    "volume": 3192,
   },
 ]
 `;

@@ -164,12 +164,14 @@ snap; μ per material):
 1. **Materials + PRBM flexure joint.** *Largely done* (see below). Remaining:
    print anisotropy (Z properties + build direction) and force-driven
    equilibrium (apply a load, solve the pose) rather than displacement-driven.
-2. **Beam flexures in assemblies.** Promote `beam2d` to 3D, couple to rigid
-   components via connectors, flexure-from-geometry, skinned rendering,
-   force–displacement plots, golden curves in the harness.
-3. **Contact and snap-through.** Penalty contact with friction; arc-length
-   continuation. Examples: the star box snaps (computed closing force), a
-   bistable switch.
+2. **Beam flexures in assemblies.** *Started*: in-plane `beam` elements clamped
+   between parts (see below). Remaining: 3D beams, flexure-from-geometry,
+   rendering the solved shape (today a beam is drawn bent along the small-
+   deflection shape), force–displacement plots, golden curves in the harness.
+3. **Contact and snap-through.** Snap-through of beams under displacement
+   control is done (the bistable switch). Remaining: penalty contact with
+   friction (the star box snaps' computed closing force) and arc-length
+   continuation (snap-through under a force).
 4. **Solid FE check** for roots, plates and non-beam flexures.
 
 ## Built so far: flexure joints, closed loops, the compliant four-bar
@@ -232,7 +234,69 @@ snap; μ per material):
 
   These are typical FDM values; tune them to your filament. PP is the classic
   living-hinge plastic. PLA hinges fatigue: expect hundreds of flexes, not
-  thousands.
+  thousands. The table lives in `test/flexure-materials.ts`, shared with the
+  gripper.
+- **Expression strips and pivots.** A flexure's `length` / `width` /
+  `thickness` and any joint's connector points may be expressions in the
+  parameters (`joint.create { flexure: { thickness: "hingeT" }, baseOrigin: { x:
+  "ground", … } }`), so a mechanism's links and hinges follow its sliders.
+
+## Built since: beam elements, rest positions, the bistable switch, the gripper
+
+- **Beam elements.** `joint.create { kind: "beam", beam: { width, thickness,
+  profile: "straight" | "cosine" } }` clamps a long strip from a point on
+  `base` to a point on `moved`.
+  - **It places nothing:** other joints place both parts. As they move, the
+    strip is solved as a large-deflection beam (`beam2d`, clamped at the base,
+    its far end driven to the moved part's displacement and rotation). The
+    solve gives its energy, its peak strain and the force it pushes back with.
+  - **Effort without differencing across a snap:** a study's drive effort for a
+    beam is that end force times how far the end moves per unit of drive, not a
+    difference of energy across a snap.
+  - **Solves are reused:** solves are cached by the beam's shape relative to its
+    base end, mirrored to point +X. Identical and mirror-image beams then share
+    one solve.
+  - **Bad branches are re-solved:** a solve that doesn't converge, or that
+    lands on a non-physical branch past a snap (over 30% strain), is re-solved
+    in finer steps.
+  - **Checked against:** the fixed-guided beam F = 12EI·δ/L³ exactly, and the
+    curved-beam bistable (`test/beam-element.test.ts`).
+- **Rest positions.** `flexureEquilibria(doc, param, min, max)` sweeps a drive
+  and finds where the effort is zero. A rest position is stable where the
+  effort rises through zero and unstable where it falls. The study also gives
+  the push needed to snap between two stable states, and the energy barrier.
+  - **In customize mode:** the readout shows "bistable: rests at … · snaps over
+    at …", or "springs back to …" when there's one rest position, once the
+    sliders have been still for a moment. It also reports an input force for a
+    length drive and a torque for an angle.
+- **Example: `public/examples/bistable.json`** (`test/bistable.build.test.ts`).
+  A U-frame, a shuttle, and two parallel curved (cosine) beams clamped wall to
+  wall through it. These are four `beam` elements, and the shuttle rides a
+  slider by symmetry. The drawn beams bend with the shuttle along the
+  fixed-guided shape 3s² − 2s³.
+  - **Published check:** against Qiu, Lang & Slocum, "A curved-beam bistable
+    mechanism" (JMEMS 2004), at span 76, rise 3.2, thickness 0.8:
+
+    | | Chisel | Paper |
+    |---|---|---|
+    | Second rest position | 6.10 mm (0.95 × 2h) | just short of 2h |
+    | Snap force | 755 EIh/L³ per beam (4.3 N in TPU 68D, 10.8 N in PLA) | ≈ 740 |
+    | Pull-back | −449 | ≈ −370, a rough figure |
+
+  - **Strain:** 1.82% through the snap, within every material's limit.
+  - **Monostable case:** a shallow, thick arch (rise/thickness 1.5) only
+    springs back, as theory says it should below ~2.3.
+- **Example: `public/examples/gripper.json`** (`test/gripper.build.test.ts`).
+  A normally-closed gripper: push the plunger, and both jaws open.
+  - **Size:** 8 parts and 10 flexure hinges. The plunger rides a parallelogram
+    guide, and a pushrod each side turns a jaw lever.
+  - **The solve:** 3 closed loops with 6 unknowns, solved together at every
+    pose.
+  - **Results:** at the default size, the jaws open 6 → 43 mm for 5 mm of push.
+    That's ×3.72 per tip, against a lever ratio of 3.57. The two sides differ by
+    0.19 mm (the guide's arc), and the push force rises linearly to 21 N.
+  - **Tested:** every material at both jaw lengths stays within its limit, and
+    the part clears itself through the stroke.
 
 ## Open questions
 - Which mechanisms matter first? Snap fits and living hinges point at phases 1 + 3;

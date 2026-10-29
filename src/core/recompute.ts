@@ -108,7 +108,7 @@ export async function recompute(
 /** Move every expression-positioned point to its parameters' current value
  *  (they are fixed, so the solve builds the rest of the sketch around them). A
  *  coordinate that no longer evaluates keeps its last position. */
-function placeParametricPoints(sk: Sketch, scope: Scope): void {
+export function placeParametricPoints(sk: Sketch, scope: Scope): void {
   for (const e of Object.values(sk.entities)) {
     if (e.kind !== "point" || (e.xExpr === undefined && e.yExpr === undefined)) continue;
     for (const [axis, expr] of [["x", e.xExpr], ["y", e.yExpr]] as const) {
@@ -227,6 +227,9 @@ export function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<strin
     if (j.flexure?.exprs) for (const [k, e] of Object.entries(j.flexure.exprs) as ["length" | "width" | "thickness", string][]) {
       try { const v = compileExpr(e).eval(scope); if (Number.isFinite(v) && v > 0) j.flexure[k] = v; } catch { /* keep last */ }
     }
+    if (j.beam?.exprs) for (const [k, e] of Object.entries(j.beam.exprs) as ["width" | "thickness", string][]) {
+      try { const v = compileExpr(e).eval(scope); if (Number.isFinite(v) && v > 0) j.beam[k] = v; } catch { /* keep last */ }
+    }
     // ...and so do connector points given as expressions
     for (const [side, key] of [["base", "baseOrigin"], ["moved", "movedOrigin"]] as const) {
       const ex = j.originExprs?.[side];
@@ -236,6 +239,7 @@ export function resolveComponentWorld(doc: CadDocument, scope: Scope): Map<strin
     }
     if (!doc.components[j.base]) { j.error = `joint base "${j.base}" not found`; continue; }
     if (!doc.components[j.moved]) { j.error = `joint moved "${j.moved}" not found`; continue; }
+    if (j.kind === "beam") continue; // an elastic element between placed parts, not a placement
     if (j.closes) closures.push(j); // a constraint, not a placement
     else jointByMoved.set(j.moved, j);
   }
