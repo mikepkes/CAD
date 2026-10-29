@@ -271,22 +271,27 @@ snap; μ per material):
     sliders have been still for a moment. It also reports an input force for a
     length drive and a torque for an angle.
 - **Example: `public/examples/bistable.json`** (`test/bistable.build.test.ts`).
-  A U-frame, a shuttle, and two parallel curved (cosine) beams clamped wall to
-  wall through it. These are four `beam` elements, and the shuttle rides a
-  slider by symmetry. The drawn beams bend with the shuttle along the
-  fixed-guided shape 3s² − 2s³.
+  A ring frame, a shuttle, and two parallel curved (cosine) beams clamped wall to
+  wall through it: four `beam` elements. The drawn beams bend with the shuttle
+  along the fixed-guided shape 3s² − 2s³. The frame is solved as well (see
+  "Frame compliance" below).
   - **Published check:** against Qiu, Lang & Slocum, "A curved-beam bistable
-    mechanism" (JMEMS 2004), at span 76, rise 3.2, thickness 0.8:
+    mechanism" (JMEMS 2004), with the frame held rigid (span 60, rise/thickness
+    4, TPU 68D):
 
     | | Chisel | Paper |
     |---|---|---|
-    | Second rest position | 6.10 mm (0.95 × 2h) | just short of 2h |
-    | Snap force | 755 EIh/L³ per beam (4.3 N in TPU 68D, 10.8 N in PLA) | ≈ 740 |
-    | Pull-back | −449 | ≈ −370, a rough figure |
+    | Second rest position | 6.95 mm (0.95 × 2h) | just short of 2h |
+    | Snap force | 749 EIh/L³ per beam | ≈ 740 |
+    | Pull-back | −439 | ≈ −370, a rough figure |
 
-  - **Strain:** 1.82% through the snap, within every material's limit.
-  - **Monostable case:** a shallow, thick arch (rise/thickness 1.5) only
-    springs back, as theory says it should below ~2.3.
+  - **Sized by material:** the snap strain goes as about 35·t·h/L², and the snap
+    force as E·t³·h/L³. So for the chosen span and arch, each material gets the
+    thickest beams that snap at 3/4 of its strain limit (capped at 4%, where the
+    stroke runs out), but never under 0.6 mm. That gives 11.9 N to flip in
+    TPU 68D and 5.9 N in PLA, against 2–4 N for the first, fixed-size version.
+  - **Monostable case:** a flat arch (rise/thickness 1.5) only springs back, as
+    theory says it should below ~2.3.
 - **Example: `public/examples/gripper.json`** (`test/gripper.build.test.ts`).
   A normally-closed gripper: push the plunger, and both jaws open.
   - **Size:** 8 parts and 10 flexure hinges. The plunger rides a parallelogram
@@ -336,6 +341,43 @@ snap; μ per material):
     straightens a little.
   - **Strain:** blades reach 0.74% at the corners of travel, within every
     material's limit.
+
+## Built since: frame compliance
+
+The first bistable switch, a U-frame, sprang back when printed unless its walls
+were squeezed. The model called it bistable because it held the frame rigid.
+
+- **Bent strips.** `beam { via: [{x, y}, …] }` runs a strip through corners
+  between its ends, each a number or an expression. A frame's bar can then be
+  a beam that runs along the base and up a wall. Checked on an L-frame against
+  k = EI/(b³/3 + a·b²) (`test/beam-element.test.ts`).
+- **Floating frame parts.** The frame's walls (where the beams are clamped) and
+  its top bar are parts on free `planar` joints, held by those bar beams. They
+  carry no geometry and are drawn as part of the frame, since they move by
+  hundredths of a millimetre. They settle with every pose.
+- **What it showed:**
+  - **The U-frame:** under the beams' push, its long base bends and the walls
+    splay (~0.1 mm) and tilt (~0.2°). That's enough to lose the second rest at
+    every bar width tried (6–24 mm).
+  - **A tie under the beams (an H):** this doesn't fix it. The tie sits below
+    the load, so it still bends.
+  - **A closed ring:** this holds each wall at both ends. It keeps 98% of the
+    rigid frame's stroke and 75% of its snap force at 10 mm bars, and stays
+    bistable down to 5 mm bars.
+- **A second mode, mid-snap.** Pushed by its knob alone, the shuttle sways and
+  tilts about 1° through the middle of the snap (the full beam's second mode).
+  That costs ~2% of the energy and doesn't change the peak force or the rest
+  positions. The square, symmetric pose is a saddle there, so a free shuttle
+  goes one way or the other depending on round-off. The example holds the
+  shuttle square, and a test pins down the size of the effect.
+- **Speed.** A frame study has 9 free axes and 10 beams, so two changes keep it
+  near 7 s instead of ~50:
+  - **The settle reuses its curvature:** it keeps its Hessian between poses
+    (per document) and updates it with BFGS, rebuilding it only when a step
+    won't go downhill.
+  - **Solves start nearby:** each beam solve starts from the nearest pose that
+    beam has already been solved at, when that's nearer than rest. A stout bar
+    moved a sliver of its thickness takes a single step.
 
 ## Open questions
 - Which mechanisms matter first? Snap fits and living hinges point at phases 1 + 3;

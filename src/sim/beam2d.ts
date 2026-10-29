@@ -40,6 +40,8 @@ export interface BeamResult {
   elements: { N: number; M1: number; M2: number; maxStrain: number }[];
   /** Elastic strain energy stored in the beam (N·mm = mJ). */
   energy: number;
+  /** The nodal displacements (x, y, θ per node), to continue from (`start`). */
+  u: Float64Array;
 }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -113,12 +115,16 @@ function solveDense(A: number[][], b: number[]): number[] {
   return x;
 }
 
-export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; tol?: number; maxIter?: number } = {}): BeamResult {
+/** `start`: begin from an earlier solution of the same model (its `u`) instead
+ *  of from rest, stepping the prescribed displacements on from where they were
+ *  there (displacement loads only: forces are ramped from zero regardless). */
+export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; tol?: number; maxIter?: number; start?: Float64Array } = {}): BeamResult {
   const steps = opts.steps ?? 20, tol = opts.tol ?? 1e-10, maxIter = opts.maxIter ?? 50;
   const n = 3 * m.nodes.length;
   const constrained = new Map<number, number>(); // dof index → target value at full load
   for (const f of m.fixed) constrained.set(3 * f.node + f.dof, 0);
   for (const p of load.prescribed ?? []) constrained.set(3 * p.node + p.dof, p.value);
+  const from = new Map([...constrained.keys()].map((d) => [d, opts.start?.[d] ?? 0])); // each one's value at load factor 0
   const free = [...Array(n).keys()].filter((d) => !constrained.has(d));
   const fext = new Float64Array(n);
   for (const f of load.forces ?? []) { fext[3 * f.node] += f.fx ?? 0; fext[3 * f.node + 1] += f.fy ?? 0; fext[3 * f.node + 2] += f.m ?? 0; }
@@ -127,7 +133,7 @@ export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; 
   // terms (EA/L0 ≫ EI/L0³) round-off alone can keep the force residual above any
   // fixed tolerance even though the displacements have stopped changing.
   const span = Math.max(1, ...m.nodes.map((p) => Math.hypot(p.x, p.y)));
-  const u = new Float64Array(n);
+  const u = opts.start ? Float64Array.from(opts.start) : new Float64Array(n);
   const assemble = () => {
     const fint = new Float64Array(n);
     const K = Array.from({ length: n }, () => new Array(n).fill(0));
@@ -163,11 +169,11 @@ export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; 
     const next = Math.min(1, lam + dlam);
     const saved = u.slice();
     const { K } = assemble();
-    const dp = new Map([...constrained].map(([d, v]) => [d, (next - lam) * v]));
+    const dp = new Map([...constrained].map(([d, v]) => [d, (next - lam) * (v - from.get(d)!)]));
     const rhs = free.map((d) => (next - lam) * fext[d] - [...dp].reduce((acc, [p, v]) => acc + K[d][p] * v, 0));
     const du = solveDense(free.map((d) => free.map((e) => K[d][e])), rhs);
     free.forEach((d, k) => { u[d] += du[k]; });
-    for (const [d, v] of constrained) u[d] = next * v;
+    for (const [d, v] of constrained) u[d] = from.get(d)! + next * (v - from.get(d)!);
     if (du.every(Number.isFinite) && correct(next)) { lam = next; continue; }
     u.set(saved);
     dlam /= 2;
@@ -183,6 +189,7 @@ export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; 
     reactions,
     elements: els.map((e) => ({ N: e.N, M1: e.M1, M2: e.M2, maxStrain: e.maxStrain })),
     energy: els.reduce((sum, e) => sum + e.energy, 0),
+    u,
   };
 }
 

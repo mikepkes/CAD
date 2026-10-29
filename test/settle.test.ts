@@ -57,7 +57,7 @@ describe("free planar axes settle at minimum energy", () => {
     const d = 2;
     const f = flexureSweep(free.s.doc, "dx", [d])[0].effort, g = flexureSweep(held.s.doc, "dx", [d])[0].effort;
     expect(g).toBeGreaterThan(1.05 * f); // the blades must stretch instead of drawing in
-    expect(flexureState(held.s.doc).energy).toBeGreaterThan(flexureState(free.s.doc).energy);
+    expect(flexureState(held.s.doc, { dx: String(d) }).energy).toBeGreaterThan(flexureState(free.s.doc, { dx: String(d) }).energy);
   });
 
   it("a free axis with nothing elastic on it stays put", async () => {

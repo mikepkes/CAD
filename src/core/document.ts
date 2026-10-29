@@ -463,6 +463,11 @@ export interface BeamSection {
   width: number;
   thickness: number;
   profile: "straight" | "cosine";
+  /** Corners the strip runs through on its way, in the base's as-modelled frame
+   *  (a frame's bar turning a corner, a folded spring): then it is straight
+   *  from point to point, and `profile` is ignored. */
+  via?: { x: number; y: number }[];
+  viaExprs?: { x: string; y: string }[];
   material?: string;
   exprs?: Partial<Record<"width" | "thickness", string>>;
 }
