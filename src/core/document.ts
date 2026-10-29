@@ -475,6 +475,9 @@ export interface BeamSection {
   viaExprs?: { x: string; y: string }[];
   material?: string;
   exprs?: Partial<Record<"width" | "thickness", string>>;
+  /** The strip is there only while this expression is non-zero (an optional
+   *  spring behind a checkbox or a count): switched off, it carries nothing. */
+  when?: string;
 }
 
 /** A named attachment frame on a component, in that component's LOCAL coordinates.

@@ -75,6 +75,12 @@ strips also resize for it. How it works is in
   - **What it solves:** 8 parts, 10 hinges and 3 closed loops, together. The
     plunger rides a parallelogram guide, and pushrods turn the jaw levers, so
     each jaw tip moves about 3.7× as far as the plunger.
+  - **Grip strength:** `springs` adds up to three leaf springs from the frame
+    to the plunger. Each adds about 10 N of push at full stroke in TPU 68D, so
+    the grip on a held object goes 1.4 → 2.1 → 2.7 → 3.3 N per jaw.
+  - **Skeleton:** tick it to put a PLA core in every rigid link, for a
+    two-material print (it saves as a 3MF). The model treats the links as
+    rigid; in a soft TPU, the core makes them so. The hinges stay TPU.
   - **Try:** `jaw` changes the lever length.
 - **XY stage:** https://mikepkes.github.io/CAD/?mode=customize&example=xystage
   - **What it is:** a platform that moves in X and Y on thin blades, with two
@@ -277,7 +283,7 @@ straight from a URL:
 ?mode=customize&example=starbox        # snap-together star box: width + height sliders, print material dropdown; opens on the one printable half, tick fullBox for both (one flipped)
 ?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain; link-length sliders, print material dropdown
 ?mode=customize&example=bistable       # bistable switch: curved beams that snap between two rest positions; span / arch / frame sliders
-?mode=customize&example=gripper        # compliant gripper: 10 hinges, 3 loops, amplified jaws; jaw length slider
+?mode=customize&example=gripper        # compliant gripper: 10 hinges, 3 loops, amplified jaws; jaw length slider, grip springs, PLA skeleton
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```

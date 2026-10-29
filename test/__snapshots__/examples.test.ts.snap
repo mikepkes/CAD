@@ -173,52 +173,7 @@ exports[`bundled examples > public/examples/fourbar.json > replays, builds on bo
 exports[`bundled examples > public/examples/gripper.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
-    "body": "ext216",
-    "max": [
-      22,
-      16,
-      6,
-    ],
-    "min": [
-      -22,
-      -60,
-      0,
-    ],
-    "name": "Stem",
-    "volume": 5328,
-  },
-  {
-    "body": "ext363",
-    "max": [
-      -6,
-      -37,
-      6,
-    ],
-    "min": [
-      -27,
-      -43,
-      0,
-    ],
-    "name": "Hinge guide -40 (link, frame end)",
-    "volume": 636,
-  },
-  {
-    "body": "ext426",
-    "max": [
-      -6,
-      -17,
-      6,
-    ],
-    "min": [
-      -27,
-      -23,
-      0,
-    ],
-    "name": "Hinge guide -20 (link, frame end)",
-    "volume": 636,
-  },
-  {
-    "body": "ext489",
+    "body": "ext1001",
     "max": [
       -15,
       40,
@@ -233,7 +188,7 @@ exports[`bundled examples > public/examples/gripper.json > replays, builds on bo
     "volume": 744,
   },
   {
-    "body": "ext552",
+    "body": "ext1086",
     "max": [
       -3,
       90,
@@ -248,7 +203,7 @@ exports[`bundled examples > public/examples/gripper.json > replays, builds on bo
     "volume": 3192,
   },
   {
-    "body": "ext657",
+    "body": "ext1257",
     "max": [
       21,
       40,
@@ -263,22 +218,7 @@ exports[`bundled examples > public/examples/gripper.json > replays, builds on bo
     "volume": 744,
   },
   {
-    "body": "ext69",
-    "max": [
-      35,
-      40,
-      6,
-    ],
-    "min": [
-      -35,
-      -80,
-      0,
-    ],
-    "name": "Base",
-    "volume": 10632,
-  },
-  {
-    "body": "ext720",
+    "body": "ext1342",
     "max": [
       35,
       90,
@@ -291,6 +231,66 @@ exports[`bundled examples > public/examples/gripper.json > replays, builds on bo
     ],
     "name": "Hinge rod (lever half)",
     "volume": 3192,
+  },
+  {
+    "body": "ext618",
+    "max": [
+      22,
+      16,
+      6,
+    ],
+    "min": [
+      -22,
+      -60,
+      0,
+    ],
+    "name": "Stem",
+    "volume": 5328,
+  },
+  {
+    "body": "ext75",
+    "max": [
+      35,
+      40,
+      6,
+    ],
+    "min": [
+      -35,
+      -80,
+      0,
+    ],
+    "name": "Base",
+    "volume": 10872,
+  },
+  {
+    "body": "ext831",
+    "max": [
+      -6,
+      -37,
+      6,
+    ],
+    "min": [
+      -27,
+      -43,
+      0,
+    ],
+    "name": "Hinge guide -40 (link, frame end)",
+    "volume": 636,
+  },
+  {
+    "body": "ext916",
+    "max": [
+      -6,
+      -17,
+      6,
+    ],
+    "min": [
+      -27,
+      -23,
+      0,
+    ],
+    "name": "Hinge guide -20 (link, frame end)",
+    "volume": 636,
   },
 ]
 `;
@@ -347,13 +347,13 @@ exports[`bundled examples > public/examples/gyroscope.json > replays, builds on 
 
 exports[`bundled examples > public/examples/roubo.json > is clear at rest and while its joints are driven 1`] = `
 [
-  "rest: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 56297.3, ext112 × ext490 10.8, ext112 × ext542 10.8, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 16792.3, ext424 × ext512 11084.7, ext424 × ext542 16792.3, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
-  "viseGap = 0: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 80424.8, ext112 × ext490 103.2, ext112 × ext542 103.2, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 64800, ext424 × ext512 11084.7, ext424 × ext522 6281.3, ext424 × ext542 64800, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext490 × ext554 424.7, ext490 × ext564 424.7, ext502 × ext542 424.7, ext512 × ext542 424.7, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
-  "viseGap = 34: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 77207.8, ext112 × ext490 27.9, ext112 × ext542 27.9, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 24943.9, ext424 × ext512 11084.7, ext424 × ext542 24943.9, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
-  "viseGap = 68: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 49863.4, ext112 × ext490 7.5, ext112 × ext542 7.5, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 15250.2, ext424 × ext512 11084.7, ext424 × ext542 15250.2, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
-  "viseGap = 102: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 22518.9, ext112 × ext490 0.2, ext112 × ext542 0.2, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 10941.2, ext424 × ext512 11084.7, ext424 × ext542 10941.2, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
-  "viseGap = 136: ext112 × ext344 98560, ext112 × ext384 98560, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 8497.9, ext424 × ext512 11084.7, ext424 × ext542 8497.9, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
-  "viseGap = 170: ext112 × ext344 98560, ext112 × ext384 98560, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext424 × ext490 6921.6, ext424 × ext512 11084.7, ext424 × ext542 6921.6, ext424 × ext554 11084.7, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "rest: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 56297.3, ext112 × ext490 10.8, ext112 × ext542 10.8, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 0: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 80424.8, ext112 × ext490 103.2, ext112 × ext542 103.2, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext490 × ext554 424.7, ext490 × ext564 424.7, ext502 × ext542 424.7, ext512 × ext542 424.7, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 34: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 77207.8, ext112 × ext490 27.9, ext112 × ext542 27.9, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 68: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 49863.4, ext112 × ext490 7.5, ext112 × ext542 7.5, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 102: ext112 × ext344 98560, ext112 × ext384 98560, ext112 × ext434 22518.9, ext112 × ext490 0.2, ext112 × ext542 0.2, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 136: ext112 × ext344 98560, ext112 × ext384 98560, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
+  "viseGap = 170: ext112 × ext344 98560, ext112 × ext384 98560, ext170 × ext344 98560, ext170 × ext404 98560, ext228 × ext364 98560, ext228 × ext384 98560, ext286 × ext364 98560, ext286 × ext404 98560, ext424 × ext434 33778.4, ext447 × ext464 2544.7, ext490 × ext502 1847.4, ext490 × ext512 1847.4, ext490 × ext522 3694.9, ext522 × ext542 3694.9, ext542 × ext554 1847.4, ext542 × ext564 1847.4, ext610 × ext618 34972.2, ext610 × ext674 1986.5, ext618 × ext674 2247.8, ext674 × rev636 2046.5, ext686 × rev636 4849.3, ext724 × rev636 4849.3, ext762 × rev636 4849.3, rev636 × rev712 954.8, rev636 × rev750 954.8, rev636 × rev788 954.8",
 ]
 `;
 
@@ -567,7 +567,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
       -275,
     ],
     "name": "Extrude",
-    "volume": 4704000,
+    "volume": 4214400,
   },
   {
     "body": "ext434",

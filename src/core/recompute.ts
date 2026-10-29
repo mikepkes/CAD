@@ -135,8 +135,12 @@ export function placeComponentSketches(doc: CadDocument, scope: Scope): void {
         const iW = (sk.componentId ? componentWorld.get(sk.componentId) : undefined) ?? IDENTITY;
         const tW = componentWorld.get(sk.templatePlane.componentId) ?? IDENTITY;
         sk.plane = transformPlane(compose(iW, invert(tW)), sk.templatePlane.plane);
+      } else if (sk.localPlane) {
+        // an offset plane drawn in its component: it moves with the component
+        const W = sk.componentId ? componentWorld.get(sk.componentId) : undefined;
+        sk.plane = W && !isIdentity(W) ? transformPlane(W, sk.localPlane) : sk.localPlane;
       }
-      continue; // otherwise face/offset planes carry their own world position
+      continue; // otherwise face planes carry their own world position
     }
     const base = sk.datumId ? doc.planes[sk.datumId]?.plane : planeById(sk.planeId);
     const W = sk.componentId ? componentWorld.get(sk.componentId) : undefined;

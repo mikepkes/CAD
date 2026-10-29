@@ -426,6 +426,37 @@ were squeezed. The model called it bistable because it held the frame rigid.
   - **Tested:** CRC-32 against the standard check value, each part closed, the
     skeleton inside the frame by its skin, and the parts in place.
 
+## Built since: grip springs and a skeleton for the gripper
+
+- **Grip springs** (`springs`: none to 3). Each is a straight leaf spring,
+  drawn bending with the plunger, from the frame's left column to the stem: a
+  `beam` element, fixed-guided as the plunger rises.
+  - **Why the left only:** that's the guide's side. The plunger drifts toward
+    it on the guide's arc by δ²/2R, about what a bent blade's ends draw together
+    (0.6·δ²/L). A blade on the far side would be stretched by twice that: 13%
+    strain where it should be 4%.
+  - **Sized by material:** each material's blade is the thickest (0.6–1.6 mm)
+    that bends the full stroke at 70% of its strain limit.
+  - **What each adds:** 12EI/L³ of push, within 10% of theory (9.7 N at 5 mm in
+    TPU 68D). Held half open on something, the grip per jaw is
+    (push)/(2·gain): 1.4 N with none, then 2.1, 2.7 and 3.3 N.
+  - **Switched off:** `beam { when }` makes a beam carry nothing while its
+    expression is 0. The drawn blades are features with `when`.
+- **Skeleton** (checkbox). A PLA core goes in each of the 8 rigid links, under
+  a 1.2 mm skin, and a pocket is cut to match.
+  - **Each core is a child part** of its link with its own material, so it
+    rides with the link. The hinge strips stay TPU.
+  - **The model treats the links as rigid already.** In a soft TPU the core
+    makes that true.
+  - **It saves as a two-part 3MF.**
+- **Offset sketches move with their part.** A sketch on an offset plane
+  (`sketch.create { offset }`) used to stay where it was drawn when its
+  component moved. Origin-plane sketches always followed. Now it keeps its
+  as-modelled plane (`localPlane`) and follows the part.
+  - **The skeleton's cores need it:** they're drawn lifted off the part's floor.
+  - **It also fixed the Roubo vise:** the slot cut through its sliding chop now
+    follows the chop, so the crisscross arms pass through it.
+
 ## Open questions
 - Which mechanisms matter first? Snap fits and living hinges point at phases 1 + 3;
   grippers and flexure stages at 1 + 2.

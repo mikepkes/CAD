@@ -12,7 +12,7 @@
 import type { CadDocument, FlexureSection, Joint, MechanicalProps } from "../core/document";
 import { materialForComponent } from "../core/document";
 import { resolveComponentWorld, setEnergySettler } from "../core/recompute";
-import type { Scope } from "../math/expr";
+import { compileExpr, type Scope } from "../math/expr";
 import { resolveParameters } from "../model/parameters";
 import { applyPoint, compose, IDENTITY, invert, type Rigid } from "../math/transform";
 import { rectSection, solveBeam, type BeamResult } from "./beam2d";
@@ -59,6 +59,11 @@ export interface FlexureState {
 
 const flexureJoints = (doc: CadDocument): Joint[] => Object.values(doc.joints).filter((j) => j.kind === "flexure" && j.flexure);
 const beamJoints = (doc: CadDocument): Joint[] => Object.values(doc.joints).filter((j) => j.kind === "beam" && j.beam);
+/** The beams switched on (`beam.when` non-zero, or none): the ones that carry. */
+const activeBeams = (doc: CadDocument, scope: Scope): Joint[] => beamJoints(doc).filter((j) => {
+  if (!j.beam!.when) return true;
+  try { return compileExpr(j.beam!.when).eval(scope) !== 0; } catch { return true; }
+});
 
 export const hasFlexures = (doc: CadDocument): boolean => flexureJoints(doc).length > 0 || beamJoints(doc).length > 0;
 
@@ -192,7 +197,7 @@ function elastic(doc: CadDocument, scope: Scope, world: Map<string, Rigid>) {
     if (props) hinges += 0.5 * flexureStiffness(props.E, j.flexure!) * (j.valueValue * RAD) ** 2;
   }
   const beams: { j: Joint; end: { dx: number; dy: number; dth: number }; R: { fx: number; fy: number; m: number } }[] = [];
-  for (const j of beamJoints(doc)) {
+  for (const j of activeBeams(doc, scope)) {
     const props = propsOf(doc, j, scope);
     if (!props) continue;
     const end = beamEnd(j, world), b = solveBeamElement(j, props.E, end);
@@ -209,7 +214,7 @@ function kinematics(doc: CadDocument, scope: Scope, world: Map<string, Rigid>) {
     const props = propsOf(doc, j, scope);
     if (props) hinges += 0.5 * flexureStiffness(props.E, j.flexure!) * (j.valueValue * RAD) ** 2;
   }
-  return { hinges, ends: new Map(beamJoints(doc).map((j) => [j.id, beamEnd(j, world)])) };
+  return { hinges, ends: new Map(activeBeams(doc, scope).map((j) => [j.id, beamEnd(j, world)])) };
 }
 
 const hessianCache = new WeakMap<CadDocument, { sig: string; H: number[][] }>();
@@ -337,7 +342,7 @@ export function flexureState(doc: CadDocument, overrides: Record<string, string>
     utilisation = Math.max(utilisation, strain / props.allowableStrain);
     flexures.push({ joint: j.id, name: j.name, angle, strain, allowable: props.allowableStrain, moment: k * angle * RAD });
   }
-  for (const j of beamJoints(doc)) {
+  for (const j of activeBeams(doc, scope)) {
     const props = propsOf(doc, j, scope);
     const end = beamEnd(j, world);
     if (opts.solveBeams === false) { beams.push({ joint: j.id, end }); continue; }
