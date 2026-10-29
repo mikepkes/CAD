@@ -105,7 +105,7 @@ type BeamSolution = { energy: number; strain: number; reaction: { fx: number; fy
 // refinement, a mechanism's identical or mirror-image beams), so solutions are
 // remembered by the beam's shape relative to its base end, mirrored to point +X.
 const beamCache = new Map<string, BeamSolution>();
-/** Solved deformed states, by beam shape: where the next solve can start. */
+/** Deformed states ramped to from rest, by beam shape: where a solve further along can start. */
 const beamStates = new Map<string, { e: { dx: number; dy: number; dth: number }; u: Float64Array }[]>();
 
 /** Solve a beam for its moved end's displacement: clamped at the base, the end
@@ -135,19 +135,30 @@ export function solveBeamElement(j: Joint, E: number, end: { dx: number; dy: num
     // (a stout bar moved a sliver of its thickness is all but linear: one step)
     const stepsFor = (d: number) => d < 0.05 * b.thickness ? 1 : Math.min(48, Math.max(6, Math.ceil(d / (0.25 * b.thickness))));
     // Poses come in streams of near neighbours (a settle's steps, a study's
-    // samples), so a solve carries on from the nearest pose this beam has been
-    // solved at, when that's nearer than rest: a step or two, not a ramp.
+    // samples), so a solve carries on from a pose this beam was solved at: a
+    // step or two, not a ramp from rest. But a beam can hold more than one
+    // shape for the same ends (past a snap, and back), and the answer is the
+    // one pushing straight from rest gives, whatever was solved before. So it
+    // only carries on from a pose short of this one on the same line from
+    // rest: that push's own path, continued (never back across a snap).
     const shape = key.slice(0, key.length - ends.length), seen = beamStates.get(shape) ?? [];
+    const v = [e.dx, e.dy, e.dth * chord], vv = v[0] ** 2 + v[1] ** 2 + v[2] ** 2;
     let near: (typeof seen)[number] | undefined, dist = travel;
     for (const q of seen) {
-      const d = Math.max(Math.abs(q.e.dx - e.dx), Math.abs(q.e.dy - e.dy), Math.abs(q.e.dth - e.dth) * chord);
+      const w = [q.e.dx, q.e.dy, q.e.dth * chord], along = (w[0] * v[0] + w[1] * v[1] + w[2] * v[2]) / vv;
+      if (!(along >= 0 && along <= 1)) continue;
+      if (Math.max(...w.map((c, i) => Math.abs(c - along * v[i]))) > 0.01 * b.thickness) continue; // off the line
+      const d = (1 - along) * travel;
       if (d < dist) { near = q; dist = d; }
     }
-    let r = near ? solveBeam(model, load, { steps: stepsFor(dist), maxIter: 80, start: near.u }) : undefined;
-    let steps = stepsFor(travel);
-    if (!r || !plausible(r)) r = solveBeam(model, load, { steps, maxIter: 80 });
-    for (let k = 0; k < 3 && !plausible(r); k++) { steps *= 2; r = solveBeam(model, load, { steps, maxIter: 80 }); }
-    if (plausible(r)) {
+    // (carrying on a ramp needs only its own step size, not a fresh ramp's minimum)
+    let r = near ? solveBeam(model, load, { steps: Math.max(1, Math.ceil(dist / (0.25 * b.thickness))), maxIter: 80, start: near.u }) : undefined;
+    if (!r || !plausible(r)) {
+      let steps = stepsFor(travel);
+      r = solveBeam(model, load, { steps, maxIter: 80 });
+      for (let k = 0; k < 3 && !plausible(r); k++) { steps *= 2; r = solveBeam(model, load, { steps, maxIter: 80 }); }
+    }
+    if (plausible(r)) { // ramped from rest, or that ramp carried on: either way, a pose to carry on from
       seen.push({ e, u: r.u });
       if (seen.length > 64) seen.shift();
       beamStates.set(shape, seen);

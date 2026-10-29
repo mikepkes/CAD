@@ -9,13 +9,16 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../../model/parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
-import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, collideFeatures, CollisionResult, GeometryCache, SolidEval } from "../features";
+import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval } from "../features";
+import { meshesTo3mf } from "../export/threemf";
 import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
 import { expandAssembly, hasAssemblyPatterns, instanceSolids } from "../assembly";
 import { Scope } from "../../math/expr";
 
-export type ExportFormat = "stl" | "step";
+/** "3mf" is the whole model as one object with a part per material, for a
+ *  multi-material print. */
+export type ExportFormat = "stl" | "step" | "3mf";
 
 /** Evaluated geometry plus the re-resolved planes of any face-referenced sketches
  *  (so the caller can fold them back onto a doc the worker only saw a copy of). */
@@ -104,12 +107,16 @@ async function exportModelBytes(doc: CadDocument, format: ExportFormat): Promise
     // at rest: every joint drive at 0, so geometry drawn to follow one (a bent
     // beam) is unbent too
     const drives = Object.fromEntries(Object.values(doc.joints).filter((j) => !j.solve && !j.closes && j.kind !== "beam")
-      .flatMap((j) => doc.parameters.filter((p) => new RegExp(`\\b${p.name}\\b`).test(j.valueExpr)).map((p) => [p.name, "0"])));
+      .flatMap((j) => doc.parameters.filter((p) => new RegExp(`\\b${p.name}\\b`).test([j.valueExpr, ...Object.values(j.planar ?? {})].join(" "))).map((p) => [p.name, "0"])));
     printed = { ...poseDoc(doc, drives), joints: {} };
     placeComponentSketches(printed, scopeOf(printed));
   }
   const scope = scopeOf(printed);
   const geo = geometryDoc(printed, scope);
+  if (format === "3mf") {
+    const parts = printPartsByMaterial(geo, scopeOf(geo));
+    return parts.length ? meshesTo3mf(parts.map((p) => ({ name: p.name, color: p.color, positions: p.mesh.positions, indices: p.mesh.indices })), "model") : null;
+  }
   const blob = exportFusedBlob(geo, scopeOf(geo), format);
   return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
 }
@@ -169,7 +176,7 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       const result = collideFeatures(doc, scopeOf(doc));
       return { res: { id: req.id, kind: "collide", result }, transfer: [] };
     }
-    const bytes = req.featureId === null
+    const bytes = req.featureId === null || req.format === "3mf" // a 3MF is always the whole model
       ? await exportModelBytes(req.doc, req.format)
       : await exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format);
     return { res: { id: req.id, kind: "export", bytes }, transfer: bytes ? [bytes.buffer as ArrayBuffer] : [] };
@@ -199,7 +206,7 @@ export class InlineGeometryBackend implements GeometryBackend {
     return featureEdges(geometryDoc(doc, scope), scope, featureId);
   }
   async exportBytes(doc: CadDocument, featureId: string | null, format: ExportFormat): Promise<Uint8Array | null> {
-    if (featureId === null) return exportModelBytes(doc, format);
+    if (featureId === null || format === "3mf") return exportModelBytes(doc, format); // a 3MF is always the whole model
     const scope = scopeOf(doc);
     return exportFeatureBytes(geometryDoc(doc, scope), scope, featureId, format);
   }

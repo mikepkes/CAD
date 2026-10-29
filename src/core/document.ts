@@ -338,7 +338,12 @@ export interface InstanceFrame {
   template: string;  // the source (template) component it was cloned from
 }
 
-export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & { instanceFrame?: InstanceFrame };
+export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
+  instanceFrame?: InstanceFrame;
+  /** Build this feature only while this expression is non-zero (a checkbox
+   *  parameter switching an optional part on or off). */
+  when?: string;
+};
 /** Features that own a single sketch (the profile-driven ones). */
 export type SketchFeature = ExtrudeFeature | RevolveFeature;
 

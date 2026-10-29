@@ -16,7 +16,7 @@ const E = 1000, W = 6, T = 0.8, EI = (E * W * T ** 3) / 12;
 
 /** A ground part and a shuttle that slides along −Y by `travel`, with the given
  *  beams from the ground to the shuttle. */
-async function rig(beams: { from: [number, number]; to: [number, number]; profile: "straight" | "cosine" }[], travel = 0) {
+async function rig(beams: { from: [number, number]; to: [number, number]; profile: "straight" | "cosine" }[], travel = 0, thickness = T) {
   const s = realSession();
   await dis(s, "parameter.add", { name: "travel", expression: String(travel) });
   const mat = (await dis(s, "material.create", { name: "Test", kind: "plastic", youngsModulus: E, allowableStrain: 0.1 }))[0];
@@ -26,7 +26,7 @@ async function rig(beams: { from: [number, number]; to: [number, number]; profil
   const o = { x: 0, y: 0, z: 0 };
   await dis(s, "joint.create", { kind: "slider", base: ground, moved: shuttle, baseOrigin: o, movedOrigin: o, axis: { x: 0, y: -1, z: 0 }, value: "travel", name: "Guide" });
   for (const [i, b] of beams.entries()) {
-    await dis(s, "joint.create", { kind: "beam", base: ground, moved: shuttle, baseOrigin: { x: b.from[0], y: b.from[1], z: 0 }, movedOrigin: { x: b.to[0], y: b.to[1], z: 0 }, beam: { width: W, thickness: T, profile: b.profile }, name: `Beam ${i}` });
+    await dis(s, "joint.create", { kind: "beam", base: ground, moved: shuttle, baseOrigin: { x: b.from[0], y: b.from[1], z: 0 }, movedOrigin: { x: b.to[0], y: b.to[1], z: 0 }, beam: { width: W, thickness, profile: b.profile }, name: `Beam ${i}` });
   }
   await s.recompute();
   return s;
@@ -73,26 +73,37 @@ describe("beam elements", () => {
   // clamped-clamped cosine beam whose centre can't rotate (a double beam) snaps
   // at F_top ≈ 740·EI·h/L³, pulls back at most ≈ 370·EI·h/L³ past the middle,
   // and rests again just short of 2h.
+  // Qiu, Lang & Slocum's F_top ≈ 740·EIh/L³ and F_bottom ≈ −370 are for a
+  // slender arch (large Q = rise/thickness). A stockier one tips over into its
+  // lower, mode-3 shape sooner (it stretches more on the way), so it snaps
+  // with less: the beams settle into stable shapes, and Q sets which.
   it("a double curved beam is bistable, as the curved-beam bistable mechanism predicts", async () => {
     const L = 40, h = 3; // span and rise of each beam; two beams, so twice the force
     const halves: { from: [number, number]; to: [number, number]; profile: "cosine" }[] = [];
     for (const y0 of [0, 8]) for (const side of [-1, 1]) halves.push({ from: [side * (L / 2), y0], to: [0, y0 + h], profile: "cosine" });
-    const s = await rig(halves);
-    const st = flexureEquilibria(s.doc, "travel", 0, 2.2 * h, 66);
-    const scale = (2 * EI * h) / L ** 3; // two beams
-    const stable = st.states.filter((q) => q.stable).map((q) => q.value / h);
-    const between = st.poses.filter((p) => p.value > 0 && p.value < stable[1] * h);
-    const peak = st.snap!.effort / scale, pull = Math.min(...between.map((p) => p.effort)) / scale;
-    console.log(`F_top ${peak.toFixed(0)}·EIh/L³ (paper ≈ 740), F_bottom ${pull.toFixed(0)} (≈ −370); rests at ${stable.map((v) => v.toFixed(2)).join(", ")}·h`);
-    expect(st.multistable).toBe(true);
-    expect(stable[0]).toBeCloseTo(0, 6);
-    expect(stable[1]).toBeGreaterThan(1.75);
-    expect(stable[1]).toBeLessThan(2);
-    expect(peak / 740).toBeGreaterThan(0.9);
-    expect(peak / 740).toBeLessThan(1.1);
-    expect(-pull / 370).toBeGreaterThan(0.85);
-    expect(-pull / 370).toBeLessThan(1.15);
-    // the document is left posed where it was
-    expect(flexureState(s.doc).energy).toBeCloseTo(0, 9);
+    const study = async (t: number) => {
+      const s = await rig(halves, 0, t);
+      const st = flexureEquilibria(s.doc, "travel", 0, 2.2 * h, 66);
+      const scale = (2 * (E * W * t ** 3) / 12 * h) / L ** 3; // two beams
+      const stable = st.states.filter((q) => q.stable).map((q) => q.value / h);
+      const between = st.poses.filter((p) => p.value > 0 && p.value < stable[1] * h);
+      const peak = st.snap!.effort / scale, pull = Math.min(...between.map((p) => p.effort)) / scale;
+      console.log(`Q ${(h / t).toFixed(1)}: F_top ${peak.toFixed(0)}·EIh/L³ (paper ≈ 740), F_bottom ${pull.toFixed(0)} (≈ −370); rests at ${stable.map((v) => v.toFixed(2)).join(", ")}·h`);
+      expect(st.multistable).toBe(true);
+      expect(stable[0]).toBeCloseTo(0, 6);
+      expect(flexureState(s.doc).energy).toBeCloseTo(0, 9); // the document is left posed where it was
+      return { peak, pull, rest: stable[1] };
+    };
+    const slender = await study(0.2), stocky = await study(T); // Q 15 and 3.75
+    expect(slender.peak / 740).toBeGreaterThan(0.95);
+    expect(slender.peak / 740).toBeLessThan(1.05);
+    expect(-slender.pull / 370).toBeGreaterThan(0.93);
+    expect(-slender.pull / 370).toBeLessThan(1.07);
+    expect(slender.rest).toBeGreaterThan(1.95); // just short of the mirror shape, 2h
+    expect(slender.rest).toBeLessThan(2);
+    expect(stocky.peak).toBeLessThan(0.9 * slender.peak);
+    expect(stocky.peak).toBeGreaterThan(0.75 * slender.peak);
+    expect(stocky.rest).toBeGreaterThan(1.75);
+    expect(stocky.rest).toBeLessThan(slender.rest);
   }, 120000);
 });

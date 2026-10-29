@@ -4,7 +4,7 @@ import occWasmUrl from "replicad-opencascadejs/wasm?url";
 
 import { CadSession, DispatchResult } from "../core/command/session";
 import { createDefaultRegistry } from "../core/command/builtins";
-import { createDocument } from "../core/document";
+import { createDocument, materialForComponent } from "../core/document";
 import { PlaneGCSSolver } from "../core/solver/planegcs";
 import { Evaluations } from "../core/recompute";
 import { resolveParameters } from "./parameters";
@@ -273,9 +273,10 @@ export interface AppState {
   setJointTemplateAppliesTo: (templateId: string, appliesTo: "first" | "rest" | "all") => Promise<void>;
   deleteJointTemplate: (templateId: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
-  exportSolid: (format: "stl" | "step") => Promise<void>;
-  /** The whole model as one STL file, offered through the native share sheet on
-   *  phones (Save to Files / AirDrop / another app) and downloaded elsewhere. */
+  exportSolid: (format: "stl" | "step" | "3mf") => Promise<void>;
+  /** The whole model as one print file, offered through the native share sheet
+   *  on phones (Save to Files / AirDrop / another app) and downloaded elsewhere:
+   *  an STL, or a 3MF with a part per material when it has more than one. */
   shareModel: (name?: string) => Promise<void>;
 
   // agent
@@ -973,7 +974,7 @@ export const useStore = create<AppState>((set, get) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `model.${format === "step" ? "step" : "stl"}`;
+      a.download = `model.${format}`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     },
@@ -985,13 +986,21 @@ export const useStore = create<AppState>((set, get) => {
       // A compliant mechanism prints unbent and in one piece, whatever pose the
       // sliders show; anything else exports as it stands.
       const doc = get().session.doc;
-      const stl = hasFlexures(doc) ? await geometry.exportBytes(doc, null, "stl") : meshesToStlBinary(meshes);
-      if (!stl) { set({ toast: { kind: "error", text: "Export failed." } }); return; }
-      const file = new File([stl as BlobPart], `${name || "model"}.stl`, { type: "model/stl" });
+      // two print materials (an embedded skeleton): a 3MF, one part each
+      const scope = resolveParameters(doc.parameters).scope;
+      const materials = new Set(Object.values(get().solids).filter((sol) => sol.mesh)
+        .map((sol) => materialForComponent(doc, sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined, scope)?.id ?? ""));
+      const multi = materials.size > 1;
+      const bytes = multi ? await geometry.exportBytes(doc, null, "3mf")
+        : hasFlexures(doc) ? await geometry.exportBytes(doc, null, "stl") : meshesToStlBinary(meshes);
+      if (!bytes) { set({ toast: { kind: "error", text: "Export failed." } }); return; }
+      const file = multi
+        ? new File([bytes as BlobPart], `${name || "model"}.3mf`, { type: "model/3mf" })
+        : new File([bytes as BlobPart], `${name || "model"}.stl`, { type: "model/stl" });
       const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
       // Native share sheet (phones) → Save to Files / AirDrop / another app.
       if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
-        try { await nav.share({ files: [file], title: file.name, text: "3D model (STL) from Chisel CAD" }); return; }
+        try { await nav.share({ files: [file], title: file.name, text: `3D model (${multi ? "3MF" : "STL"}) from Chisel CAD` }); return; }
         catch (e) { if ((e as Error).name === "AbortError") return; /* else fall through to download */ }
       }
       const url = URL.createObjectURL(file);

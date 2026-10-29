@@ -253,7 +253,7 @@ export function CustomizeApp() {
               <FlexureReadout />
               <button
                 className="cz-share"
-                title="Save the model as an STL (all parts in one file), or share it to Files / AirDrop / another app on a phone"
+                title="Save the model for printing: an STL (all parts in one file), or a 3MF with a part per material when it has more than one; or share it to Files / AirDrop / another app on a phone"
                 onClick={() => void shareModel(new URLSearchParams(location.search).get("example") || "model")}
               >
                 ⬇ Save / share for printing

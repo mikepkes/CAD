@@ -261,7 +261,7 @@ snap; μ per material):
     lands on a non-physical branch past a snap (over 30% strain), is re-solved
     in finer steps.
   - **Checked against:** the fixed-guided beam F = 12EI·δ/L³ exactly, and the
-    curved-beam bistable (`test/beam-element.test.ts`).
+    curved-beam bistable for slender arches (`test/beam-element.test.ts`).
 - **Rest positions.** `flexureEquilibria(doc, param, min, max)` sweeps a drive
   and finds where the effort is zero. A rest position is stable where the
   effort rises through zero and unstable where it falls. The study also gives
@@ -276,15 +276,18 @@ snap; μ per material):
   along the fixed-guided shape 3s² − 2s³. The frame is solved as well (see
   "Frame compliance" below).
   - **Published check:** against Qiu, Lang & Slocum, "A curved-beam bistable
-    mechanism" (JMEMS 2004), with the frame held rigid (span 60, rise/thickness
-    4, TPU 68D):
+    mechanism" (JMEMS 2004). Their figures are for slender arches. Checked on
+    the double curved beam in `test/beam-element.test.ts`:
 
-    | | Chisel | Paper |
-    |---|---|---|
-    | Second rest position | 6.95 mm (0.95 × 2h) | just short of 2h |
-    | Snap force | 749 EIh/L³ per beam | ≈ 740 |
-    | Pull-back | −439 | ≈ −370, a rough figure |
+    | | Q = rise/thickness 15 | Q 3.75 | Paper |
+    |---|---|---|---|
+    | Second rest position | 1.99 h | 1.89 h | just short of 2h |
+    | Snap force | 723 EIh/L³ per beam | 617 | ≈ 740 |
+    | Pull-back | −358 | −257 | ≈ −370 |
 
+    A stocky arch stretches more on its way over and tips into its lower
+    (mode-3) shape sooner. The switch (Q 4, frame held rigid) snaps at 623 and
+    pulls back at −269.
   - **Sized by material:** the snap strain goes as about 35·t·h/L², and the snap
     force as E·t³·h/L³. So for the chosen span and arch, each material gets the
     thickest beams that snap at 3/4 of its strain limit (capped at 4%, where the
@@ -362,22 +365,66 @@ were squeezed. The model called it bistable because it held the frame rigid.
   - **A tie under the beams (an H):** this doesn't fix it. The tie sits below
     the load, so it still bends.
   - **A closed ring:** this holds each wall at both ends. It keeps 98% of the
-    rigid frame's stroke and 75% of its snap force at 10 mm bars, and stays
+    rigid frame's stroke and 92% of its snap force at 10 mm bars, and stays
     bistable down to 5 mm bars.
 - **A second mode, mid-snap.** Pushed by its knob alone, the shuttle sways and
-  tilts about 1° through the middle of the snap (the full beam's second mode).
-  That costs ~2% of the energy and doesn't change the peak force or the rest
-  positions. The square, symmetric pose is a saddle there, so a free shuttle
-  goes one way or the other depending on round-off. The example holds the
-  shuttle square, and a test pins down the size of the effect.
+  tilts up to ~2° through the middle of the snap (the full beam's second
+  mode). It starts after the peak, so the snap force and the rest positions
+  don't change. Mid-snap the energy is ~5% lower, and the far side is softer
+  (−3.1 N against −4.1 N). The square, symmetric pose is a saddle there, so a
+  free shuttle goes one way or the other depending on round-off. The example
+  holds the shuttle square, and a test pins down the size of the effect.
 - **Speed.** A frame study has 9 free axes and 10 beams, so two changes keep it
-  near 7 s instead of ~50:
+  to a few seconds instead of ~50:
   - **The settle reuses its curvature:** it keeps its Hessian between poses
     (per document) and updates it with BFGS, rebuilding it only when a step
     won't go downhill.
-  - **Solves start nearby:** each beam solve starts from the nearest pose that
-    beam has already been solved at, when that's nearer than rest. A stout bar
-    moved a sliver of its thickness takes a single step.
+  - **Solves carry on:** a beam solve continues from a pose that beam was
+    already solved at, short of this one on the same line from rest. It
+    continues that push rather than ramping from rest again. A stout bar moved
+    a sliver of its thickness takes a single step.
+
+## Built since: stable beams, answers independent of history
+
+- **Stable shapes.** Newton finds equilibria, stable or not. A beam pushed
+  along a symmetric path keeps to that shape past where a nudge would tip it
+  into a lower one (an arch's next mode), as the real strip does.
+  - **The check:** `solveBeam` checks where it stops. If the stiffness isn't
+    positive definite there (an LDLᵀ meets a pivot that isn't positive), it
+    steps along the direction of negative curvature that the factor gives,
+    then minimises (damped Newton, every step downhill) to the stable shape.
+  - **Why it matters:** before this, the curved beams could ride an unstable
+    branch. Their energy then jumped with tiny changes in their ends, a settled
+    frame landed in different places from run to run (energies 25–36 mJ at
+    one pose), and the snap force read high. That's how a stocky arch
+    appeared to match the slender-arch figure.
+- **No history.** A beam can hold more than one shape for the same ends. The
+  answer is the one pushing straight from rest gives, so a solve only carries
+  on from poses on that push. A study is now path-independent: through the
+  snap and back gives the same force and energy at a pose, to the settle's
+  tolerance. A test checks this.
+
+## Built since: an embedded skeleton, 3MF export
+
+- **Optional features.** `feature.setCondition { feature, when }` builds a
+  feature only while `when` is non-zero. Both the full and the incremental
+  evaluation skip it. A checkbox can then add or remove a part.
+- **The bistable's `skeleton` checkbox.** It embeds a PLA ring of core bars in
+  the frame's bars, under a 1.2 mm skin, and cuts the pocket it fills.
+  - **The model:** each frame bar is modelled at the thickness that bends like
+    the composite section, (t³ + (E_c/E − 1)·(h_c/Hz)·c³)^⅓, which assumes a
+    good bond between the two materials. That underrates the bars' stretch,
+    which only errs soft.
+  - **What it gives:** with 6 mm bars in TPU 95A the snap goes from 0.20 N to
+    0.28 N, against 0.34 N held rigid. With 10 mm bars it reaches the rigid
+    value. TPU 68D is 40% as stiff as PLA, so a core adds only 1–7% there.
+- **3MF export** (`src/core/export/threemf.ts`). The whole model becomes one
+  3MF object that holds a part per material. Each part is all that material's
+  bodies fused, welded watertight, named and coloured after its material. Save
+  / share switches to 3MF when a model has more than one print material. It's
+  dependency-free: a zip of stored entries.
+  - **Tested:** CRC-32 against the standard check value, each part closed, the
+    skeleton inside the frame by its skin, and the parts in place.
 
 ## Open questions
 - Which mechanisms matter first? Snap fits and living hinges point at phases 1 + 3;
