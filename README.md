@@ -62,6 +62,10 @@ strips also resize for it. How it works is in
     (The first version, a U-frame, did exactly that once printed.)
   - **Material:** the material sizes the beams. Each one gets the stoutest beams
     that snap within its strain limit: about 12 N to flip in TPU 68D, 6 N in PLA.
+  - **Skeleton:** tick it to embed a PLA core in the frame's bars, under a
+    1.2 mm skin, for a two-material print (it saves as a 3MF). The model counts
+    the stiffer bars. It matters most with a soft TPU: in TPU 95A the snap rises
+    to the rigid-frame value. TPU 68D's own frame is already close.
   - **Try:** `span`, `arch` (rise over thickness) and `frame`. A flat arch
     stops being bistable and just springs back.
 - **Gripper:** https://mikepkes.github.io/CAD/?mode=customize&example=gripper
@@ -127,7 +131,8 @@ on.
   over-constraint **which constraints conflict** — surfaced as a toast and
   inline highlight. Closed profiles are shaded (what's extrudable).
 - **3D:** extrude a sketch profile into a solid on the **OpenCASCADE** kernel
-  (replicad/OCCT WASM); export **STEP** (CAD/CNC) and **STL** (3D print).
+  (replicad/OCCT WASM); export **STEP** (CAD/CNC), **STL** (3D print) and
+  **3MF** (a part per material, for multi-material prints).
   Extrude has new/join/cut, symmetric, **reverse direction** and
   **through-all** extents; plus **revolve**, edge **fillet / chamfer** (edge
   selectors: parallel to an axis, in a plane, near a point, in a box),
@@ -250,7 +255,10 @@ mcp/             MCP server exposing the core to agents
 
 - **Extrude** a sketch profile into a solid on the OpenCASCADE kernel (holes via
   boolean cut), with a **parametric distance**. Export **STL** (3D print) and
-  **STEP** (CAD/CNC) from the toolbar or over MCP.
+  **STEP** (CAD/CNC) from the toolbar or over MCP, and **3MF** from the toolbar.
+- **Optional parts:** `feature.setCondition { feature, when }` builds a feature
+  only while an expression is non-zero. A checkbox parameter can then switch a
+  part on or off, such as an insert or a second-material core.
 - **Modify tools**: mirror, linear pattern, and construction (reference)
   geometry — all command-based, so they're parametric and undoable.
 - **Save / Open** `.chisel.json` and **autosave** to the browser, so a reload
@@ -291,7 +299,11 @@ follow it with `pick`, e.g. `pick(material, 0.75, 1.1, 1.0)`, and
 too, so the preview shows the chosen filament.
 
 **Save / share for printing** exports the whole configured model (all bodies in
-one file, so a print-in-place assembly stays together) as a binary **STL**. On
+one file, so a print-in-place assembly stays together) as a binary **STL**.
+When the model has more than one print material, it exports a **3MF** instead:
+one object with a part per material, in place, named and coloured after it.
+Bambu Studio, Orca and PrusaSlicer load that as one object with several parts,
+and you pick each part's filament. On
 a phone this goes through the native share sheet (Save to Files, AirDrop, or any
 app that accepts the file); on desktop it downloads. Note: there is no direct
 "web → Bambu Handy" path — Handy is not a slicer and doesn't import local STL /

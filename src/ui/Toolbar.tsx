@@ -310,6 +310,7 @@ export function Toolbar() {
                 </button>
                 <button className="btn" title="Export STEP (CAD/CNC)" onClick={() => exportSolid("step")}>⬇ STEP</button>
                 <button className="btn" title="Export STL (3D print)" onClick={() => exportSolid("stl")}>⬇ STL</button>
+                <button className="btn" title="Export 3MF: the whole model as one object, a part per material (multi-material print)" onClick={() => exportSolid("3mf")}>⬇ 3MF</button>
               </>
             )}
           </div>

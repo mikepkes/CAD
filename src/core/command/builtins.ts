@@ -2135,6 +2135,34 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
 
+  {
+    type: "feature.setCondition",
+    title: "Switch a feature by parameter",
+    summary: "Build a feature only while an expression is non-zero (an optional part behind a checkbox).",
+    description:
+      "Sets `when` on a feature: it builds only while the expression evaluates non-zero, so a boolean parameter can switch an optional part on or off (an insert, a second body for another material). A join or cut switched off leaves its body as it was; switch every feature of an optional body together. An empty `when` makes the feature unconditional again.",
+    paramsSchema: {
+      type: "object",
+      required: ["feature", "when"],
+      additionalProperties: false,
+      properties: {
+        feature: { type: "string", description: "Feature id." },
+        when: { type: "string", description: "Expression in the parameters, e.g. a boolean parameter's name; empty to clear." },
+      },
+    },
+    examples: [{ note: "Build the insert only while `insert` is ticked", params: { feature: "ext12", when: "insert" } }],
+    apply(draft, p: { feature: string; when: string }) {
+      const f = draft.features[p.feature];
+      if (!f) throw new Error(`No feature "${p.feature}"`);
+      const when = p.when.trim();
+      if (!when) { delete f.when; return { message: `${f.name} always builds` }; }
+      const v = compileExpr(when).eval(resolveParameters(draft.parameters).scope); // throws on a bad expression
+      if (!Number.isFinite(v)) throw new Error(`when "${when}" is not a number`);
+      f.when = when;
+      return { message: `${f.name} builds while ${when}` };
+    },
+  },
+
   // ---- modify (mirror / pattern / construction) ----
   {
     type: "sketch.mirror",

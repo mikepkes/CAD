@@ -7,7 +7,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp,
+  CadDocument, ExtrudeFeature, FeatureDef, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, regionAt, Region } from "./geometry/profile";
@@ -630,8 +630,18 @@ function buildGroupShape(doc: CadDocument, scope: Scope, g: ExtrudeGroup): Shape
   return shape;
 }
 
+/** Whether a feature is switched on: no `when`, or a `when` that's non-zero
+ *  (one that can't be evaluated leaves the feature on rather than drop it). */
+export function featureActive(f: FeatureDef, scope: Scope): boolean {
+  if (!f.when) return true;
+  try { return compileExpr(f.when).eval(scope) !== 0; } catch { return true; }
+}
+
+/** The features that build, in order: those switched off by `when` are skipped. */
+const activeFeatures = (doc: CadDocument, scope: Scope): FeatureDef[] => Object.values(doc.features).filter((f) => featureActive(f, scope));
+
 export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: GeometryCache): Record<string, SolidEval> {
-  const features: FeatureDef[] = Object.values(doc.features);
+  const features: FeatureDef[] = activeFeatures(doc, scope);
   if (!isKernelReady()) {
     const out: Record<string, SolidEval> = {};
     for (const f of features) {
@@ -657,7 +667,7 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
 function evaluateCached(doc: CadDocument, scope: Scope, cache: GeometryCache): Record<string, SolidEval> {
   const out: Record<string, SolidEval> = {};
   const used = new Set<string>();
-  for (const g of groupExtrudes(Object.values(doc.features))) {
+  for (const g of groupExtrudes(activeFeatures(doc, scope))) {
     const distance = resolveDistance(g.features[0], scope);
     const meta = { featureId: g.newId, name: g.name, sketchId: g.sketchId, distance };
     const sig = groupSignature(doc, scope, g);
@@ -727,7 +737,7 @@ function evaluateBodies(doc: CadDocument, scope: Scope): { bodies: Body[]; out: 
   const out: Record<string, SolidEval> = {};
   const bodies: Body[] = [];
   let worlds: Map<string, Rigid> | undefined; // component frames, resolved only for pattern instances
-  for (const f of Object.values(doc.features)) {
+  for (const f of activeFeatures(doc, scope)) {
     if (!f.instanceFrame) { applyFeature(doc, scope, f, bodies, out); continue; }
     worlds ??= resolveComponentWorld(doc, scope);
     const T = compose(worlds.get(f.instanceFrame.component) ?? IDENTITY, invert(worlds.get(f.instanceFrame.template) ?? IDENTITY));
@@ -841,6 +851,34 @@ export function exportFusedBlob(doc: CadDocument, scope: Scope, format: "stl" | 
     return null;
   } finally {
     for (const s of partials) s.delete();
+    for (const b of bodies) b.shape.delete();
+  }
+}
+
+/**
+ * The print parts of a multi-material model: every body fused with the others
+ * of its material (each body's from its component), meshed. One part for a
+ * single-material model; a TPU frame with an embedded PLA skeleton gives two.
+ */
+export function printPartsByMaterial(doc: CadDocument, scope: Scope): { name: string; color?: string; mesh: SolidMesh }[] {
+  if (!isKernelReady()) return [];
+  const { bodies } = evaluateBodies(doc, scope);
+  const groups = new Map<string, { name: string; color?: string; shapes: Shape3D[] }>();
+  for (const b of bodies) {
+    const m = materialForComponent(doc, doc.sketches[b.sketchId]?.componentId, scope);
+    const key = m?.id ?? "";
+    if (!groups.has(key)) groups.set(key, { name: m?.name ?? "Part", color: m?.color, shapes: [] });
+    groups.get(key)!.shapes.push(b.shape);
+  }
+  const partials: Shape3D[] = [];
+  try {
+    return [...groups.values()].map((g) => {
+      let fused = g.shapes[0];
+      for (const sh of g.shapes.slice(1)) { fused = fuseShapes(fused, sh); partials.push(fused); }
+      return { name: g.name, color: g.color, mesh: meshShape(fused) };
+    });
+  } finally {
+    for (const sh of partials) sh.delete();
     for (const b of bodies) b.shape.delete();
   }
 }

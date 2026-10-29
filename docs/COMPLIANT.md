@@ -379,6 +379,28 @@ were squeezed. The model called it bistable because it held the frame rigid.
     beam has already been solved at, when that's nearer than rest. A stout bar
     moved a sliver of its thickness takes a single step.
 
+## Built since: an embedded skeleton, 3MF export
+
+- **Optional features.** `feature.setCondition { feature, when }` builds a
+  feature only while `when` is non-zero. Both the full and the incremental
+  evaluation skip it. A checkbox can then add or remove a part.
+- **The bistable's `skeleton` checkbox.** It embeds a PLA ring of core bars in
+  the frame's bars, under a 1.2 mm skin, and cuts the pocket it fills.
+  - **The model:** each frame bar is modelled at the thickness that bends like
+    the composite section, (t³ + (E_c/E − 1)·(h_c/Hz)·c³)^⅓, which assumes a
+    good bond between the two materials. That underrates the bars' stretch,
+    which only errs soft.
+  - **What it gives:** with 6 mm bars in TPU 95A the snap goes from 0.20 N to
+    0.28 N, against 0.34 N held rigid. With 10 mm bars it reaches the rigid
+    value. TPU 68D is 40% as stiff as PLA, so a core adds only 1–7% there.
+- **3MF export** (`src/core/export/threemf.ts`). The whole model becomes one
+  3MF object that holds a part per material. Each part is all that material's
+  bodies fused, welded watertight, named and coloured after its material. Save
+  / share switches to 3MF when a model has more than one print material. It's
+  dependency-free: a zip of stored entries.
+  - **Tested:** CRC-32 against the standard check value, each part closed, the
+    skeleton inside the frame by its skin, and the parts in place.
+
 ## Open questions
 - Which mechanisms matter first? Snap fits and living hinges point at phases 1 + 3;
   grippers and flexure stages at 1 + 2.
