@@ -390,7 +390,7 @@ export interface TimelineGroup {
 export interface Joint {
   id: string;
   name: string;
-  kind: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam";
+  kind: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam" | "planar";
   base: string;  // base component id (root = ground)
   moved: string; // the component this joint places
   /** Connector point on each component, in that component's LOCAL coordinates. */
@@ -428,6 +428,14 @@ export interface Joint {
    *  beam (src/sim/beam2d.ts). Both points are in the parts' as-modelled frames,
    *  which must coincide (parts drawn in place). */
   beam?: BeamSection;
+  /** planar only: the moved part translates (x, y, mm) and turns (angle, °,
+   *  about the connector) in the base's XY plane. An axis given an expression
+   *  is driven by it; one left out is free, and settles where the stored
+   *  elastic energy (beams, flexures) is least — the part floats on its
+   *  compliant supports. */
+  planar?: Partial<Record<"x" | "y" | "angle", string>>;
+  /** planar only: where each axis is now (driven, or settled). */
+  planarValue?: { x: number; y: number; angle: number };
   /** Connector points given as expressions in the parameters (per coordinate);
    *  baseOrigin / movedOrigin hold their last evaluation. */
   originExprs?: { base?: Partial<Record<"x" | "y" | "z", string>>; moved?: Partial<Record<"x" | "y" | "z", string>> };

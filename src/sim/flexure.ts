@@ -11,7 +11,8 @@
 
 import type { CadDocument, FlexureSection, Joint, MechanicalProps } from "../core/document";
 import { materialForComponent } from "../core/document";
-import { resolveComponentWorld } from "../core/recompute";
+import { resolveComponentWorld, setEnergySettler } from "../core/recompute";
+import type { Scope } from "../math/expr";
 import { resolveParameters } from "../model/parameters";
 import { applyPoint, compose, IDENTITY, invert, type Rigid } from "../math/transform";
 import { rectSection, solveBeam } from "./beam2d";
@@ -133,13 +134,128 @@ function propsOf(doc: CadDocument, j: Joint, scope: Record<string, number>): Mec
   return m?.mechanical;
 }
 
+// ---- settling free axes: force-driven equilibrium -------------------------
+
+/** Stored energy at a placement, and its gradient's ingredients: each hinge's
+ *  energy and each beam's end and the force it pushes back with there. */
+function elastic(doc: CadDocument, scope: Scope, world: Map<string, Rigid>) {
+  let hinges = 0, beamsU = 0;
+  for (const j of flexureJoints(doc)) {
+    const props = propsOf(doc, j, scope);
+    if (props) hinges += 0.5 * flexureStiffness(props.E, j.flexure!) * (j.valueValue * RAD) ** 2;
+  }
+  const beams: { j: Joint; end: { dx: number; dy: number; dth: number }; R: { fx: number; fy: number; m: number } }[] = [];
+  for (const j of beamJoints(doc)) {
+    const props = propsOf(doc, j, scope);
+    if (!props) continue;
+    const end = beamEnd(j, world), b = solveBeamElement(j, props.E, end);
+    beamsU += Number.isFinite(b.energy) ? b.energy : Infinity;
+    beams.push({ j, end, R: b.reaction });
+  }
+  return { energy: hinges + beamsU, hinges, beams };
+}
+
+/** Hinge energy only (no beam solves), and each beam's end, at a placement. */
+function kinematics(doc: CadDocument, scope: Scope, world: Map<string, Rigid>) {
+  let hinges = 0;
+  for (const j of flexureJoints(doc)) {
+    const props = propsOf(doc, j, scope);
+    if (props) hinges += 0.5 * flexureStiffness(props.E, j.flexure!) * (j.valueValue * RAD) ** 2;
+  }
+  return { hinges, ends: new Map(beamJoints(doc).map((j) => [j.id, beamEnd(j, world)])) };
+}
+
+/** Settle every free planar axis where the stored energy is least: Newton on
+ *  the energy's gradient — each beam's part exact (its end force times how its
+ *  end moves with the axis), the hinges' by difference — with the Hessian by
+ *  differencing that gradient, damped so every step lowers the energy. Seeded
+ *  from where the axes last settled, so it follows a mechanism as it moves. */
+function settleByEnergy(doc: CadDocument, scope: Scope, place: () => Map<string, Rigid>): Map<string, Rigid> | undefined {
+  const free: { pv: { x: number; y: number; angle: number }; k: "x" | "y" | "angle" }[] = [];
+  for (const j of Object.values(doc.joints)) {
+    if (j.kind !== "planar") continue;
+    j.planarValue ??= { x: 0, y: 0, angle: 0 };
+    for (const k of ["x", "y", "angle"] as const) if (j.planar?.[k] === undefined) free.push({ pv: j.planarValue, k });
+  }
+  if (!free.length) return undefined;
+  const n = free.length, h = 1e-4;
+  const get = () => free.map((f) => f.pv[f.k]);
+  const set = (q: number[]) => free.forEach((f, i) => { f.pv[f.k] = q[i]; });
+  /** Energy and gradient at q (beams solved once, at q itself). */
+  const at = (q: number[]) => {
+    set(q);
+    const e = elastic(doc, scope, place());
+    const g = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) {
+      const qp = q.slice(), qm = q.slice();
+      qp[i] += h; qm[i] -= h;
+      set(qp); const kp = kinematics(doc, scope, place());
+      set(qm); const km = kinematics(doc, scope, place());
+      g[i] = (kp.hinges - km.hinges) / (2 * h);
+      for (const b of e.beams) {
+        const a = km.ends.get(b.j.id)!, c = kp.ends.get(b.j.id)!;
+        g[i] += (b.R.fx * (c.dx - a.dx) + b.R.fy * (c.dy - a.dy) + b.R.m * (c.dth - a.dth)) / (2 * h);
+      }
+    }
+    set(q);
+    return { energy: e.energy, g };
+  };
+  let q = get(), cur = at(q), lambda = 1e-6;
+  for (let it = 0; it < 40; it++) {
+    const gn = Math.max(...cur.g.map(Math.abs));
+    if (!(gn > 1e-9)) break;
+    // Hessian by differencing the gradient (symmetrised)
+    const H = Array.from({ length: n }, () => new Array(n).fill(0));
+    for (let i = 0; i < n; i++) {
+      const qi = q.slice(); qi[i] += h;
+      const gi = at(qi).g;
+      for (let k = 0; k < n; k++) H[k][i] = (gi[k] - cur.g[k]) / h;
+    }
+    for (let i = 0; i < n; i++) for (let k = 0; k < i; k++) H[i][k] = H[k][i] = (H[i][k] + H[k][i]) / 2;
+    let moved = false;
+    for (let tries = 0; tries < 12; tries++) {
+      const A = H.map((row, i) => row.map((v, k) => v + (i === k ? lambda * (1 + Math.abs(H[i][i])) : 0)));
+      const step = solveSmall(A, cur.g.map((v) => -v));
+      if (!step.every(Number.isFinite)) { lambda *= 10; continue; }
+      const trial = q.map((v, i) => v + step[i]);
+      const next = at(trial);
+      if (next.energy <= cur.energy + 1e-12 * (1 + Math.abs(cur.energy))) {
+        q = trial; cur = next; lambda = Math.max(1e-9, lambda / 10); moved = true;
+        if (Math.max(...step.map(Math.abs)) < 1e-9) it = Infinity;
+        break;
+      }
+      lambda *= 10;
+    }
+    if (!moved) break;
+  }
+  set(q);
+  return place();
+}
+
+/** Solve a small dense system (Gaussian elimination, partial pivoting). */
+function solveSmall(A: number[][], b: number[]): number[] {
+  const n = b.length, M = A.map((r, i) => [...r, b[i]]);
+  for (let k = 0; k < n; k++) {
+    let p = k;
+    for (let r = k + 1; r < n; r++) if (Math.abs(M[r][k]) > Math.abs(M[p][k])) p = r;
+    [M[k], M[p]] = [M[p], M[k]];
+    for (let r = k + 1; r < n; r++) { const f = M[r][k] / M[k][k]; for (let c = k; c <= n; c++) M[r][c] -= f * M[k][c]; }
+  }
+  const x = new Array(n).fill(0);
+  for (let k = n - 1; k >= 0; k--) { let v = M[k][n]; for (let c = k + 1; c < n; c++) v -= M[k][c] * x[c]; x[k] = v / M[k][k]; }
+  return x;
+}
+
+setEnergySettler(settleByEnergy);
+
 /** Pose the mechanism with these parameter overrides and read every hinge and
  *  beam. `solveBeams: false` poses the beams' ends without solving them (their
  *  energy and strain are left out). */
-export function flexureState(doc: CadDocument, overrides: Record<string, string> = {}, opts: { solveBeams?: boolean } = {}): FlexureState {
+export function flexureState(doc: CadDocument, overrides: Record<string, string> = {}, opts: { solveBeams?: boolean; settle?: boolean } = {}): FlexureState {
   const parameters = doc.parameters.map((p) => (overrides[p.name] != null ? { ...p, expr: overrides[p.name] } : p));
   const scope = resolveParameters(parameters).scope;
-  const world = resolveComponentWorld(doc, scope); // poses and closes the loops (joint values) and sizes the strips
+  // poses and closes the loops (joint values), sizes the strips, settles free axes
+  const world = resolveComponentWorld(doc, scope, { settle: opts.settle });
   const flexures: FlexureReading[] = [];
   const beams: FlexureState["beams"] = [];
   let energy = 0, utilisation = 0;
@@ -191,9 +307,13 @@ export function flexureSweep(doc: CadDocument, param: string, values: number[]):
   const per = angular ? 180 / Math.PI : 1; // dU/dθ[deg] → per radian
   const d = 1e-3;
   return values.map((v) => {
-    const lo = flexureState(doc, { [param]: String(v - d) }, { solveBeams: false });
-    const hi = flexureState(doc, { [param]: String(v + d) }, { solveBeams: false });
+    // settle at v, then probe either side with the free axes held there: at a
+    // settled pose the energy is flat along them, so the drive's effort is the
+    // partial derivative (and the probes need no settling of their own)
     const state = flexureState(doc, { [param]: String(v) });
+    const lo = flexureState(doc, { [param]: String(v - d) }, { solveBeams: false, settle: false });
+    const hi = flexureState(doc, { [param]: String(v + d) }, { solveBeams: false, settle: false });
+    flexureState(doc, { [param]: String(v) }, { solveBeams: false, settle: false }); // leave it posed at v
     let effort = (hi.energy - lo.energy) / (2 * d);
     for (const b of state.beams) {
       const a = lo.beams.find((q) => q.joint === b.joint)!.end, c = hi.beams.find((q) => q.joint === b.joint)!.end, R = b.reaction;

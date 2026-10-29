@@ -73,7 +73,10 @@ const pairKey = (o: CollisionResult["overlaps"][number]) => [o.aId, o.bId].sort(
  *  across [min, max] (or its value list) when bounded; through 360° when it is a
  *  bare revolute drive. An unbounded slider has no known range, so it is skipped. */
 function motionSamples(doc: CadDocument): { name: string; values: number[] }[] {
-  const drives = [...Object.values(doc.joints), ...Object.values(doc.jointTemplates ?? {})].map((j) => ({ kind: j.kind, expr: (j.valueExpr ?? "").trim() }));
+  const drives = [...Object.values(doc.joints), ...Object.values(doc.jointTemplates ?? {})].flatMap((j) => [
+    { kind: j.kind, expr: (j.valueExpr ?? "").trim() },
+    ...("planar" in j && j.planar ? Object.values(j.planar).map((e) => ({ kind: j.kind, expr: String(e).trim() })) : []), // a planar joint's driven axes
+  ]);
   const out: { name: string; values: number[] }[] = [];
   for (const p of doc.parameters) {
     const uses = drives.filter((d) => new RegExp(`\\b${p.name}\\b`).test(d.expr));
