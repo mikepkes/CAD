@@ -170,10 +170,10 @@ async function buildBistable(s: CadSession, opts: { span?: number; arch?: number
 
   // The shuttle is pushed straight down `travel`; the walls and the top bar
   // settle, every way. The beams and the frame's bars store the energy.
-  // (Left free, mid-snap the shuttle sways and tilts a degree or so, the beams'
-  // second mode, for ~2% less energy and the same peak force and rests: see
-  // the `swaying` test. Held square, a study is repeatable and the drawn beams
-  // stay on it.)
+  // (Left free, past the peak the shuttle sways and tilts up to ~2°, the
+  // beams' second mode: the same snap force and rests, ~5% less energy mid-snap
+  // and a softer far side. See the `swaying` test. Held square, a study is
+  // repeatable and the drawn beams stay on it.)
   await dis(s, "joint.create", { kind: "planar", base: frame, moved: shuttle, baseOrigin: o, movedOrigin: o, planar: opts.swaying ? { y: "-travel" } : { x: "0", y: "-travel", angle: "0" }, name: "Shuttle" });
   if (top) await free(top, "Top bar");
   for (const side of [-1, 1] as const) {
@@ -290,9 +290,9 @@ describe("bistable switch", () => {
     console.log(`frame ${thin}: ${MATERIALS[soft].name} snaps at ${bare.snap.toFixed(2)} N alone, ${cored.snap.toFixed(2)} N with a PLA core ` +
       `(its bars bend like ${cored.bend.toFixed(1)} mm of it), ${rigid.snap.toFixed(2)} N held rigid; ` +
       `${MATERIALS[DEFAULT_MATERIAL].name} ${tpu.snap.toFixed(2)} N alone, ${tpuCored.snap.toFixed(2)} N with the core`);
-    expect(bare.snap / rigid.snap).toBeLessThan(0.7);
-    expect(cored.snap / rigid.snap).toBeGreaterThan(0.8);
-    expect(cored.snap).toBeLessThanOrEqual(rigid.snap * 1.001);
+    expect(bare.snap / rigid.snap).toBeLessThan(0.8);
+    expect(cored.snap / rigid.snap).toBeGreaterThan(0.9);
+    expect(cored.snap).toBeLessThanOrEqual(rigid.snap * 1.02); // as stiff as rigid, to the study's sampling
     expect(tpuCored.snap).toBeGreaterThan(tpu.snap);
   }, 300000);
 
@@ -306,15 +306,18 @@ describe("bistable switch", () => {
     const stable = restsOf(st);
     const between = st.poses.filter((p) => p.value > 0 && p.value < stable[1]);
     const top = st.snap!.effort / ((2 * EI * h) / L ** 3), bottom = Math.min(...between.map((p) => p.effort)) / ((2 * EI * h) / L ** 3);
-    console.log(`rigid frame: rests at travel ${fmt(stable)} mm (2·rise = ${(2 * h).toFixed(2)}); snap ${st.snap!.effort.toFixed(2)} N = ${top.toFixed(0)}·EIh/L³ per beam (paper ≈ 740), pull back ${bottom.toFixed(0)} (≈ −370); peak strain ${(Math.max(...between.map((p) => p.utilisation)) * MATERIALS[DEFAULT_MATERIAL].strain * 100).toFixed(2)}%`);
+    console.log(`rigid frame: rests at travel ${fmt(stable)} mm (2·rise = ${(2 * h).toFixed(2)}); snap ${st.snap!.effort.toFixed(2)} N = ${top.toFixed(0)}·EIh/L³ per beam (paper ≈ 740 for slender arches), pull back ${bottom.toFixed(0)} (≈ −370); peak strain ${(Math.max(...between.map((p) => p.utilisation)) * MATERIALS[DEFAULT_MATERIAL].strain * 100).toFixed(2)}%`);
     expect(st.multistable).toBe(true);
     expect(stable[0]).toBeCloseTo(0, 6);
     expect(stable[1] / (2 * h)).toBeGreaterThan(0.85); // just short of the mirror shape (2·rise)
     expect(stable[1] / (2 * h)).toBeLessThan(1);
-    expect(top / 740).toBeGreaterThan(0.85);
-    expect(top / 740).toBeLessThan(1.15);
-    expect(-bottom / 370).toBeGreaterThan(0.75); // the paper gives this one only roughly
-    expect(-bottom / 370).toBeLessThan(1.25);
+    // the paper's figures are for slender arches; at rise/thickness 4 it tips
+    // into its lower shape sooner, as test/beam-element.test.ts shows (617 and
+    // −257 there at 3.75, 723 and −358 at 15)
+    expect(top / 740).toBeGreaterThan(0.78);
+    expect(top / 740).toBeLessThan(0.92);
+    expect(-bottom / 370).toBeGreaterThan(0.6);
+    expect(-bottom / 370).toBeLessThan(0.85);
   }, 120000);
 
   // The first design, printed: it sprang back unless its walls were squeezed.
@@ -337,7 +340,31 @@ describe("bistable switch", () => {
     expect(restsOf(ring)[1] / restsOf(rigid)[1]).toBeGreaterThan(0.95);
   }, 300000);
 
-  it("pushed by its knob alone, mid-snap the shuttle sways and tilts a little, for the same peak force and rests", async () => {
+  // Beams can hold more than one shape for the same ends; the answer for a pose
+  // must not depend on what was solved before it (a solve continued from a
+  // pose on the far side of a snap stays on that side).
+  it("the force and energy at a pose don't depend on the path there: through the snap and back gives the same", async () => {
+    const s = realSession();
+    await buildBistable(s);
+    await s.recompute();
+    const out = flexureSweep(s.doc, "travel", [3, 4.5]);
+    const there = flexureSweep(s.doc, "travel", Array.from({ length: 41 }, (_, k) => k / 4)); // 0 → 10
+    const back = flexureSweep(s.doc, "travel", Array.from({ length: 41 }, (_, k) => 10 - k / 4)); // and back
+    const again = flexureSweep(s.doc, "travel", [3, 4.5]);
+    for (const [i, v] of [3, 4.5].entries()) {
+      for (const p of [there.find((q) => q.value === v)!, back.find((q) => q.value === v)!, again[i]]) {
+        expect(p.energy / out[i].energy, `energy at ${v}`).toBeCloseTo(1, 2); // to the settle's tolerance
+        expect(Math.abs(p.effort - out[i].effort), `force at ${v}`).toBeLessThan(0.05 + 0.01 * Math.abs(out[i].effort));
+      }
+    }
+  }, 300000);
+
+  // The example holds the shuttle square: a study is then repeatable (square,
+  // mid-snap, the shuttle sits on a saddle and could go either way), and the
+  // drawn beams stay on it. Pushed by its knob alone it sways and tilts
+  // through the middle of the snap (the beams' second mode), which this
+  // measures; it's square again at the rest positions.
+  it("pushed by its knob alone, mid-snap the shuttle sways and tilts: the same snap force and rests, a softer far side", async () => {
     const square = realSession(), free = realSession();
     await buildBistable(square);
     await buildBistable(free, { swaying: true });
@@ -345,20 +372,26 @@ describe("bistable switch", () => {
     await free.recompute();
     const sh = Object.values(free.doc.joints).find((j) => j.name === "Shuttle")!;
     const rows: string[] = [];
-    let tilted = 0;
-    for (const t of [1, 2, 3, 4, 5, 6, 7]) {
-      sh.planarValue = { x: 0.05, y: -t, angle: 0.5 }; // a nudge: square, it sits on a saddle
+    let tilted = 0, peakSquare = 0, peakFree = 0, pullSquare = 0, pullFree = 0;
+    for (let t = 0.5; t <= 7; t += 0.5) {
+      sh.planarValue = { x: 0.05, y: -t, angle: 0.5 }; // a nudge off the saddle
       const [a] = flexureSweep(square.doc, "travel", [t]), [b] = flexureSweep(free.doc, "travel", [t]);
       tilted = Math.max(tilted, Math.abs(sh.planarValue!.angle));
+      peakSquare = Math.max(peakSquare, a.effort);
+      peakFree = Math.max(peakFree, b.effort);
+      pullSquare = Math.min(pullSquare, a.effort);
+      pullFree = Math.min(pullFree, b.effort);
       rows.push(`${t} mm: square ${a.effort.toFixed(2)} N, ${a.energy.toFixed(2)} mJ; free ${b.effort.toFixed(2)} N, ${b.energy.toFixed(2)} mJ, turned ${sh.planarValue!.angle.toFixed(2)}°, sideways ${sh.planarValue!.x.toFixed(3)} mm`);
-      expect(b.energy).toBeLessThanOrEqual(a.energy + 1e-9);
-      expect(b.energy / a.energy).toBeGreaterThan(0.97);
-      if (t <= 1) expect(b.effort / a.effort).toBeCloseTo(1, 2); // the peak comes before it sways
-      if (t >= 7) expect(Math.abs(sh.planarValue!.angle)).toBeLessThan(1e-3); // and it's square again at rest
+      expect(b.energy).toBeLessThanOrEqual(a.energy * (1 + 1e-3)); // free to move, it can only do better
+      if (t <= 1) expect(b.effort / a.effort).toBeCloseTo(1, 2); // no sway before the peak's run-up
+      if (t >= 7) expect(Math.abs(sh.planarValue!.angle)).toBeLessThan(1e-3); // square again at rest
     }
-    console.log(rows.join("\n"));
-    expect(tilted).toBeGreaterThan(0.2);
+    console.log(rows.join("\n") + `\npeak: square ${peakSquare.toFixed(2)} N, free ${peakFree.toFixed(2)} N; far side: square ${pullSquare.toFixed(2)} N, free ${pullFree.toFixed(2)} N`);
+    expect(tilted).toBeGreaterThan(0.5);
     expect(tilted).toBeLessThan(3);
+    expect(peakFree / peakSquare).toBeCloseTo(1, 3); // it sways only once past the peak
+    expect(pullFree / pullSquare).toBeGreaterThan(0.6);
+    expect(pullFree / pullSquare).toBeLessThan(0.95);
   }, 300000);
 
   it("in every material, it is bistable and the beams stay within its strain limit through the snap", async () => {

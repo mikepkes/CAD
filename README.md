@@ -55,9 +55,10 @@ strips also resize for it. How it works is in
     shape, where it stays until you push it back up.
   - **The readout:** both rest positions, the force to snap it over, and the
     beams' strain on the way.
-  - **The physics:** the beams are solved as large-deflection beams. In a rigid
-    frame, the snap force matches the published result for this mechanism to
-    within a few percent. The frame is solved too: the beams push its walls
+  - **The physics:** the beams are solved as large-deflection beams, settling
+    into stable shapes. For slender beams, the snap force matches the
+    published result for this mechanism to within 3%. This switch's stockier
+    beams tip over sooner and snap a little lower. The frame is solved too: the beams push its walls
     apart as they flip, and a frame that gives loses the second rest position.
     (The first version, a U-frame, did exactly that once printed.)
   - **Material:** the material sizes the beams. Each one gets the stoutest beams

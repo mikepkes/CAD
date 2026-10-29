@@ -115,10 +115,38 @@ function solveDense(A: number[][], b: number[]): number[] {
   return x;
 }
 
+/** LDLᵀ of a symmetric banded matrix (no pivoting). Stops at the first pivot
+ *  that isn't positive and returns its index: the matrix isn't positive
+ *  definite, and `L⁻ᵀ·e_k` is a direction of negative curvature along it. */
+function ldlt(A: number[][], bw: number): { L: number[][]; d: number[]; bad: number } {
+  const n = A.length, L = Array.from({ length: n }, () => new Array(n).fill(0)), d = new Array(n).fill(0);
+  const scale = Math.max(1e-300, ...A.map((r, i) => Math.abs(r[i])));
+  for (let k = 0; k < n; k++) {
+    let v = A[k][k];
+    for (let j = Math.max(0, k - bw); j < k; j++) v -= L[k][j] * L[k][j] * d[j];
+    d[k] = v;
+    if (!(v > 1e-12 * scale)) return { L, d, bad: k };
+    L[k][k] = 1;
+    for (let i = k + 1; i <= Math.min(n - 1, k + bw); i++) {
+      let w = A[i][k];
+      for (let j = Math.max(0, i - bw, k - bw); j < k; j++) w -= L[i][j] * L[k][j] * d[j];
+      L[i][k] = w / v;
+    }
+  }
+  return { L, d, bad: -1 };
+}
+
+function bandwidth(A: number[][]): number {
+  let bw = 0;
+  for (let r = 0; r < A.length; r++) for (let c = 0; c < A.length; c++) if (A[r][c] !== 0) bw = Math.max(bw, Math.abs(r - c));
+  return bw;
+}
+
 /** `start`: begin from an earlier solution of the same model (its `u`) instead
  *  of from rest, stepping the prescribed displacements on from where they were
- *  there (displacement loads only: forces are ramped from zero regardless). */
-export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; tol?: number; maxIter?: number; start?: Float64Array } = {}): BeamResult {
+ *  there (displacement loads only: forces are ramped from zero regardless).
+ *  The result is a stable equilibrium unless `stable: false`. */
+export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; tol?: number; maxIter?: number; start?: Float64Array; stable?: boolean } = {}): BeamResult {
   const steps = opts.steps ?? 20, tol = opts.tol ?? 1e-10, maxIter = opts.maxIter ?? 50;
   const n = 3 * m.nodes.length;
   const constrained = new Map<number, number>(); // dof index → target value at full load
@@ -178,6 +206,82 @@ export function solveBeam(m: BeamModel, load: BeamLoad, opts: { steps?: number; 
     u.set(saved);
     dlam /= 2;
     if (++cuts > 16) { converged = false; break; }
+  }
+
+  // Newton finds equilibria, stable or not: a beam pushed along a symmetric
+  // path keeps to its symmetric shape past where a nudge would tip it into a
+  // lower one (an arch's second mode). Where it stops is checked: if the
+  // stiffness isn't positive definite there, it's moved off along the way
+  // down and let settle to the stable shape, as the real strip would.
+  if (converged && opts.stable !== false) converged = stabilise();
+
+  function potential(): number {
+    let E = 0;
+    for (const e of m.elements) E += element(m, e, u).energy;
+    for (let d = 0; d < n; d++) E -= fext[d] * u[d];
+    return E;
+  }
+  function stabilise(): boolean {
+    for (let round = 0; round < 6; round++) {
+      const { K } = assemble();
+      const Kff = free.map((d) => free.map((e) => K[d][e]));
+      const bw = bandwidth(Kff), f = ldlt(Kff, bw);
+      if (f.bad < 0) return true;
+      // the direction of negative curvature: Lᵀ·φ = e_k
+      const phi = new Array(free.length).fill(0);
+      phi[f.bad] = 1;
+      for (let i = f.bad - 1; i >= 0; i--) {
+        let v = 0;
+        for (let j = i + 1; j <= Math.min(f.bad, i + bw); j++) v -= f.L[j][i] * phi[j];
+        phi[i] = v;
+      }
+      const big = Math.max(...phi.map(Math.abs)) || 1;
+      // step down it, whichever way goes further down, then minimise
+      const u0 = u.slice(), E0 = potential();
+      let best = { E: E0, u: u0 };
+      for (const sgn of [1, -1]) {
+        for (let a = 1e-4 * span; a <= 0.1 * span; a *= 2) {
+          u.set(u0);
+          free.forEach((d, k) => { u[d] += (sgn * a * phi[k]) / big; });
+          const E = potential();
+          if (E < best.E) best = { E, u: u.slice() };
+        }
+      }
+      if (best.E >= E0 - 1e-12 * Math.max(1, Math.abs(E0))) { u.set(u0); return true; } // flat: as good as stable
+      u.set(best.u);
+      if (!minimise()) return false;
+    }
+    return true;
+  }
+  /** Damped Newton on the potential: the stiffness shifted until positive
+   *  definite, and every step lowering the energy. */
+  function minimise(): boolean {
+    let mu = 0;
+    for (let it = 0; it < 200; it++) {
+      const { fint, K } = assemble();
+      const g = free.map((d) => fint[d] - fext[d]);
+      const scale = Math.max(1, ...free.map((d) => Math.abs(fext[d])), ...free.map((d) => Math.abs(fint[d])));
+      if (Math.max(0, ...g.map(Math.abs)) <= 1e-9 * scale) return true;
+      const Kff = free.map((d) => free.map((e) => K[d][e])), diag = Math.max(...Kff.map((r, i) => Math.abs(r[i])));
+      let A = Kff;
+      for (let tries = 0; tries < 40; tries++) {
+        A = Kff.map((r, i) => r.map((v, j) => (i === j ? v + mu * diag : v)));
+        if (ldlt(A, bandwidth(A)).bad < 0) break;
+        mu = Math.max(mu * 4, 1e-8);
+      }
+      const step = solveDense(A.map((r) => r.slice()), g.map((v) => -v));
+      const u0 = u.slice(), E0 = potential(), slope = step.reduce((acc, v, k) => acc + v * g[k], 0);
+      let ok = false;
+      for (let a = 1; a > 1e-8; a /= 2) {
+        u.set(u0);
+        free.forEach((d, k) => { u[d] += a * step[k]; });
+        if (potential() <= E0 + 1e-4 * a * slope) { ok = true; break; }
+      }
+      if (!ok) { u.set(u0); if (mu > 1e6) return false; mu = Math.max(mu * 10, 1e-6); continue; }
+      mu /= 4;
+      if (Math.max(...step.map(Math.abs)) <= 1e-12 * span) return true;
+    }
+    return false;
   }
 
   const { fint, els } = assemble();
