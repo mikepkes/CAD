@@ -15,7 +15,7 @@ import { resolveComponentWorld, setEnergySettler } from "../core/recompute";
 import type { Scope } from "../math/expr";
 import { resolveParameters } from "../model/parameters";
 import { applyPoint, compose, IDENTITY, invert, type Rigid } from "../math/transform";
-import { rectSection, solveBeam } from "./beam2d";
+import { rectSection, solveBeam, type BeamResult } from "./beam2d";
 
 const RAD = Math.PI / 180;
 
@@ -67,11 +67,25 @@ const BEAM_SEGMENTS = 16;
 /** A beam's unstressed shape, from its base end to its moved end (as modelled). */
 export function beamRestShape(j: Joint, n = BEAM_SEGMENTS): { x: number; y: number }[] {
   const a = j.baseOrigin, b = j.movedOrigin;
-  return restShape({ x: b.x - a.x, y: b.y - a.y }, j.beam!.profile, n).map((p) => ({ x: a.x + p.x, y: a.y + p.y }));
+  const via = j.beam!.via?.map((p) => ({ x: p.x - a.x, y: p.y - a.y }));
+  return restShape({ x: b.x - a.x, y: b.y - a.y }, j.beam!.profile, n, via).map((p) => ({ x: a.x + p.x, y: a.y + p.y }));
 }
 
-/** The unstressed shape of a strip from the origin to `rel`. */
-function restShape(rel: { x: number; y: number }, profile: "straight" | "cosine", n = BEAM_SEGMENTS) {
+/** The unstressed shape of a strip from the origin to `rel`: through its `via`
+ *  corners, straight from point to point (the elements shared out by length,
+ *  with a node on every corner), or else straight or a cosine S. */
+function restShape(rel: { x: number; y: number }, profile: "straight" | "cosine", n = BEAM_SEGMENTS, via?: { x: number; y: number }[]) {
+  if (via?.length) {
+    const pts = [{ x: 0, y: 0 }, ...via, rel];
+    const lens = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
+    const total = lens.reduce((s, l) => s + l, 0);
+    const out = [pts[0]];
+    lens.forEach((l, i) => {
+      const m = Math.max(2, Math.round((2 * n * l) / total)); // a frame needs the resolution: twice the elements
+      for (let k = 1; k <= m; k++) out.push({ x: pts[i].x + ((pts[i + 1].x - pts[i].x) * k) / m, y: pts[i].y + ((pts[i + 1].y - pts[i].y) * k) / m });
+    });
+    return out;
+  }
   return Array.from({ length: n + 1 }, (_, k) => {
     const s = k / n, f = profile === "cosine" ? (1 - Math.cos(Math.PI * s)) / 2 : s;
     return { x: rel.x * s, y: rel.y * f };
@@ -91,6 +105,8 @@ type BeamSolution = { energy: number; strain: number; reaction: { fx: number; fy
 // refinement, a mechanism's identical or mirror-image beams), so solutions are
 // remembered by the beam's shape relative to its base end, mirrored to point +X.
 const beamCache = new Map<string, BeamSolution>();
+/** Solved deformed states, by beam shape: where the next solve can start. */
+const beamStates = new Map<string, { e: { dx: number; dy: number; dth: number }; u: Float64Array }[]>();
 
 /** Solve a beam for its moved end's displacement: clamped at the base, the end
  *  driven to (dx, dy, dθ). Energy (mJ), peak strain, and the force it pushes
@@ -101,28 +117,48 @@ export function solveBeamElement(j: Joint, E: number, end: { dx: number; dy: num
   const flip = j.movedOrigin.x < j.baseOrigin.x ? -1 : 1; // x → −x is the same problem
   const rel = { x: flip * (j.movedOrigin.x - j.baseOrigin.x), y: j.movedOrigin.y - j.baseOrigin.y };
   const e = { dx: flip * end.dx, dy: end.dy, dth: flip * end.dth };
-  const key = [rel.x, rel.y, b.width, b.thickness, b.profile, E, e.dx, e.dy, e.dth].map((v) => (typeof v === "number" ? v.toPrecision(10) : v)).join("|");
+  const via = b.via?.map((p) => ({ x: flip * (p.x - j.baseOrigin.x), y: p.y - j.baseOrigin.y }));
+  const ends = [e.dx, e.dy, e.dth].map((v) => "|" + v.toPrecision(10)).join("");
+  const key = [rel.x, rel.y, ...(via ?? []).flatMap((p) => [p.x, p.y]), b.width, b.thickness, b.profile, E].map((v) => (typeof v === "number" ? v.toPrecision(10) : v)).join("|") + ends;
   let sol = beamCache.get(key);
   if (!sol) {
-    const nodes = restShape(rel, b.profile);
+    const nodes = restShape(rel, b.profile, BEAM_SEGMENTS, via);
     const n = nodes.length - 1, sec = rectSection(E, b.width, b.thickness);
-    const travel = Math.max(Math.abs(e.dx), Math.abs(e.dy), Math.abs(e.dth) * Math.hypot(rel.x, rel.y));
+    const chord = Math.hypot(rel.x, rel.y);
+    const travel = Math.max(Math.abs(e.dx), Math.abs(e.dy), Math.abs(e.dth) * chord);
     const model = { nodes, elements: Array.from({ length: n }, (_, k) => ({ a: k, b: k + 1, ...sec })), fixed: [{ node: 0 as const, dof: 0 as const }, { node: 0, dof: 1 as const }, { node: 0, dof: 2 as const }] };
     const load = { prescribed: [{ node: n, dof: 0 as const, value: e.dx }, { node: n, dof: 1 as const, value: e.dy }, { node: n, dof: 2 as const, value: e.dth }] };
     // Newton can leap onto a far, non-physical branch as a beam snaps through:
     // a result that didn't converge or that bends the strip beyond any plastic
     // (30% strain) is re-solved in finer steps.
-    let steps = Math.min(48, Math.max(6, Math.ceil(travel / (0.25 * b.thickness))));
-    let r = solveBeam(model, load, { steps, maxIter: 80 });
-    const plausible = (q: typeof r) => q.converged && q.elements.every((el) => el.maxStrain < 0.3);
+    const plausible = (q: BeamResult) => q.converged && q.elements.every((el) => el.maxStrain < 0.3);
+    // (a stout bar moved a sliver of its thickness is all but linear: one step)
+    const stepsFor = (d: number) => d < 0.05 * b.thickness ? 1 : Math.min(48, Math.max(6, Math.ceil(d / (0.25 * b.thickness))));
+    // Poses come in streams of near neighbours (a settle's steps, a study's
+    // samples), so a solve carries on from the nearest pose this beam has been
+    // solved at, when that's nearer than rest: a step or two, not a ramp.
+    const shape = key.slice(0, key.length - ends.length), seen = beamStates.get(shape) ?? [];
+    let near: (typeof seen)[number] | undefined, dist = travel;
+    for (const q of seen) {
+      const d = Math.max(Math.abs(q.e.dx - e.dx), Math.abs(q.e.dy - e.dy), Math.abs(q.e.dth - e.dth) * chord);
+      if (d < dist) { near = q; dist = d; }
+    }
+    let r = near ? solveBeam(model, load, { steps: stepsFor(dist), maxIter: 80, start: near.u }) : undefined;
+    let steps = stepsFor(travel);
+    if (!r || !plausible(r)) r = solveBeam(model, load, { steps, maxIter: 80 });
     for (let k = 0; k < 3 && !plausible(r); k++) { steps *= 2; r = solveBeam(model, load, { steps, maxIter: 80 }); }
+    if (plausible(r)) {
+      seen.push({ e, u: r.u });
+      if (seen.length > 64) seen.shift();
+      beamStates.set(shape, seen);
+    }
     // the beam's push on its moved end: the energy's gradient there
     sol = {
       energy: r.converged ? r.energy : NaN,
       strain: Math.max(...r.elements.map((el) => el.maxStrain)),
       reaction: { fx: r.reactions[`${n}:0`] ?? 0, fy: r.reactions[`${n}:1`] ?? 0, m: r.reactions[`${n}:2`] ?? 0 },
     };
-    if (beamCache.size > 4000) beamCache.clear();
+    if (beamCache.size > 4000) { beamCache.clear(); beamStates.clear(); }
     beamCache.set(key, sol);
   }
   return flip > 0 ? sol : { ...sol, reaction: { fx: -sol.reaction.fx, fy: sol.reaction.fy, m: -sol.reaction.m } };
@@ -165,10 +201,13 @@ function kinematics(doc: CadDocument, scope: Scope, world: Map<string, Rigid>) {
   return { hinges, ends: new Map(beamJoints(doc).map((j) => [j.id, beamEnd(j, world)])) };
 }
 
+const hessianCache = new WeakMap<CadDocument, { sig: string; H: number[][] }>();
+
 /** Settle every free planar axis where the stored energy is least: Newton on
  *  the energy's gradient — each beam's part exact (its end force times how its
- *  end moves with the axis), the hinges' by difference — with the Hessian by
- *  differencing that gradient, damped so every step lowers the energy. Seeded
+ *  end moves with the axis), the hinges' by difference — damped so every step
+ *  lowers the energy, with the Hessian carried from the last settle and kept
+ *  current by BFGS (rebuilt by differencing the gradient when it fails). Seeded
  *  from where the axes last settled, so it follows a mechanism as it moves. */
 function settleByEnergy(doc: CadDocument, scope: Scope, place: () => Map<string, Rigid>): Map<string, Rigid> | undefined {
   const free: { pv: { x: number; y: number; angle: number }; k: "x" | "y" | "angle" }[] = [];
@@ -200,34 +239,51 @@ function settleByEnergy(doc: CadDocument, scope: Scope, place: () => Map<string,
     set(q);
     return { energy: e.energy, g };
   };
-  let q = get(), cur = at(q), lambda = 1e-6;
-  for (let it = 0; it < 40; it++) {
-    const gn = Math.max(...cur.g.map(Math.abs));
-    if (!(gn > 1e-9)) break;
-    // Hessian by differencing the gradient (symmetrised)
+  /** The Hessian by differencing the gradient (symmetrised): n more solves. */
+  const fdHessian = (q: number[], g0: number[]) => {
     const H = Array.from({ length: n }, () => new Array(n).fill(0));
     for (let i = 0; i < n; i++) {
       const qi = q.slice(); qi[i] += h;
       const gi = at(qi).g;
-      for (let k = 0; k < n; k++) H[k][i] = (gi[k] - cur.g[k]) / h;
+      for (let k = 0; k < n; k++) H[k][i] = (gi[k] - g0[k]) / h;
     }
     for (let i = 0; i < n; i++) for (let k = 0; k < i; k++) H[i][k] = H[k][i] = (H[i][k] + H[k][i]) / 2;
+    return H;
+  };
+  // A mechanism is settled again and again as its drive moves, and its energy's
+  // curvature barely changes from pose to pose: start from the last Hessian and
+  // keep it current with BFGS updates, so a settle costs a few gradients, not
+  // a Hessian's worth of them. A step that won't lower the energy rebuilds it.
+  const sig = free.map((f) => `${Object.values(doc.joints).find((j) => j.planarValue === f.pv)?.id}.${f.k}`).join(",");
+  const cached = hessianCache.get(doc);
+  let q = get(), cur = at(q), lambda = 1e-9, fresh = false;
+  let H = cached?.sig === sig ? cached.H.map((r) => r.slice()) : (fresh = true, fdHessian(q, cur.g));
+  for (let it = 0; it < 60; it++) {
+    if (!(Math.max(...cur.g.map(Math.abs)) > 1e-9)) break;
     let moved = false;
-    for (let tries = 0; tries < 12; tries++) {
+    for (let tries = 0; tries < 8; tries++) {
       const A = H.map((row, i) => row.map((v, k) => v + (i === k ? lambda * (1 + Math.abs(H[i][i])) : 0)));
       const step = solveSmall(A, cur.g.map((v) => -v));
-      if (!step.every(Number.isFinite)) { lambda *= 10; continue; }
+      if (!step.every(Number.isFinite)) { lambda = Math.max(lambda * 10, 1e-6); continue; }
       const trial = q.map((v, i) => v + step[i]);
       const next = at(trial);
       if (next.energy <= cur.energy + 1e-12 * (1 + Math.abs(cur.energy))) {
+        // BFGS: fold the step's change in gradient into the curvature
+        const yv = next.g.map((v, i) => v - cur.g[i]), sy = step.reduce((a, v, i) => a + v * yv[i], 0);
+        const Hs = H.map((row) => row.reduce((a, v, k) => a + v * step[k], 0)), sHs = step.reduce((a, v, i) => a + v * Hs[i], 0);
+        if (sy > 1e-14 && sHs > 1e-14) H = H.map((row, i) => row.map((v, k) => v - (Hs[i] * Hs[k]) / sHs + (yv[i] * yv[k]) / sy));
         q = trial; cur = next; lambda = Math.max(1e-9, lambda / 10); moved = true;
-        if (Math.max(...step.map(Math.abs)) < 1e-9) it = Infinity;
+        if (Math.max(...step.map(Math.abs)) < 1e-10) it = Infinity;
         break;
       }
-      lambda *= 10;
+      lambda = Math.max(lambda * 10, 1e-6);
     }
-    if (!moved) break;
+    if (!moved) {
+      if (fresh) break; // even the true curvature can't go downhill: settled
+      H = fdHessian(q, cur.g); fresh = true; lambda = 1e-9;
+    }
   }
+  hessianCache.set(doc, { sig, H });
   set(q);
   return place();
 }

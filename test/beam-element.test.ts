@@ -43,6 +43,24 @@ describe("beam elements", () => {
     expect(p.energy / (0.5 * ((12 * EI) / L ** 3) * d * d)).toBeCloseTo(1, 2);
   });
 
+  // A frame's arm: along the base (a), then up a wall (b). Pushed sideways at a
+  // free tip (the tip part settles, so there is no moment or vertical force
+  // there), its stiffness is EI / (b³/3 + a·b²) — the wall bends, and the
+  // base arm turns it.
+  it("a strip that turns a corner is an L-frame: k = EI / (b³/3 + a·b²)", async () => {
+    const s = realSession();
+    await dis(s, "parameter.add", { name: "push", expression: "0.01" });
+    const mat = (await dis(s, "material.create", { name: "Test", kind: "plastic", youngsModulus: E, allowableStrain: 0.1 }))[0];
+    const ground = (await dis(s, "component.create", { name: "Ground" }))[0], tip = (await dis(s, "component.create", { name: "Tip" }))[0];
+    await dis(s, "material.assign", { component: ground, material: mat });
+    const a = 30, b = 20, o = { x: a, y: b, z: 0 };
+    await dis(s, "joint.create", { kind: "planar", base: ground, moved: tip, baseOrigin: o, movedOrigin: o, planar: { x: "push" } });
+    await dis(s, "joint.create", { kind: "beam", base: ground, moved: tip, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: o, beam: { width: W, thickness: T, via: [{ x: a, y: 0 }] } });
+    await s.recompute();
+    const [p] = flexureSweep(s.doc, "push", [0.01]);
+    expect(p.effort / (0.01 * EI / (b ** 3 / 3 + a * b * b))).toBeCloseTo(1, 2);
+  });
+
   it("places nothing, needs a section, and won't take a cosine strip with its ends level in X", async () => {
     const s = await rig([]);
     const [g, sh] = Object.keys(s.doc.components).filter((k) => k !== s.doc.rootComponentId);

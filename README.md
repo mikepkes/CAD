@@ -50,16 +50,20 @@ strips also resize for it. How it works is in
   - **Reshape it:** `crank`, `rocker` and `ground` change the linkage. A longer
     crank or a shorter rocker makes the pointer swing further.
 - **Bistable switch:** https://mikepkes.github.io/CAD/?mode=customize&example=bistable
-  - **What it is:** two curved beams span a frame and carry a shuttle. Push its
-    button down and the beams snap through to their mirror shape, where it
-    stays until you push it back.
+  - **What it is:** two curved beams span a stout ring frame and carry a
+    shuttle. Push its knob down and the beams snap through to their mirror
+    shape, where it stays until you push it back up.
   - **The readout:** both rest positions, the force to snap it over, and the
     beams' strain on the way.
-  - **The physics:** the beams are solved as large-deflection beams. The snap
-    force matches the published result for this mechanism to within a few
-    percent.
-  - **Try:** `span`, `rise` and `thickness`. A shallow, thick arch stops being
-    bistable and just springs back.
+  - **The physics:** the beams are solved as large-deflection beams. In a rigid
+    frame, the snap force matches the published result for this mechanism to
+    within a few percent. The frame is solved too: the beams push its walls
+    apart as they flip, and a frame that gives loses the second rest position.
+    (The first version, a U-frame, did exactly that once printed.)
+  - **Material:** the material sizes the beams. Each one gets the stoutest beams
+    that snap within its strain limit: about 12 N to flip in TPU 68D, 6 N in PLA.
+  - **Try:** `span`, `arch` (rise over thickness) and `frame`. A flat arch
+    stops being bistable and just springs back.
 - **Gripper:** https://mikepkes.github.io/CAD/?mode=customize&example=gripper
   - **What it is:** push the plunger and both jaws swing open; let go and they
     spring shut on whatever is between them.
@@ -263,7 +267,7 @@ straight from a URL:
 ?mode=customize&example=scissor-jointed # the scissor as a jointed assembly (count + articulates)
 ?mode=customize&example=starbox        # snap-together star box: width + height sliders, print material dropdown; opens on the one printable half, tick fullBox for both (one flipped)
 ?mode=customize&example=fourbar        # compliant four-bar: flexure hinges, a closed loop, live hinge strain; link-length sliders, print material dropdown
-?mode=customize&example=bistable       # bistable switch: curved beams that snap between two rest positions; span / rise / thickness sliders
+?mode=customize&example=bistable       # bistable switch: curved beams that snap between two rest positions; span / arch / frame sliders
 ?mode=customize&example=gripper        # compliant gripper: 10 hinges, 3 loops, amplified jaws; jaw length slider
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file

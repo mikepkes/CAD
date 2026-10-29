@@ -463,7 +463,10 @@ export const BUILTINS: CommandDef<any>[] = [
           required: ["width", "thickness"],
           additionalProperties: false,
           description: "beam only: the strip (mm). width out of the sketch plane, thickness in it; each a number or an expression. profile: straight (default) or cosine (an S leaving and arriving parallel to X).",
-          properties: { width: { type: ["number", "string"] }, thickness: { type: ["number", "string"] }, profile: { type: "string", enum: ["straight", "cosine"] }, material: { type: "string", description: "Strip material id (default: the base component's)." } },
+          properties: {
+            width: { type: ["number", "string"] }, thickness: { type: ["number", "string"] }, profile: { type: "string", enum: ["straight", "cosine"] }, material: { type: "string", description: "Strip material id (default: the base component's)." },
+            via: { type: "array", description: "Corners the strip runs through between its ends (base frame, as modelled): it is straight from point to point. Each coordinate a number or an expression.", items: { type: "object", required: ["x", "y"], properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] } } } },
+          },
         },
         solve: { type: "boolean", description: "The value is solved so every closing joint's connectors meet (closed loops); `value` only seeds it." },
         closes: { type: "boolean", description: "Close a loop: place nothing, constrain the two connectors to coincide. `moved` must be placed by another joint." },
@@ -491,7 +494,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Pin a bracket to the base at its origin", params: { moved: "cmp3", baseOrigin: { x: 40, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 } } },
       { note: "Revolute joint spun 30°", params: { kind: "revolute", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 20 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "30" } },
     ],
-    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam" | "planar"; planar?: Partial<Record<"x" | "y" | "angle", number | string>>; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
+    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam" | "planar"; planar?: Partial<Record<"x" | "y" | "angle", number | string>>; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string; via?: { x: number | string; y: number | string }[] }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
@@ -521,13 +524,18 @@ export const BUILTINS: CommandDef<any>[] = [
       const section = kind === "flexure" ? flexureSection(p.flexure!, scope) : undefined;
       // so may a connector point
       const baseO = exprPoint(p.baseOrigin, scope, "baseOrigin"), movedO = exprPoint(p.movedOrigin, scope, "movedOrigin");
-      let beam: { width: number; thickness: number; profile: "straight" | "cosine"; material?: string; exprs?: Partial<Record<"width" | "thickness", string>> } | undefined;
+      let beam: { width: number; thickness: number; profile: "straight" | "cosine"; material?: string; exprs?: Partial<Record<"width" | "thickness", string>>; via?: { x: number; y: number }[]; viaExprs?: { x: string; y: string }[] } | undefined;
       if (kind === "beam") {
         const sec = flexureSection({ length: 1, width: p.beam!.width, thickness: p.beam!.thickness }, scope);
         const exprs = sec.exprs ? { ...(sec.exprs.width ? { width: sec.exprs.width } : {}), ...(sec.exprs.thickness ? { thickness: sec.exprs.thickness } : {}) } : undefined;
         if (Math.hypot(movedO.value.x - baseO.value.x, movedO.value.y - baseO.value.y) < 1e-6) throw new Error("a beam needs two distinct ends");
-        if (p.beam!.profile === "cosine" && Math.abs(movedO.value.x - baseO.value.x) < 1e-6) throw new Error("a cosine beam needs its ends apart in X");
-        beam = { width: sec.width, thickness: sec.thickness, profile: p.beam!.profile ?? "straight", ...(p.beam!.material ? { material: p.beam!.material } : {}), ...(exprs ? { exprs } : {}) };
+        if (p.beam!.profile === "cosine" && !p.beam!.via && Math.abs(movedO.value.x - baseO.value.x) < 1e-6) throw new Error("a cosine beam needs its ends apart in X");
+        const via = p.beam!.via?.map((q, i) => exprPoint({ x: q.x, y: q.y, z: 0 }, scope, `beam.via[${i}]`));
+        beam = {
+          width: sec.width, thickness: sec.thickness, profile: p.beam!.profile ?? "straight", ...(p.beam!.material ? { material: p.beam!.material } : {}), ...(exprs ? { exprs } : {}),
+          ...(via ? { via: via.map((q) => ({ x: q.value.x, y: q.value.y })) } : {}),
+          ...(via?.some((q) => q.exprs) ? { viaExprs: via.map((q, i) => ({ x: q.exprs?.x ?? String(p.beam!.via![i].x), y: q.exprs?.y ?? String(p.beam!.via![i].y) })) } : {}),
+        };
       }
       if (p.closes && p.solve) throw new Error("a closing joint is the constraint; give `solve` to the joints it determines");
       if (p.closes && !Object.values(draft.joints).some((j) => j.moved === p.moved && !j.closes)) throw new Error("a closing joint's moved component must already be placed by another joint");

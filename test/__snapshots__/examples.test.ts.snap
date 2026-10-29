@@ -73,34 +73,34 @@ exports[`bundled examples > examples/scissor.json > replays, builds on both geom
 exports[`bundled examples > public/examples/bistable.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
-    "body": "ext51",
+    "body": "ext66",
     "max": [
-      44,
-      16,
+      40,
+      30.7,
       6,
     ],
     "min": [
-      -44,
-      -28,
+      -40,
+      -23,
       0,
     ],
-    "name": "Base",
-    "volume": 6576,
+    "name": "Bottom bar",
+    "volume": 14229.6,
   },
   {
-    "body": "ext678",
+    "body": "ext714",
     "max": [
-      9,
-      35.2,
-      6,
+      3,
+      19.7,
+      14,
     ],
     "min": [
-      -9,
-      -6,
+      -3,
+      -2,
       0,
     ],
     "name": "Shuttle",
-    "volume": 1915.2,
+    "volume": 1019.4,
   },
 ]
 `;

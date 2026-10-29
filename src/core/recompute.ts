@@ -258,6 +258,9 @@ function placeComponents(doc: CadDocument, scope: Scope): Map<string, Rigid> {
     if (j.beam?.exprs) for (const [k, e] of Object.entries(j.beam.exprs) as ["width" | "thickness", string][]) {
       try { const v = compileExpr(e).eval(scope); if (Number.isFinite(v) && v > 0) j.beam[k] = v; } catch { /* keep last */ }
     }
+    j.beam?.viaExprs?.forEach((e, i) => {
+      for (const k of ["x", "y"] as const) try { const v = compileExpr(e[k]).eval(scope); if (Number.isFinite(v)) j.beam!.via![i][k] = v; } catch { /* keep last */ }
+    });
     // ...and so do connector points given as expressions
     for (const [side, key] of [["base", "baseOrigin"], ["moved", "movedOrigin"]] as const) {
       const ex = j.originExprs?.[side];
