@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument, Material, RoleRef, MemberFeature, findConfiguration } from "../document";
+import { CadDocument, Material, RoleRef, MemberFeature, SurfaceFeature, findConfiguration } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -1989,6 +1989,120 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.endCaps ? { endCaps: true } : {}), ...(p.gusset != null ? { gussetExpr: String(p.gusset) } : {}),
       };
       return { createdIds: [id], message: `Structural members along ${draft.sketches[p.sketch].name}` };
+    },
+  },
+  {
+    type: "feature.surface",
+    title: "Surface",
+    summary: "Make a surface body (no volume) from sketch curves: extrude, revolve, loft, sweep, or a flat patch.",
+    description:
+      "Unlike a solid feature, the curves needn't be closed: an open chain of lines/arcs/splines makes an open surface. `mode` extrude (sketch, distance, symmetric, direction), revolve (sketch, axis p1→p2 in sketch coords, angle in degrees, default 360), loft (sketches: ordered sections, one chain each; ruled for straight sections), sweep (sketch = profile, path = spine sketch), or patch (fill each closed loop of the sketch with a flat face). " +
+      "Every chain in the sketch becomes part of the surface. Surfaces can be trimmed (feature.trim), stitched together (feature.stitch, into a solid when they close up) and thickened (feature.thicken). Returns the feature id (also the body id).",
+    paramsSchema: {
+      type: "object",
+      required: ["mode"],
+      additionalProperties: false,
+      properties: {
+        mode: { type: "string", enum: ["extrude", "revolve", "loft", "sweep", "patch"] },
+        sketch: { type: "string", description: "Profile sketch (extrude / revolve / sweep / patch)." },
+        sketches: { type: "array", items: { type: "string" }, description: "Section sketches in order (loft)." },
+        path: { type: "string", description: "Spine sketch (sweep)." },
+        distance: { type: ["string", "number"], description: "Extrude distance (expr; default 10)." },
+        symmetric: { type: "boolean" },
+        direction: { type: "string", enum: ["normal", "reverse"] },
+        axis: { type: "object", required: ["p1", "p2"], properties: { p1: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } }, p2: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } } } },
+        angle: { type: ["string", "number"], description: "Revolve angle in degrees (default 360)." },
+        ruled: { type: "boolean" },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "An open S-curve extruded 40 into a wall", params: { mode: "extrude", sketch: "sketch1", distance: 40 } },
+      { note: "A vase skin: an open profile revolved about the sketch's y axis", params: { mode: "revolve", sketch: "sketch1", axis: { p1: { x: 0, y: 0 }, p2: { x: 0, y: 1 } } } },
+    ],
+    apply(draft, p: { mode: SurfaceFeature["mode"]; sketch?: string; sketches?: string[]; path?: string; distance?: unknown; symmetric?: boolean; direction?: "normal" | "reverse"; axis?: SurfaceFeature["axis"]; angle?: unknown; ruled?: boolean; name?: string }, ctx) {
+      const need = (id: string | undefined, what: string) => { if (!id || !draft.sketches[id]) throw new Error(`surface ${p.mode} needs ${what} (an existing sketch)`); };
+      if (p.mode === "loft") { if (!p.sketches || p.sketches.length < 2) throw new Error("surface loft needs `sketches` (two or more)"); p.sketches.forEach((id) => need(id, "each section")); }
+      else need(p.sketch, "`sketch`");
+      if (p.mode === "sweep") need(p.path, "`path`");
+      if (p.mode === "revolve" && !p.axis) throw new Error("surface revolve needs `axis`");
+      const id = ctx.alloc("srf");
+      draft.features[id] = {
+        id, kind: "surface", name: p.name ?? `Surface ${p.mode}`, mode: p.mode,
+        ...(p.sketch ? { sketchId: p.sketch } : {}), ...(p.sketches ? { sketchIds: [...p.sketches] } : {}), ...(p.path ? { pathSketch: p.path } : {}),
+        ...(p.distance != null ? { distanceExpr: String(p.distance) } : {}), ...(p.symmetric ? { symmetric: true } : {}), ...(p.direction ? { direction: p.direction } : {}),
+        ...(p.axis ? { axis: p.axis } : {}), ...(p.angle != null ? { angleExpr: String(p.angle) } : {}), ...(p.ruled ? { ruled: true } : {}),
+      };
+      return { createdIds: [id], message: `Surface ${p.mode}` };
+    },
+  },
+  {
+    type: "feature.stitch",
+    title: "Stitch",
+    summary: "Sew surface bodies together along their shared edges — into a solid when they close up.",
+    description:
+      "Joins `bodies` (their creating-feature ids, two or more) wherever edges meet within `tolerance` (default 0.01 mm). The first body becomes the result; the others are consumed. With `solid: true` the sewn shell must enclose a volume and becomes a solid (an error names the gap otherwise). Returns the feature id.",
+    paramsSchema: {
+      type: "object", required: ["bodies"], additionalProperties: false,
+      properties: {
+        bodies: { type: "array", items: { type: "string" } },
+        tolerance: { type: ["string", "number"] },
+        solid: { type: "boolean" },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Close six patches into a solid", params: { bodies: ["srf2", "srf4", "srf6"], solid: true } }],
+    apply(draft, p: { bodies: string[]; tolerance?: unknown; solid?: boolean; name?: string }, ctx) {
+      if (p.bodies.length < 2) throw new Error("stitch needs at least two bodies");
+      const id = ctx.alloc("stitch");
+      draft.features[id] = { id, kind: "stitch", name: p.name ?? "Stitch", bodies: [...p.bodies], ...(p.tolerance != null ? { toleranceExpr: String(p.tolerance) } : {}), ...(p.solid ? { solid: true } : {}) };
+      return { createdIds: [id], message: `Stitch ${p.bodies.length} bodies` };
+    },
+  },
+  {
+    type: "feature.thicken",
+    title: "Thicken",
+    summary: "Turn a surface body into a solid of a given thickness.",
+    description: "Offsets the surface (`body`, default the most recent) by `thickness` along its normals — `side` out (default), in, or both (half each way) — and closes the gap into a solid. Returns the feature id.",
+    paramsSchema: {
+      type: "object", required: ["thickness"], additionalProperties: false,
+      properties: { thickness: { type: ["string", "number"] }, side: { type: "string", enum: ["out", "in", "both"] }, body: { type: "string" }, name: { type: "string" } },
+    },
+    examples: [{ params: { thickness: 2, side: "both" } }],
+    apply(draft, p: { thickness: unknown; side?: "out" | "in" | "both"; body?: string; name?: string }, ctx) {
+      const id = ctx.alloc("thk");
+      draft.features[id] = { id, kind: "thicken", name: p.name ?? "Thicken", thicknessExpr: String(p.thickness), ...(p.side ? { side: p.side } : {}), ...(p.body ? { body: p.body } : {}) };
+      return { createdIds: [id], message: `Thicken ${p.thickness}` };
+    },
+  },
+  {
+    type: "feature.trim",
+    title: "Trim",
+    summary: "Trim a body (usually a surface) by a sketch's closed regions or by another body.",
+    description: "Cuts `body` (default the most recent) with a tool: the closed regions of `sketch`, carried through everything along the sketch's normal, or another body `tool`. `keep` inside keeps what's within the tool; outside keeps the rest. Returns the feature id.",
+    paramsSchema: {
+      type: "object", required: ["keep"], additionalProperties: false,
+      properties: { keep: { type: "string", enum: ["inside", "outside"] }, sketch: { type: "string" }, tool: { type: "string" }, body: { type: "string" }, name: { type: "string" } },
+    },
+    examples: [{ note: "Cut a window out of a surface", params: { sketch: "sketch5", keep: "outside" } }],
+    apply(draft, p: { keep: "inside" | "outside"; sketch?: string; tool?: string; body?: string; name?: string }, ctx) {
+      if (!p.sketch && !p.tool) throw new Error("trim needs `sketch` or `tool`");
+      if (p.sketch && !draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
+      const id = ctx.alloc("trim");
+      draft.features[id] = { id, kind: "trim", name: p.name ?? "Trim", keep: p.keep, ...(p.sketch ? { sketchId: p.sketch } : {}), ...(p.tool ? { toolBody: p.tool } : {}), ...(p.body ? { body: p.body } : {}) };
+      return { createdIds: [id], message: `Trim (keep ${p.keep})` };
+    },
+  },
+  {
+    type: "feature.untrim",
+    title: "Untrim",
+    summary: "Fill the holes trimmed into a body's faces.",
+    description: "Rebuilds each face of `body` (default the most recent) from its own surface and outer boundary, so cut-outs inside a face close up again; the faces are sewn back together. Returns the feature id.",
+    paramsSchema: { type: "object", additionalProperties: false, properties: { body: { type: "string" }, name: { type: "string" } } },
+    apply(draft, p: { body?: string; name?: string }, ctx) {
+      const id = ctx.alloc("untrim");
+      draft.features[id] = { id, kind: "untrim", name: p.name ?? "Untrim", ...(p.body ? { body: p.body } : {}) };
+      return { createdIds: [id], message: "Untrim" };
     },
   },
   {

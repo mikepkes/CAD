@@ -168,6 +168,12 @@ on.
   (hidden bodies still export and measure), it's undoable, and it's saved. A
   configuration can hide things too, and agents use `set_visibility` /
   `isolate` to frame one part for `render_view`.
+- **Surface modelling:** `feature.surface` makes surface bodies (area, no
+  volume) from open or closed sketch curves: extrude, revolve, loft, sweep, or a
+  flat patch. Then **trim** them by a sketch region or another body (keep inside
+  or outside), **untrim** to fill cut-outs, **stitch** surfaces along shared
+  edges into one (a solid when they close up; a gap is reported), and
+  **thicken** a surface into a solid on either side or straddling it.
 - **3D mouse:** a 3Dconnexion SpaceMouse orbits, pans and zooms the view, and
   in a sketch it only pans and zooms. The desktop app reads it natively (alongside
   3Dconnexion's driver). Chrome and Edge pair it through WebHID from

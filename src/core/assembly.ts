@@ -120,7 +120,7 @@ export function expandAssembly(doc: CadDocument, scope: Scope, opts: { framesOnl
     // Template features: the profile features on its sketches, plus the
     // sketch-less modifiers (fillet, shell, hole…) aimed at a body one of them starts.
     const owner = featureBodies(doc);
-    const onSketch = (f: FeatureDef) => "sketchId" in f && subSketchSet.has(f.sketchId);
+    const onSketch = (f: FeatureDef) => "sketchId" in f && !!f.sketchId && subSketchSet.has(f.sketchId);
     const templateBodies = new Set(Object.values(doc.features).filter((f) => onSketch(f) && owner.get(f.id) === f.id).map((f) => f.id));
     const subFeatures = Object.values(doc.features).filter((f) => onSketch(f) || (!("sketchId" in f) && templateBodies.has(owner.get(f.id) ?? "")));
     const subFeatureSet = new Set(subFeatures.map((f) => f.id));

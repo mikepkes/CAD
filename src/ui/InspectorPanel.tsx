@@ -70,6 +70,11 @@ function ModelInspector() {
               f.kind === "primitive" ? `◧ ${f.shape}` :
               f.kind === "import" ? `⇩ ${f.format.toUpperCase()}` :
               f.kind === "member" ? `⌸ ${f.profile.kind.replace("_", " ")}` :
+              f.kind === "surface" ? `◌ ${f.mode}` :
+              f.kind === "stitch" ? `⧉ ${f.bodies.length}${f.solid ? " → solid" : ""}` :
+              f.kind === "thicken" ? `▤ ${f.thicknessExpr}` :
+              f.kind === "trim" ? `✂ ${f.keep}` :
+              f.kind === "untrim" ? "◍ fill" :
               f.kind === "hole" ? `⌀ ${f.diameterExpr}${f.at.length > 1 ? `×${f.at.length}` : ""}` :
               f.kind === "thread" ? `⇅ ${f.spec.form} ${f.spec.diameter}` :
               `${f.kind === "fillet" ? "r" : "d"}=${f.sizeExpr}`;

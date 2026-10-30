@@ -126,6 +126,73 @@ export interface PrimitiveFeature {
   requireEffect?: boolean;
 }
 
+/** A surface body (open shell / faces, no volume) from sketch curves: extruded,
+ *  revolved, lofted, swept, or a flat patch filling a closed loop. */
+export interface SurfaceFeature {
+  id: string;
+  kind: "surface";
+  name: string;
+  mode: "extrude" | "revolve" | "loft" | "sweep" | "patch";
+  /** The profile sketch (extrude / revolve / sweep / patch). */
+  sketchId?: string;
+  /** Ordered section sketches (loft). */
+  sketchIds?: string[];
+  /** The spine sketch (sweep). */
+  pathSketch?: string;
+  distanceExpr?: string;
+  distanceValue?: number;
+  symmetric?: boolean;
+  direction?: "normal" | "reverse";
+  axis?: { p1: { x: number; y: number }; p2: { x: number; y: number } };
+  angleExpr?: string;
+  ruled?: boolean;
+}
+
+/** Sew surface bodies along shared edges into one (a shell, or a solid when closed). */
+export interface StitchFeature {
+  id: string;
+  kind: "stitch";
+  name: string;
+  /** Bodies to sew (creating-feature ids); the first becomes the result, the others are consumed. */
+  bodies: string[];
+  toleranceExpr?: string;
+  /** Close the sewn shell into a solid (it must enclose a volume). */
+  solid?: boolean;
+}
+
+/** Give a surface body thickness: a solid offset to one side, the other, or both. */
+export interface ThickenFeature {
+  id: string;
+  kind: "thicken";
+  name: string;
+  body?: string;
+  thicknessExpr: string;
+  thicknessValue?: number;
+  side?: "out" | "in" | "both";
+}
+
+/** Trim a body (typically a surface) to a sketch's regions or another body. */
+export interface TrimFeature {
+  id: string;
+  kind: "trim";
+  name: string;
+  body?: string;
+  /** Closed regions of this sketch, extended through everything along its normal. */
+  sketchId?: string;
+  /** Or another body as the trimming tool. */
+  toolBody?: string;
+  /** Keep what's inside the tool, or what's outside it. */
+  keep: "inside" | "outside";
+}
+
+/** Fill the holes trimmed into a body's faces (each face rebuilt from its own outer boundary). */
+export interface UntrimFeature {
+  id: string;
+  kind: "untrim";
+  name: string;
+  body?: string;
+}
+
 /** Structural members (a weldment): a profile laid along each line of a
  *  layout sketch, one body per line, with treated corners. */
 export interface MemberFeature {
@@ -384,7 +451,7 @@ export interface InstanceFrame {
   template: string;  // the source (template) component it was cloned from
 }
 
-export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | ImportFeature | MemberFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
+export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | ImportFeature | MemberFeature | SurfaceFeature | StitchFeature | ThickenFeature | TrimFeature | UntrimFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
   instanceFrame?: InstanceFrame;
   /** Switched off by the active configuration (derived; set by rebuild). */
   configSuppressed?: boolean;

@@ -7,16 +7,17 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, ImportFeature, MemberFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
+  CadDocument, ExtrudeFeature, FeatureDef, ImportFeature, MemberFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
-import { extractRegions, extractOpenPath, regionAt, Region, Profile, Loop } from "./geometry/profile";
+import { extractRegions, extractOpenPath, extractChains, regionAt, Region, Profile, Loop } from "./geometry/profile";
 import { FaceRef } from "../sketch/types";
 import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
   faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape, keepHalfSpace,
+  chainWire, surfaceExtrude, surfaceRevolve, surfaceLoft, surfaceSweep, planarPatch, sewShapes, thickenShape, offsetSurface, untrimFaces, hasSolid,
 } from "./occ/kernel";
 import { genericNames, extrudeNames, revolveNames, holeCutterNames, inheritNames, copyNames, edgeNamesOf } from "./naming";
 import { stableJson, contentHash } from "./contentKey";
@@ -45,6 +46,8 @@ export interface SolidEval {
   centroid?: Vec3;
   /** Cosmetic thread regions on this body (rendered as a shaded texture). */
   threadDecals?: ThreadDecal[];
+  /** A surface body: shells / faces with no enclosed volume (volume reads 0). */
+  surface?: boolean;
   /** A structural member (weldment): its profile, cut length and end-cut angles (0° = square). */
   member?: { profile: string; length: number; angles: [number, number] };
 }
@@ -485,6 +488,157 @@ function applyMembers(doc: CadDocument, scope: Scope, f: MemberFeature, bodies: 
   }
 }
 
+// ---- surface modelling ------------------------------------------------------
+
+/** A surface body from sketch curves (open paths or closed loops alike). */
+function applySurface(doc: CadDocument, scope: Scope, f: SurfaceFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const sketchOf = (id: string | undefined, what: string) => { const sk = id ? doc.sketches[id] : undefined; if (!sk) throw new Error(`surface ${f.mode}: no ${what} sketch`); return sk; };
+    const wiresOf = (sk: ReturnType<typeof sketchOf>) => {
+      const chains = extractChains(sk);
+      if (!chains.length) throw new Error(`sketch "${sk.name}" has no curves`);
+      return { chains, wires: chains.map((c) => chainWire(c, resolveSketchPlane(sk))) };
+    };
+    let shape: Shape3D;
+    let names: (g: FaceGeom[]) => string[] = (g) => genericNames(f.id, g);
+    if (f.mode === "extrude") {
+      const sk = sketchOf(f.sketchId, "profile");
+      const wp = resolveSketchPlane(sk);
+      let d = resolveExpr(f.distanceExpr ?? "10", f.distanceValue ?? 10, scope);
+      f.distanceValue = d;
+      if (f.direction === "reverse") d = -d;
+      const n = wp.normal, dir = { x: n.x * d, y: n.y * d, z: n.z * d };
+      const from = f.symmetric ? { x: -dir.x / 2, y: -dir.y / 2, z: -dir.z / 2 } : undefined;
+      shape = surfaceExtrude(wiresOf(sk).wires, dir, from);
+      const unitDir = d >= 0 ? n : { x: -n.x, y: -n.y, z: -n.z };
+      names = (g) => extrudeNames(f.id, g, sk, wp, unitDir);
+    } else if (f.mode === "revolve") {
+      const sk = sketchOf(f.sketchId, "profile");
+      const wp = resolveSketchPlane(sk);
+      if (!f.axis) throw new Error("surface revolve needs an axis");
+      const o = to3d(wp, f.axis.p1.x, f.axis.p1.y), q = to3d(wp, f.axis.p2.x, f.axis.p2.y);
+      const dir = { x: q.x - o.x, y: q.y - o.y, z: q.z - o.z };
+      const angle = resolveExpr(f.angleExpr ?? "360", 360, scope);
+      shape = surfaceRevolve(wiresOf(sk).wires, o, dir, Math.abs(angle) < 1e-9 ? 360 : angle);
+      names = (g) => revolveNames(f.id, g, sk, wp, o, dir);
+    } else if (f.mode === "loft") {
+      const ids = f.sketchIds ?? [];
+      if (ids.length < 2) throw new Error("a surface loft needs at least two section sketches");
+      shape = surfaceLoft(ids.map((id) => { const { wires } = wiresOf(sketchOf(id, "section")); if (wires.length !== 1) throw new Error("each loft section sketch needs exactly one chain"); return wires[0]; }), !!f.ruled);
+    } else if (f.mode === "sweep") {
+      const prof = wiresOf(sketchOf(f.sketchId, "profile"));
+      const path = wiresOf(sketchOf(f.pathSketch, "path"));
+      if (path.wires.length !== 1) throw new Error("the sweep path sketch needs exactly one chain");
+      shape = asOneShape(prof.wires.map((w) => surfaceSweep(w, path.wires[0])));
+    } else {
+      const { chains, wires } = wiresOf(sketchOf(f.sketchId, "boundary"));
+      const closed = wires.filter((_, i) => chains[i].closed);
+      if (!closed.length) throw new Error("a patch needs a closed loop to fill");
+      shape = asOneShape(closed.map(planarPatch));
+    }
+    bodies.push({ id: f.id, name: f.name, sketchId: f.sketchId ?? "", distance: 0, shape, faceNames: nameSafely(shape, f.id, names) });
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+const asOneShape = (shapes: Shape3D[]): Shape3D => (shapes.length === 1 ? shapes[0] : sewShapes(shapes, 1e-6, false));
+
+/** Sew listed bodies into the first one (shell, or solid when closed); the rest are consumed. */
+function applyStitch(scope: Scope, f: StitchFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    if (f.bodies.length < 2) throw new Error("stitch needs at least two bodies");
+    const parts = f.bodies.map((id) => pickBody(bodies, id, "stitch"));
+    const tol = Math.max(1e-7, resolveExpr(f.toleranceExpr ?? "0.01", 0.01, scope));
+    const sewn = sewShapes(parts.map((b) => b.shape), tol, !!f.solid);
+    // names travel by surface: sewing keeps each face's surface
+    const all = parts.map((b) => b.shape);
+    const parentNames = parts.flatMap((b) => b.faceNames);
+    const parents = surfaceParentsOf(all, sewn);
+    const target = parts[0];
+    replaceShape(target, sewn);
+    target.faceNames = inheritNames(parentNames, parents, sewn, f.id, "sewn");
+    for (const b of parts.slice(1)) { b.shape.delete(); bodies.splice(bodies.indexOf(b), 1); }
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
+/** Surface parents of `out`'s faces among several input shapes' faces (concatenated in order). */
+function surfaceParentsOf(inputs: Shape3D[], output: Shape3D): number[][] {
+  const result: number[][] = [];
+  let offset = 0;
+  for (const input of inputs) {
+    const p = surfaceParents(input, output);
+    p.forEach((ps, j) => { (result[j] ??= []).push(...ps.map((i) => i + offset)); });
+    offset += faceGeoms(input).length;
+  }
+  return result;
+}
+
+/** A surface becomes a solid with thickness on its normal side, the other, or split across both. */
+function applyThicken(scope: Scope, f: ThickenFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = pickBody(bodies, f.body, "thicken");
+    const t = resolveExpr(f.thicknessExpr, f.thicknessValue ?? 0, scope);
+    f.thicknessValue = t;
+    if (!(t > 0)) throw new Error("thickness must be positive");
+    let solid: Shape3D;
+    if (f.side === "both") {
+      const shifted = offsetSurface(target.shape, -t / 2);
+      try { solid = thickenShape(shifted, t); } finally { shifted.delete(); }
+    } else solid = thickenShape(target.shape, f.side === "in" ? -t : t);
+    if (!hasSolid(solid)) { solid.delete(); throw new Error("thicken didn't make a solid (is the body a surface?)"); }
+    const names = inheritNames(target.faceNames, surfaceParents(target.shape, solid), solid, f.id, "thick", { geoms: faceGeoms(solid), offsetOf: true });
+    replaceShape(target, solid);
+    target.faceNames = names;
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
+/** Trim a body by a sketch's regions (carried through everything along the sketch normal) or by another body. */
+function applyTrim(doc: CadDocument, f: TrimFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = pickBody(bodies, f.body, "trim");
+    let tool: Shape3D, owned = false;
+    if (f.toolBody) {
+      tool = pickBody(bodies, f.toolBody, "trim").shape;
+    } else {
+      const sk = f.sketchId ? doc.sketches[f.sketchId] : undefined;
+      if (!sk) throw new Error("trim needs a sketch (closed regions) or a tool body");
+      const regions = extractRegions(sk);
+      if (!regions.length) throw new Error("the trim sketch has no closed region");
+      const len = throughAllLength(safeBounds(target.shape)) * 2;
+      tool = buildRegionsSolid(offsetPlane(resolveSketchPlane(sk), -len / 2), regions, len);
+      owned = true;
+    }
+    try {
+      const toolNames = genericNames(`${f.id}:tool`, faceGeoms(tool));
+      booleanInto(f.keep === "inside" ? "intersect" : "cut", target, tool, toolNames, f.id);
+    } finally { if (owned) tool.delete(); }
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
+/** Fill the holes trimmed into each face of a body. */
+function applyUntrim(f: UntrimFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = pickBody(bodies, f.body, "untrim");
+    const filled = untrimFaces(target.shape);
+    const names = inheritNames(target.faceNames, surfaceParents(target.shape, filled), filled, f.id, "filled");
+    replaceShape(target, filled);
+    target.faceNames = names;
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
 const V = {
   norm: (a: Vec3): Vec3 => { const m = Math.hypot(a.x, a.y, a.z) || 1; return { x: a.x / m, y: a.y / m, z: a.z / m }; },
   cross: (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }),
@@ -809,8 +963,8 @@ function applyMirror(doc: CadDocument, f: MirrorFeature, bodies: Body[], out: Re
 // properties are cached per body signature.
 
 interface BodyState { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; faceNames: string[]; decals?: ThreadDecal[]; sig: string; member?: MemberMeta }
-interface StepEffect { bodies: (BodyState & { added: boolean })[]; row?: SolidEval; planes: Record<string, WorkPlane> }
-interface BodyEval { mesh: SolidMesh; bounds?: Bounds3; mass: MassProps }
+interface StepEffect { bodies: (BodyState & { added: boolean })[]; removed?: string[]; row?: SolidEval; planes: Record<string, WorkPlane> }
+interface BodyEval { mesh: SolidMesh; bounds?: Bounds3; mass: MassProps; surface?: boolean }
 
 const cloneShape = (s: Shape3D): Shape3D => (s as unknown as { clone: () => Shape3D }).clone();
 const cloneDecals = (d?: ThreadDecal[]) => (d ? d.map((x) => structuredClone(x)) : undefined);
@@ -883,6 +1037,8 @@ function featureSketches(f: FeatureDef): string[] {
     case "loft": return f.sketchIds;
     case "sweep": return [f.profileSketch, f.pathSketch];
     case "member": return f.profile.sketch ? [f.sketchId, f.profile.sketch] : [f.sketchId];
+    case "surface": return [...(f.sketchId ? [f.sketchId] : []), ...(f.sketchIds ?? []), ...(f.pathSketch ? [f.pathSketch] : [])];
+    case "trim": return f.sketchId ? [f.sketchId] : [];
     default: return [];
   }
 }
@@ -898,7 +1054,9 @@ function bodiesRead(doc: CadDocument, f: FeatureDef, bodies: Body[]): Body[] {
       return op === "new" ? [] : target();
     case "primitive": case "import": case "loft": case "sweep": return op === "new" ? [] : target();
     case "mirror": return f.bodies === "last" ? bodies.slice(-1) : bodies;
-    case "member": return []; // makes bodies of its own
+    case "member": case "surface": return []; // make bodies of their own
+    case "stitch": return f.bodies.map((id) => bodies.find((b) => b.id === id)).filter((b): b is Body => !!b);
+    case "trim": { const t = target(); const tool = f.toolBody ? bodies.find((b) => b.id === f.toolBody) : undefined; return tool ? [...t, tool] : t; }
     default: return target(); // hole, thread, fillet, chamfer, shell, pattern
   }
 }
@@ -931,8 +1089,13 @@ const bodyState = (b: Body): BodyState => ({ id: b.id, name: b.name, sketchId: b
 /** Run one step through `run`, recording what it did; or replay a recorded effect. */
 function cachedStep(cache: GeometryCache, key: string, doc: CadDocument, f: FeatureDef, bodies: Body[], out: Record<string, SolidEval>, run: () => void) {
   const hit = cache.step(key);
-  if (hit && hit.bodies.every((b) => b.added || bodies.some((x) => x.id === b.id))) {
+  if (hit && [...hit.bodies.filter((b) => !b.added).map((b) => b.id), ...(hit.removed ?? [])].every((id) => bodies.some((x) => x.id === id))) {
     cache.hits++;
+    for (const id of hit.removed ?? []) { // bodies the step consumed (a stitch)
+      const i = bodies.findIndex((x) => x.id === id);
+      bodies[i].shape.delete();
+      bodies.splice(i, 1);
+    }
     for (const b of hit.bodies) {
       const live = { ...bodyState(b as unknown as Body), sig: b.sig };
       if (b.added) { bodies.push(live); continue; }
@@ -949,6 +1112,8 @@ function cachedStep(cache: GeometryCache, key: string, doc: CadDocument, f: Feat
   const planesBefore = new Map(featureSketches(f).map((sid) => [sid, doc.sketches[sid]?.plane]));
   run();
   const eff: StepEffect = { bodies: [], planes: {} };
+  const gone = [...before.keys()].filter((id) => !bodies.some((b) => b.id === id));
+  if (gone.length) eff.removed = gone;
   for (const b of bodies) {
     const was = before.get(b.id);
     if (was && was.shape === b.shape && was.names === b.faceNames && was.decals === (b.decals?.length ?? 0)) continue;
@@ -967,6 +1132,11 @@ function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Bod
     case "primitive": applyPrimitive(scope, f, bodies, out); break;
     case "import": applyImport(f, bodies, out); break;
     case "member": applyMembers(doc, scope, f, bodies, out); break;
+    case "surface": applySurface(doc, scope, f, bodies, out); break;
+    case "stitch": applyStitch(scope, f, bodies, out); break;
+    case "thicken": applyThicken(scope, f, bodies, out); break;
+    case "trim": applyTrim(doc, f, bodies, out); break;
+    case "untrim": applyUntrim(f, bodies, out); break;
     case "hole": applyHole(scope, f, bodies, out); break;
     case "thread": applyThread(f, bodies, out); break;
     case "loft": applyLoft(doc, f, bodies, out); break;
@@ -1060,15 +1230,18 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
       try {
         let ev = cache && body.sig ? cache.bodyEval(body.sig) : undefined;
         if (!ev) {
-          ev = { mesh: meshShape(body.shape), bounds: safeBounds(body.shape), mass: massPropsOfShape(body.shape) };
+          ev = { mesh: meshShape(body.shape), bounds: safeBounds(body.shape), mass: massPropsOfShape(body.shape), ...(hasSolid(body.shape) ? {} : { surface: true }) };
           if (cache && body.sig) cache.storeBodyEval(body.sig, ev);
         }
         row.mesh = cloneMesh(ev.mesh);
         if (row.mesh.faceRanges && row.mesh.faceRanges.length === 2 * body.faceNames.length) row.mesh.faceNames = body.faceNames.slice();
         row.bounds = ev.bounds;
-        if (Number.isFinite(ev.mass.volume)) row.volume = ev.mass.volume;
+        // an open surface encloses nothing: OCC's volume integral over it means nothing
+        if (ev.surface) row.volume = 0;
+        else if (Number.isFinite(ev.mass.volume)) row.volume = ev.mass.volume;
         if (Number.isFinite(ev.mass.area)) row.area = ev.mass.area;
         if (Number.isFinite(ev.mass.centroid.x)) row.centroid = ev.mass.centroid;
+        if (ev.surface) row.surface = true;
         if (body.member) row.member = { profile: body.member.profile, length: extentAlong(ev.mesh.positions, body.member.axis), angles: body.member.angles };
       } catch (e) {
         row.error = kernelErrorMessage(e);
@@ -1109,7 +1282,7 @@ export function bodyTopology(doc: CadDocument, scope: Scope, opts: { bodyId?: st
         const names = edgeNamesOf(eg, b.faceNames);
         edges = eg.map((e, i) => ({ ...e, name: names[i], faceNames: e.faces.map((j) => b.faceNames[j] ?? `f${j}`) }));
       }
-      return { id: b.id, name: b.name, volume: mass.volume, area: mass.area, centroid: mass.centroid, bounds: safeBounds(b.shape), faces, edges };
+      return { id: b.id, name: b.name, volume: hasSolid(b.shape) ? mass.volume : 0, area: mass.area, centroid: mass.centroid, bounds: safeBounds(b.shape), faces, edges };
     });
   } finally {
     for (const b of bodies) b.shape.delete();
