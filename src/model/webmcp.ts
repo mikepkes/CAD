@@ -54,6 +54,10 @@ export interface WebMcpHost {
   distance?: (a: string, b: string) => Promise<number>;
   /** Switch the active configuration (name/id, or null for none). */
   setConfiguration?: (ref: string | null) => Promise<unknown>;
+  /** Show or hide ids (bodies by feature id, sketches, components, datum planes). */
+  setVisibility?: (ids: string[], visible: boolean) => Promise<unknown>;
+  /** Show only these ids (null: show everything). */
+  isolate?: (ids: string[] | null) => Promise<unknown>;
   /** The configuration table's rows. */
   configurations?: () => { id: string; name: string }[];
   /** Model bytes: one body (null = the whole model fused, or every part for 3MF), optionally of a configuration. */
@@ -311,6 +315,29 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       annotations: { ...EDIT, idempotentHint: true },
       execute: async (args) => {
         try { return ok({ ok: true, ...(await host.setConfiguration!((args as { configuration?: string | null }).configuration ?? null) as object) }); }
+        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+      },
+    });
+  }
+  if (host.setVisibility && host.isolate) {
+    tools.push({
+      name: "set_visibility",
+      description: "Show or hide bodies (by the id of the feature that created them), sketches, components (hides everything inside) or datum planes. Display only: hidden bodies still take part in booleans, measure, collisions and export. Undoable; affects render_view and record_turntable, so use it to frame one part.",
+      inputSchema: { type: "object", required: ["ids", "visible"], properties: { ids: { type: "array", items: { type: "string" } }, visible: { type: "boolean" } } },
+      annotations: { ...EDIT, idempotentHint: true },
+      execute: async (args) => {
+        const a = args as { ids?: string[]; visible?: boolean };
+        try { return ok({ ok: true, ...(await host.setVisibility!(a.ids ?? [], a.visible !== false) as object) }); }
+        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+      },
+    });
+    tools.push({
+      name: "isolate",
+      description: "Show only the given bodies / sketches / components (everything inside a kept component stays visible), hiding the rest; `ids: null` shows everything again. Undoable.",
+      inputSchema: { type: "object", required: ["ids"], properties: { ids: { type: ["array", "null"], items: { type: "string" } } } },
+      annotations: { ...EDIT, idempotentHint: true },
+      execute: async (args) => {
+        try { return ok({ ok: true, ...(await host.isolate!((args as { ids?: string[] | null }).ids ?? null) as object) }); }
         catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
       },
     });

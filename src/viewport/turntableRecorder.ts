@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { resolveComponentWorld } from "../core/recompute";
 import { resolveParameters } from "../core/parameters";
+import { hiddenIds, bodyVisible } from "../core/visibility";
 import { materialForComponent, type CadDocument } from "../core/document";
 import { woodFrameFromBounds } from "./material";
 import { fitDistance, orbitDirection } from "./orbitCamera";
@@ -41,8 +42,9 @@ export interface TurntableOpts {
  *  owning component), the same way the live viewport does. */
 function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEvalLike>): { solid: SolidView; componentId: string }[] {
   const out: { solid: SolidView; componentId: string }[] = [];
+  const hidden = hiddenIds(doc);
   for (const sol of Object.values(solidsMap)) {
-    if (!sol.mesh) continue;
+    if (!sol.mesh || !bodyVisible(doc, sol, hidden)) continue; // a hidden body stays out of the video
     // Sketch-less bodies (primitives, …) have no sketch to name a component; they
     // live in the root component, so they'd otherwise drop out of the recording.
     const componentId = (sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined) ?? doc.rootComponentId;

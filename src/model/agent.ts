@@ -132,6 +132,7 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
     sketches,
     features: Object.values(doc.features).map((f) => describeFeature(f)),
     parameters: doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value, ...(p.configuredBy ? { configuredBy: p.configuredBy, baseExpr: p.baseExpr } : {}) })),
+    ...(doc.hidden?.length ? { hidden: doc.hidden } : {}),
     // The configuration table: rows override parameters / suppress features while active.
     ...(doc.configurations?.length ? {
       configurations: doc.configurations.map((c) => ({ id: c.id, name: c.name, values: c.values, ...(c.suppress ? { suppress: c.suppress } : {}), ...(c.warnings ? { warnings: c.warnings } : {}) })),

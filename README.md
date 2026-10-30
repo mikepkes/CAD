@@ -159,6 +159,12 @@ on.
   switches the whole model — solids, collisions, motion studies, exports —
   without touching the timeline, and switching back replays from cache.
   `export_model { all: true }` writes one file per configuration.
+- **Visibility:** hide or show bodies, sketches, components and datum planes
+  with the eye toggles. Hiding a component hides everything in it. **◉** shows
+  everything and **◎** draws hidden bodies as faint ghosts. It's display only
+  (hidden bodies still export and measure), it's undoable, and it's saved. A
+  configuration can hide things too, and agents use `set_visibility` /
+  `isolate` to frame one part for `render_view`.
 - **Incremental rebuild:** each feature step is cached by its inputs, so an
   edit re-runs only the features downstream of it on the bodies it touches.
 - **Splines & involute gears:** an interpolating **spline** entity (exported

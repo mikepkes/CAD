@@ -418,7 +418,7 @@ export const BUILTINS: CommandDef<any>[] = [
     description:
       "A configuration is a named set of parameter values (each cell an expression, which may use other parameters) plus an optional list of features to suppress. " +
       "Nothing changes until it is made active (set_configuration / the Configurations table); then its cells replace those parameters' expressions and its suppressed features are skipped, everywhere — solids, collisions, motion studies, exports. " +
-      "Parameters a configuration doesn't list keep the timeline's values. Returns the configuration id.",
+      "Parameters a configuration doesn't list keep the timeline's values. `hide` lists bodies/sketches/components/datum planes hidden from view while it is active (display only). Returns the configuration id.",
     paramsSchema: {
       type: "object",
       required: ["name"],
@@ -427,19 +427,20 @@ export const BUILTINS: CommandDef<any>[] = [
         name: { type: "string", description: "Unique configuration name, e.g. \"Large\"." },
         values: { type: "object", description: "Parameter name → expression (or number), e.g. { \"width\": \"80\", \"holes\": 6 }." },
         suppress: { type: "array", items: { type: "string" }, description: "Feature ids switched off in this configuration." },
+        hide: { type: "array", items: { type: "string" }, description: "Bodies (feature ids), sketches, components or datum planes hidden while this configuration is active (display only)." },
       },
     },
     examples: [
       { note: "A larger variant", params: { name: "Large", values: { width: "80", depth: "width/2" } } },
       { note: "A variant without the lid", params: { name: "Open", suppress: ["prim7"] } },
     ],
-    apply(draft, p: { name: string; values?: Record<string, unknown>; suppress?: string[] }, ctx) {
+    apply(draft, p: { name: string; values?: Record<string, unknown>; suppress?: string[]; hide?: string[] }, ctx) {
       const name = p.name.trim();
       if (!name) throw new Error("a configuration needs a name");
       if (draft.configurations.some((c) => c.name === name)) throw new Error(`Configuration "${name}" exists`);
       const values = configCells(p.values ?? {}); // validate before allocating, so a bad row is rejected outright
       const id = ctx.alloc("cfg");
-      draft.configurations.push({ id, name, values, ...(p.suppress?.length ? { suppress: [...p.suppress] } : {}) });
+      draft.configurations.push({ id, name, values, ...(p.suppress?.length ? { suppress: [...p.suppress] } : {}), ...(p.hide?.length ? { hide: [...p.hide] } : {}) });
       return { createdIds: [id], message: `Added configuration ${name}` };
     },
   },
@@ -458,10 +459,11 @@ export const BUILTINS: CommandDef<any>[] = [
         name: { type: "string" },
         values: { type: "object", description: "Parameter name → expression, number, or null (remove the cell)." },
         suppress: { type: "array", items: { type: "string" } },
+        hide: { type: "array", items: { type: "string" }, description: "Replaces the list of ids hidden while active." },
       },
     },
     examples: [{ params: { configuration: "Large", values: { width: "90", depth: null } } }],
-    apply(draft, p: { configuration: string; name?: string; values?: Record<string, unknown>; suppress?: string[] }) {
+    apply(draft, p: { configuration: string; name?: string; values?: Record<string, unknown>; suppress?: string[]; hide?: string[] }) {
       const c = findConfiguration(draft, p.configuration);
       if (!c) throw new Error(`No configuration "${p.configuration}"`);
       if (p.name !== undefined) {
@@ -476,6 +478,7 @@ export const BUILTINS: CommandDef<any>[] = [
         Object.assign(c.values, configCells(Object.fromEntries(Object.entries(p.values).filter(([, v]) => v !== null))));
       }
       if (p.suppress) c.suppress = p.suppress.length ? [...p.suppress] : undefined;
+      if (p.hide) c.hide = p.hide.length ? [...p.hide] : undefined;
       return { message: `Updated configuration ${c.name}` };
     },
   },

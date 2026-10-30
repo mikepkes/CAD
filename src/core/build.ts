@@ -7,6 +7,7 @@
 // advance `doc.nextId`.
 
 import { CadDocument, freshComponents, Configuration } from "./document";
+import { isHideable } from "./visibility";
 import { CommandRegistry } from "./command/registry";
 import { CommandApplyInfo, CommandContext, OperationRecord } from "./command/types";
 
@@ -91,6 +92,7 @@ function applyConfiguration(doc: CadDocument) {
     const warnings = [
       ...Object.keys(c.values).filter((n) => !doc.parameters.some((p) => p.name === n)).map((n) => `no parameter "${n}"`),
       ...(c.suppress ?? []).filter((id) => !doc.features[id]).map((id) => `no feature "${id}"`),
+      ...(c.hide ?? []).filter((id) => !isHideable(doc, id)).map((id) => `nothing to hide called "${id}"`),
     ];
     c.warnings = warnings.length ? warnings : undefined;
   }

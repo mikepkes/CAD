@@ -1,4 +1,5 @@
 import { activeSketch, useStore } from "../model/store";
+import { EyeToggle } from "./EyeToggle";
 import { Constraint, DimensionConstraint, isDimension } from "../sketch/types";
 
 const dimLabel: Record<string, string> = {
@@ -48,7 +49,8 @@ function ModelInspector() {
               f.kind === "thread" ? `⇅ ${f.spec.form} ${f.spec.diameter}` :
               `${f.kind === "fillet" ? "r" : "d"}=${f.sizeExpr}`;
             return (
-              <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "1fr 1fr 60px 22px" }}>
+              <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "18px 1fr 1fr 60px 22px" }}>
+                {sol?.mesh ? <EyeToggle id={f.id} label={f.name} /> : <span />}
                 <span className="dim-type" title={`${f.kind} ${f.id}`}>{f.name}</span>
                 <span className="muted-inline">{detail}</span>
                 <span className="dim-val" title={sol?.error ?? sol?.warning}>{sol?.error ? "⚠" : sol?.warning ? "!" : "✓"}</span>
@@ -57,7 +59,8 @@ function ModelInspector() {
             );
           }
           return (
-            <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "1fr 1fr 60px 22px" }}>
+            <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "18px 1fr 1fr 60px 22px" }}>
+                {sol?.mesh ? <EyeToggle id={f.id} label={f.name} /> : <span />}
               <span className="dim-type" title={`Extrude of ${f.sketchId}`}>{f.name}</span>
               <input
                 className="dim-expr"

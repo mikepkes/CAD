@@ -258,9 +258,10 @@ function ConfigurationsTable() {
       {configs.length === 0 && !pasting ? (
         <div className="param-empty">No configurations. ＋ saves the current values as one.</div>
       ) : (
-        <div className="config-grid" style={{ gridTemplateColumns: `18px minmax(70px, 1.2fr) repeat(${cols.length}, minmax(48px, 1fr)) 22px` }}>
+        <div className="config-grid" style={{ gridTemplateColumns: `18px minmax(70px, 1.2fr) repeat(${cols.length}, minmax(48px, 1fr)) minmax(56px, 1fr) 22px` }}>
           <span /><span className="config-head">Name</span>
           {cols.map((c) => <span key={c} className="config-head" title={`Default: ${base(c)}`}>{c}</span>)}
+          <span className="config-head" title="Bodies (feature ids), sketches or components hidden while this configuration is active, comma-separated">hide</span>
           <span>
             {addable.length > 0 && (
               <select className="config-add" value="" title="Add a parameter column" onChange={(e) => e.target.value && setExtraCols([...extraCols, e.target.value])}>
@@ -273,6 +274,7 @@ function ConfigurationsTable() {
           <input type="radio" name="active-config" checked={!doc.activeConfiguration} onChange={() => void setActive(null)} title="Use the timeline's own values" />
           <span className="config-name default">Default</span>
           {cols.map((c) => <span key={c} className="config-cell default">{base(c)}</span>)}
+          <span className="config-cell default">—</span>
           <span />
 
           {configs.map((cfg) => (
@@ -295,6 +297,18 @@ function ConfigurationsTable() {
                   onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                 />
               ))}
+              <input
+                key={`hide${(cfg.hide ?? []).join(",")}`}
+                className="config-cell"
+                defaultValue={(cfg.hide ?? []).join(", ")}
+                placeholder="none"
+                title="Ids hidden while active (bodies by feature id, sketches, components)"
+                onBlur={(e) => {
+                  const ids = e.target.value.split(",").map((x) => x.trim()).filter(Boolean);
+                  if (ids.join(",") !== (cfg.hide ?? []).join(",")) void update(cfg.id, { hide: ids });
+                }}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+              />
               <button className="icon-btn danger" title={`Delete ${cfg.name}`} onClick={() => void remove(cfg.id)}>✕</button>
             </div>
           ))}
