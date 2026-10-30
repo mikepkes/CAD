@@ -15,7 +15,7 @@ exports[`bundled examples > examples/gyroscope.json > replays, builds on both ge
       -6,
     ],
     "name": "Ring 2 (middle)",
-    "volume": 16399.5,
+    "volume": 16399.4,
   },
   {
     "body": "rev259",
@@ -310,7 +310,7 @@ exports[`bundled examples > public/examples/gyroscope.json > replays, builds on 
       -6,
     ],
     "name": "Ring 2 (middle)",
-    "volume": 16399.5,
+    "volume": 16399.4,
   },
   {
     "body": "rev259",

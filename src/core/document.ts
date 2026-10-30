@@ -221,9 +221,10 @@ export interface ImportFeature {
   id: string;
   kind: "import";
   name: string;
-  /** step / brep (OpenCASCADE's text format, also inside FreeCAD files) / stl (faceted). */
-  format: "step" | "brep" | "stl";
-  /** The file contents: text for step and brep, base64 for stl. */
+  /** step / brep (OpenCASCADE's text format, also inside FreeCAD files) / stl
+   *  (faceted) / nurbs (exact NURBS B-rep data as JSON, from a Rhino file). */
+  format: "step" | "brep" | "stl" | "nurbs";
+  /** The file contents: text for step / brep / nurbs, base64 for stl. */
   data: string;
   /** World offset applied to the imported geometry. */
   at?: { x: number; y: number; z: number };
