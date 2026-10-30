@@ -126,6 +126,28 @@ export interface PrimitiveFeature {
   requireEffect?: boolean;
 }
 
+/** Structural members (a weldment): a profile laid along each line of a
+ *  layout sketch, one body per line, with treated corners. */
+export interface MemberFeature {
+  id: string;
+  kind: "member";
+  name: string;
+  /** The layout sketch whose lines the members follow. */
+  sketchId: string;
+  /** Which lines (ids); default every non-construction line. */
+  lines?: string[];
+  /** Standard profile and its sizes (expressions), or a custom profile sketch. */
+  profile: { kind: "rect_tube" | "square_tube" | "round_tube" | "round_bar" | "angle" | "channel" | "ibeam" | "flat" | "custom"; w?: string; h?: string; t?: string; d?: string; sketch?: string };
+  /** Turn the profile about each member's axis (degrees). */
+  rotateExpr?: string;
+  /** Corners where two members meet: mitred, butt (later members trimmed to earlier ones), or left overlapping. */
+  corner?: "miter" | "butt" | "none";
+  /** Close each open member end with a plate. */
+  endCaps?: boolean;
+  /** Gusset plate leg length at each corner of two members (expression; empty = none). */
+  gussetExpr?: string;
+}
+
 /** A body read from a neutral CAD file. The file's text is kept in the
  *  document, so a saved design is self-contained and replays anywhere. */
 export interface ImportFeature {
@@ -362,7 +384,7 @@ export interface InstanceFrame {
   template: string;  // the source (template) component it was cloned from
 }
 
-export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | ImportFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
+export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | ImportFeature | MemberFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
   instanceFrame?: InstanceFrame;
   /** Switched off by the active configuration (derived; set by rebuild). */
   configSuppressed?: boolean;
