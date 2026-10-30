@@ -4,7 +4,7 @@
 // "math solve" layer; it is independent of any renderer.
 
 import { CadDocument } from "./document";
-import { resolveParameters } from "../model/parameters";
+import { resolveParameters } from "./parameters";
 import { ConstraintSolver, SolveDiagnosis } from "./solver/model";
 import { compileSketch } from "./solver/compile";
 import { compileExpr, Scope } from "../math/expr";

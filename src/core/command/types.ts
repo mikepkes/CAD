@@ -56,6 +56,8 @@ export interface CommandDef<P = Record<string, unknown>> {
   examples?: { note?: string; params: P }[];
   /** Whether this command adds constraints (enables the over-constraint guard). */
   constrains?: boolean;
+  /** Removes or overwrites existing model content (undoable, but flagged to MCP clients as destructive). */
+  destructive?: boolean;
   /** Mutate the draft document. Must be deterministic given (doc, params). */
   apply(draft: CadDocument, params: P, ctx: CommandContext): CommandApplyInfo | void;
 }

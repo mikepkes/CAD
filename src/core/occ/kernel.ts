@@ -4,7 +4,7 @@
 // display, and STL/STEP blobs for CNC / 3D-print output.
 
 import opencascade from "replicad-opencascadejs";
-import { setOC, draw, drawCircle, drawEllipse, makeBox, makeCylinder, makeSphere, makeHelix, genericSweep, Plane, measureVolume, type Drawing, type Shape3D, type Wire, type EdgeFinder, type FaceFinder } from "replicad";
+import { setOC, getOC, cast, isShape3D, measureArea, measureDistanceBetween, draw, drawCircle, drawEllipse, makeBox, makeCylinder, makeSphere, makeHelix, genericSweep, Plane, measureVolume, type Drawing, type Shape3D, type Wire, type EdgeFinder, type FaceFinder } from "replicad";
 import { ThreadForm, threadSection, threadLead, ThreadSection } from "../geometry/thread";
 import { WorkPlane } from "../../geometry/plane";
 import { Loop, LoopSegment, Profile, Pt } from "../geometry/profile";
@@ -18,6 +18,10 @@ export interface SolidMesh {
   indices: Uint32Array;
   edges: Float32Array; // flat xyz, line segment pairs
   triangleCount: number;
+  /** Per B-rep face, in face order: [start, count] into `indices` (flat pairs). */
+  faceRanges?: number[];
+  /** Topological name of each face (aligned with faceRanges), when known. */
+  faceNames?: string[];
 }
 
 /** A B-rep edge, classified and sampled in 3D world space (for projection). */
@@ -193,7 +197,7 @@ export function mirrorShape(shape: Shape3D, wp: WorkPlane): Shape3D {
 
 /** Tessellate a solid into a display mesh. Does NOT free the shape. */
 export function meshShape(solid: Shape3D): SolidMesh {
-  const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 });
+  const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 }) as ReturnType<Shape3D["mesh"]> & { faceGroups?: { start: number; count: number }[] };
   const e = solid.meshEdges();
   return {
     positions: Float32Array.from(m.vertices),
@@ -201,6 +205,7 @@ export function meshShape(solid: Shape3D): SolidMesh {
     indices: Uint32Array.from(m.triangles),
     edges: Float32Array.from(e.lines),
     triangleCount: m.triangles.length / 3,
+    faceRanges: (m.faceGroups ?? []).flatMap((g) => [g.start, g.count]),
   };
 }
 
@@ -347,8 +352,18 @@ function applyFaceSelector(f: FaceFinder, sel: FaceSelector): FaceFinder {
 
 const isEmptySelector = (sel: object) => Object.values(sel).every((v) => v === undefined);
 
-/** Fillet (round) or chamfer (bevel) the selected edges. Returns a NEW shape. */
-export function blendEdges(shape: Shape3D, mode: "fillet" | "chamfer", size: number, sel: EdgeSelector): Shape3D {
+/** Whether an edge's topological name matches a requested one: face pairs
+ *  compare order-free, and a request without "#k" matches every copy. */
+export function edgeNameMatches(name: string | undefined, want: string): boolean {
+  if (!name) return false;
+  const norm = (n: string) => { const [base, k] = n.split("#"); return base.split("|").sort().join("|") + (k ? `#${k}` : ""); };
+  const n = norm(name), w = norm(want);
+  return n === w || (!want.includes("#") && n.split("#")[0] === w);
+}
+
+/** Fillet (round) or chamfer (bevel) the selected edges. Returns a NEW shape.
+ *  `edgeNames` (aligned with the shape's edges) resolves a `names` selector. */
+export function blendEdges(shape: Shape3D, mode: "fillet" | "chamfer", size: number, sel: EdgeSelector, edgeNames?: string[]): Shape3D {
   const s = shape as unknown as {
     fillet: (r: number, f?: (e: EdgeFinder) => EdgeFinder) => Shape3D;
     chamfer: (r: number, f?: (e: EdgeFinder) => EdgeFinder) => Shape3D;
@@ -356,8 +371,19 @@ export function blendEdges(shape: Shape3D, mode: "fillet" | "chamfer", size: num
   };
   // fillet()/chamfer() consume the receiver: operate on a clone so `shape` survives.
   const clone = s.clone() as unknown as typeof s;
-  const filter = isEmptySelector(sel) ? undefined : (e: EdgeFinder) => applyEdgeSelector(e, sel);
-  return mode === "fillet" ? clone.fillet(size, filter) : clone.chamfer(size, filter);
+  const named = sel.names?.length ? edgesOf(shape) : [];
+  try {
+    let byName: ((e: OcEdge) => boolean) | undefined;
+    if (sel.names?.length) {
+      const find = indexer(named);
+      byName = (e) => { const i = find(e.wrapped, e.hashCode); return i >= 0 && sel.names!.some((w) => edgeNameMatches(edgeNames?.[i], w)); };
+    }
+    const filter = isEmptySelector(sel) ? undefined : (e: EdgeFinder) => {
+      const f = applyEdgeSelector(e, sel);
+      return byName ? f.when(({ element }) => byName!(element as unknown as OcEdge)) : f;
+    };
+    return mode === "fillet" ? clone.fillet(size, filter) : clone.chamfer(size, filter);
+  } finally { freeAll(named); }
 }
 
 /** Hollow a solid to `thickness`, removing the selected faces as openings. Returns a NEW shape. */
@@ -591,4 +617,215 @@ export function boundsOfShape(shape: Shape3D): Bounds3 {
 /** Enclosed volume of a solid (mm³). */
 export function volumeOfShape(shape: Shape3D): number {
   try { return measureVolume(shape); } catch { return NaN; }
+}
+
+// ---- topology + provenance (for topological naming) -------------------------
+//
+// Faces are addressed by their index in OCC explorer order — the order
+// `shape.faces` and the mesh's face groups use, and which a transform copy
+// preserves. Provenance between an operation's input and output faces comes
+// from the kernel itself: boolean history (Modified / IsDeleted, including
+// SimplifyResult's merges) or, for fillet/chamfer/shell, the Geom_Surface an
+// output face still shares with the input face it was trimmed from.
+
+type OcFace = { wrapped: { IsSame(o: unknown): boolean }; hashCode: number; geomType: string; center: Vec3; normalAt(p?: unknown): Vec3; pointOnSurface(u: number, v: number): Vec3; edges: OcEdge[]; delete(): void };
+type OcEdge = { wrapped: { IsSame(o: unknown): boolean }; hashCode: number; geomType: string; length: number; startPoint: Vec3; endPoint: Vec3; pointAt(t: number): Vec3; delete(): void };
+const facesOf = (s: Shape3D): OcFace[] => (s as unknown as { faces: OcFace[] }).faces;
+const edgesOf = (s: Shape3D): OcEdge[] => (s as unknown as { edges: OcEdge[] }).edges;
+const freeAll = (xs: { delete(): void }[]) => { for (const x of xs) { try { x.delete(); } catch { /* already freed */ } } };
+
+/** Index of `shape` in `list` (by OCC IsSame), bucketed by hash code. */
+function indexer<T extends { wrapped: { IsSame(o: unknown): boolean }; hashCode: number }>(list: T[]): (s: { IsSame(o: unknown): boolean }, hash: number) => number {
+  const buckets = new Map<number, number[]>();
+  list.forEach((x, i) => { const b = buckets.get(x.hashCode); if (b) b.push(i); else buckets.set(x.hashCode, [i]); });
+  return (s, hash) => {
+    for (const i of buckets.get(hash) ?? []) if (list[i].wrapped.IsSame(s)) return i;
+    return -1;
+  };
+}
+
+/** One face's geometry, for naming and topology reports. */
+export interface FaceGeom {
+  /** OCC surface type: PLANE, CYLINDRE, CONE, SPHERE, TORUS, BSPLINE_SURFACE, … */
+  type: string;
+  center: Vec3;
+  /** Normal at the centre (outward for a solid's face). */
+  normal: Vec3;
+  /** A point ON the face (its UV mid-point; `center` is the area centroid,
+   *  which for a curved face lies off the surface). */
+  point: Vec3;
+  area: number;
+}
+
+export function faceGeoms(shape: Shape3D): FaceGeom[] {
+  const faces = facesOf(shape);
+  try {
+    return faces.map((f) => {
+      const v = (q: Vec3): Vec3 => ({ x: q.x, y: q.y, z: q.z });
+      const type = String(f.geomType).toUpperCase();
+      const c = v(f.center);
+      // A point ON the face: a curved face's centroid can sit on its axis.
+      let p = c;
+      try { p = v(f.pointOnSurface(0.5, 0.5)); } catch { /* keep the centroid */ }
+      // (at the UV mid-point, same as `p`; OCC's face normal is unnormalised —
+      // its length is the surface's area element there)
+      let n: Vec3 = { x: 0, y: 0, z: 0 };
+      try { const raw = v(f.normalAt()); const m = Math.hypot(raw.x, raw.y, raw.z); if (m > 0) n = { x: raw.x / m, y: raw.y / m, z: raw.z / m }; } catch { /* leave zero */ }
+      let area = NaN;
+      try { area = measureArea(f as never); } catch { /* leave NaN */ }
+      return { type, center: c, normal: n, point: p, area };
+    });
+  } finally { freeAll(faces); }
+}
+
+/** One edge: its geometry and the indices of the faces it bounds. */
+export interface EdgeGeom {
+  type: string;
+  length: number;
+  mid: Vec3;
+  faces: number[];
+}
+
+export function edgeGeoms(shape: Shape3D): EdgeGeom[] {
+  const faces = facesOf(shape), edges = edgesOf(shape);
+  const faceEdges: OcEdge[] = [];
+  try {
+    const owners = new Map<number, number[]>(); // edge hash → face indices
+    const faceEdgeLists = faces.map((f, i) => {
+      const es = f.edges;
+      faceEdges.push(...es);
+      for (const e of es) { const b = owners.get(e.hashCode); if (b) b.push(i); else owners.set(e.hashCode, [i]); }
+      return es;
+    });
+    return edges.map((e) => {
+      const adj = new Set<number>();
+      for (const i of owners.get(e.hashCode) ?? []) if (faceEdgeLists[i].some((fe) => fe.wrapped.IsSame(e.wrapped))) adj.add(i);
+      const m = e.pointAt(0.5);
+      let length = NaN;
+      try { length = e.length; } catch { /* leave NaN */ }
+      return { type: String(e.geomType).toUpperCase(), length, mid: { x: m.x, y: m.y, z: m.z }, faces: [...adj].sort((a, b) => a - b) };
+    });
+  } finally { freeAll(faceEdges); freeAll(edges); freeAll(faces); }
+}
+
+export type BooleanKind = "fuse" | "cut" | "intersect";
+
+/** A boolean plus its face provenance: `parents[j]` lists the input faces that
+ *  became result face j, as indices into [...faces(a), ...faces(b)] (so b's
+ *  faces start at faces(a).length). Consumes neither operand. */
+export function booleanWithHistory(kind: BooleanKind, a: Shape3D, b: Shape3D): { shape: Shape3D; parents: number[][] } {
+  type Builder = { Build(): void; IsDone(): boolean; SimplifyResult(u: boolean, v: boolean, tol: number): void; Shape(): unknown; Modified(s: unknown): OcList; IsDeleted(s: unknown): boolean; delete(): void };
+  type OcList = { Size(): number; First(): { IsSame(o: unknown): boolean; HashCode?(n: number): number }; RemoveFirst(): void; delete(): void };
+  const oc = getOC() as unknown as Record<string, new (a: unknown, b: unknown) => Builder>;
+  const ctor = kind === "fuse" ? oc.BRepAlgoAPI_Fuse : kind === "cut" ? oc.BRepAlgoAPI_Cut : oc.BRepAlgoAPI_Common;
+  const aw = (a as unknown as { wrapped: unknown }).wrapped, bw = (b as unknown as { wrapped: unknown }).wrapped;
+  const builder = new ctor(aw, bw);
+  const inputs = [...facesOf(a), ...facesOf(b)];
+  let outFaces: OcFace[] = [];
+  try {
+    builder.Build();
+    if (!builder.IsDone()) throw new Error(`${kind} failed in the kernel`);
+    builder.SimplifyResult(true, true, 1e-3);
+    const shape = cast(builder.Shape() as never) as unknown as Shape3D;
+    if (!isShape3D(shape as never)) throw new Error(`${kind} did not produce a solid`);
+    outFaces = facesOf(shape);
+    const find = indexer(outFaces);
+    const hashOf = (s: unknown) => (cast(s as never) as unknown as { hashCode: number; delete(): void });
+    const parents: number[][] = outFaces.map(() => []);
+    inputs.forEach((f, i) => {
+      if (builder.IsDeleted(f.wrapped)) return;
+      const mods = builder.Modified(f.wrapped);
+      try {
+        if (mods.Size() === 0) { const j = find(f.wrapped, f.hashCode); if (j >= 0) parents[j].push(i); return; }
+        while (mods.Size() > 0) {
+          const m = mods.First();
+          const h = hashOf(m);
+          const j = find(m, h.hashCode);
+          h.delete();
+          if (j >= 0 && !parents[j].includes(i)) parents[j].push(i);
+          mods.RemoveFirst();
+        }
+      } finally { mods.delete(); }
+    });
+    return { shape, parents };
+  } finally {
+    freeAll(outFaces); freeAll(inputs); builder.delete();
+  }
+}
+
+/** Provenance by shared surface: output face j's parents are the input faces
+ *  whose Geom_Surface it still carries (a face trimmed by a fillet, chamfer or
+ *  shell keeps its surface; faces the operation created have none). */
+export function surfaceParents(input: Shape3D, output: Shape3D): number[][] {
+  type Surf = { isAliasOf(o: unknown): boolean; delete?(): void };
+  const oc = getOC() as unknown as { TopLoc_Location: new () => { delete(): void }; BRep_Tool: { Surface(f: unknown, l: unknown): Surf } };
+  const ins = facesOf(input), outs = facesOf(output);
+  const loc = new oc.TopLoc_Location();
+  try {
+    const surf = (f: OcFace) => oc.BRep_Tool.Surface(f.wrapped, loc);
+    const inSurfs = ins.map(surf);
+    return outs.map((f) => {
+      const s = surf(f);
+      const out: number[] = [];
+      inSurfs.forEach((t, i) => { if (t.isAliasOf(s)) out.push(i); });
+      return out;
+    });
+  } finally { loc.delete(); freeAll(ins); freeAll(outs); }
+}
+
+let importSeq = 0;
+
+/** Read a STEP file (its text) into one shape — a solid, or a compound when the
+ *  file holds several. Synchronous (through OCC's in-memory file system), so it
+ *  can run inside feature evaluation. */
+export function readStep(text: string): Shape3D {
+  type Status = { value?: number };
+  const oc = getOC() as unknown as {
+    FS: { writeFile(p: string, d: string): void; unlink(p: string): void };
+    STEPControl_Reader: new () => { ReadFile(p: string): Status; TransferRoots(): number; NbShapes(): number; OneShape(): unknown; delete(): void };
+    IFSelect_ReturnStatus: { IFSelect_RetDone: Status };
+  };
+  const file = `/chisel-import-${++importSeq}.step`;
+  oc.FS.writeFile(file, text);
+  const reader = new oc.STEPControl_Reader();
+  try {
+    if (reader.ReadFile(file) !== oc.IFSelect_ReturnStatus.IFSelect_RetDone) throw new Error("not a readable STEP file");
+    reader.TransferRoots();
+    if (reader.NbShapes() < 1) throw new Error("the STEP file has no shapes");
+    const shape = cast(reader.OneShape() as never) as unknown as Shape3D;
+    if (!isShape3D(shape as never)) throw new Error("the STEP file has no solid geometry");
+    return shape;
+  } finally {
+    reader.delete();
+    try { oc.FS.unlink(file); } catch { /* already gone */ }
+  }
+}
+
+/** Minimum distance between two shapes (0 when they touch or overlap). */
+export function distanceBetween(a: Shape3D, b: Shape3D): number {
+  return measureDistanceBetween(a as never, b as never);
+}
+
+/** Exact (B-rep, not mesh) mass properties of a solid: volume (mm³), surface
+ *  area (mm²) and the centroid of its volume, by Gauss integration over the
+ *  faces. NaN fields if OCC can't integrate the shape. */
+export interface MassProps { volume: number; area: number; centroid: Vec3 }
+
+export function massPropsOfShape(shape: Shape3D): MassProps {
+  const oc = getOC() as unknown as {
+    GProp_GProps: new () => { Mass(): number; CentreOfMass(): { X(): number; Y(): number; Z(): number; delete(): void }; delete(): void };
+    BRepGProp: { VolumeProperties(s: unknown, p: unknown, onlyClosed: boolean, skipShared: boolean, useTri: boolean): void; SurfaceProperties(s: unknown, p: unknown, skipShared: boolean, useTri: boolean): void };
+  };
+  const wrapped = (shape as unknown as { wrapped: unknown }).wrapped;
+  const vp = new oc.GProp_GProps(), sp = new oc.GProp_GProps();
+  try {
+    oc.BRepGProp.VolumeProperties(wrapped, vp, false, false, false);
+    oc.BRepGProp.SurfaceProperties(wrapped, sp, false, false);
+    const c = vp.CentreOfMass();
+    try { return { volume: vp.Mass(), area: sp.Mass(), centroid: { x: c.X(), y: c.Y(), z: c.Z() } }; } finally { c.delete(); }
+  } catch {
+    return { volume: NaN, area: NaN, centroid: { x: NaN, y: NaN, z: NaN } };
+  } finally {
+    vp.delete(); sp.delete();
+  }
 }

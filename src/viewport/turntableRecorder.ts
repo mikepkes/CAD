@@ -7,9 +7,10 @@
 import * as THREE from "three";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { resolveComponentWorld } from "../core/recompute";
-import { resolveParameters } from "../model/parameters";
+import { resolveParameters } from "../core/parameters";
 import { materialForComponent, type CadDocument } from "../core/document";
 import { woodFrameFromBounds } from "./material";
+import { fitDistance, orbitDirection } from "./orbitCamera";
 import type { SceneManager, SolidView } from "./SceneManager";
 
 interface SolidEvalLike {
@@ -21,8 +22,14 @@ interface SolidEvalLike {
 
 export interface TurntableOpts {
   width?: number; height?: number; fps?: number; seconds?: number;
-  center?: [number, number, number]; radius?: number; elevationDeg?: number;
+  /** Orbit centre; default the bodies' bounding-box centre. */
+  center?: [number, number, number];
+  /** Camera distance from the centre; default frames the bodies' bounding sphere. */
+  radius?: number;
+  elevationDeg?: number;
   startAzDeg?: number; revolutions?: number;
+  /** Vertical field of view while recording (default the live camera's). */
+  fovDeg?: number;
   bitrate?: number;
   /** Drive a parameter (e.g. "viseGap") open→close within a time window. */
   param?: string;
@@ -36,8 +43,9 @@ function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEvalLike>)
   const out: { solid: SolidView; componentId: string }[] = [];
   for (const sol of Object.values(solidsMap)) {
     if (!sol.mesh) continue;
-    const componentId = sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined;
-    if (!componentId) continue;
+    // Sketch-less bodies (primitives, …) have no sketch to name a component; they
+    // live in the root component, so they'd otherwise drop out of the recording.
+    const componentId = (sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
     const mat = materialForComponent(doc, componentId);
     const material = mat ? { kind: mat.kind, species: mat.species, finish: mat.finish, color: mat.color, roughness: mat.roughness, metalness: mat.metalness, ringScale: mat.ringScale, grainContrast: mat.grainContrast, poreStrength: mat.poreStrength } : undefined;
     const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;
@@ -55,53 +63,100 @@ function paramAt(t: number, oc: NonNullable<TurntableOpts["openClose"]>): number
     : oc.to + (oc.from - oc.to) * (t - mid) / (oc.end - mid);
 }
 
-export async function recordTurntable(scene: SceneManager, doc: CadDocument, solidsMap: Record<string, SolidEvalLike>, opts: TurntableOpts = {}): Promise<Uint8Array> {
-  const W = opts.width ?? 960, H = opts.height ?? 600, fps = opts.fps ?? 60, secs = opts.seconds ?? 10;
+export interface TurntableResult {
+  bytes: Uint8Array;
+  /** The WebCodecs codec string actually used (H.264 unless the platform can't encode it). */
+  codec: string;
+  width: number; height: number; fps: number; frames: number;
+}
+
+// Preferred first: H.264 plays everywhere (QuickTime included); VP9 is the fallback.
+const CODECS: { codec: string; mux: "avc" | "vp9" }[] = [
+  { codec: "avc1.640033", mux: "avc" }, // High profile, level 5.1 (1080p60 headroom)
+  { codec: "avc1.4d0033", mux: "avc" }, // Main profile
+  { codec: "vp09.00.10.08", mux: "vp9" },
+];
+
+async function pickCodec(width: number, height: number, fps: number, bitrate: number): Promise<{ mux: "avc" | "vp9"; config: VideoEncoderConfig }> {
+  if (typeof VideoEncoder === "undefined") throw new Error("video export needs WebCodecs (VideoEncoder), which this browser lacks");
+  for (const c of CODECS) {
+    const config: VideoEncoderConfig = { codec: c.codec, width, height, bitrate, framerate: fps, ...(c.mux === "avc" ? { avc: { format: "avc" as const } } : {}) };
+    try { if ((await VideoEncoder.isConfigSupported(config)).supported) return { mux: c.mux, config }; } catch { /* try the next codec */ }
+  }
+  throw new Error(`this browser can't encode ${width}×${height} H.264 or VP9 video`);
+}
+
+/** Bounding box of every meshed body (build pose), or null when nothing is built. */
+function bodyBounds(solidsMap: Record<string, SolidEvalLike>): THREE.Box3 | null {
+  const box = new THREE.Box3(), v = new THREE.Vector3();
+  for (const sol of Object.values(solidsMap)) {
+    const p = sol.mesh?.positions;
+    if (!p) continue;
+    for (let i = 0; i < p.length; i += 3) box.expandByPoint(v.set(p[i], p[i + 1], p[i + 2]));
+  }
+  return box.isEmpty() ? null : box;
+}
+
+export async function recordTurntable(scene: SceneManager, doc: CadDocument, solidsMap: Record<string, SolidEvalLike>, opts: TurntableOpts = {}): Promise<TurntableResult> {
+  // H.264 needs even dimensions.
+  const W = Math.round((opts.width ?? 960) / 2) * 2, H = Math.round((opts.height ?? 600) / 2) * 2;
+  const fps = opts.fps ?? 60, secs = opts.seconds ?? 10;
   const N = Math.max(2, Math.round(fps * secs));
-  const center = new THREE.Vector3(...(opts.center ?? [0, -50, -15]));
-  const R = opts.radius ?? 2050, E = (opts.elevationDeg ?? 20) * Math.PI / 180;
-  const az0 = (opts.startAzDeg ?? 19) * Math.PI / 180, rev = opts.revolutions ?? 1;
+  const box = bodyBounds(solidsMap);
+  if (!box) throw new Error("nothing to record — build a solid first");
+  const center = opts.center ? new THREE.Vector3(...opts.center) : box.getCenter(new THREE.Vector3());
+  const elevation = opts.elevationDeg ?? 20, az0 = opts.startAzDeg ?? 19, rev = opts.revolutions ?? 1;
+  const { mux, config } = await pickCodec(W, H, fps, opts.bitrate ?? 10e6);
 
   const bodies = buildBodies(doc, solidsMap);
   const base = resolveParameters(doc.parameters).scope;
   const buildWorld = resolveComponentWorld(doc, base);
 
+  const restoreView = scene.captureSession();
   scene.configureRecording(W, H);
-  scene.beginAnimation(bodies, buildWorld);
   const cam = scene.camera as THREE.PerspectiveCamera;
+  if (opts.fovDeg) { cam.fov = opts.fovDeg; cam.updateProjectionMatrix(); }
+  const R = opts.radius ?? fitDistance(box.getBoundingSphere(new THREE.Sphere()).radius, cam.fov, W / H);
+  scene.beginAnimation(bodies, buildWorld);
 
-  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: "vp9", width: W, height: H, frameRate: fps }, fastStart: "in-memory" });
-  const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { throw e; } });
-  encoder.configure({ codec: "vp09.00.10.08", width: W, height: H, bitrate: opts.bitrate ?? 10e6, framerate: fps });
+  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: mux, width: W, height: H, frameRate: fps }, fastStart: "in-memory" });
+  let encodeError: unknown = null;
+  const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { encodeError = e; } });
+  encoder.configure(config);
 
   try {
     const scope: Record<string, number> = { ...base };
     for (let f = 0; f < N; f++) {
-      const u = f / (N - 1), t = u * secs;
+      // f / N (not N - 1): the last frame stops one step short of the first, so a
+      // full revolution loops without a repeated frame.
+      const u = f / N, t = u * secs;
       let worlds = buildWorld;
       if (opts.param && opts.openClose) {
         scope[opts.param] = paramAt(t, opts.openClose);
         worlds = resolveComponentWorld(doc, scope);
       }
       scene.setAnimationPose(worlds);
-      const a = az0 + 2 * Math.PI * rev * u;
-      cam.position.set(center.x + R * Math.cos(E) * Math.cos(a), center.y + R * Math.cos(E) * Math.sin(a), center.z + R * Math.sin(E));
+      const [dx, dy, dz] = orbitDirection(az0 + 360 * rev * u, elevation);
+      cam.position.set(center.x + R * dx, center.y + R * dy, center.z + R * dz);
       cam.up.set(0, 0, 1); cam.lookAt(center); cam.updateMatrixWorld();
       scene.renderFrame();
 
       const frame = new VideoFrame(scene.recordCanvas, { timestamp: Math.round((f * 1e6) / fps), duration: Math.round(1e6 / fps) });
       encoder.encode(frame, { keyFrame: f % fps === 0 });
       frame.close();
+      if (encodeError) throw encodeError;
 
       if (f % 8 === 0) { opts.onProgress?.(u); await new Promise((r) => setTimeout(r, 0)); }
       // keep the encoder queue bounded so memory stays flat on long clips
       while (encoder.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 4));
     }
     await encoder.flush();
+    if (encodeError) throw encodeError;
     muxer.finalize();
-    return new Uint8Array((muxer.target as ArrayBufferTarget).buffer);
+    return { bytes: new Uint8Array((muxer.target as ArrayBufferTarget).buffer), codec: String(config.codec), width: W, height: H, fps, frames: N };
   } finally {
-    encoder.close();
+    if (encoder.state !== "closed") encoder.close();
     scene.endAnimation();
+    restoreView();
   }
 }

@@ -47,6 +47,14 @@ interface Snapshot {
 
 const clone = <T>(v: T): T => structuredClone(v);
 
+/** A restorable session state (documents are immutable snapshots, so this is cheap). */
+export interface SessionCheckpoint {
+  doc: CadDocument;
+  evaluations: Evaluations;
+  undo: Snapshot[];
+  redo: Snapshot[];
+}
+
 export class CadSession {
   doc: CadDocument;
   evaluations: Evaluations = {};
@@ -180,6 +188,19 @@ export class CadSession {
     this.evaluations = entry.evalsAfter;
     this.undoStack.push(entry);
     return true;
+  }
+
+  /** Capture the current state, for an all-or-nothing batch of edits. */
+  checkpoint(): SessionCheckpoint {
+    return { doc: this.doc, evaluations: this.evaluations, undo: this.undoStack.slice(), redo: this.redoStack.slice() };
+  }
+
+  /** Return to a checkpoint: the document, its evaluations and the undo/redo history as they were. */
+  rollback(cp: SessionCheckpoint): void {
+    this.doc = cp.doc;
+    this.evaluations = cp.evaluations;
+    this.undoStack = cp.undo.slice();
+    this.redoStack = cp.redo.slice();
   }
 
   getMcpTools() {

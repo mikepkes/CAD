@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { realSession, echoSession } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { evaluateFeatures, SolidEval } from "../src/core/features";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { pickFace } from "../src/core/geometry/pick";
 import type { CadSession } from "../src/core/command/session";
 

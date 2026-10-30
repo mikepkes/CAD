@@ -16,7 +16,7 @@ import { collideFeatures, evaluateFeatures, exportFusedBlob } from "../src/core/
 import { InlineGeometryBackend } from "../src/core/geometry/backend";
 import { readStoredZip, modelObjects, openEdges } from "./threemf-read";
 import { placeComponentSketches, resolveComponentWorld } from "../src/core/recompute";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { flexureEquilibria, flexureState, flexureSweep } from "../src/sim/flexure";
 import { applyPoint } from "../src/math/transform";
 import { materialForComponent } from "../src/core/document";

@@ -20,7 +20,7 @@ import { realSession } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { evaluateFeatures } from "../src/core/features";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
 
 const OUT = process.env.BUILD_SCISSOR || "";

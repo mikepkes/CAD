@@ -59,8 +59,10 @@ the agent has everything it needs to call it. Command tools:
   `feature__chamfer` (EdgeSelector), `feature__shell` (FaceSelector),
   `feature__pattern` (linear/circular bodies), `feature__mirror` (`bodies`
   all/last)
-- `sketch_on_face` — start a sketch on the body face nearest a world point;
-  returns the sketch frame (origin, u, v, normal)
+- `feature__import` (STEP text) and `import_step` (a `.step`/`.stp` path)
+- `sketch_on_face` — start a sketch on a face by its topological name
+  (`face`, preferred: the sketch then follows that face) or the face nearest a
+  world point; returns the sketch frame (origin, u, v, normal)
 
 Plus timeline / query / history tools:
 
@@ -71,6 +73,18 @@ Plus timeline / query / history tools:
   `move_rollback`
 - `undo`, `redo`
 - `export_document`, `import_document`
+- `measure` — exact volume, surface area, centroid and bounds per body, plus
+  `between: [a, b]` minimum distance
+- `body_topology` — each body's faces (stable names such as `extrude3:end`,
+  surface type, area, centre, normal) and edges (`A|B` by the faces they
+  separate). Use the names in `sketch_on_face` and fillet/chamfer
+  `edges: { names }`
+- `batch` — run `steps: [{tool, arguments}]` as one transaction. The first
+  failing step rolls the document and its undo history back (`atomic: false`
+  keeps the successful steps)
+
+Every tool carries MCP annotations: queries are `readOnlyHint`, and deletes,
+`import_document` and `batch` are `destructiveHint`.
 
 ## The feedback loop
 

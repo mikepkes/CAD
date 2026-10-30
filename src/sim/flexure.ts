@@ -13,7 +13,7 @@ import type { CadDocument, FlexureSection, Joint, MechanicalProps } from "../cor
 import { materialForComponent } from "../core/document";
 import { resolveComponentWorld, setEnergySettler } from "../core/recompute";
 import { compileExpr, type Scope } from "../math/expr";
-import { resolveParameters } from "../model/parameters";
+import { resolveParameters } from "../core/parameters";
 import { applyPoint, compose, IDENTITY, invert, type Rigid } from "../math/transform";
 import { rectSection, solveBeam, type BeamResult } from "./beam2d";
 

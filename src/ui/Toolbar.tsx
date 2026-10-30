@@ -6,18 +6,28 @@ function FileMenu() {
   const newDocument = useStore((s) => s.newDocument);
   const saveToFile = useStore((s) => s.saveToFile);
   const openFile = useStore((s) => s.openFile);
+  const importStep = useStore((s) => s.importStep);
   const inputRef = useRef<HTMLInputElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
   return (
     <div className="file-menu">
       <button className="btn ghost" title="New document" onClick={() => { if (confirm("Start a new document? Unsaved work is autosaved in this browser only.")) newDocument(); }}>New</button>
       <button className="btn ghost" title="Open a .chisel.json file" onClick={() => inputRef.current?.click()}>Open</button>
       <button className="btn ghost" title="Save to a .chisel.json file" onClick={saveToFile}>Save</button>
+      <button className="btn ghost" title="Import a STEP file (.step/.stp) as a new body" onClick={() => importRef.current?.click()}>Import</button>
       <input
         ref={inputRef}
         type="file"
         accept=".json,application/json"
         style={{ display: "none" }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = ""; }}
+      />
+      <input
+        ref={importRef}
+        type="file"
+        accept=".step,.stp,model/step"
+        style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) importStep(f); e.target.value = ""; }}
       />
     </div>
   );

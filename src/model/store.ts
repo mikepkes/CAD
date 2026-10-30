@@ -2,27 +2,31 @@ import { create } from "zustand";
 import planegcsWasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
 import occWasmUrl from "replicad-opencascadejs/wasm?url";
 
-import { CadSession, DispatchResult } from "../core/command/session";
+import { CadSession, DispatchResult, SessionCheckpoint } from "../core/command/session";
 import { createDefaultRegistry } from "../core/command/builtins";
 import { createDocument, materialForComponent } from "../core/document";
 import { PlaneGCSSolver } from "../core/solver/planegcs";
 import { Evaluations } from "../core/recompute";
-import { resolveParameters } from "./parameters";
+import { resolveParameters } from "../core/parameters";
 import { availableOps } from "./selectionOps";
 import { ChatEntry, describeDocument } from "./agent";
 import { createAgentController, AGENT_KEY_LS, AGENT_MODEL_LS } from "./agentController";
 import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus } from "./desktopMcp";
 import { createMcpController, WEBMCP_LS, DESKTOP_MCP_LS, DESKTOP_MCP_PORT_LS } from "./mcpController";
 import { getActiveScene } from "../viewport/sceneRef";
+import type { RenderViewOpts } from "../viewport/SceneManager";
+import type { TurntableOpts } from "../viewport/turntableRecorder";
+import { saveOutput } from "./saveOutput";
 import { pickFace } from "../core/geometry/pick";
+import type { Vec3 } from "../math/vec";
 
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
 import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
 import type { SolidEval } from "../core/features";
-import { GeometryBackend, InlineGeometryBackend } from "../core/geometry/backend";
+import { GeometryBackend, InlineGeometryBackend, TopologyOpts } from "../core/geometry/backend";
 import { hasFlexures } from "../sim/flexure";
-import { WorkerGeometryBackend } from "../core/geometry/worker-backend";
+import { WorkerGeometryBackend } from "./worker-backend";
 import { runMotionStudy, driveParams, MotionStatus, MotionResult } from "./motionStudy";
 import { meshesToStlBinary } from "../core/export/stl";
 import { projectEdges } from "../core/geometry/project";
@@ -298,6 +302,8 @@ export interface AppState {
   loadDocument: (doc: CadDocument) => Promise<void>;
   saveToFile: () => void;
   openFile: (file: File) => Promise<void>;
+  /** Import a STEP file as a new body (a feature.import on the timeline). */
+  importStep: (file: File) => Promise<void>;
 }
 
 function toastFor(r: DispatchResult): Toast | null {
@@ -339,6 +345,14 @@ export const useStore = create<AppState>((set, get) => {
     const c = get().activeComponentId;
     return c && c !== get().session.doc.rootComponentId ? { component: c } : {};
   };
+  // A face reference for a sketch on the body face at `point`, with the face's
+  // topological name pinned (read off the display meshes) so the sketch follows
+  // that face through upstream edits rather than the nearest look-alike.
+  const faceRefOf = (normal: Vec3, point: Vec3): { normal: Vec3; point: Vec3; name?: string } => {
+    const meshes = Object.values(get().solids).filter((s) => s.mesh).map((s) => ({ featureId: s.featureId, mesh: s.mesh! }));
+    const name = pickFace(meshes, point)?.faceName;
+    return { normal, point, ...(name ? { name } : {}) };
+  };
 
   // Shared command host for both the in-app agent and WebMCP: dispatch a command
   // and keep the viewport in sync (activate a new sketch, switch to model on extrude).
@@ -364,22 +378,51 @@ export const useStore = create<AppState>((set, get) => {
       }
       return out;
     },
-    sketchOnFace: async (point: { x: number; y: number; z: number }, name?: string) => {
+    sketchOnFace: async (point: { x: number; y: number; z: number } | undefined, name?: string, face?: string) => {
       if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
-      const meshes = Object.values(get().solids).filter((s) => s.mesh).map((s) => ({ featureId: s.featureId, mesh: s.mesh! }));
-      const hit = pickFace(meshes, point);
-      if (!hit) throw new Error("no body face found — build a solid first");
-      const r = await runDispatch("sketch.create", { planeDef: { origin: hit.origin, normal: hit.normal }, faceRef: { normal: hit.normal, point: hit.point }, ...(name ? { name } : {}), ...scopeComponent() });
+      let at: { origin: Vec3; normal: Vec3; point: Vec3; featureId: string; distance: number; faceRef: { normal: Vec3; point: Vec3; name?: string } };
+      if (face) {
+        // By topological name: the planar face carrying it (the piece nearest `point` if it was split).
+        const bodies = await geometry.topology(get().session.doc, { edges: false });
+        const hits = bodies.flatMap((b) => b.faces.filter((f) => f.name === face).map((f) => ({ b, f })));
+        if (!hits.length) throw new Error(`no face named "${face}" — list names with body_topology`);
+        const planar = hits.filter((h) => h.f.type === "PLANE");
+        if (!planar.length) throw new Error(`face "${face}" is ${hits[0].f.type.toLowerCase()}, not planar — sketches need a planar face`);
+        const d2 = (c: Vec3) => (point ? (c.x - point.x) ** 2 + (c.y - point.y) ** 2 + (c.z - point.z) ** 2 : 0);
+        const { b, f } = planar.reduce((m, h) => (d2(h.f.center) < d2(m.f.center) ? h : m));
+        const off = f.center.x * f.normal.x + f.center.y * f.normal.y + f.center.z * f.normal.z;
+        at = { origin: { x: f.normal.x * off, y: f.normal.y * off, z: f.normal.z * off }, normal: f.normal, point: f.center, featureId: b.id, distance: 0, faceRef: { normal: f.normal, point: f.center, name: face } };
+      } else {
+        if (!point) throw new Error("give a world point on the face, or a face name");
+        const meshes = Object.values(get().solids).filter((s) => s.mesh).map((s) => ({ featureId: s.featureId, mesh: s.mesh! }));
+        const hit = pickFace(meshes, point);
+        if (!hit) throw new Error("no body face found — build a solid first");
+        at = { origin: hit.origin, normal: hit.normal, point: hit.point, featureId: hit.featureId, distance: hit.distance, faceRef: faceRefOf(hit.normal, hit.point) };
+      }
+      const r = await runDispatch("sketch.create", { planeDef: { origin: at.origin, normal: at.normal }, faceRef: at.faceRef, ...(name ? { name } : {}), ...scopeComponent() });
       if (!r.ok) throw new Error(r.error ?? "sketch.create failed");
       set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
       const wp = resolveSketchPlane(get().session.doc.sketches[r.createdIds[0]]);
-      return { sketchId: r.createdIds[0], originId: r.createdIds[1], featureId: hit.featureId, distanceToFace: hit.distance, frame: { origin: wp.origin, u: wp.u, v: wp.v, normal: wp.normal } };
+      return { sketchId: r.createdIds[0], originId: r.createdIds[1], featureId: at.featureId, face: at.faceRef.name, distanceToFace: at.distance, frame: { origin: wp.origin, u: wp.u, v: wp.v, normal: wp.normal } };
+    },
+    topology: (opts: TopologyOpts) => geometry.topology(get().session.doc, opts),
+    distance: (a: string, b: string) => geometry.distance(get().session.doc, a, b),
+    // An all-or-nothing batch: remember the session (new_document swaps it) and
+    // its state, and put both back if a step fails.
+    checkpoint: () => ({ session: get().session, state: get().session.checkpoint() }),
+    rollback: async (token: unknown) => {
+      const t = token as { session: CadSession; state: SessionCheckpoint };
+      t.session.rollback(t.state);
+      if (get().session !== t.session) set({ session: t.session, solids: {} });
+      bump();
+      afterMutate();
+      if (Object.keys(t.session.doc.features).length) await get().rebuildSolids();
     },
     newDocument: () => get().newDocument(),
     undo: () => get().undo(),
     redo: () => get().redo(),
     deleteOperation: (opId: string) => get().deleteOperation(opId),
-    render: async (opts: { view?: string; width?: number; height?: number; hideSketches?: boolean }) => {
+    render: async (opts: RenderViewOpts) => {
       // Make sure solids are current before capturing (agents call this right
       // after editing, and the worker-backed rebuild is asynchronous): always
       // evaluate the live doc, so the capture never shows a stale body.
@@ -389,6 +432,14 @@ export const useStore = create<AppState>((set, get) => {
       if (!scene) throw new Error("viewport not ready");
       return scene.renderView(opts);
     },
+    recordTurntable: async (opts: TurntableOpts) => {
+      if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
+      const scene = getActiveScene();
+      if (!scene) throw new Error("viewport not ready");
+      const { recordTurntable } = await import("../viewport/turntableRecorder");
+      return recordTurntable(scene, get().session.doc, get().solids as never, opts);
+    },
+    saveOutput,
   });
 
   // The embedded agent's actions (history + aborter live inside the controller).
@@ -537,7 +588,7 @@ export const useStore = create<AppState>((set, get) => {
       // Stable sketch origin: foot of the perpendicular from world (0,0,0) to the face plane.
       const d = hit.x * normal.x + hit.y * normal.y + hit.z * normal.z;
       const origin = { x: normal.x * d, y: normal.y * d, z: normal.z * d };
-      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, faceRef: { normal, point: hit }, ...scopeComponent() });
+      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, faceRef: faceRefOf(normal, hit), ...scopeComponent() });
       if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: "Sketching on face." });
     },
     finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null }),
@@ -895,7 +946,7 @@ export const useStore = create<AppState>((set, get) => {
       const onPlane = all.filter((e) => e.pts.every((p) => Math.abs((p.x - origin.x) * normal.x + (p.y - origin.y) * normal.y + (p.z - origin.z) * normal.z) < tol));
       const curves = projectEdges(onPlane, plane);
       if (!curves.length) { bump({ toast: { kind: "info", text: "Couldn't read that face's boundary." } }); return; }
-      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, faceRef: { normal, point: hit }, name: "Face" });
+      const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, faceRef: faceRefOf(normal, hit), name: "Face" });
       if (!r.ok) return;
       const sid = r.createdIds[0];
       await runDispatch("sketch.projectCurves", { sketch: sid, curves });
@@ -1068,6 +1119,18 @@ export const useStore = create<AppState>((set, get) => {
         bump({ toast: { kind: "info", text: `Opened ${file.name}` } });
       } catch (e) {
         bump({ toast: { kind: "error", text: `Open failed: ${(e as Error).message}` } });
+      }
+    },
+    importStep: async (file) => {
+      try {
+        const r = await runDispatch("feature.import", { data: await file.text(), name: file.name.replace(/\.(step|stp)$/i, "") });
+        if (!r.ok) return;
+        set({ mode: "model" });
+        await get().rebuildSolids();
+        const sol = get().solids[r.createdIds[0]];
+        if (sol?.error) bump({ toast: { kind: "error", text: sol.error } });
+      } catch (e) {
+        bump({ toast: { kind: "error", text: `Import failed: ${(e as Error).message}` } });
       }
     },
   };

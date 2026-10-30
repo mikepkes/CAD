@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { realSession, sessionFromDoc } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { deserializeDocument } from "../src/core/persistence";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { cutList, viewSegments, drawingSheetSVG } from "../src/core/drawings";
 import type { CadSession } from "../src/core/command/session";
 

@@ -15,6 +15,16 @@ export interface FacePick {
   /** Sketch origin convention: foot of the perpendicular from the world origin to the face plane. */
   origin: Vec3;
   featureId: string;
+  /** Topological name of the picked B-rep face, when the mesh carries names. */
+  faceName?: string;
+}
+
+/** The name of the face a triangle (index into `indices`, a multiple of 3) belongs to. */
+function faceNameAt(mesh: SolidMesh, tri: number): string | undefined {
+  const r = mesh.faceRanges, n = mesh.faceNames;
+  if (!r || !n) return undefined;
+  for (let k = 0; k * 2 < r.length; k++) if (tri >= r[2 * k] && tri < r[2 * k] + r[2 * k + 1]) return n[k];
+  return undefined;
 }
 
 const sub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
@@ -64,7 +74,7 @@ export function pickFace(meshes: { featureId: string; mesh: SolidMesh }[], p: Ve
       const n = norm(cross(sub(b, a), sub(c, a)));
       if (!Number.isFinite(n.x)) continue;
       const off = dot(q, n);
-      best = { point: q, normal: n, distance: d, origin: scale(n, off), featureId };
+      best = { point: q, normal: n, distance: d, origin: scale(n, off), featureId, faceName: faceNameAt(mesh, t) };
     }
   }
   return best;
