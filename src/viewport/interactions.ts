@@ -52,6 +52,7 @@ export class Interactions {
     // fire, because resetting the in-progress draw stage is interaction-local.
     window.addEventListener("chisel:lookAt", this.onLookAt as EventListener);
     window.addEventListener("chisel:frame", this.onFrame as EventListener);
+    window.addEventListener("chisel:view", this.onView as EventListener);
     window.addEventListener("chisel:cancel", this.onCancel as EventListener);
   }
 
@@ -64,6 +65,7 @@ export class Interactions {
     this.dom.removeEventListener("pointerdown", this.onHandleDown, { capture: true } as EventListenerOptions);
     window.removeEventListener("chisel:lookAt", this.onLookAt as EventListener);
     window.removeEventListener("chisel:frame", this.onFrame as EventListener);
+    window.removeEventListener("chisel:view", this.onView as EventListener);
     window.removeEventListener("chisel:cancel", this.onCancel as EventListener);
   }
 
@@ -76,6 +78,8 @@ export class Interactions {
   };
 
   /** Frame (zoom-to-fit): the selection if any, else everything in view. */
+  private onView = (e: CustomEvent<string>) => this.scene.viewFrom(e.detail);
+
   private onFrame = () => {
     const st = this.st();
     if (st.mode === "sketch" && st.activeSketchId) {

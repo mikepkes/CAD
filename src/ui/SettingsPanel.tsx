@@ -1,12 +1,51 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../model/store";
 import { isTauri } from "../model/desktopMcp";
+import { connectWebHid, onSpaceMouseStatus, setSpaceMouseSettings, spaceMouseSettings, spaceMouseStatus, webHidAvailable, SpaceMouseStatus } from "../model/spaceMouseInput";
+import type { SpaceMouseSettings } from "../viewport/spaceMouse";
 
 const MODELS = [
   { id: "claude-opus-5-5", label: "Claude Opus 5.5 (most capable)" },
   { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5 (fast, balanced)" },
   { id: "claude-haiku-5-5", label: "Claude Haiku 5.5 (cheapest)" },
 ];
+
+/** 3D mouse (3Dconnexion SpaceMouse): connection, speed, axes, buttons. */
+function SpaceMouseSettingsSection() {
+  const [st, setSt] = useState<SpaceMouseStatus>(spaceMouseStatus());
+  const [cfg, setCfg] = useState(spaceMouseSettings());
+  useEffect(() => onSpaceMouseStatus(setSt), []);
+  const update = (patch: Partial<SpaceMouseSettings>) => { setSpaceMouseSettings(patch); setCfg(spaceMouseSettings()); };
+  const axes = [["tx", "Pan left/right"], ["tz", "Pan up/down"], ["ty", "Zoom"], ["rx", "Tilt"], ["rz", "Spin"]] as const;
+  const viewActions = ["view.frame", "view.iso", "view.front", "view.top", "view.right", "edit.undo", "edit.redo"];
+  return (
+    <>
+      <label className="field-label">3D mouse</label>
+      <p className="field-note">
+        {st.source ? <><span className="ok-dot">●</span> {st.product ?? "Connected"} ({st.source === "native" ? "desktop" : "WebHID"})</> : st.note ?? "No 3D mouse connected."}
+      </p>
+      {!st.source && !isTauri() && webHidAvailable() && (
+        <button className="btn ghost" onClick={() => void connectWebHid().then(setSt).catch((e) => setSt({ source: null, note: String(e?.message ?? e) }))}>Connect a 3D mouse…</button>
+      )}
+      <label className="field-label">Speed ({cfg.speed.toFixed(1)}×)</label>
+      <input className="field-input" type="range" min={0.2} max={3} step={0.1} value={cfg.speed} onChange={(e) => update({ speed: Number(e.target.value) })} />
+      <label className="field-toggle"><input type="checkbox" checked={cfg.lockRotation} onChange={(e) => update({ lockRotation: e.target.checked })} /><span>Pan and zoom only (no rotation)</span></label>
+      <div className="field-note">Invert:{" "}
+        {axes.map(([k, label]) => (
+          <label key={k} className="toggle" style={{ marginRight: 8 }}><input type="checkbox" checked={!!cfg.invert[k]} onChange={(e) => update({ invert: { [k]: e.target.checked } })} /> {label}</label>
+        ))}
+      </div>
+      {[0, 1].map((b) => (
+        <div key={b} className="field-note">Button {b + 1}:{" "}
+          <select className="field-input" style={{ width: "auto" }} value={cfg.buttons[b] ?? ""} onChange={(e) => update({ buttons: { ...cfg.buttons, [b]: e.target.value } })}>
+            <option value="">(nothing)</option>
+            {viewActions.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+      ))}
+    </>
+  );
+}
 
 export function SettingsPanel() {
   const open = useStore((s) => s.settingsOpen);
@@ -107,6 +146,8 @@ export function SettingsPanel() {
               )}
             </>
           )}
+          <div className="field-divider" />
+          <SpaceMouseSettingsSection />
         </div>
         <div className="modal-foot">
           <button className="btn primary" onClick={() => { setApiKey(draft.trim()); close(); }}>Save</button>

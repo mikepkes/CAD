@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { sampleSpline, splineCurvatureComb } from "../core/geometry/spline";
+import { SpaceMouseState, SpaceMouseSettings, NavigationDelta, IDLE, DEFAULT_SETTINGS, navigationDelta, isIdle } from "./spaceMouse";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { PLANES, WorkPlane, to3d } from "../geometry/plane";
@@ -172,6 +173,9 @@ export class SceneManager {
   private orthoCam: THREE.OrthographicCamera;
   readonly controls: OrbitControls;
   private clock = new THREE.Clock();
+  /** Held 3D-mouse deflection, applied every frame (see spaceMouse.ts). */
+  private navInput: SpaceMouseState = IDLE;
+  navSettings: SpaceMouseSettings = DEFAULT_SETTINGS;
   /** Active camera animation (reorient / dolly between two framings). */
   private tween: {
     t: number; dur: number;
@@ -469,7 +473,11 @@ export class SceneManager {
     if (this.recording) return; // the turntable recorder drives render() itself
     const dt = this.clock.getDelta();
     if (this.tween) this.stepTween(dt);
-    else this.controls.update();
+    else {
+      this.controls.update();
+      const nav = navigationDelta(this.navInput, Math.min(dt, 0.05), this.navSettings, this.lastData?.mode === "sketch");
+      if (!isIdle(nav)) this.applyNavigation(nav);
+    }
     // Dimension annotations and constraint badges are sized in world units from
     // the on-screen pixel scale, computed when the sketch is built. That scale
     // changes with zoom but not with a document edit, so re-render the sketch
@@ -482,6 +490,43 @@ export class SceneManager {
     this.lastPixelScale = scale;
     this.renderer.render(this.scene, this.camera);
   };
+
+  /** The 3D mouse's current deflection (from WebHID or the desktop's HID reader). */
+  setNavigationInput(state: SpaceMouseState) { this.navInput = state; }
+
+  /** Move the camera by one frame of 3D-mouse motion: orbit about the orbit
+   *  target (yaw about world up, pitch about the screen's right axis, stopping
+   *  short of the poles; the view stays Z-up, so roll is not applied), pan in
+   *  the view plane by a fraction of the visible height, and dolly / zoom. */
+  private applyNavigation(d: NavigationDelta) {
+    const cam = this.camera as THREE.PerspectiveCamera & THREE.OrthographicCamera;
+    const target = this.controls.target;
+    const off = cam.position.clone().sub(target);
+    const up = cam.up.clone().normalize();
+    if (d.yaw) off.applyAxisAngle(up, -d.yaw);
+    if (d.pitch) {
+      const right = new THREE.Vector3().crossVectors(off, up).normalize();
+      const turned = off.clone().applyAxisAngle(right, -d.pitch);
+      if (Math.abs(turned.clone().normalize().dot(up)) < 0.995) off.copy(turned);
+    }
+    const dist = off.length();
+    const visible = (cam as THREE.PerspectiveCamera).isPerspectiveCamera
+      ? 2 * dist * Math.tan(((cam.fov * Math.PI) / 180) / 2)
+      : (cam.top - cam.bottom) / (cam.zoom || 1);
+    if (d.panX || d.panY) {
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
+      const screenUp = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
+      // the model follows the cap, so the camera moves the other way
+      const move = right.multiplyScalar(-d.panX * visible).add(screenUp.multiplyScalar(-d.panY * visible));
+      target.add(move);
+    }
+    if (d.zoom !== 1) {
+      if ((cam as THREE.PerspectiveCamera).isPerspectiveCamera) off.multiplyScalar(1 / d.zoom);
+      else { cam.zoom *= d.zoom; cam.updateProjectionMatrix(); }
+    }
+    cam.position.copy(target).add(off);
+    cam.lookAt(target);
+  }
 
   /** Rebuild only the sketch + preview groups (cheap; leaves solids alone). */
   private rerenderSketchLayer() {
@@ -802,6 +847,27 @@ export class SceneManager {
   frameSketchPoints(plane: WorkPlane, pts: { x: number; y: number }[]) {
     if (!pts.length) return;
     this.frameWorld(pts.map((p) => this.worldPt(plane, p.x, p.y)));
+  }
+
+  /** Turn (animated) to a standard view of the model, framed: iso, front,
+   *  back, top, bottom, right, left. Model mode only (a sketch keeps its plane). */
+  viewFrom(view: string) {
+    if (this.lastData?.mode === "sketch") return;
+    const DIRS: Record<string, [number, number, number]> = {
+      iso: [1, -1, 0.8], front: [0, -1, 0], back: [0, 1, 0], top: [0, 0.0001, 1], bottom: [0, 0.0001, -1], right: [1, 0, 0], left: [-1, 0, 0],
+    };
+    const v = DIRS[view];
+    if (!v) return;
+    const box = new THREE.Box3().setFromObject(this.solidsGroup);
+    const center = box.isEmpty() ? this.controls.target.clone() : box.getCenter(new THREE.Vector3());
+    const radius = box.isEmpty() ? Math.max(20, this.camOff().length() / 3) : Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
+    const pc = this.perspCam;
+    const dist = (radius * 1.3) / Math.tan(((pc.fov * Math.PI) / 180) / 2);
+    const up = this.camera.up.clone();
+    this.beginTween({
+      from: { off: this.camOff(), target: this.controls.target.clone(), up, zoom: pc.zoom },
+      to: { off: new THREE.Vector3(...v).normalize().multiplyScalar(dist), target: center, up, zoom: pc.zoom },
+    });
   }
 
   /** Zoom-to-fit all rendered solids (used by Frame in model mode). */

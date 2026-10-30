@@ -18,6 +18,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net", "macros"] }
 axum = "0.8"
+# 3D mouse (3Dconnexion SpaceMouse) in the desktop app, where the webview has no WebHID.
+# macos-shared-device opens it non-exclusively, so 3Dconnexion's own driver can keep it too.
+hidapi = { version = "2.6", default-features = false, features = ["macos-shared-device"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

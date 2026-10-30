@@ -1201,6 +1201,8 @@ export const useStore = create<AppState>((set, get) => {
 
     initApp: async () => {
       mcpActions.initMcp();
+      // a 3D mouse: the desktop's native reader, or a browser device paired before
+      void import("./spaceMouseInput").then((m) => m.autoConnectSpaceMouse()).catch(() => { /* no device support here */ });
       let saved: string | null = null;
       try {
         saved = localStorage.getItem(AUTOSAVE_KEY);

@@ -168,6 +168,11 @@ on.
   (hidden bodies still export and measure), it's undoable, and it's saved. A
   configuration can hide things too, and agents use `set_visibility` /
   `isolate` to frame one part for `render_view`.
+- **3D mouse:** a 3Dconnexion SpaceMouse orbits, pans and zooms the view, and
+  in a sketch it only pans and zooms. The desktop app reads it natively (alongside
+  3Dconnexion's driver). Chrome and Edge pair it through WebHID from
+  Settings. Speed, axis inversion, rotation lock and the two buttons (fit,
+  standard views, undo…) are set in Settings.
 - **Weldments:** `feature.member` lays a structural profile (rect, square or
   round tube, round bar, flat, angle, channel, I-beam, or a custom sketch)
   along every line of a layout sketch, one body per member. Corners are
