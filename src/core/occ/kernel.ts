@@ -206,10 +206,15 @@ export function mirrorShape(shape: Shape3D, wp: WorkPlane): Shape3D {
   return (clone as unknown as { mirror: (p: Plane) => Shape3D }).mirror(plane);
 }
 
+/** Edge polylines at the faces' own tolerance: replicad's default (0.001 mm)
+ *  is far finer than the shading mesh and took seconds on a spline-revolved
+ *  surface. */
+const EDGE_MESH = { tolerance: 0.05, angularTolerance: 0.25 };
+
 /** Tessellate a solid into a display mesh. Does NOT free the shape. */
 export function meshShape(solid: Shape3D): SolidMesh {
   const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 }) as ReturnType<Shape3D["mesh"]> & { faceGroups?: { start: number; count: number }[] };
-  const e = solid.meshEdges();
+  const e = solid.meshEdges(EDGE_MESH);
   return {
     positions: Float32Array.from(m.vertices),
     normals: Float32Array.from(m.normals),
@@ -225,7 +230,7 @@ export function extrudeToMesh(wp: WorkPlane, profile: Profile, distance: number)
   const solid = buildSolid(wp, profile, distance);
   try {
     const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 });
-    const e = solid.meshEdges();
+    const e = solid.meshEdges(EDGE_MESH);
     return {
       positions: Float32Array.from(m.vertices),
       normals: Float32Array.from(m.normals),
