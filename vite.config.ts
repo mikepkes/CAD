@@ -18,8 +18,10 @@ export default defineConfig(({ command }) => ({
   // fallback that Vite's dep-scanner can't resolve (the package's exports map
   // blocks the deep path). We never hit that branch — we pass the wasm URL via
   // locateFile — so exclude it from pre-bundling.
+  // rhino3dm is served as its ESM build untouched: pre-bundling would try to
+  // resolve the Node-only `require("ws")` inside its emscripten glue.
   optimizeDeps: {
-    exclude: ["replicad-opencascadejs"],
+    exclude: ["replicad-opencascadejs", "rhino3dm"],
     // Pre-bundle the turntable recorder's muxer so importing it at runtime
     // doesn't trigger a dep re-optimize + full page reload mid-recording.
     include: ["mp4-muxer"],

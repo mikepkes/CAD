@@ -26,6 +26,7 @@ import { resolveSketchPlane } from "../src/geometry/plane";
 import { describeFeature } from "../src/model/agent";
 import { InlineGeometryBackend } from "../src/core/geometry/backend";
 import { isolationList } from "../src/core/visibility";
+import { importRequests } from "../src/core/importers";
 import type { Vec3 } from "../src/math/vec";
 
 /** Topology / distance queries share the backend's assembly-aware evaluation (the kernel is loaded by ensureKernel). */
@@ -335,25 +336,21 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
       },
     },
     {
-      name: "import_step",
-      description: "Import a STEP file from disk (a .step/.stp path) as a body — the same as feature.import with the file's text, which is stored in the document. Optional `at` offset, `operation` (new/join/cut/intersect), `body`, `name`.",
-      inputSchema: {
-        type: "object",
-        required: ["path"],
-        properties: {
-          path: { type: "string" },
-          at: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
-          operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
-          body: { type: "string" },
-          name: { type: "string" },
-        },
-      },
+      name: "import_file",
+      description: "Import a CAD file from disk as bodies: STEP (.step/.stp), BREP (.brep/.brp), STL (.stl, sewn into a faceted solid) or a FreeCAD document (.FCStd — each visible solid becomes a body). The file's contents are stored in the document. Several bodies import as one step: all or none.",
+      inputSchema: { type: "object", required: ["path"], properties: { path: { type: "string" } } },
       handler: async (a) => {
-        const path = String(a.path ?? "");
-        if (!/\.(step|stp)$/i.test(path)) return { ok: false, error: "path must be a .step or .stp file" };
-        const { path: _p, ...rest } = a;
-        const name = (a.name as string | undefined) ?? path.split(/[\\/]/).pop()!.replace(/\.(step|stp)$/i, "");
-        return shapeDispatch(await session.dispatch("feature.import", { ...rest, name, data: readFileSync(path, "utf8") }));
+        let reqs;
+        try { reqs = await importRequests(String(a.path ?? ""), new Uint8Array(readFileSync(String(a.path)))); }
+        catch (e) { return { ok: false, error: (e as Error).message }; }
+        const start = { session, state: session.checkpoint() };
+        const ids: string[] = [];
+        for (const r of reqs) {
+          const res = await session.dispatch("feature.import", { data: r.data, format: r.format, name: r.name });
+          if (!res.ok) { session = start.session; session.rollback(start.state); return { ok: false, error: `${r.name}: ${res.error}` }; }
+          ids.push(res.createdIds[0]);
+        }
+        return { ok: true, bodies: ids };
       },
     },
     {

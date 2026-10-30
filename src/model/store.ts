@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import planegcsWasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
 import occWasmUrl from "replicad-opencascadejs/wasm?url";
+import rhino3dmWasmUrl from "rhino3dm/rhino3dm.wasm?url";
 
 import { CadSession, DispatchResult, SessionCheckpoint } from "../core/command/session";
 import { createDefaultRegistry } from "../core/command/builtins";
@@ -20,6 +21,7 @@ import { saveOutput } from "./saveOutput";
 import { pickFace } from "../core/geometry/pick";
 import type { Vec3 } from "../math/vec";
 import { isolationList } from "../core/visibility";
+import { importRequests, ImportRequest } from "../core/importers";
 
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
@@ -316,8 +318,8 @@ export interface AppState {
   loadDocument: (doc: CadDocument) => Promise<void>;
   saveToFile: () => void;
   openFile: (file: File) => Promise<void>;
-  /** Import a STEP file as a new body (a feature.import on the timeline). */
-  importStep: (file: File) => Promise<void>;
+  /** Import a STEP / BREP / STL / FreeCAD file as bodies (feature.import on the timeline). */
+  importFile: (file: File) => Promise<void>;
 }
 
 function toastFor(r: DispatchResult): Toast | null {
@@ -350,6 +352,20 @@ export const useStore = create<AppState>((set, get) => {
     bump({ ready: true, toast: toastFor(r), lastMessage: r.ok ? r.message ?? "" : r.error ?? "" });
     afterMutate();
     return r;
+  };
+
+  // Import several bodies as one undoable unit: all of them, or (on a failure) none.
+  const importAll = async (reqs: ImportRequest[]): Promise<string[]> => {
+    const session = get().session;
+    const start = session.checkpoint();
+    const ids: string[] = [];
+    for (const r of reqs) {
+      const res = await session.dispatch("feature.import", { data: r.data, format: r.format, name: r.name });
+      if (!res.ok) { session.rollback(start); bump(); throw new Error(`${r.name}: ${res.error}`); }
+      ids.push(res.createdIds[0]);
+    }
+    bump(); afterMutate();
+    return ids;
   };
 
   const activeId = () => get().activeSketchId;
@@ -428,6 +444,13 @@ export const useStore = create<AppState>((set, get) => {
       return { active: ref, parameters: get().session.doc.parameters.filter((p) => p.configuredBy).map((p) => ({ name: p.name, expr: p.expr, value: p.value })) };
     },
     configurations: () => get().session.doc.configurations.map((c) => ({ id: c.id, name: c.name })),
+    importFile: async (fileName: string, bytes: Uint8Array) => {
+      const reqs = await importRequests(fileName, bytes, { rhino3dmWasmUrl });
+      const ids = await importAll(reqs);
+      set({ mode: "model" });
+      await get().rebuildSolids();
+      return ids.map((id) => ({ id, name: get().session.doc.features[id]?.name, error: get().solids[id]?.error }));
+    },
     setVisibility: async (ids: string[], visible: boolean) => {
       const r = await get().session.setVisibility(ids, visible);
       if (!r.ok) throw new Error(r.error ?? "could not change visibility");
@@ -1197,14 +1220,14 @@ export const useStore = create<AppState>((set, get) => {
         bump({ toast: { kind: "error", text: `Open failed: ${(e as Error).message}` } });
       }
     },
-    importStep: async (file) => {
+    importFile: async (file) => {
       try {
-        const r = await runDispatch("feature.import", { data: await file.text(), name: file.name.replace(/\.(step|stp)$/i, "") });
-        if (!r.ok) return;
+        const reqs = await importRequests(file.name, new Uint8Array(await file.arrayBuffer()), { rhino3dmWasmUrl });
+        const ids = await importAll(reqs);
         set({ mode: "model" });
         await get().rebuildSolids();
-        const sol = get().solids[r.createdIds[0]];
-        if (sol?.error) bump({ toast: { kind: "error", text: sol.error } });
+        const failed = ids.map((id) => get().solids[id]).find((sol) => sol?.error);
+        bump({ toast: failed ? { kind: "error", text: failed.error! } : { kind: "info", text: `Imported ${reqs.length > 1 ? `${reqs.length} bodies from ` : ""}${file.name}` } });
       } catch (e) {
         bump({ toast: { kind: "error", text: `Import failed: ${(e as Error).message}` } });
       }

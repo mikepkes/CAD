@@ -59,7 +59,9 @@ the agent has everything it needs to call it. Command tools:
   `feature__chamfer` (EdgeSelector), `feature__shell` (FaceSelector),
   `feature__pattern` (linear/circular bodies), `feature__mirror` (`bodies`
   all/last)
-- `feature__import` (STEP text) and `import_step` (a `.step`/`.stp` path)
+- `feature__import` (STEP/BREP text, or STL as base64) and `import_file` (a
+  path to a `.step`/`.stp`, `.brep`, `.stl`, FreeCAD `.FCStd` or Rhino `.3dm`;
+  several bodies import all-or-nothing)
 - `sketch_on_face` — start a sketch on a face by its topological name
   (`face`, preferred: the sketch then follows that face) or the face nearest a
   world point; returns the sketch frame (origin, u, v, normal)

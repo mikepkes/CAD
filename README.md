@@ -146,8 +146,11 @@ on.
   **shell**, body **patterns** (linear / circular) and **mirror** (all bodies or
   just the last). Sketches can be started **on a body face** by picking a point
   or naming the face (`sketch_on_face`), and every feature reports kernel
-  errors and warnings (e.g. a cut that removed nothing). **Import STEP** files
-  as bodies (File → Import, or `feature.import`).
+  errors and warnings (e.g. a cut that removed nothing). **Import** STEP,
+  OpenCASCADE BREP, STL (sewn into a faceted solid), FreeCAD `.FCStd` (each
+  visible solid) and Rhino `.3dm` (from the render meshes Rhino saves) as
+  bodies (File → Import, or `import_file`). IGES isn't readable yet: this
+  OpenCASCADE build has no IGES reader.
 - **Topological naming:** every face is named by the feature that made it
   (`extrude3:end`, `extrude3:side:line7`, `prim2:+X`, `hole9:bore`) and keeps
   that name through later booleans, fillets, shells and patterns, via
