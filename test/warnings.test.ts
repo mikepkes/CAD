@@ -61,4 +61,12 @@ describe("no-op warnings", () => {
     expect(e?.error).toBeUndefined();
     expect(e?.warning).toBeUndefined();
   });
+
+  it("a blend the kernel rejects outright reports an error (not a silent no-op)", async () => {
+    const s = realSession();
+    await s.dispatch("feature.primitive", { shape: "sphere", radius: 10 });
+    await s.dispatch("feature.fillet", { radius: "50" }); // OCC throws a bare WebAssembly.Exception
+    const e = evalById(s, "fil");
+    expect(e?.error).toMatch(/kernel could not build/);
+  });
 });
