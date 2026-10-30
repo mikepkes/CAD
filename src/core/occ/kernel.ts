@@ -39,6 +39,17 @@ export interface KernelInitOptions {
   wasmBinary?: ArrayBuffer | Uint8Array;
 }
 
+/** Text for anything a kernel call threw. OCC failures surface as a bare
+ *  WebAssembly.Exception with no message, which would otherwise read as
+ *  `undefined` and hide the failure entirely. */
+export function kernelErrorMessage(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (typeof WebAssembly !== "undefined" && "Exception" in WebAssembly && e instanceof (WebAssembly as unknown as { Exception: new (...a: never[]) => object }).Exception) {
+    return "the geometry kernel could not build this (OpenCASCADE raised an exception) — the size or selection probably doesn't fit the shape";
+  }
+  return typeof e === "string" && e ? e : "the geometry kernel failed";
+}
+
 let readyPromise: Promise<void> | null = null;
 let ready = false;
 

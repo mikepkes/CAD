@@ -8,7 +8,7 @@
 import { CadDocument } from "../document";
 import { resolveParameters } from "../parameters";
 import { WorkPlane } from "../../geometry/plane";
-import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
+import { initKernel, isKernelReady, KernelInitOptions, Edge3D, kernelErrorMessage } from "../occ/kernel";
 import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance } from "../features";
 import { meshesTo3mf } from "../export/threemf";
 import { hasFlexures } from "../../sim/flexure";
@@ -206,7 +206,7 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       : await exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format);
     return { res: { id: req.id, kind: "export", bytes }, transfer: bytes ? [bytes.buffer as ArrayBuffer] : [] };
   } catch (e) {
-    return { res: { id: req.id, kind: "error", message: (e as Error).message }, transfer: [] };
+    return { res: { id: req.id, kind: "error", message: kernelErrorMessage(e) }, transfer: [] };
   }
 }
 

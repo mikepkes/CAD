@@ -16,7 +16,7 @@ import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
-  faceGeoms, edgeGeoms, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep,
+  faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep,
 } from "./occ/kernel";
 import { genericNames, extrudeNames, revolveNames, holeCutterNames, inheritNames, copyNames, edgeNamesOf } from "./naming";
 import { stableJson, contentHash } from "./contentKey";
@@ -231,7 +231,7 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
   try {
     tool = buildFeatureSolid(doc, scope, f, target ? safeBounds(target.shape) : undefined);
   } catch (e) {
-    out[f.id] = { featureId: f.id, name: f.name, sketchId: f.sketchId, distance, error: (e as Error).message };
+    out[f.id] = { featureId: f.id, name: f.name, sketchId: f.sketchId, distance, error: kernelErrorMessage(e) };
     return;
   }
   if (!target) {
@@ -249,7 +249,7 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
       out[f.id] = { ...modifierRow(f), sketchId: f.sketchId, distance, ...(f.requireEffect ? { error: msg } : { warning: msg }) };
     }
   } catch (e) {
-    out[f.id] = { featureId: f.id, name: f.name, sketchId: f.sketchId, distance, error: (e as Error).message };
+    out[f.id] = { featureId: f.id, name: f.name, sketchId: f.sketchId, distance, error: kernelErrorMessage(e) };
   } finally {
     tool.shape.delete();
   }
@@ -272,7 +272,7 @@ function combineBody(op: BooleanOp, target: Body, tool: Named, f: FeatureDef & {
       out[f.id] = { ...modifierRow(f), ...(f.requireEffect ? { error: msg } : { warning: msg }) };
     }
   } catch (e) {
-    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+    out[f.id] = { ...modifierRow(f), error: kernelErrorMessage(e) };
   } finally {
     tool.shape.delete();
   }
@@ -302,7 +302,7 @@ function applyPrimitive(scope: Scope, f: PrimitiveFeature, bodies: Body[], out: 
       x: dim("x"), y: dim("y"), z: dim("z"), radius: dim("radius"), radius2: dim("radius2"), height: dim("height"), tube: dim("tube"),
     }), f.id);
   } catch (e) {
-    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+    out[f.id] = { ...modifierRow(f), error: kernelErrorMessage(e) };
     return;
   }
   addOrCombine(f, tool, bodies, out, f.shape);
@@ -316,7 +316,7 @@ function applyImport(f: ImportFeature, bodies: Body[], out: Record<string, Solid
     if (f.at && (f.at.x || f.at.y || f.at.z)) { const moved = translateShape(shape, f.at); shape.delete(); shape = moved; }
     tool = { shape, names: faceGeoms(shape).map((_, i) => `${f.id}:f${i}`) };
   } catch (e) {
-    out[f.id] = { ...modifierRow(f), error: `import: ${(e as Error).message}` };
+    out[f.id] = { ...modifierRow(f), error: `import: ${kernelErrorMessage(e)}` };
     return;
   }
   addOrCombine(f, tool, bodies, out, "import");
@@ -384,7 +384,7 @@ function applyThread(f: ThreadFeature, bodies: Body[], out: Record<string, Solid
       return;
     }
     try { (pickBody(bodies, f.body, "thread").decals ??= []).push(decal); }
-    catch (e) { out[f.id].error = (e as Error).message; }
+    catch (e) { out[f.id].error = kernelErrorMessage(e); }
   };
 
   if (!modeled) { cosmetic(); return; }
@@ -395,7 +395,7 @@ function applyThread(f: ThreadFeature, bodies: Body[], out: Record<string, Solid
     if (op !== "cut" && (op === "new" || !bodies.length)) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape: rod.shape, faceNames: rod.names }); return; }
     combineBody(op, pickBody(bodies, f.body, "thread"), rod, f, "thread", out);
   } catch (e) {
-    cosmetic(`modelled thread fell back to cosmetic: ${(e as Error).message}`); // kernel couldn't form it
+    cosmetic(`modelled thread fell back to cosmetic: ${kernelErrorMessage(e)}`); // kernel couldn't form it
   }
 }
 
@@ -448,7 +448,7 @@ function applyHole(scope: Scope, f: HoleFeature, bodies: Body[], out: Record<str
               finally { tap.delete(); }
             });
           } finally { shape.delete(); }
-        } catch (e) { addDecals(`modelled thread fell back to cosmetic: ${(e as Error).message}`); }
+        } catch (e) { addDecals(`modelled thread fell back to cosmetic: ${kernelErrorMessage(e)}`); }
       } else {
         addDecals();
       }
@@ -459,7 +459,7 @@ function applyHole(scope: Scope, f: HoleFeature, bodies: Body[], out: Record<str
       if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
     }
   } catch (e) {
-    out[f.id].error = (e as Error).message;
+    out[f.id].error = kernelErrorMessage(e);
   }
 }
 
@@ -477,7 +477,7 @@ function applySweep(doc: CadDocument, f: SweepFeature, bodies: Body[], out: Reco
     if (!path) throw new Error("sweep: path sketch has no open chain of lines/arcs");
     tool = named(buildSweepSolid(regions[0], resolveSketchPlane(pathSk), path), f.id);
   } catch (e) {
-    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+    out[f.id] = { ...modifierRow(f), error: kernelErrorMessage(e) };
     return;
   }
   addOrCombine(f, tool, bodies, out, "sweep");
@@ -497,7 +497,7 @@ function applyLoft(doc: CadDocument, f: LoftFeature, bodies: Body[], out: Record
     if (profiles.length < 2) throw new Error("loft needs at least two profile sketches");
     tool = named(buildLoftSolid(profiles, !!f.ruled), f.id);
   } catch (e) {
-    out[f.id] = { ...modifierRow(f), error: (e as Error).message };
+    out[f.id] = { ...modifierRow(f), error: kernelErrorMessage(e) };
     return;
   }
   addOrCombine(f, tool, bodies, out, "loft");
@@ -533,7 +533,7 @@ function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: 
       if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
     }
   } catch (e) {
-    out[f.id].error = (e as Error).message;
+    out[f.id].error = kernelErrorMessage(e);
   }
 }
 
@@ -562,7 +562,7 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
       if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
     }
   } catch (e) {
-    out[f.id].error = (e as Error).message;
+    out[f.id].error = kernelErrorMessage(e);
   }
 }
 
@@ -605,7 +605,7 @@ function applyPattern(scope: Scope, f: PatternFeature, bodies: Body[], out: Reco
     replaceShape(target, acc);
     target.faceNames = accNames;
   } catch (e) {
-    out[f.id].error = (e as Error).message;
+    out[f.id].error = kernelErrorMessage(e);
   }
 }
 
@@ -617,7 +617,7 @@ function applyMirror(doc: CadDocument, f: MirrorFeature, bodies: Body[], out: Re
   try {
     wp = mirrorPlane(doc, f);
   } catch (e) {
-    out[f.id].error = (e as Error).message;
+    out[f.id].error = kernelErrorMessage(e);
     return;
   }
   const targets = f.bodies === "last" ? bodies.slice(-1) : bodies;
@@ -627,7 +627,7 @@ function applyMirror(doc: CadDocument, f: MirrorFeature, bodies: Body[], out: Re
       try { booleanInto("join", body, reflected, copyNames(body.faceNames, f.id), f.id); }
       finally { reflected.delete(); }
     } catch (e) {
-      out[f.id].error = (e as Error).message;
+      out[f.id].error = kernelErrorMessage(e);
     }
   }
 }
@@ -904,7 +904,7 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
         if (Number.isFinite(ev.mass.area)) row.area = ev.mass.area;
         if (Number.isFinite(ev.mass.centroid.x)) row.centroid = ev.mass.centroid;
       } catch (e) {
-        row.error = (e as Error).message;
+        row.error = kernelErrorMessage(e);
       } finally {
         body.shape.delete();
       }

@@ -48,7 +48,7 @@ const geometry = createGeometryBackend();
 const studyGeometry = createGeometryBackend();
 let studyReady = false;
 let motionToken = 0; // bumped to cancel/supersede an in-flight study
-let rebuildInFlight = false; // a preview evaluate is running
+let rebuildInFlight: Promise<void> | null = null; // the running preview evaluate (its whole coalesced loop)
 let rebuildDirty = false;    // a newer rebuild was requested while one ran
 
 const AUTOSAVE_KEY = "chisel.autosave.v1";
@@ -881,29 +881,33 @@ export const useStore = create<AppState>((set, get) => {
       // only flags that another is needed. When the build finishes it re-runs
       // for the CURRENT doc, so rapid edits (dragging a slider) never queue a
       // backlog of stale rebuilds — the preview always chases the latest value.
-      if (rebuildInFlight) { rebuildDirty = true; return; }
-      rebuildInFlight = true;
-      try {
-        do {
-          rebuildDirty = false;
-          const doc = get().session.doc;
-          const { solids, facePlanes } = await geometry.evaluate(doc);
-          // The backend may run on a worker (a doc copy), so fold the derived state
-          // back onto the live doc: feature distances (inspector) and re-resolved
-          // face-sketch planes (so the ghost sketch tracks its face).
-          for (const [fid, s] of Object.entries(solids)) {
-            const f = doc.features[fid];
-            if (f && f.kind === "extrude" && Number.isFinite(s.distance)) f.distanceValue = s.distance;
-          }
-          for (const [sid, plane] of Object.entries(facePlanes)) {
-            const sk = doc.sketches[sid];
-            if (sk) sk.plane = plane;
-          }
-          bump({ solids });
-        } while (rebuildDirty);
-      } finally {
-        rebuildInFlight = false;
-      }
+      // A caller that awaits gets the running loop's promise, which settles only
+      // after that re-run, so it always sees solids for the doc as it is now.
+      if (rebuildInFlight) { rebuildDirty = true; return rebuildInFlight; }
+      rebuildInFlight = (async () => {
+        try {
+          do {
+            rebuildDirty = false;
+            const doc = get().session.doc;
+            const { solids, facePlanes } = await geometry.evaluate(doc);
+            // The backend may run on a worker (a doc copy), so fold the derived state
+            // back onto the live doc: feature distances (inspector) and re-resolved
+            // face-sketch planes (so the ghost sketch tracks its face).
+            for (const [fid, s] of Object.entries(solids)) {
+              const f = doc.features[fid];
+              if (f && f.kind === "extrude" && Number.isFinite(s.distance)) f.distanceValue = s.distance;
+            }
+            for (const [sid, plane] of Object.entries(facePlanes)) {
+              const sk = doc.sketches[sid];
+              if (sk) sk.plane = plane;
+            }
+            bump({ solids });
+          } while (rebuildDirty);
+        } finally {
+          rebuildInFlight = null;
+        }
+      })();
+      return rebuildInFlight;
     },
     runMotionStudy: async () => {
       const doc = get().session.doc;
