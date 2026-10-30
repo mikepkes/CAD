@@ -10,6 +10,7 @@ import { WorkPlane } from "../../geometry/plane";
 import { Loop, LoopSegment, Profile, Pt } from "../geometry/profile";
 import type { EdgeSelector, FaceSelector } from "../document";
 import { splineTangents } from "../geometry/spline";
+import { NurbsBrepData, NurbsCurveData, NurbsFaceData, NurbsSurfaceData, knotMults } from "../nurbs";
 import { Vec3 } from "../../math/vec";
 
 export interface SolidMesh {
@@ -986,6 +987,25 @@ export function planarPatch(wire: Wire): Shape3D {
   return built(new oc.BRepBuilderAPI_MakeFace((wire as unknown as { wrapped: unknown }).wrapped, true), "patch");
 }
 
+/** A shape with no shell (a lone face) wrapped in one; anything else as is. */
+function asShell(shape: unknown): unknown {
+  const oc = getOC() as unknown as {
+    TopExp_Explorer: new (s: unknown, find: unknown) => { More(): boolean; delete(): void };
+    TopAbs_ShapeEnum: { TopAbs_SHELL: unknown };
+    TopoDS_Shell: new () => unknown;
+    TopoDS_Builder: new () => { MakeShell(s: unknown): void; Add(s: unknown, c: unknown): void; delete(): void };
+  };
+  const ex = new oc.TopExp_Explorer(shape, oc.TopAbs_ShapeEnum.TopAbs_SHELL);
+  const has = ex.More();
+  ex.delete();
+  if (has) return shape;
+  const shell = new oc.TopoDS_Shell(), b = new oc.TopoDS_Builder();
+  b.MakeShell(shell);
+  b.Add(shell, shape);
+  b.delete();
+  return shell;
+}
+
 /** Sew shapes along shared edges (within `tol`) into one shell; with `solid`,
  *  close it into a solid — which must then have positive volume. */
 export function sewShapes(shapes: Shape3D[], tol: number, solid: boolean): Shape3D {
@@ -1005,7 +1025,9 @@ export function sewShapes(shapes: Shape3D[], tol: number, solid: boolean): Shape
     const sewn = sew.SewedShape();
     if (!solid) return cast(sewn as never) as unknown as Shape3D;
     const make = new oc.BRepBuilderAPI_MakeSolid();
-    const ex = new oc.TopExp_Explorer(sewn, oc.TopAbs_ShapeEnum.TopAbs_SHELL);
+    // a single closed face (a NURBS sphere) sews to a face, not a shell: wrap it
+    const shelled = asShell(sewn);
+    const ex = new oc.TopExp_Explorer(shelled, oc.TopAbs_ShapeEnum.TopAbs_SHELL);
     try {
       let shells = 0;
       for (; ex.More(); ex.Next()) {
@@ -1069,6 +1091,130 @@ export function hasSolid(shape: Shape3D): boolean {
   const solids = (shape as unknown as { solids?: { delete(): void }[] }).solids ?? [];
   freeAll(solids);
   return solids.length > 0;
+}
+
+// ---- exact NURBS B-reps (imported Rhino geometry) -----------------------------
+
+type OcAny = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/** OCC arrays (1-based) from plain numbers. */
+function ocCurve(oc: OcAny, c: NurbsCurveData): OcAny {
+  const n = c.poles.length / 3;
+  const poles = new oc.NCollection_Array1_gp_Pnt(1, n);
+  const weights = new oc.NCollection_Array1_double(1, n);
+  for (let i = 0; i < n; i++) {
+    const p = new oc.gp_Pnt(c.poles[3 * i], c.poles[3 * i + 1], c.poles[3 * i + 2]);
+    poles.SetValue(i + 1, p); p.delete();
+    weights.SetValue(i + 1, c.weights?.[i] ?? 1);
+  }
+  const { knots, mults } = knotMults(c.knots);
+  const K = new oc.NCollection_Array1_double(1, knots.length), M = new oc.NCollection_Array1_int(1, knots.length);
+  knots.forEach((k, i) => { K.SetValue(i + 1, k); M.SetValue(i + 1, mults[i]); });
+  try { return new oc.Geom_BSplineCurve(poles, weights, K, M, c.degree, false, true); }
+  finally { poles.delete(); weights.delete(); K.delete(); M.delete(); }
+}
+
+function ocSurface(oc: OcAny, s: NurbsSurfaceData): OcAny {
+  const poles = new oc.NCollection_Array2_gp_Pnt(1, s.countU, 1, s.countV);
+  const weights = new oc.NCollection_Array2_double(1, s.countU, 1, s.countV);
+  for (let i = 0; i < s.countU; i++) for (let j = 0; j < s.countV; j++) {
+    const k = i * s.countV + j;
+    const p = new oc.gp_Pnt(s.poles[3 * k], s.poles[3 * k + 1], s.poles[3 * k + 2]);
+    poles.SetValue(i + 1, j + 1, p); p.delete();
+    weights.SetValue(i + 1, j + 1, s.weights?.[k] ?? 1);
+  }
+  const arr = (flat: number[]) => {
+    const { knots, mults } = knotMults(flat);
+    const K = new oc.NCollection_Array1_double(1, knots.length), M = new oc.NCollection_Array1_int(1, knots.length);
+    knots.forEach((k, i) => { K.SetValue(i + 1, k); M.SetValue(i + 1, mults[i]); });
+    return { K, M };
+  };
+  const u = arr(s.knotsU), v = arr(s.knotsV);
+  let surf: OcAny;
+  try { surf = new oc.Geom_BSplineSurface(poles, weights, u.K, v.K, u.M, v.M, s.degreeU, s.degreeV, false, false); }
+  finally { poles.delete(); weights.delete(); u.K.delete(); u.M.delete(); v.K.delete(); v.M.delete(); }
+  // A surface that meets itself (a full turn: a sphere, a cylinder's side) is
+  // made periodic, so its face gets a real seam instead of two loose edges.
+  try { if (surf.IsUClosed()) surf.SetUPeriodic(); } catch { /* not periodic-compatible: keep it clamped */ }
+  try { if (surf.IsVClosed()) surf.SetVPeriodic(); } catch { /* likewise */ }
+  return surf;
+}
+
+/** Whether every edge of a face's loops runs along its surface's own
+ *  boundary (iso-lines at the ends of the u/v ranges) — then the face is just
+ *  the surface's natural extent, which OCC builds cleanly with its seams and
+ *  poles; only a genuinely trimmed face is built from its edges. */
+function onNaturalBoundary(oc: OcAny, surf: OcAny, curves: OcAny[], face: NurbsFaceData): boolean {
+  const b = surf.Bounds(0, 0, 0, 0) as { U1: number; U2: number; V1: number; V2: number };
+  const [u0, u1, v0, v1] = [b.U1, b.U2, b.V1, b.V2];
+  const tu = 1e-6 * Math.max(1, Math.abs(u1 - u0)), tv = 1e-6 * Math.max(1, Math.abs(v1 - v0));
+  for (const loop of face.loops) for (const t of loop.trims) {
+    const c = curves[t.curve];
+    const a = c.FirstParameter(), b = c.LastParameter();
+    for (const f of [0.17, 0.5, 0.83]) {
+      const p = c.Value(a + (b - a) * f);
+      const proj = new oc.GeomAPI_ProjectPointOnSurf(p, surf);
+      try {
+        if (proj.NbPoints() < 1) return false;
+        const { U, V } = proj.LowerDistanceParameters();
+        if (!(Math.abs(U - u0) < tu || Math.abs(U - u1) < tu || Math.abs(V - v0) < tv || Math.abs(V - v1) < tv)) return false;
+      } finally { proj.delete(); p.delete(); }
+    }
+  }
+  return true;
+}
+
+/** Build a solid (or, when it doesn't close, a shell) from exact NURBS B-rep data. */
+export function readNurbsBrep(text: string): Shape3D {
+  const data = JSON.parse(text) as NurbsBrepData;
+  const oc = getOC() as OcAny;
+  const curves = data.curves.map((c) => ocCurve(oc, c));
+  const faces: Shape3D[] = [];
+  try {
+    for (const fd of data.faces) {
+      const surf = ocSurface(oc, fd.surface);
+      let face: OcAny;
+      if (onNaturalBoundary(oc, surf, curves, fd)) {
+        const mk = new oc.BRepBuilderAPI_MakeFace(surf, 1e-6);
+        try { face = mk.Face(); } finally { mk.delete(); }
+      } else {
+        // a trimmed face: wires of its edges in loop order (the fixer joins
+        // them within tolerance and adds their curves on the surface)
+        const builder = new oc.TopoDS_Builder();
+        const wires = fd.loops.map((loop) => {
+          const w = new oc.TopoDS_Wire();
+          builder.MakeWire(w);
+          for (const t of loop.trims) {
+            const mkE = new oc.BRepBuilderAPI_MakeEdge(curves[t.curve]);
+            const e = mkE.Edge();
+            builder.Add(w, t.reversed ? e.Reversed() : e);
+            mkE.delete();
+          }
+          return w;
+        });
+        const outer = fd.loops.findIndex((l) => l.outer);
+        const mk = new oc.BRepBuilderAPI_MakeFace(surf, wires[outer >= 0 ? outer : 0], true);
+        wires.forEach((w, i) => { if (i !== (outer >= 0 ? outer : 0)) mk.Add(w); });
+        const raw = mk.Face();
+        mk.delete(); builder.delete();
+        const fix = new oc.ShapeFix_Face(raw);
+        fix.SetPrecision(data.tolerance);
+        fix.Perform();
+        fix.FixOrientation(); // an outer loop traced the wrong way would make the face its own complement
+        face = fix.Face();
+        fix.delete();
+      }
+      faces.push(cast((fd.reversed ? face.Reversed() : face) as never) as unknown as Shape3D);
+    }
+    if (!faces.length) throw new Error("the B-rep has no faces");
+    const tol = Math.max(1e-6, data.tolerance);
+    if (data.solid) {
+      try { return sewShapes(faces, tol, true); } catch { /* not watertight after all: keep it as a shell */ }
+    }
+    return faces.length === 1 ? faces[0] : sewShapes(faces, tol, false);
+  } catch (e) {
+    throw new Error(e instanceof Error ? e.message : `could not rebuild the NURBS geometry (${kernelErrorMessage(e)})`);
+  }
 }
 
 /** Minimum distance between two shapes (0 when they touch or overlap). */
@@ -1263,13 +1409,15 @@ export interface MassProps { volume: number; area: number; centroid: Vec3 }
 export function massPropsOfShape(shape: Shape3D): MassProps {
   const oc = getOC() as unknown as {
     GProp_GProps: new () => { Mass(): number; CentreOfMass(): { X(): number; Y(): number; Z(): number; delete(): void }; delete(): void };
-    BRepGProp: { VolumeProperties(s: unknown, p: unknown, onlyClosed: boolean, skipShared: boolean, useTri: boolean): void; SurfaceProperties(s: unknown, p: unknown, skipShared: boolean, useTri: boolean): void };
+    BRepGProp: { VolumeProperties(s: unknown, p: unknown, eps: number, onlyClosed: boolean, skipShared: boolean): number; SurfaceProperties(s: unknown, p: unknown, eps: number, skipShared: boolean): number };
   };
   const wrapped = (shape as unknown as { wrapped: unknown }).wrapped;
   const vp = new oc.GProp_GProps(), sp = new oc.GProp_GProps();
   try {
-    oc.BRepGProp.VolumeProperties(wrapped, vp, false, false, false);
-    oc.BRepGProp.SurfaceProperties(wrapped, sp, false, false);
+    // adaptive (error-bounded) integration: the fixed-order rule is off by
+    // ~0.2% on rational B-spline surfaces (an imported NURBS sphere)
+    oc.BRepGProp.VolumeProperties(wrapped, vp, 1e-9, false, false);
+    oc.BRepGProp.SurfaceProperties(wrapped, sp, 1e-9, false);
     const c = vp.CentreOfMass();
     try { return { volume: vp.Mass(), area: sp.Mass(), centroid: { x: c.X(), y: c.Y(), z: c.Z() } }; } finally { c.delete(); }
   } catch {

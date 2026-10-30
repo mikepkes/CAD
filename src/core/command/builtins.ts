@@ -1918,7 +1918,7 @@ export const BUILTINS: CommandDef<any>[] = [
       required: ["data"],
       additionalProperties: false,
       properties: {
-        format: { type: "string", enum: ["step", "brep", "stl"], description: "File format (default step)." },
+        format: { type: "string", enum: ["step", "brep", "stl", "nurbs"], description: "File format (default step); nurbs is exact NURBS B-rep JSON (what a Rhino import stores)." },
         data: { type: "string", description: "The file: STEP or BREP text, or STL as base64." },
         at: { type: "object", additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "World offset (default none)." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
@@ -1928,12 +1928,13 @@ export const BUILTINS: CommandDef<any>[] = [
       },
     },
     examples: [{ note: "Import a bracket, raised 10mm", params: { data: "ISO-10303-21;\nHEADER;…END-ISO-10303-21;", at: { x: 0, y: 0, z: 10 }, name: "Bracket" } }],
-    apply(draft, p: { format?: "step" | "brep" | "stl"; data: string; at?: Vec3; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+    apply(draft, p: { format?: "step" | "brep" | "stl" | "nurbs"; data: string; at?: Vec3; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       const format = p.format ?? "step";
       const head = p.data.slice(0, 2000);
       if (format === "step" && !/ISO-10303-21/.test(head)) throw new Error("data is not a STEP file (no ISO-10303-21 header)");
       if (format === "brep" && !/CASCADE Topology/.test(head)) throw new Error("data is not a BREP file (no CASCADE Topology header)");
       if (format === "stl" && !/^[A-Za-z0-9+/=\s]+$/.test(head)) throw new Error("stl data must be base64");
+      if (format === "nurbs" && !/^\s*\{\s*"tolerance"/.test(head)) throw new Error("nurbs data must be NURBS B-rep JSON");
       const id = ctx.alloc("import");
       draft.features[id] = {
         id, kind: "import", name: p.name ?? "Imported", format, data: p.data,

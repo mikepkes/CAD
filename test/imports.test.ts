@@ -166,7 +166,42 @@ describe("imports: BREP, STL, FreeCAD", () => {
     await importInto(t, "tricky.stl", stl);
     expect(Math.abs(bodies(t)[0].volume!)).toBeCloseTo(1000, 3);
     const empty = new rhino.File3dm();
-    await expect(importRequests("empty.3dm", empty.toByteArray())).rejects.toThrow(/no meshes/);
+    await expect(importRequests("empty.3dm", empty.toByteArray())).rejects.toThrow(/no solids, surfaces or meshes/);
+  });
+
+  it("imports Rhino Breps exactly: a NURBS sphere, a capped cylinder and a box, in cm", async () => {
+    const rhino = await (await import("rhino3dm")).default();
+    const file = new rhino.File3dm();
+    file.settings().modelUnitSystem = rhino.UnitSystem.Centimeters;
+    const named = (n: string) => { const a = new rhino.ObjectAttributes(); a.name = n; return a; };
+    file.objects().addBrep(new rhino.Sphere([0, 0, 0], 1).toBrep(), named("Ball"));                                   // r 10 mm
+    file.objects().addBrep(rhino.Brep.createFromCylinder(new rhino.Cylinder(new rhino.Circle(0.5), 2), true, true), named("Can")); // r 5, h 20 mm
+    file.objects().addBrep(rhino.Brep.createFromBoundingBox(new rhino.BoundingBox([0, 0, 0], [3, 2, 1])), named("Box")); // 30×20×10 mm
+    const reqs = await importRequests("parts.3dm", file.toByteArray());
+    expect(reqs.map((r) => [r.name, r.format])).toEqual([["Ball", "nurbs"], ["Can", "nurbs"], ["Box", "nurbs"]]);
+    const s = realSession();
+    for (const r of reqs) expect((await s.dispatch("feature.import", { data: r.data, format: r.format, name: r.name })).ok).toBe(true);
+    const by = Object.fromEntries(bodies(s).map((b) => [b.name, b]));
+    const rel = (a: number, b: number) => Math.abs(a - b) / b;
+    expect(by.Ball.surface).toBeUndefined();                              // closed: a solid, not a skin
+    expect(rel(by.Ball.volume!, (4 / 3) * Math.PI * 1000)).toBeLessThan(1e-7);
+    expect(rel(by.Ball.area!, 4 * Math.PI * 100)).toBeLessThan(1e-7);
+    expect(rel(by.Can.volume!, Math.PI * 25 * 20)).toBeLessThan(1e-4);   // trimmed caps, fitted within the model tolerance
+    expect(rel(by.Can.area!, 2 * Math.PI * 5 * 20 + 2 * Math.PI * 25)).toBeLessThan(1e-4);
+    expect(by.Box.volume).toBeCloseTo(6000, 6);
+    expect(by.Box.area).toBeCloseTo(2200, 6);
+  });
+
+  it("mixes exact Breps with meshes in one Rhino file", async () => {
+    const rhino = await (await import("rhino3dm")).default();
+    const file = new rhino.File3dm();
+    file.objects().addBrep(new rhino.Sphere([0, 0, 0], 5).toBrep(), new rhino.ObjectAttributes());
+    const mesh = new rhino.Mesh(); const vs = mesh.vertices(); vs.setCount(8);
+    [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]].forEach((c, i) => vs.set(i, c.map((x) => x * 10 + 20)));
+    for (const q of [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]]) mesh.faces().addQuadFace(q[0], q[1], q[2], q[3]);
+    file.objects().addMesh(mesh, new rhino.ObjectAttributes());
+    const reqs = await importRequests("mixed.3dm", file.toByteArray());
+    expect(reqs.map((r) => r.format)).toEqual(["nurbs", "stl"]);
   });
 
   it("explains what it can't read", async () => {

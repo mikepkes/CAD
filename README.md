@@ -148,9 +148,10 @@ on.
   or naming the face (`sketch_on_face`), and every feature reports kernel
   errors and warnings (e.g. a cut that removed nothing). **Import** STEP,
   OpenCASCADE BREP, STL (sewn into a faceted solid), FreeCAD `.FCStd` (each
-  visible solid) and Rhino `.3dm` (from the render meshes Rhino saves) as
-  bodies (File → Import, or `import_file`). IGES isn't readable yet: this
-  OpenCASCADE build has no IGES reader.
+  visible solid) and Rhino `.3dm` as bodies (File → Import, or `import_file`).
+  Rhino Breps, extrusions and surfaces come in **exact**, as NURBS surfaces
+  with their trims sewn into solids; meshes come in as they are. For IGES,
+  export STEP instead.
 - **Topological naming:** every face is named by the feature that made it
   (`extrude3:end`, `extrude3:side:line7`, `prim2:+X`, `hole9:bore`) and keeps
   that name through later booleans, fillets, shells and patterns, via

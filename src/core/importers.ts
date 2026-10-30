@@ -5,10 +5,11 @@
 // visible solid it holds. Async because unzipping is; evaluation stays sync.
 
 import { unzip } from "../util/zip";
+import { NurbsBrepData, NurbsCurveData, NurbsFaceData, NurbsSurfaceData, dehomogenize, flatKnots } from "./nurbs";
 
 export interface ImportRequest {
   name: string;
-  format: "step" | "brep" | "stl";
+  format: "step" | "brep" | "stl" | "nurbs";
   data: string;
 }
 
@@ -41,9 +42,9 @@ export async function importRequests(fileName: string, bytes: Uint8Array, opts: 
     case "igs": case "iges":
       throw new Error("IGES can't be read yet: this build of OpenCASCADE has no IGES reader. Export STEP from the source program instead.");
     case "3dm": {
-      const parts = await rhinoMeshes(bytes, opts.rhino3dmWasmUrl);
-      if (!parts.length) throw new Error("the Rhino file has no meshes to import — save it in Rhino with render meshes (the default), or export STEP");
-      return parts.map((m) => ({ name: m.name, format: "stl" as const, data: toBase64(m.stl) }));
+      const parts = await rhinoObjects(bytes, opts.rhino3dmWasmUrl);
+      if (!parts.length) throw new Error("the Rhino file has no solids, surfaces or meshes to import");
+      return parts.map((p) => (p.brep ? { name: p.name, format: "nurbs" as const, data: JSON.stringify(p.brep) } : { name: p.name, format: "stl" as const, data: toBase64(p.stl!) }));
     }
     default:
       throw new Error(`can't import .${ext || "?"} files (STEP, BREP, STL and FreeCAD .FCStd are supported)`);
@@ -70,13 +71,74 @@ function stlBytes(tris: number[]): Uint8Array {
 
 type RhinoMesh = { vertices(): { count: number; get(i: number): number[] }; faces(): { count: number; get(i: number): number[] }; delete?(): void };
 
+/** Triangles of meshes (flat xyz, in mm). */
+function meshTriangles(meshes: RhinoMesh[], mm: number): number[] {
+  const tris: number[] = [];
+  for (const m of meshes) {
+    const vs = m.vertices(), fs = m.faces();
+    const v = (k: number) => vs.get(k).map((c) => c * mm);
+    for (let f = 0; f < fs.count; f++) {
+      const [a, b, c, d] = fs.get(f);
+      tris.push(...v(a), ...v(b), ...v(c));
+      if (d !== c) tris.push(...v(a), ...v(c), ...v(d)); // a quad
+    }
+  }
+  return tris;
+}
+
+// The slice of rhino3dm's Brep / NURBS API the exact import reads.
+type RNurbsSurface = { orderU: number; orderV: number; knotsU(): { toList(): number[] }; knotsV(): { toList(): number[] }; points(): { countU: number; countV: number; get(u: number, v: number): number[] } };
+type RCurve = { toNurbsCurve(): { order: number; knots(): { toList(): number[] }; points(): { count: number; get(i: number): number[] } } };
+type RTrim = { edgeIndex: number; isReversed: boolean };
+type RFace = { orientationIsReversed: boolean; underlyingSurface(): { toNurbsSurface(): RNurbsSurface }; loops: { count: number; get(i: number): { loopType: unknown; trims: { count: number; get(i: number): RTrim } } }; getMesh(t: unknown): RhinoMesh | null };
+type RBrep = { isSolid: boolean; faces(): { count: number; get(i: number): RFace }; edges(): { count: number; get(i: number): RCurve } };
+
+/** A NURBS surface as plain data (Rhino's homogeneous points and short knot vectors converted). */
+function surfaceData(ns: RNurbsSurface, mm: number): NurbsSurfaceData {
+  const pts = ns.points();
+  const homog: number[][] = [];
+  for (let i = 0; i < pts.countU; i++) for (let j = 0; j < pts.countV; j++) homog.push(pts.get(i, j));
+  return { degreeU: ns.orderU - 1, degreeV: ns.orderV - 1, countU: pts.countU, countV: pts.countV, knotsU: flatKnots(ns.knotsU().toList()), knotsV: flatKnots(ns.knotsV().toList()), ...dehomogenize(homog, mm) };
+}
+
 /**
- * The meshes of a Rhino file, one per object, as binary STLs in mm. A mesh
- * object is taken as is; a Brep or extrusion contributes the render mesh Rhino
- * saved with each face (rhino3dm can read meshes but not re-mesh NURBS), so a
- * file saved without render meshes yields nothing.
+ * A Rhino Brep as exact NURBS B-rep data: each face's NURBS surface and its
+ * trim loops as runs of 3D edge curves. Singular trims (a sphere's poles) have
+ * no edge and are dropped; the kernel rebuilds them.
  */
-async function rhinoMeshes(bytes: Uint8Array, wasmUrl?: string): Promise<{ name: string; stl: Uint8Array }[]> {
+function brepData(b: RBrep, rhino: { BrepLoopType?: Record<string, unknown> }, mm: number, tolerance: number): NurbsBrepData {
+  const edges = b.edges();
+  const curves: NurbsCurveData[] = [];
+  for (let e = 0; e < edges.count; e++) {
+    const nc = edges.get(e).toNurbsCurve();
+    const pts = nc.points();
+    const homog: number[][] = [];
+    for (let i = 0; i < pts.count; i++) homog.push(pts.get(i));
+    curves.push({ degree: nc.order - 1, knots: flatKnots(nc.knots().toList()), ...dehomogenize(homog, mm) });
+  }
+  const outerType = rhino.BrepLoopType?.Outer;
+  const faces = b.faces();
+  const out: NurbsFaceData[] = [];
+  for (let f = 0; f < faces.count; f++) {
+    const face = faces.get(f);
+    const loops = [];
+    for (let l = 0; l < face.loops.count; l++) {
+      const lp = face.loops.get(l);
+      const trims = [];
+      for (let t = 0; t < lp.trims.count; t++) { const tr = lp.trims.get(t); if (tr.edgeIndex >= 0) trims.push({ curve: tr.edgeIndex, reversed: tr.isReversed }); }
+      loops.push({ outer: outerType !== undefined ? lp.loopType === outerType : l === 0, trims });
+    }
+    out.push({ surface: surfaceData(face.underlyingSurface().toNurbsSurface(), mm), reversed: face.orientationIsReversed, loops });
+  }
+  return { tolerance, solid: b.isSolid, curves, faces: out };
+}
+
+/**
+ * The objects of a Rhino file: Breps, extrusions and surfaces as exact NURBS
+ * B-reps; meshes (and any object whose exact form can't be read) as their
+ * mesh, converted to mm.
+ */
+async function rhinoObjects(bytes: Uint8Array, wasmUrl?: string): Promise<{ name: string; brep?: NurbsBrepData; stl?: Uint8Array }[]> {
   const rhino3dm = (await import("rhino3dm/rhino3dm.module.js")).default; // the ESM build (no CommonJS requires)
   const rhino = await rhino3dm(wasmUrl ? { locateFile: () => wasmUrl } : undefined);
   const file = rhino.File3dm.fromByteArray(bytes);
@@ -84,30 +146,27 @@ async function rhinoMeshes(bytes: Uint8Array, wasmUrl?: string): Promise<{ name:
   const unit = Object.entries(rhino.UnitSystem).find(([, v]) => v === file.settings().modelUnitSystem)?.[0] ?? "Millimeters";
   const mm = RHINO_MM[unit];
   if (mm === undefined) throw new Error(`the Rhino file's unit system (${unit}) isn't supported`);
-  const out: { name: string; stl: Uint8Array }[] = [];
+  const tolerance = Math.max(1e-4, (file.settings().modelAbsoluteTolerance || 0.001) * mm * 10);
+  const out: { name: string; brep?: NurbsBrepData; stl?: Uint8Array }[] = [];
   const objects = file.objects();
   for (let i = 0; i < objects.count; i++) {
     const obj = objects.get(i);
-    const g = obj.geometry() as unknown as { objectType: unknown; faces?: () => { count: number; get(i: number): { getMesh(t: unknown): RhinoMesh | null } }; getMesh?(t: unknown): RhinoMesh | null };
+    const name = obj.attributes().name || `Rhino object ${i + 1}`;
+    const g = obj.geometry() as unknown as { objectType: unknown; toBrep?(split?: boolean): RBrep; getMesh?(t: unknown): RhinoMesh | null; faces?: () => { count: number; get(i: number): RFace } };
+    const T = rhino.ObjectType;
+    let brep: RBrep | undefined;
+    if (g.objectType === T.Brep) brep = g as unknown as RBrep;
+    else if (g.objectType === T.Extrusion && g.toBrep) brep = g.toBrep(true);
+    else if (g.objectType === T.Surface) brep = (rhino.Brep as unknown as { createFromSurface(s: unknown): RBrep }).createFromSurface(g);
+    if (brep) {
+      try { out.push({ name, brep: brepData(brep, rhino as never, mm, tolerance) }); continue; }
+      catch { /* fall back to its saved render mesh below */ }
+    }
     const meshes: RhinoMesh[] = [];
-    if (g.objectType === rhino.ObjectType.Mesh) meshes.push(g as unknown as RhinoMesh);
-    else if (g.objectType === rhino.ObjectType.Brep && g.faces) {
-      const faces = g.faces();
-      for (let f = 0; f < faces.count; f++) { const m = faces.get(f).getMesh(rhino.MeshType.Any); if (m) meshes.push(m); }
-    } else if (g.objectType === rhino.ObjectType.Extrusion && g.getMesh) {
-      const m = g.getMesh(rhino.MeshType.Any); if (m) meshes.push(m);
-    }
-    const tris: number[] = [];
-    for (const m of meshes) {
-      const vs = m.vertices(), fs = m.faces();
-      const v = (k: number) => vs.get(k).map((c) => c * mm);
-      for (let f = 0; f < fs.count; f++) {
-        const [a, b, c, d] = fs.get(f);
-        tris.push(...v(a), ...v(b), ...v(c));
-        if (d !== c) tris.push(...v(a), ...v(c), ...v(d)); // a quad
-      }
-    }
-    if (tris.length) out.push({ name: obj.attributes().name || `Rhino object ${i + 1}`, stl: stlBytes(tris) });
+    if (g.objectType === T.Mesh) meshes.push(g as unknown as RhinoMesh);
+    else if (brep) { const fs = brep.faces(); for (let f = 0; f < fs.count; f++) { const m = fs.get(f).getMesh(rhino.MeshType.Any); if (m) meshes.push(m); } }
+    const tris = meshTriangles(meshes, mm);
+    if (tris.length) out.push({ name, stl: stlBytes(tris) });
   }
   return out;
 }

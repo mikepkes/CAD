@@ -17,7 +17,7 @@ import {
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
   faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape, keepHalfSpace,
-  chainWire, surfaceExtrude, surfaceRevolve, surfaceLoft, surfaceSweep, planarPatch, sewShapes, thickenShape, offsetSurface, untrimFaces, hasSolid,
+  readNurbsBrep, chainWire, surfaceExtrude, surfaceRevolve, surfaceLoft, surfaceSweep, planarPatch, sewShapes, thickenShape, offsetSurface, untrimFaces, hasSolid,
 } from "./occ/kernel";
 import { genericNames, extrudeNames, revolveNames, holeCutterNames, inheritNames, copyNames, edgeNamesOf } from "./naming";
 import { stableJson, contentHash } from "./contentKey";
@@ -330,7 +330,7 @@ const base64ToBytes = (b64: string): Uint8Array => {
 function applyImport(f: ImportFeature, bodies: Body[], out: Record<string, SolidEval>) {
   let tool: Named;
   try {
-    let shape = f.format === "brep" ? readBrep(f.data) : f.format === "stl" ? readStl(base64ToBytes(f.data)) : readStep(f.data);
+    let shape = f.format === "brep" ? readBrep(f.data) : f.format === "stl" ? readStl(base64ToBytes(f.data)) : f.format === "nurbs" ? readNurbsBrep(f.data) : readStep(f.data);
     if (f.at && (f.at.x || f.at.y || f.at.z)) { const moved = translateShape(shape, f.at); shape.delete(); shape = moved; }
     tool = { shape, names: faceGeoms(shape).map((_, i) => `${f.id}:f${i}`) };
   } catch (e) {
