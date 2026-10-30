@@ -92,6 +92,8 @@ function buildView(s: AppState): ViewData {
         material,
         woodFrame,
         ...(bodyVisible(doc, sol, hidden) ? {} : { ghost: true }),
+        // analysis data only applies to the mesh it was computed on
+        ...(() => { const a = s.analysisData[sol.featureId]; return a && a.vertices * 3 === sol.mesh!.positions.length ? { curvature: a.curvature, combs: a.combs } : {}; })(),
       };
     });
   return {
@@ -119,6 +121,7 @@ function buildView(s: AppState): ViewData {
     extrudeRegions: buildExtrudeRegions(s),
     extrudePreview: buildExtrudePreview(s),
     section: s.section,
+    analysis: s.analysis,
   };
 }
 

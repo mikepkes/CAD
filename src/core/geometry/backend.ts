@@ -9,7 +9,7 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D, kernelErrorMessage } from "../occ/kernel";
-import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance } from "../features";
+import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
 import { meshesTo3mf } from "../export/threemf";
 import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
@@ -57,6 +57,8 @@ export interface GeometryBackend {
   topology(doc: CadDocument, opts?: TopologyOpts): Promise<BodyTopology[]>;
   /** Minimum distance between two bodies (by creating-feature id). */
   distance(doc: CadDocument, a: string, b: string): Promise<number>;
+  /** Curvature per display-mesh vertex, edge continuity and curvature combs (all bodies, or one). */
+  analyze(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): Promise<BodyAnalysisResult[]>;
   /** Release workers / native resources. */
   dispose(): void;
 }
@@ -135,6 +137,12 @@ function topologyOf(doc: CadDocument, opts?: TopologyOpts): BodyTopology[] {
   return bodyTopology(geo, scopeOf(geo), opts);
 }
 
+/** Surface analysis of the bodies as built (component patterns expanded). */
+function analyzeOf(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): BodyAnalysisResult[] {
+  const geo = geometryDoc(doc, scopeOf(doc));
+  return analyzeBodies(geo, scopeOf(geo), opts);
+}
+
 // ---- shared job protocol (used by both worker adapters) --------------------
 
 export type GeometryRequest =
@@ -143,7 +151,8 @@ export type GeometryRequest =
   | { id: number; kind: "export"; doc: CadDocument; featureId: string | null; format: ExportFormat }
   | { id: number; kind: "collide"; doc: CadDocument; overrides?: Record<string, string> }
   | { id: number; kind: "topology"; doc: CadDocument; opts?: TopologyOpts }
-  | { id: number; kind: "distance"; doc: CadDocument; a: string; b: string };
+  | { id: number; kind: "distance"; doc: CadDocument; a: string; b: string }
+  | { id: number; kind: "analyze"; doc: CadDocument; opts?: { bodyId?: string; combs?: boolean } };
 
 export type GeometryResponse =
   | { id: number; kind: "evaluate"; solids: Record<string, SolidEval>; facePlanes: Record<string, WorkPlane> }
@@ -152,6 +161,7 @@ export type GeometryResponse =
   | { id: number; kind: "collide"; result: CollisionResult }
   | { id: number; kind: "topology"; bodies: BodyTopology[] }
   | { id: number; kind: "distance"; distance: number }
+  | { id: number; kind: "analyze"; bodies: BodyAnalysisResult[] }
   | { id: number; kind: "error"; message: string };
 
 /** GeometryRequest without the id field, distributing over the union. */
@@ -190,6 +200,10 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
     }
     if (req.kind === "topology") {
       return { res: { id: req.id, kind: "topology", bodies: topologyOf(req.doc, req.opts) }, transfer: [] };
+    }
+    if (req.kind === "analyze") {
+      const bodies = analyzeOf(req.doc, req.opts);
+      return { res: { id: req.id, kind: "analyze", bodies }, transfer: bodies.flatMap((b) => [b.curvature.buffer as ArrayBuffer, b.combs.buffer as ArrayBuffer]) };
     }
     if (req.kind === "distance") {
       const doc = geometryDoc(req.doc, scope);
@@ -242,6 +256,9 @@ export class InlineGeometryBackend implements GeometryBackend {
   }
   async topology(doc: CadDocument, opts?: TopologyOpts): Promise<BodyTopology[]> {
     return topologyOf(doc, opts);
+  }
+  async analyze(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): Promise<BodyAnalysisResult[]> {
+    return analyzeOf(doc, opts);
   }
   async distance(doc: CadDocument, a: string, b: string): Promise<number> {
     const d = geometryDoc(doc, scopeOf(doc));

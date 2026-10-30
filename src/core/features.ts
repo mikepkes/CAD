@@ -16,7 +16,7 @@ import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
-  faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl,
+  faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape,
 } from "./occ/kernel";
 import { genericNames, extrudeNames, revolveNames, holeCutterNames, inheritNames, copyNames, edgeNamesOf } from "./naming";
 import { stableJson, contentHash } from "./contentKey";
@@ -950,6 +950,41 @@ export function bodyTopology(doc: CadDocument, scope: Scope, opts: { bodyId?: st
         edges = eg.map((e, i) => ({ ...e, name: names[i], faceNames: e.faces.map((j) => b.faceNames[j] ?? `f${j}`) }));
       }
       return { id: b.id, name: b.name, volume: mass.volume, area: mass.area, centroid: mass.centroid, bounds: safeBounds(b.shape), faces, edges };
+    });
+  } finally {
+    for (const b of bodies) b.shape.delete();
+  }
+}
+
+/** Surface-quality analysis of one body, aligned with its display mesh. */
+export interface BodyAnalysisResult {
+  featureId: string;
+  name: string;
+  /** Vertex count of the mesh the curvature array is aligned with. */
+  vertices: number;
+  /** k1, k2 per vertex (1/mm, convex positive). */
+  curvature: Float32Array;
+  /** Curvature comb segments (flat xyz pairs). */
+  combs: Float32Array;
+  /** Every edge between two faces, by name, with its continuity. */
+  edges: { name: string; continuity: "G0" | "G1" | "G2"; angleDeg: number; curvatureJump: number }[];
+  stats: { kMin: number; kMax: number; meanMin: number; meanMax: number; gaussMin: number; gaussMax: number };
+}
+
+/** Curvature, edge continuity and curvature combs for each body (or one). */
+export function analyzeBodies(doc: CadDocument, scope: Scope, opts: { bodyId?: string; combs?: boolean } = {}): BodyAnalysisResult[] {
+  if (!isKernelReady()) return [];
+  const { bodies } = evaluateBodies(doc, scope);
+  try {
+    return bodies.filter((b) => !opts.bodyId || b.id === opts.bodyId).map((b) => {
+      const mesh = meshShape(b.shape);
+      const a = analyzeShape(b.shape, mesh, { combs: opts.combs });
+      const names = edgeNamesOf(edgeGeoms(b.shape), b.faceNames);
+      return {
+        featureId: b.id, name: b.name, vertices: mesh.positions.length / 3,
+        curvature: a.curvature, combs: a.combs, stats: a.stats,
+        edges: a.edges.map((e) => ({ name: names[e.edge], continuity: e.continuity, angleDeg: e.angleDeg, curvatureJump: e.curvatureJump })),
+      };
     });
   } finally {
     for (const b of bodies) b.shape.delete();

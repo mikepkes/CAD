@@ -54,6 +54,10 @@ export interface WebMcpHost {
   distance?: (a: string, b: string) => Promise<number>;
   /** Switch the active configuration (name/id, or null for none). */
   setConfiguration?: (ref: string | null) => Promise<unknown>;
+  /** Curvature / continuity / combs per body. */
+  analyze?: (opts: { bodyId?: string; combs?: boolean }) => Promise<{ featureId: string; name: string; edges: { name: string; continuity: string; angleDeg: number; curvatureJump: number }[]; stats: Record<string, number>; combs: Float32Array }[]>;
+  /** Switch the viewport's surface-quality display. */
+  setAnalysis?: (patch: Record<string, unknown>) => Promise<unknown>;
   /** Import a file (STEP / BREP / STL / FreeCAD .FCStd) as bodies. */
   importFile?: (fileName: string, bytes: Uint8Array) => Promise<unknown>;
   /** Show or hide ids (bodies by feature id, sketches, components, datum planes). */
@@ -317,6 +321,49 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       annotations: { ...EDIT, idempotentHint: true },
       execute: async (args) => {
         try { return ok({ ok: true, ...(await host.setConfiguration!((args as { configuration?: string | null }).configuration ?? null) as object) }); }
+        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+      },
+    });
+  }
+  if (host.analyze) {
+    tools.push({
+      name: "surface_analysis",
+      description: "Surface quality of each body (or one: `body`), from the exact B-rep. Gives principal-curvature ranges (1/mm, convex positive: kMin/kMax, mean and Gaussian ranges) and the continuity of every edge between two faces: G0 = a crease, G1 = tangent but the curvature jumps (e.g. where a fillet meets a flat face), G2 = curvature-continuous. Each edge comes by name with its normal angle (°) and curvature jump. Use it to check a blend is smooth, or to find creases you didn't intend.",
+      inputSchema: { type: "object", properties: { body: { type: "string" } } },
+      annotations: READ_ONLY,
+      execute: async (args) => {
+        try {
+          const bodies = await host.analyze!({ bodyId: (args as { body?: string }).body, combs: true });
+          return ok({ ok: true, bodies: bodies.map((b) => rounded({
+            id: b.featureId, name: b.name, curvature: b.stats,
+            continuity: { G0: b.edges.filter((e) => e.continuity === "G0").length, G1: b.edges.filter((e) => e.continuity === "G1").length, G2: b.edges.filter((e) => e.continuity === "G2").length },
+            edges: b.edges,
+            curvedEdgesWithCombs: b.combs.length > 0,
+          })) });
+        } catch (e) {
+          return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+        }
+      },
+    });
+  }
+  if (host.setAnalysis) {
+    tools.push({
+      name: "set_analysis",
+      description: "Switch the viewport's surface-quality display (then render_view to see it): `mode` none / zebra (reflected stripes — broken at a crease, kinked at a tangent-only seam, flowing at G2) / curvature (colour map: blue concave, white flat, red convex; `quantity` mean / gaussian / max / min) / draft (green = drafts out along `pull`, red = undercut, yellow = steeper than `draftDeg`); `stripes` for zebra; `combs` draws curvature combs on curved edges and sketch curves.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          mode: { type: "string", enum: ["none", "zebra", "curvature", "draft"] },
+          stripes: { type: "number" },
+          quantity: { type: "string", enum: ["mean", "gaussian", "max", "min"] },
+          draftDeg: { type: "number" },
+          pull: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+          combs: { type: "boolean" },
+        },
+      },
+      annotations: { ...EDIT, idempotentHint: true },
+      execute: async (args) => {
+        try { return ok({ ok: true, analysis: await host.setAnalysis!(args) }); }
         catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
       },
     });

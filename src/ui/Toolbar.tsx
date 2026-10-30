@@ -99,6 +99,46 @@ function SectionControls() {
   );
 }
 
+/** Surface-quality display: zebra / draft / curvature, and curvature combs. */
+function AnalysisControls() {
+  const a = useStore((s) => s.analysis);
+  const setAnalysis = useStore((s) => s.setAnalysis);
+  const hasGeometry = useStore((s) => Object.keys(s.solids).length > 0 || s.mode === "sketch");
+  if (!hasGeometry) return null;
+  return (
+    <div className="grid-controls" title="Surface quality: zebra stripes show continuity across edges (broken = crease, kinked = tangent only, smooth = curvature-continuous); draft colours faces against a pull direction; curvature maps it blue (concave) to red (convex)">
+      <select className="offset-input" value={a.mode} title="Surface analysis" onChange={(e) => void setAnalysis({ mode: e.target.value as typeof a.mode })}>
+        <option value="none">Shaded</option>
+        <option value="zebra">Zebra</option>
+        <option value="curvature">Curvature</option>
+        <option value="draft">Draft</option>
+      </select>
+      {a.mode === "zebra" && (
+        <input className="grid-size" type="number" min={2} max={60} step={1} value={a.stripes} title="Stripe count" onChange={(e) => void setAnalysis({ stripes: Number(e.target.value) || 12 })} />
+      )}
+      {a.mode === "curvature" && (
+        <select className="offset-input" value={a.quantity} title="Which curvature to map" onChange={(e) => void setAnalysis({ quantity: e.target.value as typeof a.quantity })}>
+          <option value="mean">Mean</option>
+          <option value="gaussian">Gaussian</option>
+          <option value="max">Max</option>
+          <option value="min">Min</option>
+        </select>
+      )}
+      {a.mode === "draft" && (
+        <>
+          <select className="offset-input" value={a.pull.x ? "X" : a.pull.y ? "Y" : "Z"} title="Pull direction" onChange={(e) => void setAnalysis({ pull: { x: e.target.value === "X" ? 1 : 0, y: e.target.value === "Y" ? 1 : 0, z: e.target.value === "Z" ? 1 : 0 } })}>
+            <option value="Z">+Z</option><option value="Y">+Y</option><option value="X">+X</option>
+          </select>
+          <input className="grid-size" type="number" min={0} max={45} step={0.5} value={a.draftDeg} title="Minimum draft angle (°)" onChange={(e) => void setAnalysis({ draftDeg: Number(e.target.value) || 0 })} />
+        </>
+      )}
+      <label className="toggle" title="Curvature combs on curved edges and sketch curves">
+        <input type="checkbox" checked={a.combs} onChange={(e) => void setAnalysis({ combs: e.target.checked })} /> Combs
+      </label>
+    </div>
+  );
+}
+
 const TOOLS: { id: Tool; label: string; key: string; glyph: string }[] = [
   { id: "select", label: "Select", key: "S", glyph: "⤢" },
   { id: "line", label: "Line", key: "L", glyph: "╱" },
@@ -330,6 +370,7 @@ export function Toolbar() {
           </label>
           <GridControls />
           <SectionControls />
+          <AnalysisControls />
         </>
       )}
     </div>

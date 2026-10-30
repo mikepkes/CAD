@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { sampleSpline } from "../core/geometry/spline";
+import { sampleSpline, splineCurvatureComb } from "../core/geometry/spline";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { PLANES, WorkPlane, to3d } from "../geometry/plane";
@@ -62,6 +62,21 @@ export interface SolidView {
   woodFrame?: WoodFrame;
   /** A hidden body drawn as a faint, unpickable ghost ("show hidden" mode). */
   ghost?: boolean;
+  /** Principal curvatures (k1, k2) per vertex, for the curvature map. */
+  curvature?: Float32Array;
+  /** Curvature-comb line segments along the body's curved edges (flat xyz pairs). */
+  combs?: Float32Array;
+}
+
+/** Surface-quality display: zebra stripes, a draft check against a pull
+ *  direction, or a curvature colour map — plus curvature combs. */
+export interface AnalysisView {
+  mode: "none" | "zebra" | "draft" | "curvature";
+  stripes: number;
+  draftDeg: number;
+  pull: { x: number; y: number; z: number };
+  quantity: "mean" | "gaussian" | "max" | "min";
+  combs: boolean;
 }
 
 export interface ViewData {
@@ -90,6 +105,8 @@ export interface ViewData {
   extrudePreview?: { plane: WorkPlane; regions: { outer: { x: number; y: number }[]; holes: { x: number; y: number }[][] }[]; distance: number; symmetric: boolean; operation: "new" | "join" | "cut" | "intersect" };
   /** Active section (cross-section) cut: clips the solids on a base plane at an offset. */
   section?: { plane: "XY" | "XZ" | "YZ"; offset: number; flip: boolean } | null;
+  /** Surface-quality display (zebra / draft / curvature, combs). */
+  analysis?: AnalysisView;
 }
 
 export interface PickResult {
@@ -869,6 +886,80 @@ export class SceneManager {
     }
   }
 
+  /** The material for a surface-quality display mode, or null to draw normally. */
+  private analysisMaterial(a: AnalysisView, s: SolidView, geo: THREE.BufferGeometry): THREE.Material | null {
+    const worldVert = `
+      varying vec3 vN; varying vec3 vW;
+      #include <clipping_planes_pars_vertex>
+      void main() {
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
+        vec4 mvPosition = viewMatrix * w;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <clipping_planes_vertex>
+      }`;
+    if (a.mode === "zebra") {
+      // Reflected environment stripes: the stripes break at a crease (G0),
+      // kink at a tangent-only seam (G1) and flow through a G2 one.
+      return new THREE.ShaderMaterial({
+        uniforms: { stripes: { value: Math.max(2, a.stripes) } },
+        vertexShader: worldVert,
+        fragmentShader: `
+          uniform float stripes; varying vec3 vN; varying vec3 vW;
+          void main() {
+            vec3 N = normalize(vN); if (!gl_FrontFacing) N = -N;
+            vec3 V = normalize(cameraPosition - vW);
+            vec3 R = reflect(-V, N);
+            float t = fract(atan(R.y, R.x) / 6.2831853 * stripes + R.z * stripes * 0.5);
+            float band = smoothstep(0.47, 0.5, t) - smoothstep(0.97, 1.0, t);
+            float shade = 0.35 + 0.65 * abs(dot(N, V));
+            gl_FragColor = vec4(vec3(mix(0.05, 1.0, band)) * shade, 1.0);
+          }`,
+        side: THREE.DoubleSide,
+      });
+    }
+    if (a.mode === "draft") {
+      // Faces that draft out of the mould along the pull direction are green,
+      // undercuts red, and walls steeper than the draft angle yellow.
+      const p = new THREE.Vector3(a.pull.x, a.pull.y, a.pull.z).normalize();
+      return new THREE.ShaderMaterial({
+        uniforms: { pull: { value: p }, draft: { value: Math.sin((a.draftDeg * Math.PI) / 180) } },
+        vertexShader: worldVert,
+        fragmentShader: `
+          uniform vec3 pull; uniform float draft; varying vec3 vN; varying vec3 vW;
+          void main() {
+            vec3 N = normalize(vN); if (!gl_FrontFacing) N = -N;
+            float d = dot(N, pull);
+            vec3 c = d >= draft ? vec3(0.27, 0.78, 0.38) : d <= -draft ? vec3(0.86, 0.27, 0.25) : vec3(0.93, 0.78, 0.25);
+            float shade = 0.45 + 0.55 * abs(dot(N, normalize(cameraPosition - vW)));
+            gl_FragColor = vec4(c * shade, 1.0);
+          }`,
+        side: THREE.DoubleSide,
+      });
+    }
+    if (a.mode === "curvature" && s.curvature && s.curvature.length === (s.positions.length / 3) * 2) {
+      // Diverging map: blue concave, white flat, red convex, scaled to the
+      // 98th percentile so one sharp fillet doesn't wash out the rest.
+      const n = s.positions.length / 3;
+      const q = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const k1 = s.curvature[i * 2], k2 = s.curvature[i * 2 + 1];
+        q[i] = a.quantity === "gaussian" ? k1 * k2 : a.quantity === "max" ? k1 : a.quantity === "min" ? k2 : (k1 + k2) / 2;
+      }
+      const sorted = Array.from(q, Math.abs).sort((x, y) => x - y);
+      const range = Math.max(1e-9, sorted[Math.floor(0.98 * (sorted.length - 1))] ?? 0);
+      const colors = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        const t = Math.max(-1, Math.min(1, q[i] / range));
+        const [r, g, b] = t >= 0 ? [1, 1 - t, 1 - t] : [1 + t, 1 + t, 1];
+        colors.set([r, g, b], i * 3);
+      }
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      return new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0, roughness: 0.6, side: THREE.DoubleSide });
+    }
+    return null;
+  }
+
   private renderSolid(s: SolidView, faded: boolean, index: number) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(s.positions, 3));
@@ -880,7 +971,11 @@ export class SceneManager {
     // normal (un-sectioned) view keeps the assigned material, else a uniform tint.
     const color = clip ? bodyColor(index) : 0x7b86e0;
     let mat: THREE.Material;
-    if (s.material && !clip) {
+    const analysis = this.lastData?.analysis;
+    const analysisMat = !faded && !clip && analysis && analysis.mode !== "none" ? this.analysisMaterial(analysis, s, geo) : null;
+    if (analysisMat) {
+      mat = analysisMat;
+    } else if (s.material && !clip) {
       mat = this.materialFor(s);
       (mat as THREE.MeshStandardMaterial).transparent = faded;
       (mat as THREE.MeshStandardMaterial).opacity = faded ? 0.25 : 1;
@@ -893,6 +988,11 @@ export class SceneManager {
     const mesh = new THREE.Mesh(geo, mat);
     if (s.ghost) mesh.userData.ghost = true; // drawn, but never picked
     this.solidsGroup.add(mesh);
+    if (analysis?.combs && s.combs?.length && !faded) {
+      const cg = new THREE.BufferGeometry();
+      cg.setAttribute("position", new THREE.BufferAttribute(s.combs, 3));
+      this.solidsGroup.add(new THREE.LineSegments(cg, new THREE.LineBasicMaterial({ color: 0xff8a3d, depthTest: false, transparent: true, opacity: 0.85 })));
+    }
 
     // Section cap for THIS body: a stencil pass marks where the clip plane cuts
     // its material (back faces increment, front decrement), then a coloured quad
@@ -1251,6 +1351,56 @@ export class SceneManager {
     }
   }
 
+  /** Curvature combs on a sketch's splines, arcs and circles, in its plane:
+   *  teeth point away from the centre of curvature, the longest a sixth of the
+   *  sketch's size, joined tip to tip. */
+  private renderSketchCombs(sk: Sketch, plane: WorkPlane) {
+    const pt = (id: string) => sk.entities[id] as SketchPoint | undefined;
+    const rows: { p: { x: number; y: number }; tooth: { x: number; y: number } }[][] = [];
+    for (const e of Object.values(sk.entities)) {
+      if (e.construction) continue;
+      if (e.kind === "spline") {
+        const through = e.points.map(pt).filter((p): p is SketchPoint => !!p);
+        if (through.length >= 2) rows.push(splineCurvatureComb(through, 12));
+      } else if (e.kind === "arc" || e.kind === "circle") {
+        const c = pt(e.center);
+        if (!c || !(e.r > 0)) continue;
+        let a0 = 0, sweep = Math.PI * 2;
+        if (e.kind === "arc") {
+          const a = pt(e.p1), b = pt(e.p2);
+          if (!a || !b) continue;
+          a0 = Math.atan2(a.y - c.y, a.x - c.x);
+          const a1 = Math.atan2(b.y - c.y, b.x - c.x);
+          sweep = e.ccw ? ((a1 - a0 + 4 * Math.PI) % (2 * Math.PI)) : -((a0 - a1 + 4 * Math.PI) % (2 * Math.PI));
+        }
+        const row = [];
+        for (let i = 0; i <= 24; i++) {
+          const t = a0 + (sweep * i) / 24, d = { x: Math.cos(t), y: Math.sin(t) };
+          row.push({ p: { x: c.x + d.x * e.r, y: c.y + d.y * e.r }, tooth: { x: d.x / e.r, y: d.y / e.r } });
+        }
+        rows.push(row);
+      }
+    }
+    let maxK = 0, lo = { x: Infinity, y: Infinity }, hi = { x: -Infinity, y: -Infinity };
+    for (const row of rows) for (const r of row) {
+      maxK = Math.max(maxK, Math.hypot(r.tooth.x, r.tooth.y));
+      lo = { x: Math.min(lo.x, r.p.x), y: Math.min(lo.y, r.p.y) }; hi = { x: Math.max(hi.x, r.p.x), y: Math.max(hi.y, r.p.y) };
+    }
+    if (!(maxK > 1e-9)) return;
+    const scale = (Math.hypot(hi.x - lo.x, hi.y - lo.y) / 6 || 1) / maxK;
+    const pts: THREE.Vector3[] = [];
+    for (const row of rows) {
+      const tips = row.map((r) => this.worldPt(plane, r.p.x + r.tooth.x * scale, r.p.y + r.tooth.y * scale));
+      row.forEach((r, i) => {
+        pts.push(this.worldPt(plane, r.p.x, r.p.y), tips[i]);
+        if (i > 0) pts.push(tips[i - 1], tips[i]);
+      });
+    }
+    const comb = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xff8a3d, transparent: true, opacity: 0.85 }));
+    comb.userData = { decor: true };
+    this.sketchGroup.add(comb);
+  }
+
   private renderSketch(sk: Sketch, plane: WorkPlane, data: ViewData) {
     const pts = sk.entities;
     const getPt = (id: string) => pts[id] as SketchPoint;
@@ -1340,6 +1490,8 @@ export class SceneManager {
         this.sketchGroup.add(line);
       }
     }
+
+    if (data.analysis?.combs) this.renderSketchCombs(sk, plane);
 
     // points (skip purely implicit endpoints unless hovered/selected? show all real ones)
     for (const e of Object.values(sk.entities)) {

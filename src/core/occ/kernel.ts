@@ -893,6 +893,185 @@ export function distanceBetween(a: Shape3D, b: Shape3D): number {
   return measureDistanceBetween(a as never, b as never);
 }
 
+// ---- surface quality analysis (curvature, continuity, combs) ----------------
+//
+// The build has no LProp classes, so curvature comes straight from the
+// adaptors' derivatives: principal curvatures from the first and second
+// fundamental forms of a face, and an edge's curvature from |r'×r''|/|r'|³.
+// Sign convention: positive = convex (curving away from the outward normal).
+
+type OcVec = { X(): number; Y(): number; Z(): number; delete(): void };
+interface OcAnalysis {
+  gp_Pnt: new (x?: number, y?: number, z?: number) => OcVec;
+  gp_Vec: new () => OcVec;
+  BRepAdaptor_Surface: new (f: unknown, restriction?: boolean) => { D2(u: number, v: number, p: OcVec, su: OcVec, sv: OcVec, suu: OcVec, svv: OcVec, suv: OcVec): void; delete(): void };
+  BRepAdaptor_Curve: new (e: unknown) => { FirstParameter(): number; LastParameter(): number; D2(t: number, p: OcVec, d1: OcVec, d2: OcVec): void; delete(): void };
+  GeomAPI_ProjectPointOnSurf: new (p: OcVec, s: unknown) => { NbPoints(): number; LowerDistanceParameters(): { U: number; V: number }; delete(): void };
+  BRep_Tool: { Surface(f: unknown): unknown };
+  TopAbs_Orientation: { TopAbs_REVERSED: unknown };
+}
+type V3 = [number, number, number];
+const v3 = (v: OcVec): V3 => [v.X(), v.Y(), v.Z()];
+const dot3 = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const len3 = (a: V3) => Math.hypot(a[0], a[1], a[2]);
+const scale3 = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
+
+/** Differential geometry of a face at (u,v): outward unit normal, the
+ *  fundamental forms, and principal curvatures (k1 ≥ k2, convex positive). */
+interface SurfacePoint { p: V3; n: V3; su: V3; sv: V3; E: number; F: number; G: number; L: number; M: number; N: number; k1: number; k2: number }
+
+function surfacePoint(ad: InstanceType<OcAnalysis["BRepAdaptor_Surface"]>, oc: OcAnalysis, u: number, v: number, reversed: boolean): SurfacePoint | undefined {
+  const P = new oc.gp_Pnt(), Su = new oc.gp_Vec(), Sv = new oc.gp_Vec(), Suu = new oc.gp_Vec(), Svv = new oc.gp_Vec(), Suv = new oc.gp_Vec();
+  try {
+    ad.D2(u, v, P, Su, Sv, Suu, Svv, Suv);
+    const su = v3(Su), sv = v3(Sv), suu = v3(Suu), svv = v3(Svv), suv = v3(Suv);
+    const c = cross3(su, sv), m = len3(c);
+    if (!(m > 1e-14)) return undefined; // a singular point (a cone apex, a sphere pole)
+    // outward normal; with it, a convex surface has negative L/M/N — flip so convex reads positive
+    const n = scale3(c, (reversed ? -1 : 1) / m);
+    const E = dot3(su, su), F = dot3(su, sv), G = dot3(sv, sv);
+    const L = -dot3(suu, n), M = -dot3(suv, n), N = -dot3(svv, n);
+    const det = E * G - F * F;
+    const K = (L * N - M * M) / det, H = (E * N - 2 * F * M + G * L) / (2 * det);
+    const r = Math.sqrt(Math.max(0, H * H - K));
+    return { p: v3(P), n, su, sv, E, F, G, L, M, N, k1: H + r, k2: H - r };
+  } finally { for (const x of [P, Su, Sv, Suu, Svv, Suv]) x.delete(); }
+}
+
+/** Normal curvature of a face along tangent direction d (convex positive). */
+function normalCurvature(sp: SurfacePoint, d: V3): number {
+  // d = a·Su + b·Sv (least squares in the tangent plane)
+  const r1 = dot3(d, sp.su), r2 = dot3(d, sp.sv), det = sp.E * sp.G - sp.F * sp.F;
+  const a = (sp.G * r1 - sp.F * r2) / det, b = (sp.E * r2 - sp.F * r1) / det;
+  const I = sp.E * a * a + 2 * sp.F * a * b + sp.G * b * b;
+  return I > 0 ? (sp.L * a * a + 2 * sp.M * a * b + sp.N * b * b) / I : 0;
+}
+
+export interface BodyAnalysis {
+  /** Principal curvatures (k1, k2) per vertex of meshShape(shape), 1/mm, convex positive. */
+  curvature: Float32Array;
+  /** Curvature-comb line segments (flat xyz pairs): teeth along each curved edge and the line joining their tips. */
+  combs: Float32Array;
+  /** Continuity across every edge shared by two faces: G0 (a crease), G1 (tangent), G2 (curvature-continuous). */
+  edges: { edge: number; faces: [number, number]; continuity: "G0" | "G1" | "G2"; angleDeg: number; curvatureJump: number }[];
+  /** Ranges over the mesh vertices. */
+  stats: { kMin: number; kMax: number; meanMin: number; meanMax: number; gaussMin: number; gaussMax: number };
+}
+
+/** Curvature per display-mesh vertex, edge continuity and curvature combs for one solid. */
+export function analyzeShape(shape: Shape3D, mesh: SolidMesh, opts: { combs?: boolean; combTeeth?: number } = {}): BodyAnalysis {
+  const oc = getOC() as unknown as OcAnalysis;
+  const faces = facesOf(shape), edges = edgesOf(shape);
+  const adaptors = faces.map((f) => new oc.BRepAdaptor_Surface(f.wrapped, true));
+  const surfaces = faces.map((f) => oc.BRep_Tool.Surface(f.wrapped));
+  const reversed = faces.map((f) => (f.wrapped as unknown as { Orientation(): unknown }).Orientation() === oc.TopAbs_Orientation.TopAbs_REVERSED);
+  const planar = faces.map((f) => String(f.geomType).toUpperCase() === "PLANE");
+  /** The face's differential geometry at the point of it nearest to (x,y,z). */
+  const at = (fi: number, x: number, y: number, z: number): SurfacePoint | undefined => {
+    const P = new oc.gp_Pnt(x, y, z);
+    try {
+      const proj = new oc.GeomAPI_ProjectPointOnSurf(P, surfaces[fi]);
+      try {
+        if (proj.NbPoints() < 1) return undefined;
+        const { U, V } = proj.LowerDistanceParameters();
+        return surfacePoint(adaptors[fi], oc, U, V, reversed[fi]);
+      } finally { proj.delete(); }
+    } catch { return undefined; } finally { P.delete(); }
+  };
+  try {
+    // ---- per-vertex principal curvature (each face's vertices are its own)
+    const nv = mesh.positions.length / 3;
+    const curvature = new Float32Array(nv * 2);
+    const ranges = mesh.faceRanges ?? [];
+    const singular = new Set<number>(); // vertices where curvature is undefined (a pole, an apex)
+    for (let fi = 0; fi * 2 < ranges.length && fi < faces.length; fi++) {
+      if (planar[fi]) continue;
+      const seen = new Set<number>();
+      let s1 = 0, s2 = 0, n = 0;
+      for (let k = ranges[2 * fi]; k < ranges[2 * fi] + ranges[2 * fi + 1]; k++) {
+        const vi = mesh.indices[k];
+        if (seen.has(vi)) continue;
+        seen.add(vi);
+        const sp = at(fi, mesh.positions[vi * 3], mesh.positions[vi * 3 + 1], mesh.positions[vi * 3 + 2]);
+        if (sp) { curvature[vi * 2] = sp.k1; curvature[vi * 2 + 1] = sp.k2; s1 += sp.k1; s2 += sp.k2; n++; }
+        else singular.add(vi);
+      }
+      // show a singular vertex with its face's average (it doesn't count in the stats)
+      for (const vi of seen) if (singular.has(vi) && n) { curvature[vi * 2] = s1 / n; curvature[vi * 2 + 1] = s2 / n; }
+    }
+    const stats = { kMin: Infinity, kMax: -Infinity, meanMin: Infinity, meanMax: -Infinity, gaussMin: Infinity, gaussMax: -Infinity };
+    for (let i = 0; i < nv; i++) {
+      if (singular.has(i)) continue;
+      const k1 = curvature[i * 2], k2 = curvature[i * 2 + 1];
+      stats.kMin = Math.min(stats.kMin, k2); stats.kMax = Math.max(stats.kMax, k1);
+      stats.meanMin = Math.min(stats.meanMin, (k1 + k2) / 2); stats.meanMax = Math.max(stats.meanMax, (k1 + k2) / 2);
+      stats.gaussMin = Math.min(stats.gaussMin, k1 * k2); stats.gaussMax = Math.max(stats.gaussMax, k1 * k2);
+    }
+    if (!Number.isFinite(stats.kMin)) for (const k of Object.keys(stats) as (keyof typeof stats)[]) stats[k] = 0;
+
+    // ---- edges: continuity across the two faces, and combs along the curve
+    const adjacency = edgeGeoms(shape);
+    const out: BodyAnalysis["edges"] = [];
+    const teeth: { p: V3; c: V3 }[][] = [];
+    const nTeeth = Math.max(4, opts.combTeeth ?? 14);
+    edges.forEach((e, ei) => {
+      const curve = new oc.BRepAdaptor_Curve(e.wrapped);
+      const P = new oc.gp_Pnt(), D1 = new oc.gp_Vec(), D2 = new oc.gp_Vec();
+      try {
+        const t0 = curve.FirstParameter(), t1 = curve.LastParameter();
+        const sample = (t: number) => { curve.D2(t, P, D1, D2); return { p: v3(P), d1: v3(D1), d2: v3(D2) }; };
+        const fs = [...new Set(adjacency[ei]?.faces ?? [])];
+        if (fs.length === 2) {
+          let angle = 0, jump = 0, kSide = 0;
+          for (const f of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+            const { p, d1 } = sample(t0 + (t1 - t0) * f);
+            const T = scale3(d1, 1 / (len3(d1) || 1));
+            const a = at(fs[0], ...p), b = at(fs[1], ...p);
+            if (!a || !b) continue;
+            angle = Math.max(angle, (Math.acos(Math.max(-1, Math.min(1, dot3(a.n, b.n)))) * 180) / Math.PI);
+            const ka = normalCurvature(a, cross3(a.n, T)), kb = normalCurvature(b, cross3(b.n, T));
+            jump = Math.max(jump, Math.abs(ka - kb));
+            kSide = Math.max(kSide, Math.abs(ka), Math.abs(kb));
+          }
+          // tangent within half a degree is G1; the cross-edge curvature also matching (to 1%) is G2
+          out.push({ edge: ei, faces: [fs[0], fs[1]], continuity: angle > 0.5 ? "G0" : jump > 1e-6 + 0.01 * kSide ? "G1" : "G2", angleDeg: angle, curvatureJump: jump });
+        }
+        if (opts.combs) {
+          const row: { p: V3; c: V3 }[] = [];
+          for (let i = 0; i <= nTeeth; i++) {
+            const { p, d1, d2 } = sample(t0 + ((t1 - t0) * i) / nTeeth);
+            const s = len3(d1);
+            if (!(s > 1e-12)) continue;
+            const k = len3(cross3(d1, d2)) / (s * s * s);
+            const T = scale3(d1, 1 / s);
+            const nrm = [d2[0] - dot3(d2, T) * T[0], d2[1] - dot3(d2, T) * T[1], d2[2] - dot3(d2, T) * T[2]] as V3;
+            const nl = len3(nrm);
+            row.push({ p, c: k > 1e-9 && nl > 1e-12 ? scale3(nrm, -k / nl) : [0, 0, 0] }); // teeth point away from the centre of curvature
+          }
+          if (row.some((r) => len3(r.c) > 0)) teeth.push(row);
+        }
+      } finally { P.delete(); D1.delete(); D2.delete(); curve.delete(); }
+    });
+    // the largest tooth spans 8% of the body's diagonal
+    let maxK = 0;
+    for (const row of teeth) for (const t of row) maxK = Math.max(maxK, len3(t.c));
+    const xs = mesh.positions;
+    let lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < xs.length; i += 3) { lo = [Math.min(lo[0], xs[i]), Math.min(lo[1], xs[i + 1]), Math.min(lo[2], xs[i + 2])]; hi = [Math.max(hi[0], xs[i]), Math.max(hi[1], xs[i + 1]), Math.max(hi[2], xs[i + 2])]; }
+    const scale = maxK > 0 ? (0.08 * Math.max(1e-9, len3([hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]]))) / maxK : 0;
+    const seg: number[] = [];
+    for (const row of teeth) {
+      const tip = row.map((t) => [t.p[0] + t.c[0] * scale, t.p[1] + t.c[1] * scale, t.p[2] + t.c[2] * scale] as V3);
+      row.forEach((t, i) => { if (len3(t.c) > 0) seg.push(...t.p, ...tip[i]); if (i > 0) seg.push(...tip[i - 1], ...tip[i]); });
+    }
+    return { curvature, combs: Float32Array.from(seg), edges: out, stats };
+  } finally {
+    for (const a of adaptors) a.delete();
+    freeAll(edges); freeAll(faces);
+  }
+}
+
 /** Exact (B-rep, not mesh) mass properties of a solid: volume (mm³), surface
  *  area (mm²) and the centroid of its volume, by Gauss integration over the
  *  faces. NaN fields if OCC can't integrate the shape. */

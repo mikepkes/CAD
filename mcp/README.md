@@ -87,6 +87,8 @@ Plus timeline / query / history tools:
   without switching to it
 - `set_visibility { ids, visible }` and `isolate { ids | null }`: display-only
   hide/show (`get_document` lists `hidden`)
+- `surface_analysis` — curvature ranges and per-edge G0/G1/G2 continuity, from
+  the exact B-rep
 - `batch` — run `steps: [{tool, arguments}]` as one transaction. The first
   failing step rolls the document and its undo history back (`atomic: false`
   keeps the successful steps)
