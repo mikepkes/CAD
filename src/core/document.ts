@@ -215,6 +215,88 @@ export interface MemberFeature {
   gussetExpr?: string;
 }
 
+/** A fold line of a sheet's blank: a line of its sketch (usually construction). */
+export interface SheetFoldDef {
+  line: string;
+  /** Degrees: + folds toward the sheet's top (a valley seen from the top), − away (a mountain). Omitted = solved (sharp creases only). */
+  angleExpr?: string;
+  /** Which way a crease without an angle folds. */
+  direction?: "valley" | "mountain";
+  /** Inner bend radius (default the sheet's); 0 = a sharp crease. */
+  radiusExpr?: string;
+}
+
+/** A sheet-metal (or paper) part: a flat blank of uniform thickness folded
+ *  along lines — from a closed sketch (base flange / crease pattern) or an
+ *  open polyline (contour flange). Its rules (thickness, bend radius,
+ *  K-factor, relief size) carry to the flanges and folds added to it. */
+export interface SheetFeature {
+  id: string;
+  kind: "sheet";
+  name: string;
+  mode: "base" | "contour";
+  sketchId: string;
+  thicknessExpr: string;
+  /** Default inner bend radius (default: the thickness; 0 = sharp creases). */
+  radiusExpr?: string;
+  /** Neutral-layer position as a fraction of the thickness from the inside (default 0.5). */
+  kFactorExpr?: string;
+  reliefWidthExpr?: string;
+  /** base: the blank's fold lines. */
+  folds?: SheetFoldDef[];
+  /** contour: how far the profile runs along the sketch normal. */
+  widthExpr?: string;
+  /** Material on the other side: below the sketch plane (base), or left of the polyline (contour). */
+  flip?: boolean;
+  /** A point on the panel that stays put (sketch coords; default inside the blank). */
+  fixed?: { x: number; y: number };
+}
+
+/** An edge flange (or hem) on a sheet: material added off a straight edge of the blank and folded up. */
+export interface FlangeFeature {
+  id: string;
+  kind: "flange";
+  name: string;
+  body?: string;
+  /** The blank edge: a sketch line id of the base, or a flange edge ("<flangeId>:tip" / ":side1" / ":side2"). */
+  edge: string;
+  /** Straight length past the bend. */
+  lengthExpr: string;
+  /** Degrees, default 90 (a hem: 180); + toward the sheet's top. */
+  angleExpr?: string;
+  radiusExpr?: string;
+  position?: "bendOutside" | "materialInside" | "materialOutside";
+  /** Unflanged distance left at the edge's start and end. */
+  insetExprs?: [string, string];
+  hem?: boolean;
+}
+
+/** A sketched bend (or a jog) on a sheet: the line of a sketch drawn on one of its faces, folded across that face. */
+export interface FoldFeature {
+  id: string;
+  kind: "fold";
+  name: string;
+  body?: string;
+  sketchId: string;
+  /** Which line (default the sketch's first). */
+  line?: string;
+  angleExpr: string;
+  radiusExpr?: string;
+  /** A jog: the far side steps by this much (two bends) instead of turning. */
+  jogExpr?: string;
+  /** Fold the other side (the jog steps toward the line's right). */
+  flip?: boolean;
+}
+
+/** Show a sheet flat (unfold) or folded again (refold) — cuts made to it while flat are kept. */
+interface SheetViewFeature<K extends string> {
+  id: string;
+  kind: K;
+  name: string;
+  body?: string;
+}
+export type UnfoldFeature = SheetViewFeature<"unfold"> | SheetViewFeature<"refold">;
+
 /** A body read from a neutral CAD file. The file's text is kept in the
  *  document, so a saved design is self-contained and replays anywhere. */
 export interface ImportFeature {
@@ -452,7 +534,7 @@ export interface InstanceFrame {
   template: string;  // the source (template) component it was cloned from
 }
 
-export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | ImportFeature | MemberFeature | SurfaceFeature | StitchFeature | ThickenFeature | TrimFeature | UntrimFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
+export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | ImportFeature | MemberFeature | SheetFeature | FlangeFeature | FoldFeature | UnfoldFeature | SurfaceFeature | StitchFeature | ThickenFeature | TrimFeature | UntrimFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
   instanceFrame?: InstanceFrame;
   /** Switched off by the active configuration (derived; set by rebuild). */
   configSuppressed?: boolean;

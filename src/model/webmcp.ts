@@ -13,6 +13,7 @@ import type { TurntableOpts, TurntableResult } from "../viewport/turntableRecord
 import { sanitizeOutputName, timestampedStem } from "./saveOutput";
 import type { BodyTopology } from "../core/features";
 import { groupCutList, cutListCsv } from "../core/weldment";
+import { flatPatternSvg, flatPatternDxf, sheetSummary, SheetRow } from "../core/sheet";
 
 export interface WebMcpResult {
   content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
@@ -57,6 +58,8 @@ export interface WebMcpHost {
   setConfiguration?: (ref: string | null) => Promise<unknown>;
   /** Structural-member rows of the current solids (for the cut list). */
   members?: () => Promise<{ body: string; profile: string; length: number; angles: [number, number] }[]>;
+  /** Sheet-metal / paper bodies with their flat patterns (rebuilt first). */
+  sheets?: () => Promise<{ body: string; name: string; sheet: SheetRow }[]>;
   /** Curvature / continuity / combs per body. */
   analyze?: (opts: { bodyId?: string; combs?: boolean }) => Promise<{ featureId: string; name: string; edges: { name: string; continuity: string; angleDeg: number; curvatureJump: number }[]; stats: Record<string, number>; combs: Float32Array }[]>;
   /** Switch the viewport's surface-quality display. */
@@ -340,6 +343,32 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
           const out: Record<string, unknown> = { ok: true, rows };
           const name = (args as { saveAs?: string }).saveAs;
           if (name && host.saveOutput) out.saved = await host.saveOutput(sanitizeOutputName(name, "csv", "cut list"), new TextEncoder().encode(cutListCsv(rows)), "text/csv");
+          return ok(out);
+        } catch (e) {
+          return { ...ok({ ok: false, error: errorText(e) }), isError: true };
+        }
+      },
+    });
+  }
+  if (host.sheets) {
+    tools.push({
+      name: "flat_pattern",
+      description: "Sheet-metal / paper flat patterns: for each sheet body (or just `body`), its thickness, K-factor, flat size, every fold (angle in degrees: + up / valley, − down / mountain; inner radius; bend allowance — solved crease angles included), its blank's edge names (for feature.flange) and whether it's stale (changed by another feature while folded). `format` svg (cut black, valley folds dashed blue, mountain dash-dot red) or dxf (layers CUT / BEND_UP / BEND_DOWN) with `saveAs` writes the pattern — in the desktop app into ~/Downloads/Chisel CAD/; without `saveAs` the file's text is returned.",
+      inputSchema: { type: "object", properties: { body: { type: "string" }, format: { type: "string", enum: ["svg", "dxf"] }, saveAs: { type: "string" } } },
+      annotations: { ...READ_ONLY, idempotentHint: true },
+      execute: async (args) => {
+        const a = args as { body?: string; format?: "svg" | "dxf"; saveAs?: string };
+        try {
+          const all = await host.sheets!();
+          const list = a.body ? all.filter((x) => x.body === a.body) : all;
+          if (!list.length) throw new Error(a.body ? `"${a.body}" isn't a sheet-metal body` : "there are no sheet-metal bodies — make one with feature.sheet");
+          const out: Record<string, unknown> = { ok: true, sheets: list.map(({ body, name, sheet }) => sheetSummary(body, name, sheet)) };
+          if (a.format) {
+            if (list.length > 1) throw new Error("name the `body` whose flat pattern to write");
+            const text = a.format === "svg" ? flatPatternSvg(list[0].sheet.flat) : flatPatternDxf(list[0].sheet.flat);
+            if (a.saveAs && host.saveOutput) out.saved = await host.saveOutput(sanitizeOutputName(a.saveAs, a.format, `${list[0].name} flat`), new TextEncoder().encode(text), a.format === "svg" ? "image/svg+xml" : "application/dxf");
+            else out.content = text;
+          }
           return ok(out);
         } catch (e) {
           return { ...ok({ ok: false, error: errorText(e) }), isError: true };

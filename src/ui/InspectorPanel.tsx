@@ -1,7 +1,8 @@
 import { activeSketch, useStore } from "../model/store";
 import { EyeToggle } from "./EyeToggle";
 import { groupCutList, cutListCsv } from "../core/weldment";
-import { saveOutput } from "../model/saveOutput";
+import { flatPatternSvg, flatPatternDxf } from "../core/sheet";
+import { saveOutput, sanitizeOutputName } from "../model/saveOutput";
 import { Constraint, DimensionConstraint, isDimension } from "../sketch/types";
 
 const dimLabel: Record<string, string> = {
@@ -40,6 +41,33 @@ function CutList() {
   );
 }
 
+/** Each sheet-metal / paper body's flat size and folds, with SVG / DXF exports of the flat pattern. */
+function FlatPatterns() {
+  const solids = useStore((s) => s.solids);
+  const sheets = Object.values(solids).filter((b) => b.sheet);
+  if (!sheets.length) return null;
+  const save = (name: string, flat: NonNullable<(typeof sheets)[number]["sheet"]>["flat"], ext: "svg" | "dxf") =>
+    void saveOutput(sanitizeOutputName(`${name} flat`, ext, "flat pattern"), new TextEncoder().encode(ext === "svg" ? flatPatternSvg(flat) : flatPatternDxf(flat)), ext === "svg" ? "image/svg+xml" : "application/dxf");
+  return (
+    <div className="inspector-section">
+      <div className="section-title">Flat patterns ({sheets.length})</div>
+      {sheets.map((b) => {
+        const sh = b.sheet!, f = sh.flat;
+        const ups = f.folds.filter((x) => x.angle > 0).length, downs = f.folds.length - ups;
+        return (
+          <div className="dim-row" key={b.featureId} style={{ gridTemplateColumns: "1fr 1fr 28px 28px" }}
+            title={f.folds.map((x) => `${x.id}: ${x.angle.toFixed(1)}°${x.radius > 0 ? ` R${x.radius} BA ${x.allowance.toFixed(3)}` : " crease"}`).join("\n") + (sh.stale ? "\n(stale: changed while folded)" : "")}>
+            <span className="dim-type">{b.name}{sh.stale ? " ⚠" : ""}</span>
+            <span className="muted-inline">{(f.max.x - f.min.x).toFixed(1)} × {(f.max.y - f.min.y).toFixed(1)} · {ups}↑ {downs}↓</span>
+            <button className="icon-btn" title="Save flat pattern as SVG" onClick={() => save(b.name, f, "svg")}>⇩</button>
+            <button className="icon-btn" title="Save flat pattern as DXF" onClick={() => save(b.name, f, "dxf")}>⌗</button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ModelInspector() {
   const session = useStore((s) => s.session);
   useStore((s) => s.rev);
@@ -70,6 +98,11 @@ function ModelInspector() {
               f.kind === "primitive" ? `◧ ${f.shape}` :
               f.kind === "import" ? `⇩ ${f.format.toUpperCase()}` :
               f.kind === "member" ? `⌸ ${f.profile.kind.replace("_", " ")}` :
+              f.kind === "sheet" ? `▱ t=${f.thicknessExpr}${f.folds?.length ? ` · ${f.folds.length} folds` : ""}` :
+              f.kind === "flange" ? `⌐ ${f.hem ? "hem" : `${f.angleExpr ?? "90"}°`} ${f.lengthExpr}` :
+              f.kind === "fold" ? (f.jogExpr ? `⎍ jog ${f.jogExpr}` : `∠ ${f.angleExpr}°`) :
+              f.kind === "unfold" ? "▭ flat" :
+              f.kind === "refold" ? "⌐ folded" :
               f.kind === "surface" ? `◌ ${f.mode}` :
               f.kind === "stitch" ? `⧉ ${f.bodies.length}${f.solid ? " → solid" : ""}` :
               f.kind === "thicken" ? `▤ ${f.thicknessExpr}` :
@@ -108,6 +141,7 @@ function ModelInspector() {
         })}
       </div>
       <CutList />
+      <FlatPatterns />
     </div>
   );
 }

@@ -186,6 +186,20 @@ on.
   mitred, butted, or left as drawn, with optional end caps and gusset plates.
   The **cut list** (Inspector, or `cut_list`) groups members by profile, cut
   length and end angles, and exports CSV.
+- **Sheet metal and paper:** `feature.sheet` folds a flat blank (a closed
+  sketch, with fold lines drawn as construction lines) or unrolls an open run
+  of lines into a contour flange. Thickness, bend radius and K-factor are set
+  once for the part. Bends wrap the blank exactly onto their radius, so the
+  flat length is Σ straights + Σ bend allowances. Add **edge flanges** and
+  **hems** (`feature.flange`: bend outside, material inside or outside, insets,
+  automatic relief slots and open-corner reliefs), **sketched bends** and
+  **jogs** (`feature.fold`), and **unfold → cut → refold** to cut holes across
+  bends. Paper is the same model with sharp creases (radius 0) and thickness 0
+  or a small one. Creases can meet at vertices, and a crease left without an
+  angle is solved so every vertex closes up (rigid origami): drive one crease
+  and the rest follow, or get told which vertex can't fold. The **flat
+  pattern** (Inspector, or `flat_pattern`) exports SVG or DXF, with valley and
+  mountain fold lines.
 - **Surface analysis:** the toolbar switches the shaded view to **zebra**
   stripes (they break at a crease, kink at a tangent-only seam and flow through
   a curvature-continuous one), a **curvature** map (mean / Gaussian / max / min,

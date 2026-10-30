@@ -140,6 +140,18 @@ export function buildRegionsSolid(wp: WorkPlane, regions: Profile[], distance: n
   return result;
 }
 
+/** Regions on a plane as flat faces (one face, or a compound when there are several). */
+export function regionsFace(wp: WorkPlane, regions: Profile[]): Shape3D {
+  const faces = regions.map((r) => {
+    let drawing = loopToDrawing(r.outer);
+    for (const hole of r.holes) drawing = drawing.cut(loopToDrawing(hole));
+    const sk = drawing.sketchOnPlane(planeFor(wp)) as unknown as { face?: () => Shape3D; faces?: () => Shape3D };
+    return sk.face ? sk.face() : sk.faces!();
+  });
+  if (!faces.length) throw new Error("no regions");
+  return asOne(faces);
+}
+
 /** Build an OPEN drawing from a path (line/arc segments) — a sweep spine. */
 /** Continue a pen through a spline's points as cubic pieces (the same cubics sampleSpline draws). */
 function splineThrough<T>(pen: T, through: { x: number; y: number }[]): T {

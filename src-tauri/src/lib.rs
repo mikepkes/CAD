@@ -137,12 +137,12 @@ fn write_no_follow(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> 
 }
 
 /// Accept only a plain `name.png` / `.mp4` / `.webm`, an exported model
-/// (`.step` / `.stp` / `.stl` / `.3mf`) or a cut list (`.csv`): no path
-/// separators, no leading dot.
+/// (`.step` / `.stp` / `.stl` / `.3mf`), a cut list (`.csv`) or a flat
+/// pattern (`.svg` / `.dxf`): no path separators, no leading dot.
 fn render_file_name(name: &str) -> Result<&str, String> {
     let plain = name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ' '));
     let lower = name.to_ascii_lowercase();
-    let known_ext = [".png", ".mp4", ".webm", ".step", ".stp", ".stl", ".3mf", ".csv"].iter().any(|e| lower.ends_with(e) && lower.len() > e.len());
+    let known_ext = [".png", ".mp4", ".webm", ".step", ".stp", ".stl", ".3mf", ".csv", ".svg", ".dxf"].iter().any(|e| lower.ends_with(e) && lower.len() > e.len());
     if name.len() > 120 || !plain || name.starts_with('.') || !known_ext {
         return Err(format!("invalid output filename {name:?}"));
     }
@@ -181,10 +181,10 @@ mod tests {
 
     #[test]
     fn render_names_must_be_plain_files() {
-        for ok in ["turntable.mp4", "view az30 el45.png", "part-v2_final.webm", "A.PNG", "bracket Large.step", "peg.stl", "box.3mf", "frame cut list.csv"] {
+        for ok in ["turntable.mp4", "view az30 el45.png", "part-v2_final.webm", "A.PNG", "bracket Large.step", "peg.stl", "box.3mf", "frame cut list.csv", "bracket flat.dxf", "crane crease pattern.svg"] {
             assert_eq!(render_file_name(ok), Ok(ok));
         }
-        for bad in ["", ".png", ".hidden.png", "../x.png", "/etc/x.png", "a/b.mp4", "c:\\x.png", "x.sh", "x.png.sh", "~x.png", "x.step.exe", ".step"] {
+        for bad in ["", ".png", ".hidden.png", "../x.png", "/etc/x.png", "a/b.mp4", "c:\\x.png", "x.sh", "x.png.sh", "~x.png", "x.step.exe", ".step", "x.svg.html", ".dxf"] {
             assert!(render_file_name(bad).is_err(), "{bad:?} should be rejected");
         }
     }
