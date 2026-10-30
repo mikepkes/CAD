@@ -49,3 +49,28 @@ export function sampleSpline(pts: Pt[], perSeg = 8): Pt[] {
   }
   return out;
 }
+
+/** Curvature comb of a spline: at `perSeg` samples per segment, the point and
+ *  a tooth vector pointing away from the centre of curvature with length |κ|
+ *  (1/mm), from the exact derivatives of each cubic piece. */
+export function splineCurvatureComb(pts: Pt[], perSeg = 12): { p: Pt; tooth: Pt }[] {
+  if (pts.length < 2) return [];
+  const t = splineTangents(pts);
+  const out: { p: Pt; tooth: Pt }[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const { c1, c2 } = splineSegmentControls(pts, t, i);
+    for (let k = i === 0 ? 0 : 1; k <= perSeg; k++) {
+      const s = k / perSeg, u = 1 - s;
+      const p = { x: u * u * u * a.x + 3 * u * u * s * c1.x + 3 * u * s * s * c2.x + s * s * s * b.x, y: u * u * u * a.y + 3 * u * u * s * c1.y + 3 * u * s * s * c2.y + s * s * s * b.y };
+      const d1 = { x: 3 * (u * u * (c1.x - a.x) + 2 * u * s * (c2.x - c1.x) + s * s * (b.x - c2.x)), y: 3 * (u * u * (c1.y - a.y) + 2 * u * s * (c2.y - c1.y) + s * s * (b.y - c2.y)) };
+      const d2 = { x: 6 * (u * (c2.x - 2 * c1.x + a.x) + s * (b.x - 2 * c2.x + c1.x)), y: 6 * (u * (c2.y - 2 * c1.y + a.y) + s * (b.y - 2 * c2.y + c1.y)) };
+      const sp = Math.hypot(d1.x, d1.y);
+      if (sp < 1e-12) continue;
+      const kappa = (d1.x * d2.y - d1.y * d2.x) / (sp * sp * sp); // signed: + bends left
+      const left = { x: -d1.y / sp, y: d1.x / sp };
+      out.push({ p, tooth: { x: -kappa * left.x, y: -kappa * left.y } });
+    }
+  }
+  return out;
+}

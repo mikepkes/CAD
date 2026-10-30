@@ -9,7 +9,7 @@
 
 import { GeometryBackend, GeometryRequest, GeometryRequestInit, GeometryResponse, ExportFormat, EvaluateResult, TopologyOpts } from "../core/geometry/backend";
 import { CadDocument } from "../core/document";
-import { CollisionResult, BodyTopology } from "../core/features";
+import { CollisionResult, BodyTopology, BodyAnalysisResult } from "../core/features";
 import { KernelInitOptions, Edge3D } from "../core/occ/kernel";
 
 export class WorkerGeometryBackend implements GeometryBackend {
@@ -71,6 +71,11 @@ export class WorkerGeometryBackend implements GeometryBackend {
     const r = await this.send({ kind: "topology", doc, opts });
     if (r.kind === "topology") return r.bodies;
     throw new Error(r.kind === "error" ? r.message : "topology failed");
+  }
+  async analyze(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): Promise<BodyAnalysisResult[]> {
+    const r = await this.send({ kind: "analyze", doc, opts });
+    if (r.kind === "analyze") return r.bodies;
+    throw new Error(r.kind === "error" ? r.message : "analyze failed");
   }
   async distance(doc: CadDocument, a: string, b: string): Promise<number> {
     const r = await this.send({ kind: "distance", doc, a, b });

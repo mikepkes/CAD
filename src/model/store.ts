@@ -20,6 +20,7 @@ import type { TurntableOpts } from "../viewport/turntableRecorder";
 import { saveOutput } from "./saveOutput";
 import { pickFace } from "../core/geometry/pick";
 import type { Vec3 } from "../math/vec";
+import type { AnalysisView } from "../viewport/SceneManager";
 import { isolationList } from "../core/visibility";
 import { importRequests, ImportRequest } from "../core/importers";
 
@@ -104,6 +105,10 @@ export interface AppState {
   showGrid: boolean;
   /** Draw hidden bodies as faint, unpickable ghosts. */
   showHiddenGhosts: boolean;
+  /** Surface-quality display: zebra / draft / curvature map, and curvature combs. */
+  analysis: AnalysisView;
+  /** Per-body curvature and comb data for the current solids (when the display needs it). */
+  analysisData: Record<string, { curvature: Float32Array; combs: Float32Array; vertices: number }>;
   showConstraints: boolean;
   /** Cross-section view: clip the solids on a base plane at an offset (null = off). */
   section: { plane: "XY" | "XZ" | "YZ"; offset: number; flip: boolean } | null;
@@ -167,6 +172,8 @@ export interface AppState {
   toggleShowPlanes: () => void;
   toggleShowGrid: () => void;
   toggleShowHiddenGhosts: () => void;
+  /** Change the surface-quality display; curvature/combs are computed in the geometry backend. */
+  setAnalysis: (patch: Partial<AnalysisView>) => Promise<void>;
   /** Show or hide bodies (feature ids) / sketches / components / datum planes. Undoable. */
   setVisibility: (ids: string[], visible: boolean) => Promise<void>;
   /** Show only these (hide every other body and sketch); null shows everything. */
@@ -354,6 +361,20 @@ export const useStore = create<AppState>((set, get) => {
     return r;
   };
 
+  // Curvature and combs come from the B-rep, so they're computed in the
+  // geometry backend — only while a display that shows them is on.
+  const refreshAnalysis = async () => {
+    const a = get().analysis;
+    if (a.mode !== "curvature" && !a.combs) { if (Object.keys(get().analysisData).length) bump({ analysisData: {} }); return; }
+    if (!get().kernelReady || !Object.keys(get().session.doc.features).length) return;
+    try {
+      const res = await geometry.analyze(get().session.doc, { combs: a.combs });
+      bump({ analysisData: Object.fromEntries(res.map((r) => [r.featureId, { curvature: r.curvature, combs: r.combs, vertices: r.vertices }])) });
+    } catch (e) {
+      bump({ toast: { kind: "error", text: `Analysis failed: ${(e as Error).message}` } });
+    }
+  };
+
   // Import several bodies as one undoable unit: all of them, or (on a failure) none.
   const importAll = async (reqs: ImportRequest[]): Promise<string[]> => {
     const session = get().session;
@@ -444,6 +465,14 @@ export const useStore = create<AppState>((set, get) => {
       return { active: ref, parameters: get().session.doc.parameters.filter((p) => p.configuredBy).map((p) => ({ name: p.name, expr: p.expr, value: p.value })) };
     },
     configurations: () => get().session.doc.configurations.map((c) => ({ id: c.id, name: c.name })),
+    analyze: async (opts: { bodyId?: string; combs?: boolean }) => {
+      await get().ensureKernel();
+      return geometry.analyze(get().session.doc, opts);
+    },
+    setAnalysis: async (patch: Record<string, unknown>) => {
+      await get().setAnalysis(patch as Partial<AnalysisView>);
+      return get().analysis;
+    },
     importFile: async (fileName: string, bytes: Uint8Array) => {
       const reqs = await importRequests(fileName, bytes, { rhino3dmWasmUrl });
       const ids = await importAll(reqs);
@@ -536,6 +565,8 @@ export const useStore = create<AppState>((set, get) => {
     showPlanes: true,
     showGrid: true,
     showHiddenGhosts: false,
+    analysis: { mode: "none", stripes: 12, draftDeg: 1, pull: { x: 0, y: 0, z: 1 }, quantity: "mean", combs: false },
+    analysisData: {},
     section: null,
     gridSize: 10,
     gridSnap: false,
@@ -615,6 +646,10 @@ export const useStore = create<AppState>((set, get) => {
     toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
     toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
     toggleShowHiddenGhosts: () => set((s) => ({ showHiddenGhosts: !s.showHiddenGhosts })),
+    setAnalysis: async (patch) => {
+      set((s) => ({ analysis: { ...s.analysis, ...patch } }));
+      await refreshAnalysis();
+    },
     setVisibility: async (ids, visible) => {
       const r = await get().session.setVisibility(ids, visible);
       bump(r.ok ? {} : { toast: toastFor(r) });
@@ -959,6 +994,7 @@ export const useStore = create<AppState>((set, get) => {
             }
             bump({ solids });
           } while (rebuildDirty);
+          await refreshAnalysis();
         } finally {
           rebuildInFlight = null;
         }

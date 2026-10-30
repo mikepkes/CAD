@@ -61,7 +61,7 @@ const EDIT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, ide
 const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
 /** Meta tools by how they touch the document (registry commands carry their own flag). */
 const META_ANNOTATIONS: Record<string, ToolAnnotations> = {
-  get_document: READ_ONLY, describe_sketch: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
+  get_document: READ_ONLY, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
   export_model: READ_ONLY, export_document: READ_ONLY,
   delete_operation: DESTRUCTIVE, import_document: DESTRUCTIVE, batch: DESTRUCTIVE,
 };
@@ -381,6 +381,21 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
         }
         const r = await session.setHidden(list);
         return r.ok ? { ok: true, hidden: session.doc.hidden ?? [] } : { ok: false, error: r.error };
+      },
+    },
+    {
+      name: "surface_analysis",
+      description: "Surface quality of each body (or one: `body`), from the exact B-rep. Gives principal-curvature ranges (1/mm, convex positive) and the continuity of every edge between two faces: G0 = a crease, G1 = tangent but the curvature jumps (e.g. where a fillet meets a flat face), G2 = curvature-continuous. Each edge comes by name with its normal angle (°) and curvature jump.",
+      inputSchema: { type: "object", properties: { body: { type: "string" } } },
+      handler: async (a) => {
+        await ensureKernel();
+        const bodies = await geometry.analyze(session.doc, { bodyId: a.body as string | undefined });
+        if (a.body && !bodies.length) return { ok: false, error: `no body "${a.body}"` };
+        return { ok: true, bodies: bodies.map((b) => rounded({
+          id: b.featureId, name: b.name, curvature: b.stats,
+          continuity: { G0: b.edges.filter((e) => e.continuity === "G0").length, G1: b.edges.filter((e) => e.continuity === "G1").length, G2: b.edges.filter((e) => e.continuity === "G2").length },
+          edges: b.edges,
+        })) };
       },
     },
     {
