@@ -4,7 +4,7 @@
 // display, and STL/STEP blobs for CNC / 3D-print output.
 
 import opencascade from "replicad-opencascadejs";
-import { setOC, getOC, cast, isShape3D, measureArea, measureDistanceBetween, draw, drawCircle, drawEllipse, makeBox, makeCylinder, makeSphere, makeHelix, genericSweep, Plane, measureVolume, type Drawing, type Shape3D, type Wire, type EdgeFinder, type FaceFinder } from "replicad";
+import { setOC, getOC, cast, isShape3D, measureArea, measureDistanceBetween, makeAx1, makeCompound, draw, drawCircle, drawEllipse, makeBox, makeCylinder, makeSphere, makeHelix, genericSweep, Plane, measureVolume, type Drawing, type Shape3D, type Wire, type EdgeFinder, type FaceFinder } from "replicad";
 import { ThreadForm, threadSection, threadLead, ThreadSection } from "../geometry/thread";
 import { WorkPlane } from "../../geometry/plane";
 import { Loop, LoopSegment, Profile, Pt } from "../geometry/profile";
@@ -140,12 +140,25 @@ export function buildRegionsSolid(wp: WorkPlane, regions: Profile[], distance: n
 }
 
 /** Build an OPEN drawing from a path (line/arc segments) — a sweep spine. */
+/** Continue a pen through a spline's points as cubic pieces (the same cubics sampleSpline draws). */
+function splineThrough<T>(pen: T, through: { x: number; y: number }[]): T {
+  const t = splineTangents(through);
+  let q = pen;
+  for (let i = 0; i < through.length - 1; i++) {
+    q = (q as unknown as { smoothSplineTo: (e: [number, number], c: unknown) => T }).smoothSplineTo(
+      [through[i + 1].x, through[i + 1].y],
+      { startTangent: [t[i].x, t[i].y], endTangent: [t[i + 1].x, t[i + 1].y], startFactor: 4 / 3, endFactor: 4 / 3 }
+    );
+  }
+  return q;
+}
+
 function openPathToDrawing(path: { start: Pt; segments: LoopSegment[] }): Drawing {
   let pen = draw([path.start.x, path.start.y]);
   for (const s of path.segments) {
     if (s.kind === "line") pen = pen.lineTo([s.to.x, s.to.y]);
     else if (s.kind === "arc") pen = pen.threePointsArcTo([s.to.x, s.to.y], [s.via.x, s.via.y]);
-    // (spline path segments are not produced by extractOpenPath yet)
+    else pen = splineThrough(pen, s.through);
   }
   // An open path is finalized with done() (not close(), which would seal it).
   return (pen as unknown as { done: () => Drawing }).done();
@@ -905,6 +918,157 @@ export function keepHalfSpace(shape: Shape3D, origin: Vec3, normal: Vec3): Shape
   const out = (shape as unknown as { cutPlane(p: Plane, offset: number, keep: "positive" | "negative"): Shape3D | null }).cutPlane(plane, 0, "positive");
   if (!out) throw new Error("the cut removed the whole member");
   return out;
+}
+
+// ---- surfaces (open shells and faces, not solids) ---------------------------
+
+type OcBuilder = { Build(): void; IsDone(): boolean; Shape(): unknown; delete(): void };
+/** Run an OCC builder and take its shape (freeing the builder). */
+function built(b: OcBuilder, what: string): Shape3D {
+  try {
+    b.Build();
+    if (!b.IsDone()) throw new Error(`${what} failed in the kernel`);
+    return cast(b.Shape() as never) as unknown as Shape3D;
+  } catch (e) {
+    throw new Error(e instanceof Error ? e.message : `${what} failed (${kernelErrorMessage(e)})`);
+  } finally { b.delete(); }
+}
+/** Several surfaces as one body. */
+const asOne = (shapes: Shape3D[]): Shape3D => (shapes.length === 1 ? shapes[0] : (makeCompound(shapes as never) as unknown as Shape3D));
+
+/** A sketch chain (open path or closed loop) as a wire on its plane. */
+export function chainWire(chain: { closed: boolean; loop: Loop }, wp: WorkPlane): Wire {
+  const drawing = chain.closed ? loopToDrawing(chain.loop) : openPathToDrawing(chain.loop);
+  return (drawing.sketchOnPlane(planeFor(wp)) as unknown as { wire: Wire }).wire;
+}
+
+/** Surfaces swept by wires along a vector (an extruded surface; no caps). */
+export function surfaceExtrude(wires: Wire[], along: Vec3, from?: Vec3): Shape3D {
+  const oc = getOC() as unknown as { gp_Vec: new (x: number, y: number, z: number) => { delete(): void }; BRepPrimAPI_MakePrism: new (s: unknown, v: unknown, copy: boolean, canon: boolean) => OcBuilder };
+  return asOne(wires.map((w) => {
+    let wire = w as unknown as Shape3D;
+    if (from && (from.x || from.y || from.z)) wire = translateShape(wire, from);
+    const v = new oc.gp_Vec(along.x, along.y, along.z);
+    try { return built(new oc.BRepPrimAPI_MakePrism((wire as unknown as { wrapped: unknown }).wrapped, v, false, true), "surface extrude"); }
+    finally { v.delete(); if (wire !== (w as unknown as Shape3D)) wire.delete(); }
+  }));
+}
+
+/** Surfaces swept by wires about an axis by `angleDeg`. */
+export function surfaceRevolve(wires: Wire[], origin: Vec3, dir: Vec3, angleDeg: number): Shape3D {
+  const oc = getOC() as unknown as { BRepPrimAPI_MakeRevol: new (s: unknown, ax: unknown, angle: number, copy: boolean) => OcBuilder };
+  return asOne(wires.map((w) => {
+    const ax = makeAx1([origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z]) as unknown as { delete(): void };
+    try { return built(new oc.BRepPrimAPI_MakeRevol((w as unknown as { wrapped: unknown }).wrapped, ax, (angleDeg * Math.PI) / 180, false), "surface revolve"); }
+    finally { ax.delete(); }
+  }));
+}
+
+/** A lofted surface through ordered wires (open or closed), not closed into a solid. */
+export function surfaceLoft(wires: Wire[], ruled: boolean): Shape3D {
+  if (wires.length < 2) throw new Error("a surface loft needs at least two sections");
+  const oc = getOC() as unknown as { BRepOffsetAPI_ThruSections: new (solid: boolean, ruled: boolean, tol: number) => OcBuilder & { AddWire(w: unknown): void; CheckCompatibility(c: boolean): void } };
+  const b = new oc.BRepOffsetAPI_ThruSections(false, ruled, 1e-6);
+  for (const w of wires) b.AddWire((w as unknown as { wrapped: unknown }).wrapped);
+  b.CheckCompatibility(true);
+  return built(b, "surface loft");
+}
+
+/** A profile wire swept along a spine wire, as a surface. */
+export function surfaceSweep(profile: Wire, spine: Wire): Shape3D {
+  const oc = getOC() as unknown as { BRepOffsetAPI_MakePipe: new (spine: unknown, profile: unknown) => OcBuilder };
+  return built(new oc.BRepOffsetAPI_MakePipe((spine as unknown as { wrapped: unknown }).wrapped, (profile as unknown as { wrapped: unknown }).wrapped), "surface sweep");
+}
+
+/** A flat face filling a closed planar wire (a patch). */
+export function planarPatch(wire: Wire): Shape3D {
+  const oc = getOC() as unknown as { BRepBuilderAPI_MakeFace: new (w: unknown, onlyPlane: boolean) => OcBuilder };
+  return built(new oc.BRepBuilderAPI_MakeFace((wire as unknown as { wrapped: unknown }).wrapped, true), "patch");
+}
+
+/** Sew shapes along shared edges (within `tol`) into one shell; with `solid`,
+ *  close it into a solid — which must then have positive volume. */
+export function sewShapes(shapes: Shape3D[], tol: number, solid: boolean): Shape3D {
+  type Obj = { delete(): void };
+  const oc = getOC() as unknown as {
+    BRepBuilderAPI_Sewing: new (tol: number) => { Add(s: unknown): void; Perform(): void; SewedShape(): unknown } & Obj;
+    TopExp_Explorer: new (s: unknown, find: unknown) => { More(): boolean; Next(): void; Current(): unknown } & Obj;
+    TopAbs_ShapeEnum: { TopAbs_SHELL: unknown };
+    TopoDS: { Shell(s: unknown): unknown };
+    BRepBuilderAPI_MakeSolid: new () => { Add(s: unknown): void; Solid(): unknown } & Obj;
+    BRep_Tool: { IsClosed(s: unknown): boolean };
+  };
+  const sew = new oc.BRepBuilderAPI_Sewing(tol);
+  try {
+    for (const s of shapes) sew.Add((s as unknown as { wrapped: unknown }).wrapped);
+    sew.Perform();
+    const sewn = sew.SewedShape();
+    if (!solid) return cast(sewn as never) as unknown as Shape3D;
+    const make = new oc.BRepBuilderAPI_MakeSolid();
+    const ex = new oc.TopExp_Explorer(sewn, oc.TopAbs_ShapeEnum.TopAbs_SHELL);
+    try {
+      let shells = 0;
+      for (; ex.More(); ex.Next()) {
+        const shell = oc.TopoDS.Shell(ex.Current());
+        // an open shell (free edges left) would make a bogus solid
+        if (!oc.BRep_Tool.IsClosed(shell)) throw new Error("the stitched surfaces don't enclose a volume: there's a gap (an open edge) — add the missing surface or raise the tolerance");
+        make.Add(shell);
+        shells++;
+      }
+      if (!shells) throw new Error("the surfaces don't sew into a shell");
+      const out = outwardSolid(cast(make.Solid() as never) as unknown as Shape3D);
+      if (!(volumeOfShape(out) > 1e-9)) { out.delete(); throw new Error("the stitched surfaces don't enclose a volume"); }
+      return out;
+    } finally { ex.delete(); make.delete(); }
+  } catch (e) {
+    throw new Error(e instanceof Error ? e.message : `stitch failed (${kernelErrorMessage(e)})`);
+  } finally { sew.delete(); }
+}
+
+/** A solid turned outward-facing if OCC built it inside-out (negative volume). */
+function outwardSolid(shape: Shape3D): Shape3D {
+  if (!(volumeOfShape(shape) < 0)) return shape;
+  const flipped = cast((shape as unknown as { wrapped: { Reversed(): unknown } }).wrapped.Reversed() as never) as unknown as Shape3D;
+  shape.delete();
+  return flipped;
+}
+
+/** Thicken a surface into a solid by `t` along its normals (negative: the other side). */
+export function thickenShape(shape: Shape3D, t: number): Shape3D {
+  const oc = getOC() as unknown as { BRepOffsetAPI_MakeThickSolid: new () => OcBuilder & { MakeThickSolidBySimple(s: unknown, off: number): void } };
+  const b = new oc.BRepOffsetAPI_MakeThickSolid();
+  b.MakeThickSolidBySimple((shape as unknown as { wrapped: unknown }).wrapped, t);
+  return outwardSolid(built(b, "thicken"));
+}
+
+/** Offset a surface by `d` along its normals (a parallel surface). */
+export function offsetSurface(shape: Shape3D, d: number): Shape3D {
+  const oc = getOC() as unknown as { BRepOffsetAPI_MakeOffsetShape: new () => OcBuilder & { PerformBySimple(s: unknown, off: number): void } };
+  const b = new oc.BRepOffsetAPI_MakeOffsetShape();
+  b.PerformBySimple((shape as unknown as { wrapped: unknown }).wrapped, d);
+  return built(b, "offset");
+}
+
+/** Untrim: rebuild every face from its own surface and outer boundary, so the
+ *  holes trimmed into it are filled; the faces are sewn back together. */
+export function untrimFaces(shape: Shape3D): Shape3D {
+  const oc = getOC() as unknown as {
+    BRep_Tool: { Surface(f: unknown): unknown };
+    BRepTools: { OuterWire(f: unknown): unknown };
+    BRepBuilderAPI_MakeFace: new (s: unknown, w: unknown, inside: boolean) => OcBuilder;
+  };
+  const faces = facesOf(shape);
+  try {
+    const rebuilt = faces.map((f) => built(new oc.BRepBuilderAPI_MakeFace(oc.BRep_Tool.Surface(f.wrapped), oc.BRepTools.OuterWire(f.wrapped), true), "untrim"));
+    return rebuilt.length === 1 ? rebuilt[0] : sewShapes(rebuilt, 1e-6, false);
+  } finally { freeAll(faces); }
+}
+
+/** Whether a shape holds any solid (else it's a surface body: shells / faces). */
+export function hasSolid(shape: Shape3D): boolean {
+  const solids = (shape as unknown as { solids?: { delete(): void }[] }).solids ?? [];
+  freeAll(solids);
+  return solids.length > 0;
 }
 
 /** Minimum distance between two shapes (0 when they touch or overlap). */

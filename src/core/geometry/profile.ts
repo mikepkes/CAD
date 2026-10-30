@@ -284,6 +284,68 @@ export function extractOpenPath(sk: Sketch): { start: Pt; segments: LoopSegment[
   return segs.length ? { start: startPt, segments: segs } : null;
 }
 
+/** A connected run of sketch curves for a surface: open (a path) or closed
+ *  (a loop — including a full circle or ellipse). */
+export interface Chain { closed: boolean; loop: Loop }
+
+/**
+ * Every connected chain of non-construction curves in a sketch — lines, arcs
+ * and splines joined end to end, plus circles and ellipses on their own. Unlike
+ * regions, a chain needn't be closed: an open profile extrudes to a surface.
+ * A branching junction (three curves at one point) splits into separate runs.
+ */
+export function extractChains(sk: Sketch): Chain[] {
+  type E = { id: string; a: string; b: string; kind: "line" | "arc" | "spline"; center?: string; ccw?: boolean; points?: string[] };
+  const curves: E[] = [];
+  const out: Chain[] = [];
+  for (const e of Object.values(sk.entities)) {
+    if (e.construction) continue;
+    if (e.kind === "line") curves.push({ id: e.id, a: e.p1, b: e.p2, kind: "line" });
+    else if (e.kind === "arc") curves.push({ id: e.id, a: e.p1, b: e.p2, kind: "arc", center: e.center, ccw: e.ccw });
+    else if (e.kind === "spline" && e.points.length >= 2) curves.push({ id: e.id, a: e.points[0], b: e.points[e.points.length - 1], kind: "spline", points: e.points });
+    else if (e.kind === "circle") {
+      const c = P(sk, e.center);
+      if (c && e.r > 0) out.push({ closed: true, loop: { start: { x: c.x + e.r, y: c.y }, segments: [], circle: { center: { x: c.x, y: c.y }, r: e.r }, area: Math.PI * e.r * e.r } });
+    } else if (e.kind === "ellipse") {
+      const c = P(sk, e.center);
+      if (c) out.push({ closed: true, loop: { start: { x: c.x, y: c.y }, segments: [], ellipse: { center: { x: c.x, y: c.y }, rx: e.rx, ry: e.ry, rotation: e.rotation }, area: Math.PI * e.rx * e.ry } });
+    }
+  }
+  const inc = new Map<string, E[]>();
+  for (const c of curves) for (const v of [c.a, c.b]) { const l = inc.get(v) ?? []; l.push(c); inc.set(v, l); }
+  const used = new Set<string>();
+  const pt = (id: string): Pt => ({ x: P(sk, id).x, y: P(sk, id).y });
+  const walk = (start: string): Chain | null => {
+    const segs: LoopSegment[] = [];
+    let cur = start;
+    for (;;) {
+      const next = (inc.get(cur) ?? []).find((c) => !used.has(c.id));
+      if (!next) break;
+      used.add(next.id);
+      const forward = next.a === cur;
+      const toId = forward ? next.b : next.a;
+      const to = pt(toId);
+      if (next.kind === "line") segs.push({ kind: "line", to });
+      else if (next.kind === "arc") segs.push({ kind: "arc", to, via: arcVia(pt(next.center!), pt(cur), to, forward ? !!next.ccw : !next.ccw) });
+      else {
+        const ids = forward ? next.points! : [...next.points!].reverse();
+        segs.push({ kind: "spline", to, through: ids.map(pt) });
+      }
+      cur = toId;
+      if ((inc.get(cur)?.length ?? 0) > 2) break; // a branch: end this run here
+    }
+    if (!segs.length) return null;
+    const closed = cur === start;
+    const s0 = pt(start);
+    const poly = [s0, ...segs.map((g) => g.to)];
+    return { closed, loop: { start: s0, segments: segs, area: closed ? signedArea(poly) : 0 } };
+  };
+  // open runs first (from their free ends), then whatever is left is loops
+  for (const [v, l] of inc) if (l.length !== 2 && l.some((c) => !used.has(c.id))) { const c = walk(v); if (c) out.push(c); }
+  for (const c of curves) if (!used.has(c.id)) { const ch = walk(c.a); if (ch) out.push(ch); }
+  return out;
+}
+
 export function extractRegions(sk: Sketch): Region[] {
   const loops = collectLoops(sk);
   if (loops.length === 0) return [];

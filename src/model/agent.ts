@@ -91,6 +91,11 @@ export function describeFeature(f: FeatureDef): Record<string, unknown> {
     case "extrude": return { id: f.id, kind: f.kind, name: f.name, sketchId: f.sketchId, distance: f.distanceExpr, operation: f.operation ?? "new", ...(f.symmetric ? { symmetric: true } : {}), ...(f.direction ? { direction: f.direction } : {}), ...(f.extent ? { extent: f.extent } : {}) };
     case "revolve": return { id: f.id, kind: f.kind, name: f.name, sketchId: f.sketchId, angle: f.angleExpr, axis: f.axis, operation: f.operation ?? "new" };
     case "primitive": return { id: f.id, kind: f.kind, name: f.name, shape: f.shape, dims: f.dims, at: f.at, operation: f.operation ?? "new" };
+    case "surface": return { id: f.id, kind: f.kind, name: f.name, mode: f.mode, sketchId: f.sketchId, sketches: f.sketchIds, path: f.pathSketch, distance: f.distanceExpr, axis: f.axis, angle: f.angleExpr };
+    case "stitch": return { id: f.id, kind: f.kind, name: f.name, bodies: f.bodies, solid: !!f.solid };
+    case "thicken": return { id: f.id, kind: f.kind, name: f.name, body: f.body, thickness: f.thicknessExpr, side: f.side ?? "out" };
+    case "trim": return { id: f.id, kind: f.kind, name: f.name, body: f.body, sketchId: f.sketchId, toolBody: f.toolBody, keep: f.keep };
+    case "untrim": return { id: f.id, kind: f.kind, name: f.name, body: f.body };
     case "member": return { id: f.id, kind: f.kind, name: f.name, sketchId: f.sketchId, lines: f.lines, profile: f.profile, rotate: f.rotateExpr, corner: f.corner ?? "miter", endCaps: !!f.endCaps, gusset: f.gussetExpr };
     case "import": return { id: f.id, kind: f.kind, name: f.name, format: f.format, bytes: f.data.length, at: f.at, operation: f.operation ?? "new" };
     case "hole": return { id: f.id, kind: f.kind, name: f.name, at: f.at, diameter: f.diameterExpr, ...(f.throughAll ? { throughAll: true } : { depth: f.depthExpr }), ...(f.counterbore ? { counterbore: f.counterbore } : {}), ...(f.countersink ? { countersink: f.countersink } : {}), ...(f.thread ? { thread: f.thread } : {}) };
