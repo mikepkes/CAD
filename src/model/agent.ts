@@ -97,6 +97,10 @@ export function describeFeature(f: FeatureDef): Record<string, unknown> {
     case "trim": return { id: f.id, kind: f.kind, name: f.name, body: f.body, sketchId: f.sketchId, toolBody: f.toolBody, keep: f.keep };
     case "untrim": return { id: f.id, kind: f.kind, name: f.name, body: f.body };
     case "member": return { id: f.id, kind: f.kind, name: f.name, sketchId: f.sketchId, lines: f.lines, profile: f.profile, rotate: f.rotateExpr, corner: f.corner ?? "miter", endCaps: !!f.endCaps, gusset: f.gussetExpr };
+    case "sheet": return { id: f.id, kind: f.kind, name: f.name, mode: f.mode, sketchId: f.sketchId, thickness: f.thicknessExpr, radius: f.radiusExpr, kFactor: f.kFactorExpr, folds: f.folds, width: f.widthExpr, ...(f.flip ? { flip: true } : {}) };
+    case "flange": return { id: f.id, kind: f.kind, name: f.name, body: f.body, edge: f.edge, length: f.lengthExpr, angle: f.angleExpr ?? (f.hem ? "180" : "90"), radius: f.radiusExpr, position: f.position ?? "bendOutside", inset: f.insetExprs, ...(f.hem ? { hem: true } : {}) };
+    case "fold": return { id: f.id, kind: f.kind, name: f.name, body: f.body, sketchId: f.sketchId, line: f.line, angle: f.angleExpr, radius: f.radiusExpr, ...(f.jogExpr ? { jog: f.jogExpr } : {}), ...(f.flip ? { flip: true } : {}) };
+    case "unfold": case "refold": return { id: f.id, kind: f.kind, name: f.name, body: f.body };
     case "import": return { id: f.id, kind: f.kind, name: f.name, format: f.format, bytes: f.data.length, at: f.at, operation: f.operation ?? "new" };
     case "hole": return { id: f.id, kind: f.kind, name: f.name, at: f.at, diameter: f.diameterExpr, ...(f.throughAll ? { throughAll: true } : { depth: f.depthExpr }), ...(f.counterbore ? { counterbore: f.counterbore } : {}), ...(f.countersink ? { countersink: f.countersink } : {}), ...(f.thread ? { thread: f.thread } : {}) };
     case "thread": return { id: f.id, kind: f.kind, name: f.name, at: f.at, axis: f.axis, spec: f.spec, operation: f.operation ?? (f.spec.internal ? "cut" : "new") };

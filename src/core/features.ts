@@ -7,7 +7,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, ImportFeature, MemberFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
+  CadDocument, ExtrudeFeature, FeatureDef, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, extractChains, regionAt, Region, Profile, Loop } from "./geometry/profile";
@@ -26,6 +26,9 @@ import type { Shape3D } from "replicad";
 import { Vec3 } from "../math/vec";
 import { Rigid, IDENTITY, axisAngle, compose, invert, applyPoint, applyVec } from "../math/transform";
 import { resolveComponentWorld } from "./recompute";
+import { SheetState, SheetFold, SheetRow, blankEdges, contourBlank, addFlange, jogFolds, flatPointOf, chordAcross } from "./sheet";
+import { buildSheet, SheetBuild } from "./sheetBuild";
+import { flatBlankOf } from "./occ/sheet";
 
 export interface SolidEval {
   featureId: string;
@@ -50,6 +53,8 @@ export interface SolidEval {
   surface?: boolean;
   /** A structural member (weldment): its profile, cut length and end-cut angles (0° = square). */
   member?: { profile: string; length: number; angles: [number, number] };
+  /** A sheet-metal (or paper) body: its rules, fold angles and flat pattern. `stale` once another feature has changed it while folded (the flat pattern no longer matches). */
+  sheet?: SheetRow;
 }
 
 /** Evaluate a parametric expression, writing the value back onto `holder[key]Value`. */
@@ -136,6 +141,8 @@ interface Body {
   sig?: string;
   /** Set on a structural member: what the cut list needs. */
   member?: MemberMeta;
+  /** Set on a sheet-metal body: its flat state and folds (what flanges, folds and the flat pattern build on). */
+  sheet?: SheetState;
 }
 
 /** A member's axis (start, unit direction), profile name and end-cut angles. */
@@ -159,6 +166,8 @@ function pickBody(bodies: Body[], ref: string | undefined, what: string): Body {
 function replaceShape(body: Body, next: Shape3D) {
   body.shape.delete();
   body.shape = next;
+  // a sheet changed by any other feature no longer matches its flat state
+  if (body.sheet) body.sheet = { ...body.sheet, edited: true };
 }
 
 const BOOLEAN: Record<BooleanOp, BooleanKind> = { new: "fuse", join: "fuse", cut: "cut", intersect: "intersect" };
@@ -484,6 +493,173 @@ function applyMembers(doc: CadDocument, scope: Scope, f: MemberFeature, bodies: 
     bodies.push(...made);
   } catch (e) {
     for (const b of made) { try { b.shape.delete(); } catch { /* already freed */ } }
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
+// ---- sheet metal (and paper) ------------------------------------------------
+
+/** An expression that must evaluate (a sheet's dimensions have no sensible fallback). */
+function strictExpr(expr: string, what: string, scope: Scope): number {
+  let v = NaN;
+  try { v = compileExpr(expr).eval(scope); } catch { /* reported below */ }
+  if (!Number.isFinite(v)) throw new Error(`${what} "${expr}" doesn't evaluate to a number`);
+  return v;
+}
+const rad = (deg: number) => (deg * Math.PI) / 180;
+
+/** Swap a sheet body's geometry for a freshly built state. */
+function setSheet(b: Body, built: SheetBuild) {
+  b.shape.delete();
+  b.shape = built.shape;
+  b.faceNames = genericNames(b.id, faceGeoms(built.shape));
+  b.sheet = { ...built.state, pattern: built.pattern };
+}
+
+/** The sheet body a sheet feature works on (still a plain sheet: not changed by another feature since). */
+function sheetBody(bodies: Body[], ref: string | undefined, what: string): Body & { sheet: SheetState } {
+  const b = pickBody(bodies, ref, what);
+  if (!b.sheet) throw new Error(`${what}: "${b.id}" isn't a sheet-metal body`);
+  if (b.sheet.edited && !b.sheet.unfolded) throw new Error(`${what}: "${b.id}" was changed by another feature after it was folded — unfold it (feature.unfold), make the change while flat, then refold`);
+  return b as Body & { sheet: SheetState };
+}
+
+/** The open run of straight lines in a sketch, in order, with their ids (a contour flange's profile). */
+function contourPolyline(sk: CadDocument["sketches"][string]): { pts: { x: number; y: number }[]; ids: string[] } {
+  const lines = Object.values(sk.entities).filter((e) => e.kind === "line" && !e.construction) as { id: string; p1: string; p2: string }[];
+  if (Object.values(sk.entities).some((e) => (e.kind === "arc" || e.kind === "spline") && !e.construction)) throw new Error("a contour flange takes straight lines (the bends round its corners)");
+  if (!lines.length) throw new Error(`sketch "${sk.name}" has no lines`);
+  const at = new Map<string, typeof lines>();
+  for (const l of lines) for (const p of [l.p1, l.p2]) at.set(p, [...(at.get(p) ?? []), l]);
+  const ends = [...at.entries()].filter(([, ls]) => ls.length === 1).map(([p]) => p);
+  if ([...at.values()].some((ls) => ls.length > 2) || ends.length !== 2) throw new Error("a contour flange needs one open, unbranched run of lines");
+  const pt = (id: string) => { const p = sk.entities[id] as { x: number; y: number }; return { x: p.x, y: p.y }; };
+  let cur = ends.sort()[0];
+  const pts = [pt(cur)], ids: string[] = [], used = new Set<string>();
+  for (;;) {
+    const next = (at.get(cur) ?? []).find((l) => !used.has(l.id));
+    if (!next) break;
+    used.add(next.id);
+    ids.push(next.id);
+    cur = next.p1 === cur ? next.p2 : next.p1;
+    pts.push(pt(cur));
+  }
+  return { pts, ids };
+}
+
+function applySheet(doc: CadDocument, scope: Scope, f: SheetFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const sk = doc.sketches[f.sketchId];
+    if (!sk) throw new Error(`no sketch "${f.sketchId}"`);
+    const wp = resolveSketchPlane(sk);
+    const t = strictExpr(f.thicknessExpr, "thickness", scope);
+    if (t < 0) throw new Error("the thickness can't be negative");
+    const r = f.radiusExpr != null && f.radiusExpr !== "" ? strictExpr(f.radiusExpr, "bend radius", scope) : t;
+    const k = f.kFactorExpr ? strictExpr(f.kFactorExpr, "K-factor", scope) : 0.5;
+    if (r < 0) throw new Error("the bend radius can't be negative");
+    if (!(k >= 0 && k <= 1)) throw new Error("the K-factor is between 0 and 1");
+    const reliefWidth = f.reliefWidthExpr ? strictExpr(f.reliefWidthExpr, "relief width", scope) : t > 0 ? t : 1;
+    const rules = { thickness: t, kFactor: k, radius: r, reliefWidth };
+    const N = wp.normal;
+    let state: SheetState;
+    if (f.mode === "contour") {
+      const { pts, ids } = contourPolyline(sk);
+      const width = strictExpr(f.widthExpr ?? "10", "width", scope);
+      if (!(width > 0)) throw new Error("a contour flange needs a positive width");
+      const cb = contourBlank(pts, ids, width, !!f.flip, rules, f.id);
+      const e0 = { x: wp.u.x * cb.startDir.x + wp.v.x * cb.startDir.y, y: wp.u.y * cb.startDir.x + wp.v.y * cb.startDir.y, z: wp.u.z * cb.startDir.x + wp.v.z * cb.startDir.y };
+      const cr = (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+      const z = f.flip ? cr(N, e0) : cr(e0, N);
+      state = { frame: { origin: to3d(wp, pts[0].x, pts[0].y), x: e0, y: cr(z, e0), z }, base: { regions: cb.regions }, ops: [], edges: cb.edges, folds: cb.folds, ...rules, fixed: cb.fixed };
+    } else {
+      const regions = extractRegions(sk);
+      if (!regions.length) throw new Error(`sketch "${sk.name}" has no closed region for the blank`);
+      const pt = (id: string) => { const p = sk.entities[id] as { x: number; y: number } | undefined; if (!p) throw new Error(`sketch point "${id}" is missing`); return { x: p.x, y: p.y }; };
+      const lines = Object.values(sk.entities).filter((e) => e.kind === "line" && !e.construction).map((e) => { const l = e as { id: string; p1: string; p2: string }; return { id: l.id, a: pt(l.p1), b: pt(l.p2) }; });
+      const folds: SheetFold[] = (f.folds ?? []).map((fd) => {
+        const l = sk.entities[fd.line];
+        if (!l || l.kind !== "line") throw new Error(`fold "${fd.line}" isn't a line of sketch "${sk.name}"`);
+        const angle = fd.angleExpr != null && fd.angleExpr !== "" ? rad(strictExpr(fd.angleExpr, `fold ${fd.line} angle`, scope)) : undefined;
+        const radius = fd.radiusExpr != null && fd.radiusExpr !== "" ? strictExpr(fd.radiusExpr, `fold ${fd.line} radius`, scope) : r;
+        const direction: 1 | -1 = fd.direction === "mountain" ? -1 : fd.direction === "valley" ? 1 : angle != null && angle < 0 ? -1 : 1;
+        return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle, direction, radius, extend: radius > 0 };
+      });
+      const origin = f.flip ? { x: wp.origin.x - N.x * t, y: wp.origin.y - N.y * t, z: wp.origin.z - N.z * t } : wp.origin;
+      state = { frame: { origin, x: wp.u, y: wp.v, z: N }, base: { regions }, ops: [], edges: blankEdges(regions, lines), folds, ...rules, fixed: f.fixed ?? regions[0].interior };
+    }
+    const built = buildSheet(state);
+    bodies.push({ id: f.id, name: f.name, sketchId: f.sketchId, distance: t, shape: built.shape, faceNames: genericNames(f.id, faceGeoms(built.shape)), sheet: { ...built.state, pattern: built.pattern } });
+    if (built.warnings.length) out[f.id].warning = built.warnings.join("; ");
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
+function applyFlange(scope: Scope, f: FlangeFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const b = sheetBody(bodies, f.body, "flange");
+    if (b.sheet.unfolded) throw new Error("flange: refold the sheet first");
+    const angle = rad(strictExpr(f.angleExpr ?? (f.hem ? "180" : "90"), "flange angle", scope));
+    const radius = f.radiusExpr != null && f.radiusExpr !== "" ? strictExpr(f.radiusExpr, "flange radius", scope) : f.hem ? 0 : b.sheet.radius;
+    const length = strictExpr(f.lengthExpr, "flange length", scope);
+    const inset = (f.insetExprs ?? ["0", "0"]).map((x, i) => strictExpr(x || "0", `inset ${i + 1}`, scope)) as [number, number];
+    const next = addFlange(b.sheet, f.edge, { id: f.id, length, angle, radius, position: f.position, inset });
+    const built = buildSheet(next);
+    setSheet(b, built);
+    if (built.warnings.length) out[f.id].warning = built.warnings.join("; ");
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
+function applyFold(doc: CadDocument, scope: Scope, f: FoldFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const b = sheetBody(bodies, f.body, "fold");
+    const s = b.sheet;
+    if (s.unfolded) throw new Error("fold: refold the sheet first");
+    const sk = doc.sketches[f.sketchId];
+    if (!sk) throw new Error(`no sketch "${f.sketchId}"`);
+    const line = (f.line ? sk.entities[f.line] : Object.values(sk.entities).find((e) => e.kind === "line")) as { kind: string; p1: string; p2: string } | undefined;
+    if (!line || line.kind !== "line") throw new Error(f.line ? `"${f.line}" isn't a line of sketch "${sk.name}"` : `sketch "${sk.name}" has no line to fold along`);
+    const wp = resolveSketchPlane(sk);
+    const world = (id: string) => { const p = sk.entities[id] as { x: number; y: number }; return to3d(wp, p.x, p.y); };
+    const p1 = flatPointOf(s, world(line.p1)), p2 = flatPointOf(s, world(line.p2));
+    if (!p1 || !p2) throw new Error("the fold line must lie on a face of the sheet (sketch on its top or bottom)");
+    if (p1.panel !== p2.panel) throw new Error("the fold line must lie within one flat face of the sheet");
+    const [a, bb] = chordAcross(p1.flat, p2.flat, s.panels![p1.panel].segs);
+    const angle = rad(strictExpr(f.angleExpr, "fold angle", scope));
+    const radius = f.radiusExpr != null && f.radiusExpr !== "" ? strictExpr(f.radiusExpr, "fold radius", scope) : s.radius;
+    const folds: SheetFold[] = f.jogExpr
+      ? jogFolds(a, bb, strictExpr(f.jogExpr, "jog offset", scope), angle, radius, !!f.flip, s, f.id)
+      : [{ id: f.id, ...(f.flip ? { a: bb, b: a } : { a, b: bb }), angle, direction: angle < 0 ? -1 : 1, radius, extend: true }];
+    const built = buildSheet({ ...s, folds: [...s.folds, ...folds] });
+    setSheet(b, built);
+    if (built.warnings.length) out[f.id].warning = built.warnings.join("; ");
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
+function applyUnfold(f: UnfoldFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const b = sheetBody(bodies, f.body, f.kind);
+    const s = b.sheet;
+    if (f.kind === "unfold") {
+      if (s.unfolded) { out[f.id].warning = "the sheet is already flat"; return; }
+      setSheet(b, buildSheet({ ...s, unfolded: true }));
+      return;
+    }
+    if (!s.unfolded) { out[f.id].warning = "the sheet is already folded"; return; }
+    // cuts made while flat become the new blank
+    const next: SheetState = s.edited ? { ...s, base: { brep: flatBlankOf(b.shape, invert(s.frame), s.thickness) }, ops: [] } : s;
+    const built = buildSheet({ ...next, unfolded: false });
+    setSheet(b, built);
+    if (built.warnings.length) out[f.id].warning = built.warnings.join("; ");
+  } catch (e) {
     out[f.id].error = kernelErrorMessage(e);
   }
 }
@@ -962,7 +1138,7 @@ function applyMirror(doc: CadDocument, f: MirrorFeature, bodies: Body[], out: Re
 // late in the timeline reuses everything before it. Meshes and mass
 // properties are cached per body signature.
 
-interface BodyState { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; faceNames: string[]; decals?: ThreadDecal[]; sig: string; member?: MemberMeta }
+interface BodyState { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; faceNames: string[]; decals?: ThreadDecal[]; sig: string; member?: MemberMeta; sheet?: SheetState }
 interface StepEffect { bodies: (BodyState & { added: boolean })[]; removed?: string[]; row?: SolidEval; planes: Record<string, WorkPlane> }
 interface BodyEval { mesh: SolidMesh; bounds?: Bounds3; mass: MassProps; surface?: boolean }
 
@@ -1037,6 +1213,7 @@ function featureSketches(f: FeatureDef): string[] {
     case "loft": return f.sketchIds;
     case "sweep": return [f.profileSketch, f.pathSketch];
     case "member": return f.profile.sketch ? [f.sketchId, f.profile.sketch] : [f.sketchId];
+    case "sheet": case "fold": return [f.sketchId];
     case "surface": return [...(f.sketchId ? [f.sketchId] : []), ...(f.sketchIds ?? []), ...(f.pathSketch ? [f.pathSketch] : [])];
     case "trim": return f.sketchId ? [f.sketchId] : [];
     default: return [];
@@ -1054,7 +1231,7 @@ function bodiesRead(doc: CadDocument, f: FeatureDef, bodies: Body[]): Body[] {
       return op === "new" ? [] : target();
     case "primitive": case "import": case "loft": case "sweep": return op === "new" ? [] : target();
     case "mirror": return f.bodies === "last" ? bodies.slice(-1) : bodies;
-    case "member": case "surface": return []; // make bodies of their own
+    case "member": case "surface": case "sheet": return []; // make bodies of their own
     case "stitch": return f.bodies.map((id) => bodies.find((b) => b.id === id)).filter((b): b is Body => !!b);
     case "trim": { const t = target(); const tool = f.toolBody ? bodies.find((b) => b.id === f.toolBody) : undefined; return tool ? [...t, tool] : t; }
     default: return target(); // hole, thread, fillet, chamfer, shell, pattern
@@ -1084,7 +1261,7 @@ function stepKey(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Body[], 
   }));
 }
 
-const bodyState = (b: Body): BodyState => ({ id: b.id, name: b.name, sketchId: b.sketchId, distance: b.distance, shape: cloneShape(b.shape), faceNames: b.faceNames.slice(), decals: cloneDecals(b.decals), sig: b.sig!, ...(b.member ? { member: structuredClone(b.member) } : {}) });
+const bodyState = (b: Body): BodyState => ({ id: b.id, name: b.name, sketchId: b.sketchId, distance: b.distance, shape: cloneShape(b.shape), faceNames: b.faceNames.slice(), decals: cloneDecals(b.decals), sig: b.sig!, ...(b.member ? { member: structuredClone(b.member) } : {}), ...(b.sheet ? { sheet: structuredClone(b.sheet) } : {}) });
 
 /** Run one step through `run`, recording what it did; or replay a recorded effect. */
 function cachedStep(cache: GeometryCache, key: string, doc: CadDocument, f: FeatureDef, bodies: Body[], out: Record<string, SolidEval>, run: () => void) {
@@ -1132,6 +1309,10 @@ function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Bod
     case "primitive": applyPrimitive(scope, f, bodies, out); break;
     case "import": applyImport(f, bodies, out); break;
     case "member": applyMembers(doc, scope, f, bodies, out); break;
+    case "sheet": applySheet(doc, scope, f, bodies, out); break;
+    case "flange": applyFlange(scope, f, bodies, out); break;
+    case "fold": applyFold(doc, scope, f, bodies, out); break;
+    case "unfold": case "refold": applyUnfold(f, bodies, out); break;
     case "surface": applySurface(doc, scope, f, bodies, out); break;
     case "stitch": applyStitch(scope, f, bodies, out); break;
     case "thicken": applyThicken(scope, f, bodies, out); break;
@@ -1243,6 +1424,10 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
         if (Number.isFinite(ev.mass.centroid.x)) row.centroid = ev.mass.centroid;
         if (ev.surface) row.surface = true;
         if (body.member) row.member = { profile: body.member.profile, length: extentAlong(ev.mesh.positions, body.member.axis), angles: body.member.angles };
+        if (body.sheet?.pattern) {
+          const sh = body.sheet;
+          row.sheet = { thickness: sh.thickness, kFactor: sh.kFactor, unfolded: !!sh.unfolded, ...(sh.edited && !sh.unfolded ? { stale: true } : {}), angles: Object.fromEntries(Object.entries(sh.angles ?? {}).map(([k, v]) => [k, Math.round(v * 180 / Math.PI * 1e6) / 1e6])), edges: sh.edges.map((e) => e.name), flat: sh.pattern! };
+        }
       } catch (e) {
         row.error = kernelErrorMessage(e);
       } finally {

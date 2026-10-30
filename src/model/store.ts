@@ -469,6 +469,10 @@ export const useStore = create<AppState>((set, get) => {
       if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
       return Object.values(get().solids).filter((b) => b.member).map((b) => ({ body: b.featureId, ...b.member! }));
     },
+    sheets: async () => {
+      if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
+      return Object.values(get().solids).filter((b) => b.sheet).map((b) => ({ body: b.featureId, name: b.name, sheet: b.sheet! }));
+    },
     analyze: async (opts: { bodyId?: string; combs?: boolean }) => {
       await get().ensureKernel();
       return geometry.analyze(get().session.doc, opts);

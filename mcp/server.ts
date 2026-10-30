@@ -28,6 +28,7 @@ import { InlineGeometryBackend } from "../src/core/geometry/backend";
 import { isolationList } from "../src/core/visibility";
 import { importRequests } from "../src/core/importers";
 import { groupCutList, cutListCsv } from "../src/core/weldment";
+import { flatPatternSvg, flatPatternDxf, sheetSummary } from "../src/core/sheet";
 import type { Vec3 } from "../src/math/vec";
 
 /** Topology / distance queries share the backend's assembly-aware evaluation (the kernel is loaded by ensureKernel). */
@@ -62,7 +63,7 @@ const EDIT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, ide
 const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
 /** Meta tools by how they touch the document (registry commands carry their own flag). */
 const META_ANNOTATIONS: Record<string, ToolAnnotations> = {
-  get_document: READ_ONLY, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, cut_list: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
+  get_document: READ_ONLY, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, cut_list: READ_ONLY, flat_pattern: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
   export_model: READ_ONLY, export_document: READ_ONLY,
   delete_operation: DESTRUCTIVE, import_document: DESTRUCTIVE, batch: DESTRUCTIVE,
 };
@@ -408,6 +409,23 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
         const solids = evaluateFeatures(session.doc, resolveParameters(session.doc.parameters).scope);
         const rows = groupCutList(Object.values(solids).filter((b) => b.member).map((b) => ({ body: b.featureId, ...b.member! })));
         return { ok: true, rows, csv: cutListCsv(rows) };
+      },
+    },
+    {
+      name: "flat_pattern",
+      description: "Sheet-metal / paper flat patterns: each sheet body's (or just `body`'s) thickness, K-factor, flat size, folds (degrees: + up / valley, − down / mountain; radius; bend allowance; solved crease angles included) and blank edge names (for feature.flange). `format` svg or dxf also returns that file's text.",
+      inputSchema: { type: "object", properties: { body: { type: "string" }, format: { type: "string", enum: ["svg", "dxf"] } } },
+      handler: async (args: { body?: string; format?: "svg" | "dxf" }) => {
+        await ensureKernel();
+        const solids = evaluateFeatures(session.doc, resolveParameters(session.doc.parameters).scope);
+        const list = Object.values(solids).filter((b) => b.sheet && (!args.body || b.featureId === args.body));
+        if (!list.length) return { ok: false, error: args.body ? `"${args.body}" isn't a sheet-metal body` : "there are no sheet-metal bodies" };
+        const out: Record<string, unknown> = { ok: true, sheets: list.map((b) => sheetSummary(b.featureId, b.name, b.sheet!)) };
+        if (args.format) {
+          if (list.length > 1) return { ok: false, error: "name the `body` whose flat pattern to write" };
+          out.content = args.format === "svg" ? flatPatternSvg(list[0].sheet!.flat) : flatPatternDxf(list[0].sheet!.flat);
+        }
+        return out;
       },
     },
     {

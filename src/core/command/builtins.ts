@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument, Material, RoleRef, MemberFeature, SurfaceFeature, findConfiguration } from "../document";
+import { CadDocument, Material, RoleRef, MemberFeature, SurfaceFeature, SheetFoldDef, FlangeFeature, findConfiguration } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -1990,6 +1990,166 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.endCaps ? { endCaps: true } : {}), ...(p.gusset != null ? { gussetExpr: String(p.gusset) } : {}),
       };
       return { createdIds: [id], message: `Structural members along ${draft.sketches[p.sketch].name}` };
+    },
+  },
+  {
+    type: "feature.sheet",
+    title: "Sheet metal / paper",
+    summary: "A sheet-metal part (or folded paper): a flat blank of uniform thickness folded along lines — a base flange or crease pattern from a closed sketch, or a contour flange from an open run of lines.",
+    description:
+      "`mode` base (default): the closed region(s) of `sketch` are the flat blank; `folds` lists lines of the same sketch (draw them as construction lines) to fold along, each with `angle` in degrees (+ folds toward the sheet's top — a valley seen from the top; − away, a mountain) and optionally its own `radius`. " +
+      "Paper and origami: `thickness` 0 (a surface body) or a small one, `radius` 0 so folds are sharp creases. Creases may meet at vertices; a crease given no `angle` (just `direction` valley or mountain) is solved so every vertex closes up — drive one crease and the rest follow (rigid origami). An error names the vertex when the angles given can't all fold at once. " +
+      "`mode` contour: `sketch` holds one open run of straight lines (the bottom face of the profile; a bend rounds each corner) swept `width` along the sketch normal; `flip` puts the material on the run's left. " +
+      "Rules for the part and everything added to it: `thickness`, `radius` (inner bend radius, default the thickness), `kFactor` (neutral layer, default 0.5), `reliefWidth`. The flat length is Σ straights + Σ bend allowances, BA = angle·(radius + kFactor·thickness). " +
+      "The body (id = this feature's id) carries its flat pattern (flat_pattern / get_state); add flanges (feature.flange), sketched bends and jogs (feature.fold), and unfold/refold to cut it flat. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "thickness"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string" },
+        mode: { type: "string", enum: ["base", "contour"] },
+        thickness: { type: ["string", "number"], description: "Sheet thickness (0 = paper with no thickness: a surface)." },
+        radius: { type: ["string", "number"], description: "Default inner bend radius (default = thickness; 0 = sharp creases)." },
+        kFactor: { type: ["string", "number"], description: "Neutral-layer position from the inside, as a fraction of the thickness (default 0.5)." },
+        reliefWidth: { type: ["string", "number"] },
+        folds: {
+          type: "array",
+          description: "base: lines of the sketch to fold along.",
+          items: {
+            type: "object", required: ["line"], additionalProperties: false,
+            properties: {
+              line: { type: "string" },
+              angle: { type: ["string", "number"], description: "Degrees: + valley (toward the top), − mountain. Omit to solve (creases)." },
+              direction: { type: "string", enum: ["valley", "mountain"] },
+              radius: { type: ["string", "number"] },
+            },
+          },
+        },
+        width: { type: ["string", "number"], description: "contour: how far the profile runs along the sketch normal." },
+        flip: { type: "boolean", description: "Material on the other side (below the sketch plane; left of a contour)." },
+        fixed: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } }, description: "A point (sketch coords) on the panel that stays put." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A 2 mm bracket blank with one 90° bend along construction line l9", params: { sketch: "sketch1", thickness: 2, folds: [{ line: "l9", angle: 90 }] } },
+      { note: "Paper, sharp creases: drive one, solve the rest", params: { sketch: "sketch1", thickness: 0, radius: 0, folds: [{ line: "l5", angle: 60 }, { line: "l6", direction: "mountain" }, { line: "l7", direction: "valley" }, { line: "l8", direction: "valley" }] } },
+      { note: "A U-channel from an open three-line profile, 1.5 mm, 40 deep", params: { sketch: "sketch2", mode: "contour", thickness: 1.5, width: 40 } },
+    ],
+    apply(draft, p: { sketch: string; mode?: "base" | "contour"; thickness: unknown; radius?: unknown; kFactor?: unknown; reliefWidth?: unknown; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown }[]; width?: unknown; flip?: boolean; fixed?: { x: number; y: number }; name?: string }, ctx) {
+      const sk = draft.sketches[p.sketch];
+      if (!sk) throw new Error(`No sketch "${p.sketch}"`);
+      const ex = (v: unknown) => (v == null ? undefined : String(v));
+      const folds: SheetFoldDef[] | undefined = p.folds?.map((f) => {
+        if (sk.entities[f.line]?.kind !== "line") throw new Error(`fold "${f.line}" isn't a line of ${sk.name}`);
+        return { line: f.line, ...(f.angle != null ? { angleExpr: String(f.angle) } : {}), ...(f.direction ? { direction: f.direction } : {}), ...(f.radius != null ? { radiusExpr: String(f.radius) } : {}) };
+      });
+      const id = ctx.alloc("sheet");
+      draft.features[id] = {
+        id, kind: "sheet", name: p.name ?? (p.mode === "contour" ? "Contour flange" : "Sheet"), mode: p.mode ?? "base", sketchId: p.sketch,
+        thicknessExpr: String(p.thickness), ...(p.radius != null ? { radiusExpr: String(p.radius) } : {}), ...(p.kFactor != null ? { kFactorExpr: String(p.kFactor) } : {}),
+        ...(p.reliefWidth != null ? { reliefWidthExpr: String(p.reliefWidth) } : {}), ...(folds?.length ? { folds } : {}),
+        ...(ex(p.width) ? { widthExpr: ex(p.width) } : {}), ...(p.flip ? { flip: true } : {}), ...(p.fixed ? { fixed: { x: p.fixed.x, y: p.fixed.y } } : {}),
+      };
+      return { createdIds: [id], message: `${p.mode === "contour" ? "Contour flange" : "Sheet"} from ${sk.name}` };
+    },
+  },
+  {
+    type: "feature.flange",
+    title: "Edge flange / hem",
+    summary: "Add an edge flange (or a hem) to a sheet: material off a straight edge of its blank, bent up.",
+    description:
+      "`edge` names a straight edge of the flat blank: a line id of the base sketch, \"<flangeId>:tip\" / \":side1\" / \":side2\" of an earlier flange, or \"<lineId>:side1\" / \":side2\" and \"<sheetId>:start\" / \":end\" of a contour flange (the sheet's edges are listed in the error if the name is wrong). " +
+      "`length` is the straight part past the bend; `angle` degrees (default 90; + toward the sheet's top); `radius` (default the sheet's). `position`: bendOutside (default: the bend starts at the edge), materialInside (the flange's outside face lines up with the edge) or materialOutside (its inside face does) — set-back bends get relief slots at partial ends, and where two meet at a corner the overlap is cut away. `inset` [start, end] leaves part of the edge unflanged. " +
+      "`hem: true` folds it right back (180°; `radius` 0 = a closed hem). Returns the feature id.",
+    paramsSchema: {
+      type: "object", required: ["edge", "length"], additionalProperties: false,
+      properties: {
+        body: { type: "string", description: "The sheet (its feature id; default the most recent body)." },
+        edge: { type: "string" },
+        length: { type: ["string", "number"] },
+        angle: { type: ["string", "number"] },
+        radius: { type: ["string", "number"] },
+        position: { type: "string", enum: ["bendOutside", "materialInside", "materialOutside"] },
+        inset: { type: "array", items: { type: ["string", "number"] }, description: "[start, end] distances left unflanged." },
+        hem: { type: "boolean" },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A 25 mm flange up off the base sketch's line l3", params: { edge: "l3", length: 25 } },
+      { note: "A closed hem on that flange's tip", params: { edge: "flange4:tip", length: 8, hem: true } },
+    ],
+    apply(draft, p: { body?: string; edge: string; length: unknown; angle?: unknown; radius?: unknown; position?: FlangeFeature["position"]; inset?: unknown[]; hem?: boolean; name?: string }, ctx) {
+      const id = ctx.alloc("flange");
+      draft.features[id] = {
+        id, kind: "flange", name: p.name ?? (p.hem ? "Hem" : "Flange"), edge: p.edge, lengthExpr: String(p.length),
+        ...(p.body ? { body: p.body } : {}), ...(p.angle != null ? { angleExpr: String(p.angle) } : {}), ...(p.radius != null ? { radiusExpr: String(p.radius) } : {}),
+        ...(p.position ? { position: p.position } : {}), ...(p.inset ? { insetExprs: [String(p.inset[0]), String(p.inset[1])] as [string, string] } : {}), ...(p.hem ? { hem: true } : {}),
+      };
+      return { createdIds: [id], message: `${p.hem ? "Hem" : "Flange"} on ${p.edge}` };
+    },
+  },
+  {
+    type: "feature.fold",
+    title: "Sketched bend / jog",
+    summary: "Fold a sheet along a line sketched on one of its faces — or jog it (two bends that step the far side up or down).",
+    description:
+      "`sketch` is drawn on a flat face of the sheet (top or bottom); its `line` (default the first) is extended across that face and becomes a bend of `angle` degrees (+ toward the sheet's top) and `radius` (default the sheet's; 0 = a sharp crease). The side the sheet is held by stays put; `flip` folds the line's other side instead (for a jog: steps toward the line's right). " +
+      "`jog` (a distance) makes a jog: the far side steps by that much (+ toward the top) through two bends of `angle` (default 90) and carries on parallel. Returns the feature id.",
+    paramsSchema: {
+      type: "object", required: ["sketch"], additionalProperties: false,
+      properties: {
+        body: { type: "string" },
+        sketch: { type: "string" },
+        line: { type: "string" },
+        angle: { type: ["string", "number"] },
+        radius: { type: ["string", "number"] },
+        jog: { type: ["string", "number"] },
+        flip: { type: "boolean" },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Bend 45° along a line sketched on the top face", params: { sketch: "sketch3", angle: 45 } }, { note: "A 6 mm jog", params: { sketch: "sketch3", jog: 6 } }],
+    apply(draft, p: { body?: string; sketch: string; line?: string; angle?: unknown; radius?: unknown; jog?: unknown; flip?: boolean; name?: string }, ctx) {
+      const sk = draft.sketches[p.sketch];
+      if (!sk) throw new Error(`No sketch "${p.sketch}"`);
+      if (p.line && sk.entities[p.line]?.kind !== "line") throw new Error(`"${p.line}" isn't a line of ${sk.name}`);
+      if (p.angle == null && p.jog == null) throw new Error("fold needs `angle` (or `jog`)");
+      const id = ctx.alloc("fold");
+      draft.features[id] = {
+        id, kind: "fold", name: p.name ?? (p.jog != null ? "Jog" : "Bend"), sketchId: p.sketch, angleExpr: String(p.angle ?? 90),
+        ...(p.body ? { body: p.body } : {}), ...(p.line ? { line: p.line } : {}), ...(p.radius != null ? { radiusExpr: String(p.radius) } : {}),
+        ...(p.jog != null ? { jogExpr: String(p.jog) } : {}), ...(p.flip ? { flip: true } : {}),
+      };
+      return { createdIds: [id], message: p.jog != null ? `Jog ${p.jog}` : `Bend ${p.angle}°` };
+    },
+  },
+  {
+    type: "feature.unfold",
+    title: "Unfold",
+    summary: "Lay a sheet flat — to cut it while flat (holes across bends, notches), then feature.refold.",
+    description: "The sheet (`body`, default the most recent) becomes its flat blank. Features after this one work on the flat plate; feature.refold folds it back up, keeping what they cut through it. Returns the feature id.",
+    paramsSchema: { type: "object", additionalProperties: false, properties: { body: { type: "string" }, name: { type: "string" } } },
+    examples: [{ params: { body: "sheet1" } }],
+    apply(draft, p: { body?: string; name?: string }, ctx) {
+      const id = ctx.alloc("unfold");
+      draft.features[id] = { id, kind: "unfold", name: p.name ?? "Unfold", ...(p.body ? { body: p.body } : {}) };
+      return { createdIds: [id], message: "Unfold" };
+    },
+  },
+  {
+    type: "feature.refold",
+    title: "Refold",
+    summary: "Fold an unfolded sheet back up, keeping cuts made to it while flat.",
+    description: "Reads the flat sheet's blank back (with any holes or notches cut through it since feature.unfold) and folds it again. Returns the feature id.",
+    paramsSchema: { type: "object", additionalProperties: false, properties: { body: { type: "string" }, name: { type: "string" } } },
+    examples: [{ params: { body: "sheet1" } }],
+    apply(draft, p: { body?: string; name?: string }, ctx) {
+      const id = ctx.alloc("refold");
+      draft.features[id] = { id, kind: "refold", name: p.name ?? "Refold", ...(p.body ? { body: p.body } : {}) };
+      return { createdIds: [id], message: "Refold" };
     },
   },
   {
