@@ -5,7 +5,7 @@ import { setActiveScene } from "../viewport/sceneRef";
 import { AppState, useStore } from "../model/store";
 import { resolveSketchPlane, to3d } from "../geometry/plane";
 import { extractRegions, loopPolygon, Region } from "../core/geometry/profile";
-import { resolveParameters } from "../model/parameters";
+import { resolveParameters } from "../core/parameters";
 import { compileExpr } from "../math/expr";
 import { materialForComponent } from "../core/document";
 import { woodFrameFromBounds } from "../viewport/material";

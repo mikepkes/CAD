@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { realSession } from "./helpers";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import type { Parameter } from "../src/core/document";
 
 // Named parameters may carry optional extents (min/max) OR a list of acceptable

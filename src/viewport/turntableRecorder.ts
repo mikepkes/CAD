@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { resolveComponentWorld } from "../core/recompute";
-import { resolveParameters } from "../model/parameters";
+import { resolveParameters } from "../core/parameters";
 import { materialForComponent, type CadDocument } from "../core/document";
 import { woodFrameFromBounds } from "./material";
 import { fitDistance, orbitDirection } from "./orbitCamera";

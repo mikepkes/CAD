@@ -22,6 +22,12 @@ Four principles drive the design:
 
 ## Layers
 
+The layering is enforced in CI by `test/layering.test.ts`: each pure directory
+(`core`, `sim`, `sketch`, `geometry`, `math`, `util`) may import only from an
+allow-list. It may not import renderer, UI or app packages (three, react,
+zustand, Tauri, MCP SDK), and it may not use DOM globals. Platform adapters
+(the Web Worker backend, hotkeys) live in `src/model/`.
+
 ```
 src/core/                     pure, serializable, no three.js / no DOM
   units.ts                    canonical mm, scale-aware tolerance model
@@ -76,6 +82,43 @@ Replay stays stable because each operation **permanently owns the ids it
 created** (`op.createdIds`, reused verbatim on every replay); only genuinely new
 allocations advance `doc.nextId`. That is what keeps later operations'
 references valid when an earlier one is edited.
+
+## Solids: incremental evaluation and topological naming
+
+`core/features.ts` folds the feature list into bodies on the OpenCASCADE kernel.
+It runs in a Web Worker in the app and inline in tests and the stdio server.
+
+- **Input-keyed step cache.** Each feature step is keyed by a hash of its
+  inputs:
+  - its own definition (minus derived `*Value` fields);
+  - the solved geometry of the sketches it reads;
+  - the parameter values its expressions mention;
+  - its instance frame;
+  - the content signatures of the bodies it reads (its target, or every body
+    for a mirror or a face-referenced sketch).
+
+  A repeated key replays the step's recorded effect — the bodies it added or
+  changed (shared OCC handles), face names, its row, any re-resolved face
+  planes — without touching the kernel. A body's signature is the key of the
+  step that last changed it. So independent bodies never invalidate each
+  other, and an edit re-runs only what is downstream of it. Meshes and mass
+  properties are cached per body signature.
+- **Topological naming** (`core/naming.ts`). Faces are named where they are
+  made: `extrude3:start|end|side:<curveId>`, `revolve4:rev:<curveId>`,
+  `prim2:+X`, `hole9:bore`, `import5:f0`. The names carry forward by kernel
+  provenance:
+  - Booleans use `BRepAlgoAPI` `Modified`/`IsDeleted` history, including
+    `SimplifyResult` merges.
+  - Fillet, chamfer and shell keep a face's `Geom_Surface`.
+  - Transforms keep face order.
+  - Faces an operation creates are named by it and their neighbours
+    (`fillet6:blend(…)`, `shell7:inner(prim2:+X)`).
+
+  Edges are named by the faces they separate (`A|B`). A sketch's `faceRef`
+  pins a face name at pick time and resolves by name first, falling back to
+  normal + nearest point. Fillet/chamfer selectors accept edge `names`.
+- **Reference values.** `test/oracle.test.ts` checks the exact B-rep volume,
+  surface area and centroid of every feature kind against closed-form answers.
 
 ## Constraint solving & diagnosis
 

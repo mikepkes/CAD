@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../model/store";
-import { isValidParamName } from "../model/parameters";
+import { isValidParamName } from "../core/parameters";
 import type { Parameter } from "../core/document";
 
 /** The control shown for a parameter's value: a checkbox for a yes/no switch, a dropdown when it has named

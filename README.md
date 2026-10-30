@@ -145,8 +145,16 @@ on.
   selectors: parallel to an axis, in a plane, near a point, in a box),
   **shell**, body **patterns** (linear / circular) and **mirror** (all bodies or
   just the last). Sketches can be started **on a body face** by picking a point
-  (`sketch_on_face`), and every feature reports kernel errors and warnings
-  (e.g. a cut that removed nothing).
+  or naming the face (`sketch_on_face`), and every feature reports kernel
+  errors and warnings (e.g. a cut that removed nothing). **Import STEP** files
+  as bodies (File → Import, or `feature.import`).
+- **Topological naming:** every face is named by the feature that made it
+  (`extrude3:end`, `extrude3:side:line7`, `prim2:+X`, `hole9:bore`) and keeps
+  that name through later booleans, fillets, shells and patterns, via
+  OpenCASCADE's own history. A sketch on a face follows that face through
+  upstream edits; fillets and chamfers can pick edges by name (`A|B`).
+- **Incremental rebuild:** each feature step is cached by its inputs, so an
+  edit re-runs only the features downstream of it on the bodies it touches.
 - **Splines & involute gears:** an interpolating **spline** entity (exported
   as true cubic curves), and `sketch.addGear` — **external spur gears,
   internal ring gears and racks** generated the way they are cut: true involute
@@ -207,8 +215,10 @@ npm run tauri:build  # .app / .dmg under src-tauri/target/release/bundle/
 Then in the app: **Settings (⚙) → Expose MCP server (desktop app)**. The
 status bar shows `● MCP :4673` and Settings shows the URL. It speaks MCP’s
 Streamable HTTP transport, bound to 127.0.0.1 only, and the tools are exactly
-the WebMCP set (every command, `get_state`, `render_view`, hotkeys) applied to
-the open document:
+the WebMCP set applied to the open document. That set is every command, plus
+`get_state`, `render_view`, `measure`, `body_topology` and `batch` (an atomic
+transaction that rolls back on the first failing step), plus hotkeys. Every
+tool carries MCP annotations (read-only / destructive):
 
 ```bash
 claude mcp add --transport http chisel-cad http://127.0.0.1:4673/mcp
@@ -224,7 +234,7 @@ Renders can go to disk: `render_view` takes a free camera (`azimuthDeg`,
 `elevationDeg`, `fovDeg`, `rollDeg`) and a `saveAs` filename, and
 `record_turntable` records a 360° WebCodecs video (H.264, VP9 fallback) and
 saves the MP4. Desktop saves land in `~/Downloads/Chisel CAD/` — clients name
-the file, not the folder.
+the file, not the folder, and a symlinked folder or file is refused.
 
 The toggle and port persist; the server starts with the app when enabled and
 stops when the window closes. This is distinct from `npm run mcp`, the
@@ -251,12 +261,15 @@ Select geometry, then apply constraints/dimensions from the context bar.
 ## Project layout
 
 ```
-src/core/        pure, serializable, renderer-agnostic
+src/core/        pure, serializable, renderer-agnostic (CI-enforced: test/layering)
   units          canonical mm + scale-aware tolerances
   document       the design intent (parameters, sketches, constraints) + timeline
   command        registry (→ MCP tools), validator, undo/redo + timeline session
   solver         neutral ConstraintSolver interface + PlaneGCS adapter + compile
   build/recompute replay the timeline, then solve
+  features       B-rep evaluation, with the input-keyed step cache
+  naming         topological face/edge names
+  occ/kernel     the only module that touches OpenCASCADE
 src/sketch       sketch data model
 src/math         vectors, safe expression evaluator
 src/viewport     three.js scene + pointer interactions (the renderer adapter)

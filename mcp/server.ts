@@ -20,10 +20,15 @@ import { Evaluations } from "../src/core/recompute";
 import { JSONSchema } from "../src/core/command/types";
 import { initKernel, isKernelReady } from "../src/core/occ/kernel";
 import { evaluateFeatures, exportFeatureBlob } from "../src/core/features";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { pickFace } from "../src/core/geometry/pick";
 import { resolveSketchPlane } from "../src/geometry/plane";
 import { describeFeature } from "../src/model/agent";
+import { InlineGeometryBackend } from "../src/core/geometry/backend";
+import type { Vec3 } from "../src/math/vec";
+
+/** Topology / distance queries share the backend's assembly-aware evaluation (the kernel is loaded by ensureKernel). */
+const geometry = new InlineGeometryBackend();
 
 let kernelInit: Promise<void> | null = null;
 async function ensureKernel(): Promise<void> {
@@ -43,8 +48,23 @@ interface ToolDef {
   name: string;
   description: string;
   inputSchema: JSONSchema;
+  annotations?: ToolAnnotations;
   handler: (args: Record<string, unknown>) => Promise<unknown>;
 }
+
+/** MCP tool annotations (hints a client uses to decide what needs confirmation). */
+interface ToolAnnotations { title?: string; readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean; openWorldHint: boolean }
+const READ_ONLY: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const EDIT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
+/** Meta tools by how they touch the document (registry commands carry their own flag). */
+const META_ANNOTATIONS: Record<string, ToolAnnotations> = {
+  get_document: READ_ONLY, describe_sketch: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
+  export_model: READ_ONLY, export_document: READ_ONLY,
+  delete_operation: DESTRUCTIVE, import_document: DESTRUCTIVE, batch: DESTRUCTIVE,
+};
+const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+const rounded = <T>(v: T): T => JSON.parse(JSON.stringify(v, (_k, x) => (typeof x === "number" ? round6(x) : x)));
 
 export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
   const registry = createDefaultRegistry();
@@ -139,6 +159,7 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
       name: toToolName(def.type),
       description: mcp.description,
       inputSchema: mcp.inputSchema,
+      annotations: { ...(mcp.destructive ? DESTRUCTIVE : EDIT), title: mcp.title },
       handler: async (args) => shapeDispatch(await session.dispatch(def.type, args)),
     });
   }
@@ -216,32 +237,77 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
         const solids = evaluateFeatures(session.doc, scope);
         return {
           kernelReady: isKernelReady(),
-          solids: Object.values(solids).map((s) => ({ featureId: s.featureId, name: s.name, sketch: s.sketchId, distance: s.distance, triangles: s.mesh?.triangleCount, bounds: s.bounds, volume: s.volume, error: s.error, warning: s.warning })),
+          solids: Object.values(solids).map((s) => ({ featureId: s.featureId, name: s.name, sketch: s.sketchId, distance: s.distance, triangles: s.mesh?.triangleCount, bounds: s.bounds, volume: s.volume, area: s.area, centroid: s.centroid, error: s.error, warning: s.warning })),
         };
       },
     },
     {
       name: "sketch_on_face",
-      description: "Start a sketch on the body face nearest to a world point {x,y,z}. The sketch tracks that face parametrically. Returns the sketch id, origin id and the sketch's world frame (origin, u, v, normal): extrude direction \"reverse\" goes into the body, extent \"throughAll\" cuts all the way through.",
+      description: "Start a sketch on a planar body face: by its topological `face` name from body_topology (e.g. \"extrude3:end\"; preferred — the sketch then follows that face through upstream edits), or the face nearest a world `point` {x,y,z}. Returns the sketch id, origin id, the face name and the sketch's world frame (origin, u, v, normal): extrude direction \"reverse\" goes into the body, extent \"throughAll\" cuts all the way through.",
       inputSchema: {
         type: "object",
-        required: ["point"],
         properties: {
+          face: { type: "string", description: "Topological face name (from body_topology)." },
           point: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
           name: { type: "string" },
         },
       },
       handler: async (a) => {
         await ensureKernel();
-        const scope = resolveParameters(session.doc.parameters).scope;
-        const solids = evaluateFeatures(session.doc, scope);
-        const meshes = Object.values(solids).filter((s) => s.mesh).map((s) => ({ featureId: s.featureId, mesh: s.mesh! }));
-        const hit = pickFace(meshes, a.point as { x: number; y: number; z: number });
-        if (!hit) return { ok: false, error: "no body face found — build a solid first" };
-        const r = await session.dispatch("sketch.create", { planeDef: { origin: hit.origin, normal: hit.normal }, faceRef: { normal: hit.normal, point: hit.point }, ...(a.name ? { name: a.name } : {}) });
+        const point = a.point as { x: number; y: number; z: number } | undefined;
+        let at: { origin: Vec3; normal: Vec3; point: Vec3; featureId: string; distance: number; name?: string };
+        if (a.face) {
+          const hits = (await geometry.topology(session.doc, { edges: false })).flatMap((b) => b.faces.filter((f) => f.name === a.face && f.type === "PLANE").map((f) => ({ b, f })));
+          if (!hits.length) return { ok: false, error: `no planar face named "${a.face}" — list names with body_topology` };
+          const d2 = (c: Vec3) => (point ? (c.x - point.x) ** 2 + (c.y - point.y) ** 2 + (c.z - point.z) ** 2 : 0);
+          const { b, f } = hits.reduce((m, h) => (d2(h.f.center) < d2(m.f.center) ? h : m));
+          const off = f.center.x * f.normal.x + f.center.y * f.normal.y + f.center.z * f.normal.z;
+          at = { origin: { x: f.normal.x * off, y: f.normal.y * off, z: f.normal.z * off }, normal: f.normal, point: f.center, featureId: b.id, distance: 0, name: String(a.face) };
+        } else {
+          if (!point) return { ok: false, error: "give a face name or a world point" };
+          const scope = resolveParameters(session.doc.parameters).scope;
+          const solids = evaluateFeatures(session.doc, scope);
+          const meshes = Object.values(solids).filter((s) => s.mesh).map((s) => ({ featureId: s.featureId, mesh: s.mesh! }));
+          const hit = pickFace(meshes, point);
+          if (!hit) return { ok: false, error: "no body face found — build a solid first" };
+          at = { origin: hit.origin, normal: hit.normal, point: hit.point, featureId: hit.featureId, distance: hit.distance, name: hit.faceName };
+        }
+        const r = await session.dispatch("sketch.create", { planeDef: { origin: at.origin, normal: at.normal }, faceRef: { normal: at.normal, point: at.point, ...(at.name ? { name: at.name } : {}) }, ...(a.name ? { name: a.name } : {}) });
         if (!r.ok) return { ok: false, error: r.error };
         const wp = resolveSketchPlane(session.doc.sketches[r.createdIds[0]]);
-        return { ok: true, sketchId: r.createdIds[0], originId: r.createdIds[1], featureId: hit.featureId, distanceToFace: hit.distance, frame: { origin: wp.origin, u: wp.u, v: wp.v, normal: wp.normal } };
+        return { ok: true, sketchId: r.createdIds[0], originId: r.createdIds[1], featureId: at.featureId, face: at.name, distanceToFace: at.distance, frame: { origin: wp.origin, u: wp.u, v: wp.v, normal: wp.normal } };
+      },
+    },
+    {
+      name: "measure",
+      description: "Exact (B-rep, not mesh) mass properties of the bodies: volume (mm³), surface area (mm²), centroid and world bounds — every body, or one (`body`: the id of the feature that created it). With `between: [bodyA, bodyB]`, also their minimum distance (0 when they touch or overlap).",
+      inputSchema: { type: "object", properties: { body: { type: "string" }, between: { type: "array", items: { type: "string" } } } },
+      handler: async (a) => {
+        await ensureKernel();
+        const bodies = await geometry.topology(session.doc, { bodyId: a.body as string | undefined, faces: false, edges: false });
+        if (a.body && !bodies.length) return { ok: false, error: `no body "${a.body}"` };
+        const out: Record<string, unknown> = { ok: true, bodies: bodies.map((b) => rounded({ id: b.id, name: b.name, volume: b.volume, area: b.area, centroid: b.centroid, bounds: b.bounds })) };
+        const between = a.between as string[] | undefined;
+        if (between) {
+          if (between.length !== 2) return { ok: false, error: "`between` takes exactly two body ids" };
+          out.distance = round6(await geometry.distance(session.doc, between[0], between[1]));
+        }
+        return out;
+      },
+    },
+    {
+      name: "body_topology",
+      description: "The faces and edges of each body (or one: `body`), with stable topological names. A face is named by the feature that made it — \"extrude3:end\", \"extrude3:side:line7\" (the sketch line that swept it), \"prim2:+X\", \"hole9:bore\", \"fillet6:blend(…)\" — and keeps that name through later features. Each edge is named by the two faces it separates (\"A|B\"). Use face names with sketch_on_face and edge names in a fillet/chamfer `edges: { names: [...] }` selector.",
+      inputSchema: { type: "object", properties: { body: { type: "string" }, faces: { type: "boolean" }, edges: { type: "boolean" } } },
+      handler: async (a) => {
+        await ensureKernel();
+        const bodies = await geometry.topology(session.doc, { bodyId: a.body as string | undefined, faces: a.faces !== false, edges: a.edges !== false });
+        if (a.body && !bodies.length) return { ok: false, error: `no body "${a.body}"` };
+        return { ok: true, bodies: bodies.map((b) => rounded({
+          id: b.id, name: b.name, volume: b.volume, area: b.area, centroid: b.centroid,
+          faces: b.faces.map((f) => ({ name: f.name, type: f.type.toLowerCase(), area: f.area, center: f.center, normal: f.normal, point: f.point })),
+          edges: b.edges.map((e) => ({ name: e.name, type: e.type.toLowerCase(), length: e.length, mid: e.mid })),
+        })) };
       },
     },
     {
@@ -264,6 +330,28 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
       },
     },
     {
+      name: "import_step",
+      description: "Import a STEP file from disk (a .step/.stp path) as a body — the same as feature.import with the file's text, which is stored in the document. Optional `at` offset, `operation` (new/join/cut/intersect), `body`, `name`.",
+      inputSchema: {
+        type: "object",
+        required: ["path"],
+        properties: {
+          path: { type: "string" },
+          at: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+          operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
+          body: { type: "string" },
+          name: { type: "string" },
+        },
+      },
+      handler: async (a) => {
+        const path = String(a.path ?? "");
+        if (!/\.(step|stp)$/i.test(path)) return { ok: false, error: "path must be a .step or .stp file" };
+        const { path: _p, ...rest } = a;
+        const name = (a.name as string | undefined) ?? path.split(/[\\/]/).pop()!.replace(/\.(step|stp)$/i, "");
+        return shapeDispatch(await session.dispatch("feature.import", { ...rest, name, data: readFileSync(path, "utf8") }));
+      },
+    },
+    {
       name: "export_document",
       description: "Return the full document as JSON (the canonical recipe). Save this to persist or hand to the browser app.",
       inputSchema: { type: "object", properties: {} },
@@ -281,11 +369,47 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     },
   ];
   tools.push(...metaTools);
+  tools.push({
+    name: "batch",
+    description: "Run several tool calls in order as one transaction: `steps` is a list of {tool, arguments}. By default (`atomic: true`) the first failing step rolls the document (and its undo history) back to before the batch; `atomic: false` keeps the steps that succeeded. Returns each step's result and time in ms, which step failed, and whether it rolled back.",
+    inputSchema: {
+      type: "object",
+      required: ["steps"],
+      properties: {
+        steps: { type: "array", items: { type: "object", required: ["tool"], properties: { tool: { type: "string" }, arguments: { type: "object" } } } },
+        atomic: { type: "boolean", description: "Roll everything back if a step fails (default true)." },
+      },
+    },
+    handler: async (a) => {
+      const steps = (Array.isArray(a.steps) ? a.steps : []) as { tool?: string; arguments?: Record<string, unknown> }[];
+      const atomic = a.atomic !== false;
+      const start = { session, state: session.checkpoint() };
+      const results: { step: number; tool: string; ok: boolean; ms: number; result?: unknown }[] = [];
+      const failAt = (i: number) => {
+        if (atomic) { session = start.session; session.rollback(start.state); }
+        return { ok: false, failedStep: i, rolledBack: atomic, results };
+      };
+      for (let i = 0; i < steps.length; i++) {
+        const name = String(steps[i]?.tool ?? "");
+        const tool = name === "batch" ? undefined : byName.get(name);
+        if (!tool) { results.push({ step: i, tool: name, ok: false, ms: 0, result: { error: `Unknown tool "${name}"` } }); return failAt(i); }
+        const t0 = performance.now();
+        let result: unknown;
+        try { result = await tool.handler(steps[i].arguments ?? {}); }
+        catch (e) { result = { ok: false, error: (e as Error).message }; }
+        const ok = !(typeof result === "object" && result !== null && (result as { ok?: boolean }).ok === false);
+        results.push({ step: i, tool: name, ok, ms: Math.round(performance.now() - t0), result });
+        if (!ok) return failAt(i);
+      }
+      return { ok: true, results };
+    },
+  });
+  for (const t of tools) t.annotations ??= META_ANNOTATIONS[t.name] ?? EDIT;
 
   const byName = new Map(tools.map((t) => [t.name, t]));
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+    tools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, annotations: t.annotations })),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {

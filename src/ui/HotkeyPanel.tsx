@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState } from "react";
 import { useStore } from "../model/store";
-import { hotkeys, eventToKey, prettyKey } from "../core/hotkeys";
+import { hotkeys, eventToKey, prettyKey } from "../model/hotkeys";
 
 type Capture = { id: string; slot: "primary" | "secondary" } | null;
 

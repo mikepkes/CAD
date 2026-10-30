@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import { realSession } from "./helpers";
 import { expandAssembly } from "../src/core/assembly";
 import { placeComponentSketches, resolveComponentWorld } from "../src/core/recompute";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { applyPoint } from "../src/math/transform";
 import { to3d, resolveSketchPlane } from "../src/geometry/plane";
 import { materialForComponent } from "../src/core/document";

@@ -87,9 +87,45 @@ fn save_render(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Resul
     let name = render_file_name(name)?;
     let dir = app.path().download_dir().map_err(|e| e.to_string())?.join("Chisel CAD");
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    let path = dir.join(name);
-    std::fs::write(&path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    let path = confined_target(&dir, name)?;
+    write_no_follow(&path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
     Ok(path.to_string_lossy().into_owned())
+}
+
+/// Where `name` lands inside the render folder, refusing anything that could
+/// redirect the write elsewhere: the folder or the file being a symlink, or a
+/// canonical path outside the folder.
+fn confined_target(dir: &std::path::Path, name: &str) -> Result<std::path::PathBuf, String> {
+    let is_link = |p: &std::path::Path| std::fs::symlink_metadata(p).map(|m| m.file_type().is_symlink()).unwrap_or(false);
+    if is_link(dir) {
+        return Err(format!("{} is a symlink; renders are only written to a real folder", dir.display()));
+    }
+    let root = dir.canonicalize().map_err(|e| format!("cannot resolve {}: {e}", dir.display()))?;
+    let path = root.join(name);
+    if is_link(&path) {
+        return Err(format!("{} is a symlink; refusing to write through it", path.display()));
+    }
+    if path.parent() != Some(root.as_path()) {
+        return Err(format!("{name:?} would land outside {}", root.display()));
+    }
+    Ok(path)
+}
+
+/// Write a file without following a symlink planted at its path after the check.
+fn write_no_follow(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        #[cfg(target_os = "linux")]
+        const O_NOFOLLOW: i32 = 0o400000;
+        #[cfg(not(target_os = "linux"))]
+        const O_NOFOLLOW: i32 = 0x0100; // macOS / BSD
+        opts.custom_flags(O_NOFOLLOW);
+    }
+    opts.open(path)?.write_all(bytes)
 }
 
 /// Accept only a plain `name.png` / `.mp4` / `.webm`: no path separators, no leading dot.
@@ -124,7 +160,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::render_file_name;
+    use super::{confined_target, render_file_name, write_no_follow};
 
     #[test]
     fn render_names_must_be_plain_files() {
@@ -134,5 +170,28 @@ mod tests {
         for bad in ["", ".png", ".hidden.png", "../x.png", "/etc/x.png", "a/b.mp4", "c:\\x.png", "x.sh", "x.png.sh", "~x.png"] {
             assert!(render_file_name(bad).is_err(), "{bad:?} should be rejected");
         }
+    }
+
+    #[test]
+    fn renders_never_write_through_symlinks() {
+        let base = std::env::temp_dir().join(format!("chisel-render-test-{}", std::process::id()));
+        let dir = base.join("Chisel CAD");
+        std::fs::create_dir_all(&dir).unwrap();
+        let ok = confined_target(&dir, "a.png").unwrap();
+        assert_eq!(ok.parent().unwrap(), dir.canonicalize().unwrap());
+        write_no_follow(&ok, b"png").unwrap();
+        #[cfg(unix)]
+        {
+            let outside = base.join("outside.png");
+            std::fs::write(&outside, b"keep").unwrap();
+            std::os::unix::fs::symlink(&outside, dir.join("link.png")).unwrap();
+            assert!(confined_target(&dir, "link.png").is_err());
+            assert!(write_no_follow(&dir.join("link.png"), b"x").is_err(), "O_NOFOLLOW must refuse a symlink");
+            assert_eq!(std::fs::read(&outside).unwrap(), b"keep");
+            let linked_dir = base.join("linked");
+            std::os::unix::fs::symlink(&dir, &linked_dir).unwrap();
+            assert!(confined_target(&linked_dir, "a.png").is_err());
+        }
+        std::fs::remove_dir_all(&base).unwrap();
     }
 }

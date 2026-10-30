@@ -6,8 +6,11 @@ import { CommandDef, JSONSchema } from "./types";
 
 export interface McpTool {
   name: string;
+  title: string;
   description: string;
   inputSchema: JSONSchema;
+  /** Removes or overwrites model content (see CommandDef.destructive). */
+  destructive: boolean;
 }
 
 export class CommandRegistry {
@@ -43,8 +46,10 @@ export class CommandRegistry {
           : "";
       return {
         name: def.type,
+        title: def.title,
         description: `${def.summary}\n\n${def.description}${examples}`,
         inputSchema: def.paramsSchema,
+        destructive: !!def.destructive,
       };
     });
   }

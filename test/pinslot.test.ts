@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { realSession } from "./helpers";
 import { resolveComponentWorld } from "../src/core/recompute";
 import { applyPoint } from "../src/math/transform";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
 
 async function dis(s: CadSession, type: string, params: Record<string, unknown>): Promise<string[]> {

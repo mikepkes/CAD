@@ -14,7 +14,7 @@ import { CommandContext, CommandDef, JSONSchema } from "./types";
 import { makePlaneFromNormal, offsetPlane, planeById, WorkPlane } from "../../geometry/plane";
 import { Vec3 } from "../../math/vec";
 import { compileExpr } from "../../math/expr";
-import { resolveParameters } from "../../model/parameters";
+import { resolveParameters } from "../parameters";
 import { ProjectedCurve } from "../geometry/project";
 import { blendCorner, copyEntities, extendCurve, offsetCurve, trimCurve, Vec } from "./sketch-ops";
 import { gearOutline, GearType } from "../geometry/gear";
@@ -70,6 +70,7 @@ const EDGE_SELECTOR_SCHEMA: JSONSchema = {
     maxLength: { type: "number" },
     nearPoint: { ...V3_SCHEMA, description: "Edges passing through this world point." },
     inBox: { type: "object", required: ["min", "max"], properties: { min: V3_SCHEMA, max: V3_SCHEMA }, description: "Edges entirely inside this world box." },
+    names: { type: "array", items: { type: "string" }, description: "Edges by topological name \"faceA|faceB\" (see body_topology); stable across upstream edits." },
   },
 };
 const FACE_SELECTOR_SCHEMA: JSONSchema = {
@@ -770,10 +771,11 @@ export const BUILTINS: CommandDef<any>[] = [
         component: { type: "string", description: "Owning component id (from component.create). Defaults to the root component." },
         faceRef: {
           type: "object",
-          description: "Parametric body-face reference (with planeDef): the sketch re-resolves to this face each rebuild.",
+          description: "Parametric body-face reference (with planeDef): the sketch re-resolves to this face each rebuild — by its topological name when given (stable across upstream edits), else by normal + nearest point.",
           properties: {
             normal: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
             point: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } },
+            name: { type: "string", description: "Topological face name from body_topology, e.g. \"extrude3:end\"." },
           },
         },
         name: { type: "string", description: "Optional sketch name." },
@@ -784,7 +786,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Sketch 20mm above XY", params: { plane: "XY", offset: 20 } },
       { note: "Sketch on a datum plane", params: { datum: "pl5" } },
     ],
-    apply(draft, p: { plane?: string; offset?: number; datum?: string; planeDef?: { origin: Vec3; normal: Vec3 }; faceRef?: { normal: Vec3; point: Vec3 }; component?: string; name?: string }, ctx) {
+    apply(draft, p: { plane?: string; offset?: number; datum?: string; planeDef?: { origin: Vec3; normal: Vec3 }; faceRef?: { normal: Vec3; point: Vec3; name?: string }; component?: string; name?: string }, ctx) {
       const sid = ctx.alloc("sketch");
       const originId = ctx.alloc("pt");
       const count = Object.keys(draft.sketches).length + 1;
@@ -1806,6 +1808,41 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
   {
+    type: "feature.import",
+    title: "Import STEP",
+    summary: "Bring in a body from a STEP file (AP203/AP214/AP242), as a new body or combined with one.",
+    description:
+      "Reads the STEP text in `data` (the whole .step/.stp file) into a body; a file with several solids becomes one body holding them all. " +
+      "The file is stored in the document, so the design stays self-contained. `at` offsets the geometry (world mm). " +
+      "`operation` combines with an existing body Fusion-style (new/join/cut/intersect) — e.g. cut an imported fastener's shape out of a part; `body` picks which (its creating-feature id; default the most recent). " +
+      "Faces are named \"<featureId>:f<i>\" in file order (see body_topology). Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["data"],
+      additionalProperties: false,
+      properties: {
+        format: { type: "string", enum: ["step"], description: "File format (default step)." },
+        data: { type: "string", description: "The STEP file's text (starts with ISO-10303-21)." },
+        at: { type: "object", additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "World offset (default none)." },
+        operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
+        body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a cut/join that changes nothing an error." },
+        name: { type: "string" },
+      },
+    },
+    examples: [{ note: "Import a bracket, raised 10mm", params: { data: "ISO-10303-21;\nHEADER;…END-ISO-10303-21;", at: { x: 0, y: 0, z: 10 }, name: "Bracket" } }],
+    apply(draft, p: { format?: "step"; data: string; at?: Vec3; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      if (!/ISO-10303-21/.test(p.data.slice(0, 2000))) throw new Error("data is not a STEP file (no ISO-10303-21 header)");
+      const id = ctx.alloc("import");
+      draft.features[id] = {
+        id, kind: "import", name: p.name ?? "Imported", format: p.format ?? "step", data: p.data,
+        ...(p.at ? { at: p.at } : {}), operation: p.operation ?? "new",
+        ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
+      };
+      return { createdIds: [id], message: `Imported ${p.name ?? "STEP body"}` };
+    },
+  },
+  {
     type: "feature.hole",
     title: "Hole",
     summary: "Drill a hole — simple, counterbored or countersunk, blind or through — at one or more points.",
@@ -2367,6 +2404,7 @@ export const BUILTINS: CommandDef<any>[] = [
 
   {
     type: "sketch.deleteConstraints",
+    destructive: true,
     title: "Delete constraint",
     summary: "Remove constraints by id (works even for ones created by composite tools).",
     description:
@@ -2391,6 +2429,7 @@ export const BUILTINS: CommandDef<any>[] = [
   },
   {
     type: "sketch.deleteEntities",
+    destructive: true,
     title: "Delete entities",
     summary: "Delete entities (and any constraints that reference them) from a sketch.",
     description: "Removes the given entity ids and drops constraints that reference them. The origin point cannot be deleted.",
@@ -2552,6 +2591,7 @@ export const BUILTINS: CommandDef<any>[] = [
   },
   {
     type: "sketch.trim",
+    destructive: true,
     title: "Trim",
     summary: "Remove the clicked piece of a curve, bounded by its intersections.",
     description:

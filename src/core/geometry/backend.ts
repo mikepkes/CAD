@@ -6,10 +6,10 @@
 // data in, plain data out; meshes come back as transferable typed arrays.
 
 import { CadDocument } from "../document";
-import { resolveParameters } from "../../model/parameters";
+import { resolveParameters } from "../parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D } from "../occ/kernel";
-import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval } from "../features";
+import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance } from "../features";
 import { meshesTo3mf } from "../export/threemf";
 import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
@@ -36,6 +36,8 @@ function collectFacePlanes(doc: CadDocument): Record<string, WorkPlane> {
   return out;
 }
 
+export interface TopologyOpts { bodyId?: string; faces?: boolean; edges?: boolean }
+
 export interface GeometryBackend {
   /** Load the kernel (wherever this backend runs it). Idempotent. */
   init(opts: KernelInitOptions): Promise<void>;
@@ -51,6 +53,10 @@ export interface GeometryBackend {
   /** Measure body-body interpenetration at a configuration (param `overrides`
    *  set the pose), for the motion study's pass/fail. */
   collide(doc: CadDocument, overrides?: Record<string, string>): Promise<CollisionResult>;
+  /** Bodies with exact mass properties and their named faces/edges (all bodies, or one). */
+  topology(doc: CadDocument, opts?: TopologyOpts): Promise<BodyTopology[]>;
+  /** Minimum distance between two bodies (by creating-feature id). */
+  distance(doc: CadDocument, a: string, b: string): Promise<number>;
   /** Release workers / native resources. */
   dispose(): void;
 }
@@ -123,19 +129,29 @@ async function exportModelBytes(doc: CadDocument, format: ExportFormat): Promise
   return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
 }
 
+/** Named topology + mass properties of the bodies as built (component patterns expanded). */
+function topologyOf(doc: CadDocument, opts?: TopologyOpts): BodyTopology[] {
+  const geo = geometryDoc(doc, scopeOf(doc));
+  return bodyTopology(geo, scopeOf(geo), opts);
+}
+
 // ---- shared job protocol (used by both worker adapters) --------------------
 
 export type GeometryRequest =
   | { id: number; kind: "evaluate"; doc: CadDocument }
   | { id: number; kind: "edges"; doc: CadDocument; featureId: string }
   | { id: number; kind: "export"; doc: CadDocument; featureId: string | null; format: ExportFormat }
-  | { id: number; kind: "collide"; doc: CadDocument; overrides?: Record<string, string> };
+  | { id: number; kind: "collide"; doc: CadDocument; overrides?: Record<string, string> }
+  | { id: number; kind: "topology"; doc: CadDocument; opts?: TopologyOpts }
+  | { id: number; kind: "distance"; doc: CadDocument; a: string; b: string };
 
 export type GeometryResponse =
   | { id: number; kind: "evaluate"; solids: Record<string, SolidEval>; facePlanes: Record<string, WorkPlane> }
   | { id: number; kind: "edges"; edges: Edge3D[] }
   | { id: number; kind: "export"; bytes: Uint8Array | null }
   | { id: number; kind: "collide"; result: CollisionResult }
+  | { id: number; kind: "topology"; bodies: BodyTopology[] }
+  | { id: number; kind: "distance"; distance: number }
   | { id: number; kind: "error"; message: string };
 
 /** GeometryRequest without the id field, distributing over the union. */
@@ -171,6 +187,13 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
     if (req.kind === "edges") {
       const edges = featureEdges(geometryDoc(req.doc, scope), scope, req.featureId);
       return { res: { id: req.id, kind: "edges", edges }, transfer: [] };
+    }
+    if (req.kind === "topology") {
+      return { res: { id: req.id, kind: "topology", bodies: topologyOf(req.doc, req.opts) }, transfer: [] };
+    }
+    if (req.kind === "distance") {
+      const doc = geometryDoc(req.doc, scope);
+      return { res: { id: req.id, kind: "distance", distance: bodyDistance(doc, scopeOf(doc), req.a, req.b) }, transfer: [] };
     }
     if (req.kind === "collide") {
       const posed = poseDoc(req.doc, req.overrides);
@@ -216,6 +239,13 @@ export class InlineGeometryBackend implements GeometryBackend {
     const posed = poseDoc(doc, overrides);
     const d = geometryDoc(posed, scopeOf(posed));
     return collideFeatures(d, scopeOf(d));
+  }
+  async topology(doc: CadDocument, opts?: TopologyOpts): Promise<BodyTopology[]> {
+    return topologyOf(doc, opts);
+  }
+  async distance(doc: CadDocument, a: string, b: string): Promise<number> {
+    const d = geometryDoc(doc, scopeOf(doc));
+    return bodyDistance(d, scopeOf(d), a, b);
   }
   dispose(): void {}
 }

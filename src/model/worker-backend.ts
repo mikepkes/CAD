@@ -7,10 +7,10 @@
 // bundler/browser realm — it is imported solely from the browser store, never
 // from Node tests (those use InlineGeometryBackend).
 
-import { GeometryBackend, GeometryRequest, GeometryRequestInit, GeometryResponse, ExportFormat, EvaluateResult } from "./backend";
-import { CadDocument } from "../document";
-import { CollisionResult } from "../features";
-import { KernelInitOptions, Edge3D } from "../occ/kernel";
+import { GeometryBackend, GeometryRequest, GeometryRequestInit, GeometryResponse, ExportFormat, EvaluateResult, TopologyOpts } from "../core/geometry/backend";
+import { CadDocument } from "../core/document";
+import { CollisionResult, BodyTopology } from "../core/features";
+import { KernelInitOptions, Edge3D } from "../core/occ/kernel";
 
 export class WorkerGeometryBackend implements GeometryBackend {
   private worker: Worker;
@@ -66,6 +66,16 @@ export class WorkerGeometryBackend implements GeometryBackend {
     const r = await this.send({ kind: "collide", doc, overrides });
     if (r.kind === "collide") return r.result;
     throw new Error(r.kind === "error" ? r.message : "collide failed");
+  }
+  async topology(doc: CadDocument, opts?: TopologyOpts): Promise<BodyTopology[]> {
+    const r = await this.send({ kind: "topology", doc, opts });
+    if (r.kind === "topology") return r.bodies;
+    throw new Error(r.kind === "error" ? r.message : "topology failed");
+  }
+  async distance(doc: CadDocument, a: string, b: string): Promise<number> {
+    const r = await this.send({ kind: "distance", doc, a, b });
+    if (r.kind === "distance") return r.distance;
+    throw new Error(r.kind === "error" ? r.message : "distance failed");
   }
   dispose(): void { this.worker.terminate(); this.pending.clear(); }
 }

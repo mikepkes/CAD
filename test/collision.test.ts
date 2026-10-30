@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { realSession } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { collideFeatures } from "../src/core/features";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { runMotionStudy, driveParams } from "../src/model/motionStudy";
 import type { GeometryBackend } from "../src/core/geometry/backend";
 import type { CadSession } from "../src/core/command/session";

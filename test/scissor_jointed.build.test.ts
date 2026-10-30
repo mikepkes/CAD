@@ -13,7 +13,7 @@ import { serializeDocument } from "../src/core/persistence";
 import { evaluateFeatures } from "../src/core/features";
 import { expandAssembly, instanceSolids } from "../src/core/assembly";
 import { placeComponentSketches } from "../src/core/recompute";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
 
 const OUT = process.env.BUILD_SCISSOR || "";

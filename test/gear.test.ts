@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { realSession, echoSession } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { evaluateFeatures } from "../src/core/features";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { gearOutline, centreDistance } from "../src/core/geometry/gear";
 import { sampleSpline } from "../src/core/geometry/spline";
 import { extractRegions } from "../src/core/geometry/profile";

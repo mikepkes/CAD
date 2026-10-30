@@ -17,7 +17,7 @@ import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFusedBlob, GeometryCache } from "../src/core/features";
 import { placeComponentSketches } from "../src/core/recompute";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { flexureEquilibria, flexureSweep } from "../src/sim/flexure";
 import { materialForComponent } from "../src/core/document";
 import { HINGE_MATERIALS as MATERIALS, DEFAULT_HINGE_MATERIAL as DEFAULT_MATERIAL, num, pickBy } from "./flexure-materials";

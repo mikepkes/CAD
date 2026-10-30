@@ -4,9 +4,9 @@
 // runGeometryJob. Meshes are posted back with their buffers in the transfer
 // list, so they move to the main thread zero-copy.
 
-import { runGeometryJob, GeometryRequest } from "./backend";
-import { GeometryCache } from "../features";
-import { initKernel } from "../occ/kernel";
+import { runGeometryJob, GeometryRequest } from "../core/geometry/backend";
+import { GeometryCache } from "../core/features";
+import { initKernel } from "../core/occ/kernel";
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 let initPromise: Promise<void> | null = null;

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { realSession } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { evaluateFeatures } from "../src/core/features";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import {
   InlineGeometryBackend, runGeometryJob, meshTransferables, GeometryRequest,
 } from "../src/core/geometry/backend";

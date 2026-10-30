@@ -4,11 +4,14 @@
 import type { WorkPlane } from "../geometry/plane";
 import type { Vec3 } from "../math/vec";
 
-/** A parametric handle to a planar body face: matched by normal, tie-broken by
- *  the original pick point. Re-resolved against the live geometry each rebuild. */
+/** A parametric handle to a planar body face, re-resolved against the live
+ *  geometry each rebuild: by its topological `name` (see core/naming.ts) when
+ *  pinned, else matched by normal and tie-broken by the original pick point. */
 export interface FaceRef {
   normal: Vec3;
   point: Vec3;
+  /** Topological face name, e.g. "extrude3:end" (pinned when the face was picked). */
+  name?: string;
 }
 
 export type EntityId = string;

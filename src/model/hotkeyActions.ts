@@ -3,7 +3,7 @@
 // context it lives in; the "sketch" context stacks on top of "global" while a
 // sketch is open, so e.g. "f" resolves to Look At there and Frame otherwise.
 
-import { hotkeys, HotkeyAction } from "../core/hotkeys";
+import { hotkeys, HotkeyAction } from "./hotkeys";
 import { useStore, Tool } from "./store";
 
 const st = () => useStore.getState();

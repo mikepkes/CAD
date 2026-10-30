@@ -122,6 +122,22 @@ export interface PrimitiveFeature {
   requireEffect?: boolean;
 }
 
+/** A body read from a neutral CAD file. The file's text is kept in the
+ *  document, so a saved design is self-contained and replays anywhere. */
+export interface ImportFeature {
+  id: string;
+  kind: "import";
+  name: string;
+  format: "step";
+  /** The file contents (STEP is plain text). */
+  data: string;
+  /** World offset applied to the imported geometry. */
+  at?: { x: number; y: number; z: number };
+  operation?: BooleanOp;
+  body?: string;
+  requireEffect?: boolean;
+}
+
 /**
  * Selects B-rep edges of a body for fillet/chamfer. Every set field narrows the
  * selection (AND); an empty selector means every edge.
@@ -139,6 +155,9 @@ export interface EdgeSelector {
   nearPoint?: { x: number; y: number; z: number };
   /** Edges entirely inside an axis-aligned world box. */
   inBox?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+  /** Edges by topological name ("faceA|faceB", from body_topology); a name
+   *  without a "#k" suffix matches every edge between those two faces. */
+  names?: string[];
 }
 
 /** Selects B-rep faces of a body (shell openings). Empty = no faces. */
@@ -338,7 +357,7 @@ export interface InstanceFrame {
   template: string;  // the source (template) component it was cloned from
 }
 
-export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
+export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | ImportFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
   instanceFrame?: InstanceFrame;
   /** Build this feature only while this expression is non-zero (a checkbox
    *  parameter switching an optional part on or off). */

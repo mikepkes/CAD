@@ -19,7 +19,7 @@ import { InlineGeometryBackend } from "../src/core/geometry/backend";
 import { evaluateFeatures } from "../src/core/features";
 import { expandAssembly } from "../src/core/assembly";
 import { placeComponentSketches } from "../src/core/recompute";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { flexureState, hasFlexures } from "../src/sim/flexure";
 import type { SolidEval, CollisionResult } from "../src/core/features";
 import type { CadDocument } from "../src/core/document";

@@ -52,7 +52,7 @@ export async function handleMcpRpc(req: RpcRequest, toolset: WebMcpTool[] = tool
     case "ping":
       return result(id, {});
     case "tools/list":
-      return result(id, { tools: toolset.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })) });
+      return result(id, { tools: toolset.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, ...(t.annotations ? { annotations: t.annotations } : {}) })) });
     case "tools/call": {
       const name = String(params.name ?? "");
       const tool = toolset.find((t) => t.name === name);

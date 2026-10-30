@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../model/store";
 import type { CadDocument, RoleRef } from "../core/document";
-import { resolveParameters } from "../model/parameters";
+import { resolveParameters } from "../core/parameters";
 import { compileExpr } from "../math/expr";
 
 /** Resolve a count expression against the document's parameters for display. */

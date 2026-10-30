@@ -10,7 +10,7 @@ import { evaluateFeatures, exportFeatureBlob } from "../src/core/features";
 import { importSTEP, measureVolume } from "replicad";
 import { expandAssembly } from "../src/core/assembly";
 import { placeComponentSketches } from "../src/core/recompute";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import { solveBeam, rectSection } from "../src/sim/beam2d";
 import type { CadSession } from "../src/core/command/session";
 import type { CadDocument } from "../src/core/document";

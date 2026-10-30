@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { realSession } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { evaluateFeatures, SolidEval } from "../src/core/features";
-import { resolveParameters } from "../src/model/parameters";
+import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
 
 // The B-rep path: region extrude, boolean new/join/cut into bodies, and
