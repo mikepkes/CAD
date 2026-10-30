@@ -153,6 +153,12 @@ on.
   that name through later booleans, fillets, shells and patterns, via
   OpenCASCADE's own history. A sketch on a face follows that face through
   upstream edits; fillets and chamfers can pick edges by name (`A|B`).
+- **Configuration tables:** named design variants (Parameters panel →
+  Configurations, or `configuration.create`). Each row overrides parameter
+  expressions and can suppress features. Activating a row (`set_configuration`)
+  switches the whole model — solids, collisions, motion studies, exports —
+  without touching the timeline, and switching back replays from cache.
+  `export_model { all: true }` writes one file per configuration.
 - **Incremental rebuild:** each feature step is cached by its inputs, so an
   edit re-runs only the features downstream of it on the bodies it touches.
 - **Splines & involute gears:** an interpolating **spline** entity (exported

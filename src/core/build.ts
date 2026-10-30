@@ -6,7 +6,7 @@
 // it allocated the first time (`op.createdIds`); only genuinely new allocations
 // advance `doc.nextId`.
 
-import { CadDocument, freshComponents } from "./document";
+import { CadDocument, freshComponents, Configuration } from "./document";
 import { CommandRegistry } from "./command/registry";
 import { CommandApplyInfo, CommandContext, OperationRecord } from "./command/types";
 
@@ -47,6 +47,7 @@ export function rebuild(doc: CadDocument, registry: CommandRegistry): RebuildRes
   doc.materials = {};
   doc.sketches = {};
   doc.features = {};
+  doc.configurations = [];
 
   const infos: Record<string, CommandApplyInfo> = {};
   const errored: string[] = [];
@@ -74,5 +75,33 @@ export function rebuild(doc: CadDocument, registry: CommandRegistry): RebuildRes
     }
   }
 
+  applyConfiguration(doc);
   return { infos, errored };
+}
+
+/**
+ * Put the active configuration into effect on the freshly replayed model: its
+ * cells replace parameter expressions (the timeline's own is kept as
+ * `baseExpr`) and its suppressed features are switched off. Cells that name a
+ * parameter or feature that no longer exists become warnings on the row. An
+ * active id that no longer exists (the row was deleted) falls back to none.
+ */
+function applyConfiguration(doc: CadDocument) {
+  for (const c of doc.configurations) {
+    const warnings = [
+      ...Object.keys(c.values).filter((n) => !doc.parameters.some((p) => p.name === n)).map((n) => `no parameter "${n}"`),
+      ...(c.suppress ?? []).filter((id) => !doc.features[id]).map((id) => `no feature "${id}"`),
+    ];
+    c.warnings = warnings.length ? warnings : undefined;
+  }
+  const active: Configuration | undefined = doc.configurations.find((c) => c.id === doc.activeConfiguration);
+  if (!active) { doc.activeConfiguration = undefined; return; }
+  for (const p of doc.parameters) {
+    const cell = active.values[p.name];
+    if (cell === undefined) continue;
+    p.baseExpr = p.expr;
+    p.expr = cell;
+    p.configuredBy = active.name;
+  }
+  for (const id of active.suppress ?? []) if (doc.features[id]) doc.features[id].configSuppressed = true;
 }

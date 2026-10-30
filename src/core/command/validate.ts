@@ -25,7 +25,8 @@ export function validate(schema: JSONSchema, value: unknown, path = "$"): string
       (one === "string" && typeof value === "string") ||
       (one === "number" && typeof value === "number" && Number.isFinite(value)) ||
       (one === "integer" && Number.isInteger(value)) ||
-      (one === "boolean" && typeof value === "boolean");
+      (one === "boolean" && typeof value === "boolean") ||
+      (one === "null" && value === null);
     if (!types.some(matches)) {
       errors.push(`${path}: expected ${types.join(" or ")}, got ${describe(value)}`);
       return errors;

@@ -21,6 +21,10 @@ export interface Parameter {
   /** Named choices (an enum): values [0 … n−1], shown as a dropdown of these names. */
   options?: string[];
   warning?: string;
+  /** Set while the active configuration overrides `expr`: the timeline's own expression. */
+  baseExpr?: string;
+  /** Name of the configuration whose cell supplies `expr`. */
+  configuredBy?: string;
 }
 
 /** Snap a value to the nearest multiple of `step`, anchored at `base`. */

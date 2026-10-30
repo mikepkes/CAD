@@ -33,6 +33,10 @@ export interface Parameter {
   options?: string[];
   /** Set when the resolved value falls outside the extents / enum. */
   warning?: string;
+  /** Set while the active configuration overrides `expr`: the timeline's own expression. */
+  baseExpr?: string;
+  /** Name of the configuration whose cell supplies `expr`. */
+  configuredBy?: string;
 }
 
 /**
@@ -359,6 +363,8 @@ export interface InstanceFrame {
 
 export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | ImportFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
   instanceFrame?: InstanceFrame;
+  /** Switched off by the active configuration (derived; set by rebuild). */
+  configSuppressed?: boolean;
   /** Build this feature only while this expression is non-zero (a checkbox
    *  parameter switching an optional part on or off). */
   when?: string;
@@ -585,6 +591,22 @@ export interface MechanicalProps {
   allowableStrain: number;
 }
 
+/**
+ * A configuration: a named design variant — a row of the configuration table.
+ * While it is active its cells override parameter expressions and it switches
+ * listed features off; the timeline itself is unchanged.
+ */
+export interface Configuration {
+  id: string;
+  name: string;
+  /** Parameter name → expression this configuration uses instead. */
+  values: Record<string, string>;
+  /** Features (ids) this configuration suppresses. */
+  suppress?: string[];
+  /** Cells that point at nothing (a deleted parameter or feature); set by rebuild. */
+  warnings?: string[];
+}
+
 export interface CadDocument {
   schema: 1;
   id: string;
@@ -599,6 +621,10 @@ export interface CadDocument {
   rollbackIndex: number;
   /** Named, collapsible groupings over the operations (UI organization). */
   timelineGroups: TimelineGroup[];
+  /** The configuration in effect (an id from `configurations`); none = the
+   *  timeline's own values. Document state, like rollbackIndex: switching is
+   *  undoable but not a timeline step. */
+  activeConfiguration?: string;
 
   // ---- derived state (a cache, always reproducible from `operations`) ----
   parameters: Parameter[];
@@ -614,6 +640,8 @@ export interface CadDocument {
   materials: Record<string, Material>;
   sketches: Record<string, Sketch>;
   features: Record<string, FeatureDef>;
+  /** The configuration table (rows built by configuration.* operations). */
+  configurations: Configuration[];
 }
 
 /** The material that applies to `componentId`: its own, else the nearest ancestor's
@@ -669,7 +697,13 @@ export function createDocument(id = "doc1"): CadDocument {
     materials: {},
     sketches: {},
     features: {},
+    configurations: [],
   };
+}
+
+/** A configuration by id or (exact) name. */
+export function findConfiguration(doc: CadDocument, ref: string): Configuration | undefined {
+  return doc.configurations.find((c) => c.id === ref) ?? doc.configurations.find((c) => c.name === ref);
 }
 
 /** Allocate a stable id by advancing the document counter (mutates draft). */

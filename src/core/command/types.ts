@@ -8,7 +8,7 @@ import { CadDocument } from "../document";
 
 // A deliberately small JSON-Schema subset — enough to document and validate
 // command params, and to emit as MCP tool input schemas, without a dependency.
-export type JSONSchemaType = "object" | "array" | "string" | "number" | "integer" | "boolean";
+export type JSONSchemaType = "object" | "array" | "string" | "number" | "integer" | "boolean" | "null";
 
 export interface JSONSchema {
   type?: JSONSchemaType | JSONSchemaType[];

@@ -23,6 +23,8 @@ export interface SerializedDocument {
   rollbackIndex: number;
   operations: OperationRecord[];
   timelineGroups?: TimelineGroup[];
+  /** The active configuration's id (optional: absent = none). */
+  activeConfiguration?: string;
 }
 
 /** A parsed-but-not-yet-validated document; migrations work on this loose shape. */
@@ -80,6 +82,7 @@ export function serializeDocument(doc: CadDocument): string {
     rollbackIndex: doc.rollbackIndex,
     operations: doc.operations,
     timelineGroups: doc.timelineGroups,
+    ...(doc.activeConfiguration ? { activeConfiguration: doc.activeConfiguration } : {}),
   };
   return JSON.stringify(out, null, 2);
 }
@@ -95,6 +98,7 @@ export function deserializeDocument(json: string): CadDocument {
   doc.operations = d.operations as OperationRecord[];
   doc.rollbackIndex = typeof d.rollbackIndex === "number" ? d.rollbackIndex : doc.operations.length;
   doc.timelineGroups = Array.isArray(d.timelineGroups) ? d.timelineGroups : [];
+  if (typeof d.activeConfiguration === "string") doc.activeConfiguration = d.activeConfiguration;
   // Derived state (parameters/sketches/features) is reconstructed by recompute.
   return doc;
 }

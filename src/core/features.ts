@@ -654,23 +654,47 @@ const cloneDecals = (d?: ThreadDecal[]) => (d ? d.map((x) => structuredClone(x))
 
 /** Incremental-evaluation cache (lives in the geometry backend, across evaluations). */
 export class GeometryCache {
-  private steps = new Map<string, StepEffect>();
-  private evals = new Map<string, BodyEval>();
-  private usedSteps = new Set<string>();
-  private usedEvals = new Set<string>();
+  private steps = new Map<string, { eff: StepEffect; used: number }>();
+  private evals = new Map<string, { ev: BodyEval; used: number; bytes: number }>();
+  private generation = 0;
+  private readonly generations: number;
+  private readonly meshBudget: number;
   /** Feature steps replayed from cache / run through the kernel. */
   hits = 0;
   misses = 0;
-  step(key: string): StepEffect | undefined { const s = this.steps.get(key); if (s) this.usedSteps.add(key); return s; }
-  storeStep(key: string, eff: StepEffect): void { this.dropStep(key); this.steps.set(key, eff); this.usedSteps.add(key); }
-  bodyEval(sig: string): BodyEval | undefined { const e = this.evals.get(sig); if (e) this.usedEvals.add(sig); return e; }
-  storeBodyEval(sig: string, e: BodyEval): void { this.evals.set(sig, { ...e, mesh: cloneMesh(e.mesh) }); this.usedEvals.add(sig); }
-  /** Start an evaluation: track which entries it touches. */
-  begin(): void { this.usedSteps.clear(); this.usedEvals.clear(); }
-  /** Finish one: drop (and free) everything it didn't touch, bounding the cache to the live model. */
+  /**
+   * `generations`: how many recent evaluations' entries to keep. 1 keeps only
+   * the live model; more lets switching back to a recent state (another
+   * configuration, an undo) replay from cache. `meshBudgetBytes` caps the
+   * cached meshes, dropping the least recently used first.
+   */
+  constructor(opts: { generations?: number; meshBudgetBytes?: number } = {}) {
+    this.generations = Math.max(1, Math.floor(opts.generations ?? 1));
+    this.meshBudget = opts.meshBudgetBytes ?? 256 * 1024 * 1024;
+  }
+  step(key: string): StepEffect | undefined { const s = this.steps.get(key); if (s) s.used = this.generation; return s?.eff; }
+  storeStep(key: string, eff: StepEffect): void { this.dropStep(key); this.steps.set(key, { eff, used: this.generation }); }
+  bodyEval(sig: string): BodyEval | undefined { const e = this.evals.get(sig); if (e) e.used = this.generation; return e?.ev; }
+  storeBodyEval(sig: string, e: BodyEval): void {
+    const mesh = cloneMesh(e.mesh);
+    const bytes = mesh.positions.byteLength + mesh.normals.byteLength + mesh.indices.byteLength + mesh.edges.byteLength;
+    this.evals.set(sig, { ev: { ...e, mesh }, used: this.generation, bytes });
+  }
+  /** Start an evaluation. */
+  begin(): void { this.generation++; }
+  /** Finish one: drop (and free) entries no recent evaluation touched, then trim meshes to the budget. */
   end(): void {
-    for (const k of [...this.steps.keys()]) if (!this.usedSteps.has(k)) this.dropStep(k);
-    for (const k of [...this.evals.keys()]) if (!this.usedEvals.has(k)) this.evals.delete(k);
+    const oldest = this.generation - this.generations + 1;
+    for (const [k, s] of [...this.steps]) if (s.used < oldest) this.dropStep(k);
+    for (const [k, e] of [...this.evals]) if (e.used < oldest) this.evals.delete(k);
+    let bytes = 0;
+    for (const e of this.evals.values()) bytes += e.bytes;
+    if (bytes <= this.meshBudget) return;
+    for (const [k, e] of [...this.evals].sort((x, y) => x[1].used - y[1].used)) {
+      if (bytes <= this.meshBudget || e.used === this.generation) break;
+      this.evals.delete(k);
+      bytes -= e.bytes;
+    }
   }
   clear(): void { for (const k of [...this.steps.keys()]) this.dropStep(k); this.evals.clear(); }
   /** Bodies with a cached mesh. */
@@ -680,7 +704,7 @@ export class GeometryCache {
   private dropStep(key: string): void {
     const s = this.steps.get(key);
     if (!s) return;
-    for (const b of s.bodies) { try { b.shape.delete(); } catch { /* already freed */ } }
+    for (const b of s.eff.bodies) { try { b.shape.delete(); } catch { /* already freed */ } }
     this.steps.delete(key);
   }
 }
@@ -835,9 +859,11 @@ function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): 
   return { bodies, out };
 }
 
-/** Whether a feature is switched on: no `when`, or a `when` that's non-zero
- *  (one that can't be evaluated leaves the feature on rather than drop it). */
+/** Whether a feature is switched on: not suppressed by the active
+ *  configuration, and no `when` or a `when` that's non-zero (one that can't be
+ *  evaluated leaves the feature on rather than drop it). */
 export function featureActive(f: FeatureDef, scope: Scope): boolean {
+  if (f.configSuppressed) return false;
   if (!f.when) return true;
   try { return compileExpr(f.when).eval(scope) !== 0; } catch { return true; }
 }

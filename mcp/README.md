@@ -79,6 +79,10 @@ Plus timeline / query / history tools:
   surface type, area, centre, normal) and edges (`A|B` by the faces they
   separate). Use the names in `sketch_on_face` and fillet/chamfer
   `edges: { names }`
+- `configuration__create` / `configuration__update` / `configuration__delete`
+  edit the configuration table. `set_configuration` makes a row active (or
+  `null` for none). `export_model` takes a `configuration` to export a variant
+  without switching to it
 - `batch` — run `steps: [{tool, arguments}]` as one transaction. The first
   failing step rolls the document and its undo history back (`atomic: false`
   keeps the successful steps)

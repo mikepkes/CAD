@@ -99,7 +99,9 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
 
   const documentSummary = () => ({
     units: session.doc.units,
-    parameters: session.doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value, error: p.error })),
+    parameters: session.doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value, error: p.error, ...(p.configuredBy ? { configuredBy: p.configuredBy, baseExpr: p.baseExpr } : {}) })),
+    configurations: session.doc.configurations.map((c) => ({ id: c.id, name: c.name, values: c.values, suppress: c.suppress, warnings: c.warnings })),
+    activeConfiguration: session.doc.configurations.find((c) => c.id === session.doc.activeConfiguration)?.name ?? null,
     sketches: Object.values(session.doc.sketches).map((s) => ({
       id: s.id,
       name: s.name,
@@ -312,18 +314,19 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     },
     {
       name: "export_model",
-      description: "Export a solid feature to STL (3D print) or STEP (CAD/CNC). Returns base64-encoded file bytes. If featureId is omitted, the first feature is used.",
+      description: "Export a solid feature to STL (3D print) or STEP (CAD/CNC). Returns base64-encoded file bytes. If featureId is omitted, the first feature is used. `configuration` (a name or id from the configuration table) exports that variant without switching to it.",
       inputSchema: {
         type: "object",
         required: ["format"],
-        properties: { format: { type: "string", enum: ["stl", "step"] }, featureId: { type: "string" } },
+        properties: { format: { type: "string", enum: ["stl", "step"] }, featureId: { type: "string" }, configuration: { type: "string" } },
       },
       handler: async (a) => {
         await ensureKernel();
-        const scope = resolveParameters(session.doc.parameters).scope;
-        const fid = (a.featureId as string) || Object.keys(session.doc.features)[0];
+        const doc = a.configuration ? await session.previewConfiguration(String(a.configuration)) : session.doc;
+        const scope = resolveParameters(doc.parameters).scope;
+        const fid = (a.featureId as string) || Object.keys(doc.features)[0];
         if (!fid) return { ok: false, error: "No feature to export — run feature.extrude first." };
-        const blob = exportFeatureBlob(session.doc, scope, fid, a.format as "stl" | "step");
+        const blob = exportFeatureBlob(doc, scope, fid, a.format as "stl" | "step");
         if (!blob) return { ok: false, error: "Export failed (no closed profile?)." };
         const buf = Buffer.from(await blob.arrayBuffer());
         return { ok: true, featureId: fid, format: a.format, bytes: buf.length, base64: buf.toString("base64") };
@@ -350,6 +353,12 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
         const name = (a.name as string | undefined) ?? path.split(/[\\/]/).pop()!.replace(/\.(step|stp)$/i, "");
         return shapeDispatch(await session.dispatch("feature.import", { ...rest, name, data: readFileSync(path, "utf8") }));
       },
+    },
+    {
+      name: "set_configuration",
+      description: "Make a configuration (a row of the configuration table, by name or id) active, or pass null for the timeline's own values. Its cells then override those parameters and its suppressed features are skipped everywhere. Undoable; not a timeline step.",
+      inputSchema: { type: "object", required: ["configuration"], properties: { configuration: { type: ["string", "null"] } } },
+      handler: async (a) => shapeDispatch(await session.setActiveConfiguration(a.configuration == null ? null : String(a.configuration))),
     },
     {
       name: "export_document",
