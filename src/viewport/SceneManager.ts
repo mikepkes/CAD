@@ -21,6 +21,20 @@ function rigidMat(R: Rigid): THREE.Matrix4 {
 }
 import { createMaterial, MaterialSpec, WoodFrame } from "./material";
 import type { ThreadDecal } from "../core/document";
+import { fitDistance, orbitDirection } from "./orbitCamera";
+
+/** Options for an offscreen still (render_view). A free camera — `azimuthDeg` /
+ *  `elevationDeg`, see orbitDirection — overrides the named `view`. */
+export interface RenderViewOpts {
+  view?: string; width?: number; height?: number; hideSketches?: boolean;
+  azimuthDeg?: number; elevationDeg?: number;
+  /** Vertical field of view (default 45°; narrow it to mimic a zoomed photo). */
+  fovDeg?: number;
+  /** Rotation about the view axis, e.g. to match a hand-held reference shot. */
+  rollDeg?: number;
+  /** Also hide the grid and axes (a product shot rather than a modelling view). */
+  clean?: boolean;
+}
 
 export interface PreviewGeom {
   segments?: { u1: number; v1: number; u2: number; v2: number }[];
@@ -156,6 +170,7 @@ export class SceneManager {
   private planeGroup = new THREE.Group();
   private grid: THREE.GridHelper;
   private gridSize = 10;
+  private axes = new THREE.Group();
   private sketchGroup = new THREE.Group();
   private previewGroup = new THREE.Group();
   private solidsGroup = new THREE.Group();
@@ -284,11 +299,19 @@ export class SceneManager {
       ]);
       return new THREE.Line(g, new THREE.LineBasicMaterial({ color }));
     };
-    const axes = new THREE.Group();
-    axes.add(mk(new THREE.Vector3(1, 0, 0), 0xff5555));
-    axes.add(mk(new THREE.Vector3(0, 1, 0), 0x55ff77));
-    axes.add(mk(new THREE.Vector3(0, 0, 1), 0x5588ff));
-    this.scene.add(axes);
+    this.axes.add(mk(new THREE.Vector3(1, 0, 0), 0xff5555));
+    this.axes.add(mk(new THREE.Vector3(0, 1, 0), 0x55ff77));
+    this.axes.add(mk(new THREE.Vector3(0, 0, 1), 0x5588ff));
+    this.scene.add(this.axes);
+  }
+
+  /** Hide the editing overlays (origin planes, datums, grid, axes) for a clean
+   *  product capture; returns a function that restores their visibility. */
+  hideOverlays(): () => void {
+    const items = [this.planeGroup, this.datumGroup, this.grid, this.axes];
+    const was = items.map((o) => o.visible);
+    for (const o of items) o.visible = false;
+    return () => items.forEach((o, i) => { o.visible = was[i]; });
   }
 
   private buildPlanes() {
@@ -593,7 +616,7 @@ export class SceneManager {
    * PNG (base64). Used by the agent / WebMCP render_view tool; does not disturb
    * the user's camera.
    */
-  renderView(opts: { view?: string; width?: number; height?: number; hideSketches?: boolean } = {}): { base64: string; width: number; height: number; view: string } {
+  renderView(opts: RenderViewOpts = {}): { base64: string; width: number; height: number; view: string } {
     const width = Math.max(64, Math.min(Math.round(opts.width ?? 960), 1920));
     const height = Math.max(64, Math.min(Math.round(opts.height ?? 720), 1920));
     // Only honour hideSketches when there is a solid to show; otherwise the capture would be empty.
@@ -612,18 +635,26 @@ export class SceneManager {
       iso: [1, -1, 0.8], front: [0, -1, 0], back: [0, 1, 0],
       top: [0, 0, 1], bottom: [0, 0, -1], right: [1, 0, 0], left: [-1, 0, 0],
     };
-    const view = opts.view && DIRS[opts.view] ? opts.view : "iso";
-    const dir = new THREE.Vector3(...DIRS[view]).normalize();
-    const cam = new THREE.PerspectiveCamera(45, width / height, 0.1, 1e6);
+    // A free camera (azimuth/elevation) overrides the named view.
+    const free = opts.azimuthDeg != null || opts.elevationDeg != null;
+    const view = free
+      ? `az${Math.round(opts.azimuthDeg ?? -60)}_el${Math.round(opts.elevationDeg ?? 30)}`
+      : opts.view && DIRS[opts.view] ? opts.view : "iso";
+    const dir = free
+      ? new THREE.Vector3(...orbitDirection(opts.azimuthDeg ?? -60, opts.elevationDeg ?? 30))
+      : new THREE.Vector3(...DIRS[view]).normalize();
+    const fov = Math.max(1, Math.min(opts.fovDeg ?? 45, 120));
+    const cam = new THREE.PerspectiveCamera(fov, width / height, 0.1, 1e6);
     cam.up.set(0, 0, 1);
     if (view === "top" || view === "bottom") cam.up.set(0, 1, 0);
-    const dist = (radius / Math.sin(((45 * Math.PI) / 180) / 2)) * 1.15;
-    cam.position.copy(center).addScaledVector(dir, dist);
+    cam.position.copy(center).addScaledVector(dir, fitDistance(radius, fov, width / height));
     cam.lookAt(center);
+    if (opts.rollDeg) cam.rotateZ((opts.rollDeg * Math.PI) / 180); // about the view axis
     cam.updateProjectionMatrix();
 
     const rt = new THREE.WebGLRenderTarget(width, height);
-    // Hide the big origin-plane overlays for a clean capture (keep grid + axes).
+    // Hide the big origin-plane overlays (keep grid + axes for context unless `clean`).
+    const restoreOverlays = opts.clean ? this.hideOverlays() : null;
     const planesVisible = this.planeGroup.visible;
     const sketchVisible = this.sketchGroup.visible;
     this.planeGroup.visible = false;
@@ -644,6 +675,7 @@ export class SceneManager {
     this.scene.remove(key, fill);
     this.planeGroup.visible = planesVisible;
     this.sketchGroup.visible = sketchVisible;
+    restoreOverlays?.();
     rt.dispose();
 
     const canvas = document.createElement("canvas");
@@ -1022,6 +1054,24 @@ export class SceneManager {
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(w, h, false);
     this.perspCam.aspect = w / h; this.perspCam.updateProjectionMatrix();
+  }
+
+  /** Snapshot what a recording changes — the live camera's pose and field of view,
+   *  the canvas size and pixel ratio, overlay visibility — switch to the perspective
+   *  camera with overlays hidden, and return a function that puts it all back, so a
+   *  capture leaves the user's view as it was. */
+  captureSession(): () => void {
+    const cam = this.perspCam;
+    const saved = { camera: this.camera, pos: cam.position.clone(), quat: cam.quaternion.clone(), up: cam.up.clone(), fov: cam.fov };
+    const restoreOverlays = this.hideOverlays();
+    this.camera = cam;
+    return () => {
+      restoreOverlays();
+      cam.position.copy(saved.pos); cam.quaternion.copy(saved.quat); cam.up.copy(saved.up); cam.fov = saved.fov;
+      this.camera = saved.camera;
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // configureRecording forced 1
+      this.onResize();
+    };
   }
 
   /** Render one frame now (recorder-driven; the RAF loop is paused while recording). */

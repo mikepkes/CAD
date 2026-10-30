@@ -162,7 +162,7 @@ export function Viewport() {
       w.__recordTurntable = async (opts: Record<string, unknown>) => {
         const st = useStore.getState();
         const { recordTurntable } = await import("../viewport/turntableRecorder");
-        const bytes = await recordTurntable(scene, st.session.doc, st.solids as never, opts as never);
+        const { bytes } = await recordTurntable(scene, st.session.doc, st.solids as never, opts as never);
         let bin = ""; const CH = 0x8000;
         for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CH)));
         return btoa(bin);

@@ -14,6 +14,9 @@ import { createAgentController, AGENT_KEY_LS, AGENT_MODEL_LS } from "./agentCont
 import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus } from "./desktopMcp";
 import { createMcpController, WEBMCP_LS, DESKTOP_MCP_LS, DESKTOP_MCP_PORT_LS } from "./mcpController";
 import { getActiveScene } from "../viewport/sceneRef";
+import type { RenderViewOpts } from "../viewport/SceneManager";
+import type { TurntableOpts } from "../viewport/turntableRecorder";
+import { saveOutput } from "./saveOutput";
 import { pickFace } from "../core/geometry/pick";
 
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
@@ -379,7 +382,7 @@ export const useStore = create<AppState>((set, get) => {
     undo: () => get().undo(),
     redo: () => get().redo(),
     deleteOperation: (opId: string) => get().deleteOperation(opId),
-    render: async (opts: { view?: string; width?: number; height?: number; hideSketches?: boolean }) => {
+    render: async (opts: RenderViewOpts) => {
       // Make sure solids are current before capturing (agents call this right
       // after editing, and the worker-backed rebuild is asynchronous): always
       // evaluate the live doc, so the capture never shows a stale body.
@@ -389,6 +392,14 @@ export const useStore = create<AppState>((set, get) => {
       if (!scene) throw new Error("viewport not ready");
       return scene.renderView(opts);
     },
+    recordTurntable: async (opts: TurntableOpts) => {
+      if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
+      const scene = getActiveScene();
+      if (!scene) throw new Error("viewport not ready");
+      const { recordTurntable } = await import("../viewport/turntableRecorder");
+      return recordTurntable(scene, get().session.doc, get().solids as never, opts);
+    },
+    saveOutput,
   });
 
   // The embedded agent's actions (history + aborter live inside the controller).

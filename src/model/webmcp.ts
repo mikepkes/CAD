@@ -8,6 +8,9 @@
 
 import { CommandRegistry } from "../core/command/registry";
 import { hotkeys } from "../core/hotkeys";
+import type { RenderViewOpts } from "../viewport/SceneManager";
+import type { TurntableOpts, TurntableResult } from "../viewport/turntableRecorder";
+import { sanitizeOutputName, timestampedStem } from "./saveOutput";
 
 export interface WebMcpResult {
   content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
@@ -27,7 +30,11 @@ export interface WebMcpHost {
   /** Start a sketch on the body face nearest a world point (face picking without the mouse). */
   sketchOnFace?: (point: { x: number; y: number; z: number }, name?: string) => Promise<unknown>;
   describe: () => unknown;
-  render: (opts: { view?: string; width?: number; height?: number; hideSketches?: boolean }) => Promise<{ base64: string; width: number; height: number; view: string }>;
+  render: (opts: RenderViewOpts) => Promise<{ base64: string; width: number; height: number; view: string }>;
+  /** Record a WebCodecs turntable of the current bodies (optional; needs the live viewport). */
+  recordTurntable?: (opts: TurntableOpts) => Promise<TurntableResult>;
+  /** Persist an output file; resolves to where it went (a path on desktop, a download name in a browser). */
+  saveOutput?: (filename: string, bytes: Uint8Array, mime: string) => Promise<string>;
   /** Document-level actions (optional; the desktop/in-page hosts provide them). */
   newDocument?: () => Promise<void>;
   undo?: () => void;
@@ -69,26 +76,83 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
   });
   tools.push({
     name: "render_view",
-    description: "Render the current model and return a PNG image. `view` is one of iso (default), front, back, top, bottom, left, right. Optional `width`/`height` in pixels (max 1920). `hideSketches` hides sketch curves/points/constraint glyphs for a clean solids-only capture. Use it to see what you've built.",
+    description: "Render the current model and return a PNG image. `view` is one of iso (default), front, back, top, bottom, left, right. Or aim a free camera with `azimuthDeg` (around Z from +X toward +Y; -90 = looking at the front from -Y) and `elevationDeg` (up from the XY plane), which override `view`; `fovDeg` sets the vertical field of view (default 45 — narrow it, e.g. 10, to match a zoomed photo) and `rollDeg` rotates about the view axis. The model is framed automatically. Optional `width`/`height` in pixels (max 1920). `hideSketches` hides sketch curves/points/constraint glyphs; `clean` also hides the grid and axes for a product shot. `saveAs` (a filename) also writes the PNG to disk — in the desktop app into ~/Downloads/Chisel CAD/ — and reports the path. Use it to see what you've built.",
     inputSchema: {
       type: "object",
       properties: {
         view: { type: "string", enum: ["iso", "front", "back", "top", "bottom", "left", "right"] },
+        azimuthDeg: { type: "number" },
+        elevationDeg: { type: "number" },
+        fovDeg: { type: "number" },
+        rollDeg: { type: "number" },
         width: { type: "number" },
         height: { type: "number" },
         hideSketches: { type: "boolean" },
+        clean: { type: "boolean" },
+        saveAs: { type: "string", description: "Filename (no directories) to also save the PNG as." },
       },
     },
     execute: async (args) => {
       try {
-        const a = args as { view?: string; width?: number; height?: number; hideSketches?: boolean };
-        const r = await host.render({ view: a.view, width: a.width, height: a.height, hideSketches: a.hideSketches });
-        return { content: [{ type: "image", data: r.base64, mimeType: "image/png" }] };
+        const a = args as RenderViewOpts & { saveAs?: string };
+        const r = await host.render({
+          view: a.view, width: a.width, height: a.height, hideSketches: a.hideSketches, clean: a.clean,
+          azimuthDeg: a.azimuthDeg, elevationDeg: a.elevationDeg, fovDeg: a.fovDeg, rollDeg: a.rollDeg,
+        });
+        const content: WebMcpResult["content"] = [{ type: "image", data: r.base64, mimeType: "image/png" }];
+        if (a.saveAs && host.saveOutput) {
+          const name = sanitizeOutputName(a.saveAs, "png", `chisel-${r.view}`);
+          const saved = await host.saveOutput(name, base64Bytes(r.base64), "image/png");
+          content.push({ type: "text", text: JSON.stringify({ ok: true, saved, width: r.width, height: r.height, view: r.view }) });
+        }
+        return { content };
       } catch (e) {
         return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
       }
     },
   });
+  if (host.recordTurntable && host.saveOutput) {
+    tools.push({
+      name: "record_turntable",
+      description: "Record a 360° turntable video of the current bodies with WebCodecs and save it as an MP4 (H.264 when the platform can encode it, else VP9) — in the desktop app into ~/Downloads/Chisel CAD/. The camera orbits Z around the bodies, framed automatically. Defaults: 1280×720, 60 fps, 4 s, one revolution, elevationDeg 25, startAzDeg -60 (front-right), fovDeg 30. Width/height ≤ 1920, fps ≤ 60, seconds ≤ 30. Returns the saved path, codec and frame count. Takes a few seconds; it briefly borrows the viewport and restores it.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          seconds: { type: "number" },
+          fps: { type: "number" },
+          width: { type: "number" },
+          height: { type: "number" },
+          revolutions: { type: "number" },
+          elevationDeg: { type: "number" },
+          startAzDeg: { type: "number" },
+          fovDeg: { type: "number" },
+          filename: { type: "string", description: "Filename (no directories); default chisel-turntable-<timestamp>.mp4." },
+        },
+      },
+      execute: async (args) => {
+        try {
+          const a = args as { seconds?: number; fps?: number; width?: number; height?: number; revolutions?: number; elevationDeg?: number; startAzDeg?: number; fovDeg?: number; filename?: string };
+          const clamp = (v: number | undefined, d: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Number.isFinite(v) ? Number(v) : d));
+          const opts: TurntableOpts = {
+            seconds: clamp(a.seconds, 4, 0.5, 30),
+            fps: clamp(a.fps, 60, 1, 60),
+            width: clamp(a.width, 1280, 64, 1920),
+            height: clamp(a.height, 720, 64, 1920),
+            revolutions: clamp(a.revolutions, 1, -10, 10),
+            elevationDeg: clamp(a.elevationDeg, 25, -89, 89),
+            startAzDeg: Number.isFinite(a.startAzDeg) ? Number(a.startAzDeg) : -60,
+            fovDeg: clamp(a.fovDeg, 30, 1, 120),
+          };
+          const r = await host.recordTurntable!(opts);
+          const name = sanitizeOutputName(a.filename, "mp4", timestampedStem("chisel-turntable"));
+          const saved = await host.saveOutput!(name, r.bytes, "video/mp4");
+          return ok({ ok: true, saved, codec: r.codec, width: r.width, height: r.height, fps: r.fps, frames: r.frames, seconds: opts.seconds, bytes: r.bytes.length });
+        } catch (e) {
+          return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+        }
+      },
+    });
+  }
   if (host.sketchOnFace) {
     tools.push({
       name: "sketch_on_face",
@@ -170,6 +234,13 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
     },
   });
   return tools;
+}
+
+function base64Bytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 export function isWebMcpActive(): boolean {

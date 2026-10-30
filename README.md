@@ -220,6 +220,12 @@ Claude Desktop (`claude_desktop_config.json`):
 { "mcpServers": { "chisel-cad": { "type": "http", "url": "http://127.0.0.1:4673/mcp" } } }
 ```
 
+Renders can go to disk: `render_view` takes a free camera (`azimuthDeg`,
+`elevationDeg`, `fovDeg`, `rollDeg`) and a `saveAs` filename, and
+`record_turntable` records a 360° WebCodecs video (H.264, VP9 fallback) and
+saves the MP4. Desktop saves land in `~/Downloads/Chisel CAD/` — clients name
+the file, not the folder.
+
 The toggle and port persist; the server starts with the app when enabled and
 stops when the window closes. This is distinct from `npm run mcp`, the
 **headless** stdio server that runs its own document with no UI.
