@@ -131,7 +131,12 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
     activeSketchId,
     sketches,
     features: Object.values(doc.features).map((f) => describeFeature(f)),
-    parameters: doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value })),
+    parameters: doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value, ...(p.configuredBy ? { configuredBy: p.configuredBy, baseExpr: p.baseExpr } : {}) })),
+    // The configuration table: rows override parameters / suppress features while active.
+    ...(doc.configurations?.length ? {
+      configurations: doc.configurations.map((c) => ({ id: c.id, name: c.name, values: c.values, ...(c.suppress ? { suppress: c.suppress } : {}), ...(c.warnings ? { warnings: c.warnings } : {}) })),
+      activeConfiguration: doc.activeConfiguration ? doc.configurations.find((c) => c.id === doc.activeConfiguration)?.name : null,
+    } : {}),
     // Evaluation results per feature (when the host has them): bodies with bounds/volume, modifier status, warnings.
     ...(solids ? {
       bodies: Object.values(solids).filter((s) => s.mesh).map((s) => ({

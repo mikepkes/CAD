@@ -11,7 +11,8 @@ import { initKernel } from "../core/occ/kernel";
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 let initPromise: Promise<void> | null = null;
 // Persists across messages so evaluations are incremental (see GeometryCache).
-const cache = new GeometryCache();
+// Keeps a few recent evaluations, so flipping between configurations (or undoing) replays from cache.
+const cache = new GeometryCache({ generations: 6 });
 
 ctx.onmessage = async (e: MessageEvent) => {
   const msg = e.data as { kind: "init"; wasmUrl?: string } | GeometryRequest;

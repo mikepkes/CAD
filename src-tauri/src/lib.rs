@@ -74,7 +74,8 @@ fn mcp_respond(state: State<'_, AppState>, id: u64, response: Value) -> Result<(
     }
 }
 
-/// Write a render the MCP tools produced (a PNG still or MP4 turntable) into
+/// Write an output the MCP tools produced (a PNG still, an MP4 turntable, or an
+/// exported STEP/STL/3MF model) into
 /// `~/Downloads/Chisel CAD/`. The request body is the raw file bytes and the name
 /// comes in the `x-filename` header; it must be a plain filename, so an agent can
 /// choose what a render is called but never where it lands.
@@ -128,11 +129,12 @@ fn write_no_follow(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> 
     opts.open(path)?.write_all(bytes)
 }
 
-/// Accept only a plain `name.png` / `.mp4` / `.webm`: no path separators, no leading dot.
+/// Accept only a plain `name.png` / `.mp4` / `.webm`, or an exported model
+/// (`.step` / `.stp` / `.stl` / `.3mf`): no path separators, no leading dot.
 fn render_file_name(name: &str) -> Result<&str, String> {
     let plain = name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ' '));
     let lower = name.to_ascii_lowercase();
-    let known_ext = [".png", ".mp4", ".webm"].iter().any(|e| lower.ends_with(e) && lower.len() > e.len());
+    let known_ext = [".png", ".mp4", ".webm", ".step", ".stp", ".stl", ".3mf"].iter().any(|e| lower.ends_with(e) && lower.len() > e.len());
     if name.len() > 120 || !plain || name.starts_with('.') || !known_ext {
         return Err(format!("invalid output filename {name:?}"));
     }
@@ -164,10 +166,10 @@ mod tests {
 
     #[test]
     fn render_names_must_be_plain_files() {
-        for ok in ["turntable.mp4", "view az30 el45.png", "part-v2_final.webm", "A.PNG"] {
+        for ok in ["turntable.mp4", "view az30 el45.png", "part-v2_final.webm", "A.PNG", "bracket Large.step", "peg.stl", "box.3mf"] {
             assert_eq!(render_file_name(ok), Ok(ok));
         }
-        for bad in ["", ".png", ".hidden.png", "../x.png", "/etc/x.png", "a/b.mp4", "c:\\x.png", "x.sh", "x.png.sh", "~x.png"] {
+        for bad in ["", ".png", ".hidden.png", "../x.png", "/etc/x.png", "a/b.mp4", "c:\\x.png", "x.sh", "x.png.sh", "~x.png", "x.step.exe", ".step"] {
             assert!(render_file_name(bad).is_err(), "{bad:?} should be rejected");
         }
     }

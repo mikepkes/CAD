@@ -160,7 +160,7 @@ export function ParametersPanel() {
                 }}
               />
               <ParamControl p={p} />
-              <span className="param-value" title={p.error || p.warning || ""}>
+              <span className={`param-value ${p.configuredBy ? "configured" : ""}`} title={p.error || p.warning || (p.configuredBy ? `From configuration ${p.configuredBy} (default: ${p.baseExpr})` : "")}>
                 {p.error ? "⚠" : p.warning ? `⚠ ${fmt(p.value)}` : fmt(p.value)}
               </span>
               <span className="param-row-btns">
@@ -180,6 +180,126 @@ export function ParametersPanel() {
         Use names in dimensions, e.g. <code>width</code>, <code>width/2</code>, <code>rad(30)</code>. Set a
         range or value list with <code>⋯</code> for a slider or dropdown.
       </div>
+      <ConfigurationsTable />
+    </div>
+  );
+}
+
+/** Parse a pasted table (CSV or tab-separated): a header row "name, param, param…"
+ *  then one row per configuration. Empty cells are left out. */
+export function parseConfigTable(text: string): { name: string; values: Record<string, string> }[] {
+  const rows = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => l.split(/\t|,/).map((c) => c.trim()));
+  if (rows.length < 2) return [];
+  const [head, ...body] = rows;
+  return body.filter((r) => r[0]).map((r) => ({
+    name: r[0],
+    values: Object.fromEntries(head.slice(1).map((h, i) => [h, r[i + 1] ?? ""]).filter(([h, v]) => h && v)),
+  }));
+}
+
+/**
+ * The configuration table: one row per design variant plus "Default" (the
+ * timeline's own values), one column per parameter any row overrides. The
+ * radio switches the active configuration; cells are expressions (empty = use
+ * the default); pasting CSV adds or updates rows by name.
+ */
+function ConfigurationsTable() {
+  const session = useStore((s) => s.session);
+  useStore((s) => s.rev);
+  const setActive = useStore((s) => s.setActiveConfiguration);
+  const create = useStore((s) => s.createConfiguration);
+  const update = useStore((s) => s.updateConfiguration);
+  const remove = useStore((s) => s.deleteConfiguration);
+  const [extraCols, setExtraCols] = useState<string[]>([]);
+  const [pasting, setPasting] = useState(false);
+  const [paste, setPaste] = useState("");
+  const doc = session.doc;
+  const configs = doc.configurations ?? [];
+  const params = doc.parameters;
+  const cols = [...new Set([...configs.flatMap((c) => Object.keys(c.values)), ...extraCols])];
+  const base = (name: string) => { const p = params.find((x) => x.name === name); return p ? p.baseExpr ?? p.expr : "—"; };
+  const addable = params.map((p) => p.name).filter((n) => !cols.includes(n));
+
+  const commitCell = (ref: string, name: string, value: string, was: string | undefined) => {
+    const v = value.trim();
+    if (v === (was ?? "")) return;
+    void update(ref, { values: { [name]: v === "" ? null : v } });
+  };
+  const applyPaste = async () => {
+    for (const row of parseConfigTable(paste)) {
+      const existing = configs.find((c) => c.name === row.name);
+      if (existing) await update(existing.id, { values: row.values });
+      else await create(row.name, row.values);
+    }
+    setPaste(""); setPasting(false);
+  };
+
+  return (
+    <div className="config-table">
+      <div className="panel-head sub">
+        <span>Configurations</span>
+        <span className="param-row-btns">
+          <button className="icon-btn" title="Paste a table (CSV / tab-separated): header “name, param…”, one row per configuration" onClick={() => setPasting(!pasting)}>⎘</button>
+          <button className="icon-btn" title="Save the current parameter values as a new configuration" onClick={() => {
+            const name = prompt("Name for this configuration", `Config ${configs.length + 1}`);
+            if (name?.trim()) void create(name.trim());
+          }}>＋</button>
+        </span>
+      </div>
+      {pasting && (
+        <div className="config-paste">
+          <textarea rows={4} placeholder={"name,width,height\nSmall,40,20\nLarge,80,40"} value={paste} onChange={(e) => setPaste(e.target.value)} />
+          <div className="param-bounds-actions">
+            <button className="btn ghost" onClick={() => setPasting(false)}>Cancel</button>
+            <button className="btn primary" onClick={() => void applyPaste()}>Apply</button>
+          </div>
+        </div>
+      )}
+      {configs.length === 0 && !pasting ? (
+        <div className="param-empty">No configurations. ＋ saves the current values as one.</div>
+      ) : (
+        <div className="config-grid" style={{ gridTemplateColumns: `18px minmax(70px, 1.2fr) repeat(${cols.length}, minmax(48px, 1fr)) 22px` }}>
+          <span /><span className="config-head">Name</span>
+          {cols.map((c) => <span key={c} className="config-head" title={`Default: ${base(c)}`}>{c}</span>)}
+          <span>
+            {addable.length > 0 && (
+              <select className="config-add" value="" title="Add a parameter column" onChange={(e) => e.target.value && setExtraCols([...extraCols, e.target.value])}>
+                <option value="">＋</option>
+                {addable.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            )}
+          </span>
+
+          <input type="radio" name="active-config" checked={!doc.activeConfiguration} onChange={() => void setActive(null)} title="Use the timeline's own values" />
+          <span className="config-name default">Default</span>
+          {cols.map((c) => <span key={c} className="config-cell default">{base(c)}</span>)}
+          <span />
+
+          {configs.map((cfg) => (
+            <div key={cfg.id} className={`config-row ${cfg.warnings ? "warn" : ""}`} style={{ display: "contents" }}>
+              <input type="radio" name="active-config" checked={doc.activeConfiguration === cfg.id} onChange={() => void setActive(cfg.id)} title={`Make ${cfg.name} active`} />
+              <input
+                className="config-name"
+                defaultValue={cfg.name}
+                key={`n${cfg.id}${cfg.name}`}
+                title={cfg.warnings?.join("; ") || cfg.name}
+                onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== cfg.name) void update(cfg.id, { name: v }); else e.target.value = cfg.name; }}
+              />
+              {cols.map((c) => (
+                <input
+                  key={`${c}${cfg.values[c] ?? ""}`}
+                  className="config-cell"
+                  defaultValue={cfg.values[c] ?? ""}
+                  placeholder={base(c)}
+                  onBlur={(e) => commitCell(cfg.id, c, e.target.value, cfg.values[c])}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                />
+              ))}
+              <button className="icon-btn danger" title={`Delete ${cfg.name}`} onClick={() => void remove(cfg.id)}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

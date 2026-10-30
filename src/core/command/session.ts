@@ -15,7 +15,7 @@
 // over-constraint guard, which can reject a change and name the clashing
 // constraints.
 
-import { CadDocument } from "../document";
+import { CadDocument, findConfiguration } from "../document";
 import { ConstraintSolver } from "../solver/model";
 import { Evaluations, recompute } from "../recompute";
 import { rebuild } from "../build";
@@ -170,6 +170,39 @@ export class CadSession {
     const draft = clone(before);
     draft.rollbackIndex = Math.max(0, Math.min(index, draft.operations.length));
     return this.finish(before, evalsBefore, draft, undefined, false, {});
+  }
+
+  /** Make a configuration active (by id or name), or none (`null`): the model
+   *  re-evaluates with its cells in effect. Undoable; not a timeline step. */
+  async setActiveConfiguration(ref: string | null): Promise<DispatchResult> {
+    const before = this.doc;
+    const evalsBefore = this.evaluations;
+    const draft = clone(before);
+    if (ref !== null) {
+      const c = findConfiguration(draft, ref);
+      if (!c) return this.fail(`No configuration "${ref}"`);
+      draft.activeConfiguration = c.id;
+    } else {
+      draft.activeConfiguration = undefined;
+    }
+    return this.finish(before, evalsBefore, draft, undefined, false, {});
+  }
+
+  /** The document as it would be with configuration `ref` active (or none),
+   *  rebuilt and solved, without changing the session — for exporting or
+   *  measuring a variant that isn't the active one. */
+  async previewConfiguration(ref: string | null): Promise<CadDocument> {
+    const draft = clone(this.doc);
+    if (ref !== null) {
+      const c = findConfiguration(draft, ref);
+      if (!c) throw new Error(`No configuration "${ref}"`);
+      draft.activeConfiguration = c.id;
+    } else {
+      draft.activeConfiguration = undefined;
+    }
+    rebuild(draft, this.registry);
+    await recompute(draft, this.solver);
+    return draft;
   }
 
   undo(): boolean {

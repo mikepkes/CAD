@@ -1356,3 +1356,21 @@ body {
   padding: 10px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .cz-share:hover { filter: brightness(1.08); }
+
+/* ---- configuration table (Parameters panel) ---- */
+.config-table { border-top: 1px solid var(--line); padding: 4px 8px 8px; }
+.panel-head.sub { padding: 6px 0; font-size: 12px; }
+.config-grid { display: grid; gap: 4px 6px; align-items: center; overflow-x: auto; }
+.config-head { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.config-grid input.config-name, .config-grid input.config-cell {
+  min-width: 0; width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 5px; padding: 3px 5px; font-size: 12px; font-family: ui-monospace, monospace;
+}
+.config-grid input.config-name { font-family: inherit; }
+.config-grid input.config-cell::placeholder { color: var(--text-dim); opacity: 0.6; }
+.config-name.default, .config-cell.default { font-size: 12px; color: var(--text-dim); padding: 3px 5px; font-family: ui-monospace, monospace; }
+.config-name.default { font-family: inherit; }
+.config-row.warn input.config-name { border-color: var(--warn, #e0a44a); }
+.config-add { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 5px; font-size: 11px; width: 22px; padding: 0; }
+.config-paste textarea { width: 100%; box-sizing: border-box; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 5px; font: 12px ui-monospace, monospace; padding: 5px; }
+.param-value.configured { color: var(--accent); }

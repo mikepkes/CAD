@@ -24,7 +24,7 @@ const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? 
 import { solveDrag } from "../core/drag";
 import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
 import type { SolidEval } from "../core/features";
-import { GeometryBackend, InlineGeometryBackend, TopologyOpts } from "../core/geometry/backend";
+import { GeometryBackend, InlineGeometryBackend, TopologyOpts, ExportFormat } from "../core/geometry/backend";
 import { hasFlexures } from "../sim/flexure";
 import { WorkerGeometryBackend } from "./worker-backend";
 import { runMotionStudy, driveParams, MotionStatus, MotionResult } from "./motionStudy";
@@ -209,6 +209,12 @@ export interface AppState {
   /** Create a parameter from a dimension's current value and point the dimension at it. */
   promoteDimension: (cid: string) => Promise<void>;
   setParameterExpr: (name: string, expr: string) => Promise<void>;
+  /** Make a configuration active (id or name), or none. */
+  setActiveConfiguration: (ref: string | null) => Promise<void>;
+  /** Add a configuration row; with no `values`, it captures the current values of every parameter. */
+  createConfiguration: (name: string, values?: Record<string, string>) => Promise<string | null>;
+  updateConfiguration: (ref: string, change: { name?: string; values?: Record<string, string | null>; suppress?: string[] }) => Promise<void>;
+  deleteConfiguration: (ref: string) => Promise<void>;
   renameParameter: (name: string, newName: string) => Promise<void>;
   deleteParameter: (name: string) => Promise<void>;
   /** Set or clear a parameter's extents (min/max) or acceptable values (enum). */
@@ -406,6 +412,20 @@ export const useStore = create<AppState>((set, get) => {
       return { sketchId: r.createdIds[0], originId: r.createdIds[1], featureId: at.featureId, face: at.faceRef.name, distanceToFace: at.distance, frame: { origin: wp.origin, u: wp.u, v: wp.v, normal: wp.normal } };
     },
     topology: (opts: TopologyOpts) => geometry.topology(get().session.doc, opts),
+    setConfiguration: async (ref: string | null) => {
+      const r = await get().session.setActiveConfiguration(ref);
+      if (!r.ok) throw new Error(r.error ?? "could not switch configuration");
+      bump(); afterMutate();
+      if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
+      return { active: ref, parameters: get().session.doc.parameters.filter((p) => p.configuredBy).map((p) => ({ name: p.name, expr: p.expr, value: p.value })) };
+    },
+    configurations: () => get().session.doc.configurations.map((c) => ({ id: c.id, name: c.name })),
+    // A variant is exported from a rebuilt copy, so the live model never switches.
+    exportModel: async (format: ExportFormat, body: string | null, configuration?: string | null) => {
+      await get().ensureKernel();
+      const doc = configuration === undefined ? get().session.doc : await get().session.previewConfiguration(configuration);
+      return geometry.exportBytes(doc, body, format);
+    },
     distance: (a: string, b: string) => geometry.distance(get().session.doc, a, b),
     // An all-or-nothing batch: remember the session (new_document swaps it) and
     // its state, and put both back if a step fails.
@@ -711,10 +731,29 @@ export const useStore = create<AppState>((set, get) => {
       set({ lastMessage: `Promoted dimension to parameter "${name}".` });
     },
     setParameterExpr: async (name, expr) => {
+      // While a configuration supplies this parameter, an edit changes its cell.
+      const p = get().session.doc.parameters.find((x) => x.name === name);
+      if (p?.configuredBy && get().session.doc.activeConfiguration) {
+        await runDispatch("configuration.update", { configuration: get().session.doc.activeConfiguration, values: { [name]: expr } });
+        return;
+      }
       const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
       if (op) await get().editOperation(op.opId, { ...op.params, name, expression: expr });
       else await runDispatch("parameter.set", { name, expression: expr });
     },
+    setActiveConfiguration: async (ref) => {
+      const r = await get().session.setActiveConfiguration(ref);
+      bump({ toast: r.ok ? undefined : toastFor(r), lastMessage: r.ok ? (ref ? `Configuration: ${ref}` : "Configuration: default") : r.error ?? "" });
+      afterMutate();
+    },
+    createConfiguration: async (name, values) => {
+      // Capture concrete values, so the row stays what it was when saved.
+      const cells = values ?? Object.fromEntries(get().session.doc.parameters.map((p) => [p.name, Number.isInteger(p.value) ? String(p.value) : String(Math.round(p.value * 1e6) / 1e6)]));
+      const r = await runDispatch("configuration.create", { name, values: cells });
+      return r.ok ? r.createdIds[0] : null;
+    },
+    updateConfiguration: async (ref, change) => { await runDispatch("configuration.update", { configuration: ref, ...change }); },
+    deleteConfiguration: async (ref) => { await runDispatch("configuration.delete", { configuration: ref }); },
     renameParameter: async (name, newName) => {
       const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
       if (op) await get().editOperation(op.opId, { ...op.params, name: newName });

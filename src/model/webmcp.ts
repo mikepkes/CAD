@@ -52,6 +52,12 @@ export interface WebMcpHost {
   topology?: (opts: { bodyId?: string; faces?: boolean; edges?: boolean }) => Promise<BodyTopology[]>;
   /** Minimum distance between two bodies. */
   distance?: (a: string, b: string) => Promise<number>;
+  /** Switch the active configuration (name/id, or null for none). */
+  setConfiguration?: (ref: string | null) => Promise<unknown>;
+  /** The configuration table's rows. */
+  configurations?: () => { id: string; name: string }[];
+  /** Model bytes: one body (null = the whole model fused, or every part for 3MF), optionally of a configuration. */
+  exportModel?: (format: "stl" | "step" | "3mf", body: string | null, configuration?: string | null) => Promise<Uint8Array | null>;
   /** Capture / restore the document state, for an all-or-nothing batch. */
   checkpoint?: () => unknown;
   rollback?: (token: unknown) => Promise<void>;
@@ -291,6 +297,55 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
             faces: b.faces.map((f) => ({ name: f.name, type: f.type.toLowerCase(), area: f.area, center: f.center, normal: f.normal, point: f.point })),
             edges: b.edges.map((e) => ({ name: e.name, type: e.type.toLowerCase(), length: e.length, mid: e.mid })),
           })) });
+        } catch (e) {
+          return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+        }
+      },
+    });
+  }
+  if (host.setConfiguration) {
+    tools.push({
+      name: "set_configuration",
+      description: "Make a configuration (a row of the configuration table, by name or id) active, or pass null for the timeline's own values. Its cells override those parameters and its suppressed features are skipped everywhere — solids, collisions, motion studies, exports. Undoable; not a timeline step. Rows are made with configuration.create / configuration.update; get_state lists them.",
+      inputSchema: { type: "object", required: ["configuration"], properties: { configuration: { type: ["string", "null"] } } },
+      annotations: { ...EDIT, idempotentHint: true },
+      execute: async (args) => {
+        try { return ok({ ok: true, ...(await host.setConfiguration!((args as { configuration?: string | null }).configuration ?? null) as object) }); }
+        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+      },
+    });
+  }
+  if (host.exportModel && host.saveOutput) {
+    const MIME = { step: "model/step", stl: "model/stl", "3mf": "model/3mf" } as const;
+    tools.push({
+      name: "export_model",
+      description: "Export the model and save it — in the desktop app into ~/Downloads/Chisel CAD/. `format` step (CAD/CNC), stl (3D print) or 3mf (one part per material). `body` exports one body (its creating feature id); default the whole model (fused, or every part for 3MF). `configuration` exports that variant without switching to it; `all: true` writes one file per configuration. Returns the saved path(s).",
+      inputSchema: {
+        type: "object",
+        required: ["format"],
+        properties: {
+          format: { type: "string", enum: ["step", "stl", "3mf"] },
+          body: { type: "string" },
+          configuration: { type: "string" },
+          all: { type: "boolean", description: "One file per configuration." },
+          filename: { type: "string", description: "Filename stem (no directories); a configuration's name is appended." },
+        },
+      },
+      annotations: { ...EDIT, idempotentHint: true },
+      execute: async (args) => {
+        const a = args as { format: "step" | "stl" | "3mf"; body?: string; configuration?: string; all?: boolean; filename?: string };
+        try {
+          if (!MIME[a.format]) throw new Error("format must be step, stl or 3mf");
+          const rows: (string | undefined)[] = a.all ? (host.configurations?.() ?? []).map((c) => c.name) : [a.configuration];
+          if (a.all && !rows.length) throw new Error("there are no configurations — add one with configuration.create");
+          const saved: { configuration?: string; saved: string; bytes: number }[] = [];
+          for (const cfg of rows) {
+            const bytes = await host.exportModel!(a.format, a.format === "3mf" ? null : a.body ?? null, cfg);
+            if (!bytes) throw new Error(`export produced nothing${cfg ? ` for ${cfg}` : ""}`);
+            const stem = [a.filename?.replace(/\.(step|stp|stl|3mf)$/i, "") || timestampedStem("chisel-model"), cfg].filter(Boolean).join(" ");
+            saved.push({ ...(cfg ? { configuration: cfg } : {}), saved: await host.saveOutput!(sanitizeOutputName(stem, a.format, "chisel-model"), bytes, MIME[a.format]), bytes: bytes.length });
+          }
+          return ok({ ok: true, files: saved });
         } catch (e) {
           return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
         }

@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument, Material, RoleRef } from "../document";
+import { CadDocument, Material, RoleRef, findConfiguration } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -163,6 +163,18 @@ function resolvePoint(sk: Sketch, ref: PointRef, ctx: CommandContext, draft?: Ca
   const id = ctx.alloc("pt");
   sk.entities[id] = { ...pt, id };
   return id;
+}
+
+/** Configuration cells as expressions: numbers become literals, and each must parse. */
+function configCells(values: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, v] of Object.entries(values)) {
+    if (typeof v !== "string" && typeof v !== "number") throw new Error(`configuration cell "${name}" must be an expression or a number`);
+    const expr = String(v).trim();
+    try { compileExpr(expr); } catch (e) { throw new Error(`configuration cell "${name}": ${(e as Error).message}`); }
+    out[name] = expr;
+  }
+  return out;
 }
 
 /** A point at (x, y), where either may be an expression in the parameters: such
@@ -399,6 +411,88 @@ export const BUILTINS: CommandDef<any>[] = [
   },
 
   // ---- components (assembly tree) ----
+  {
+    type: "configuration.create",
+    title: "Add configuration",
+    summary: "Add a row to the configuration table: a named design variant that overrides parameters and can switch features off.",
+    description:
+      "A configuration is a named set of parameter values (each cell an expression, which may use other parameters) plus an optional list of features to suppress. " +
+      "Nothing changes until it is made active (set_configuration / the Configurations table); then its cells replace those parameters' expressions and its suppressed features are skipped, everywhere — solids, collisions, motion studies, exports. " +
+      "Parameters a configuration doesn't list keep the timeline's values. Returns the configuration id.",
+    paramsSchema: {
+      type: "object",
+      required: ["name"],
+      additionalProperties: false,
+      properties: {
+        name: { type: "string", description: "Unique configuration name, e.g. \"Large\"." },
+        values: { type: "object", description: "Parameter name → expression (or number), e.g. { \"width\": \"80\", \"holes\": 6 }." },
+        suppress: { type: "array", items: { type: "string" }, description: "Feature ids switched off in this configuration." },
+      },
+    },
+    examples: [
+      { note: "A larger variant", params: { name: "Large", values: { width: "80", depth: "width/2" } } },
+      { note: "A variant without the lid", params: { name: "Open", suppress: ["prim7"] } },
+    ],
+    apply(draft, p: { name: string; values?: Record<string, unknown>; suppress?: string[] }, ctx) {
+      const name = p.name.trim();
+      if (!name) throw new Error("a configuration needs a name");
+      if (draft.configurations.some((c) => c.name === name)) throw new Error(`Configuration "${name}" exists`);
+      const values = configCells(p.values ?? {}); // validate before allocating, so a bad row is rejected outright
+      const id = ctx.alloc("cfg");
+      draft.configurations.push({ id, name, values, ...(p.suppress?.length ? { suppress: [...p.suppress] } : {}) });
+      return { createdIds: [id], message: `Added configuration ${name}` };
+    },
+  },
+  {
+    type: "configuration.update",
+    title: "Edit configuration",
+    summary: "Change a configuration's name, cells or suppressed features.",
+    description:
+      "Edits a configuration (by id or name). `values` merges into its cells — a null value removes that cell so the parameter goes back to the timeline's value. `suppress`, when given, replaces the suppressed-feature list.",
+    paramsSchema: {
+      type: "object",
+      required: ["configuration"],
+      additionalProperties: false,
+      properties: {
+        configuration: { type: "string", description: "Configuration id or name." },
+        name: { type: "string" },
+        values: { type: "object", description: "Parameter name → expression, number, or null (remove the cell)." },
+        suppress: { type: "array", items: { type: "string" } },
+      },
+    },
+    examples: [{ params: { configuration: "Large", values: { width: "90", depth: null } } }],
+    apply(draft, p: { configuration: string; name?: string; values?: Record<string, unknown>; suppress?: string[] }) {
+      const c = findConfiguration(draft, p.configuration);
+      if (!c) throw new Error(`No configuration "${p.configuration}"`);
+      if (p.name !== undefined) {
+        const name = p.name.trim();
+        if (!name) throw new Error("a configuration needs a name");
+        if (draft.configurations.some((x) => x !== c && x.name === name)) throw new Error(`Configuration "${name}" exists`);
+        c.name = name;
+      }
+      if (p.values) {
+        const removed = Object.entries(p.values).filter(([, v]) => v === null).map(([k]) => k);
+        for (const k of removed) delete c.values[k];
+        Object.assign(c.values, configCells(Object.fromEntries(Object.entries(p.values).filter(([, v]) => v !== null))));
+      }
+      if (p.suppress) c.suppress = p.suppress.length ? [...p.suppress] : undefined;
+      return { message: `Updated configuration ${c.name}` };
+    },
+  },
+  {
+    type: "configuration.delete",
+    title: "Delete configuration",
+    summary: "Remove a row from the configuration table.",
+    description: "Deletes a configuration (by id or name). If it was active, the model goes back to the timeline's own values.",
+    destructive: true,
+    paramsSchema: { type: "object", required: ["configuration"], additionalProperties: false, properties: { configuration: { type: "string", description: "Configuration id or name." } } },
+    apply(draft, p: { configuration: string }) {
+      const c = findConfiguration(draft, p.configuration);
+      if (!c) throw new Error(`No configuration "${p.configuration}"`);
+      draft.configurations = draft.configurations.filter((x) => x !== c);
+      return { message: `Deleted configuration ${c.name}` };
+    },
+  },
   {
     type: "component.create",
     title: "New component",

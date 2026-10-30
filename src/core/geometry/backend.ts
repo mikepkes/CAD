@@ -216,7 +216,7 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
  *  fallback when workers aren't available. */
 export class InlineGeometryBackend implements GeometryBackend {
   private isReady = false;
-  private cache = new GeometryCache();
+  private cache = new GeometryCache({ generations: 6 });
   async init(opts: KernelInitOptions): Promise<void> {
     await initKernel(opts);
     this.isReady = isKernelReady();
