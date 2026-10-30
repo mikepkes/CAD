@@ -87,6 +87,8 @@ Plus timeline / query / history tools:
   without switching to it
 - `set_visibility { ids, visible }` and `isolate { ids | null }`: display-only
   hide/show (`get_document` lists `hidden`)
+- `feature__member` (weldment members along a layout sketch) and `cut_list`
+  (grouped members, plus CSV)
 - `surface_analysis` — curvature ranges and per-edge G0/G1/G2 continuity, from
   the exact B-rep
 - `batch` — run `steps: [{tool, arguments}]` as one transaction. The first

@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument, Material, RoleRef, findConfiguration } from "../document";
+import { CadDocument, Material, RoleRef, MemberFeature, findConfiguration } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -1941,6 +1941,54 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: `Imported ${p.name ?? `${format.toUpperCase()} body`}` };
+    },
+  },
+  {
+    type: "feature.member",
+    title: "Structural members",
+    summary: "Lay a structural profile (tube, angle, channel, I-beam, bar, or a sketch) along every line of a layout sketch — a weldment frame, one body per member.",
+    description:
+      "Each line of `sketch` (or just `lines`) becomes a member: the profile, centred on the line, extruded along it. Profiles: rect_tube (w, h, t), square_tube (w, t), round_tube (d, t), round_bar (d), flat (w, h), angle (w, h, t), channel (w flange, h, t), ibeam (w flange, h, t), or custom (`profile.sketch`, a closed sketch in the member's cross-section: x across, y toward the layout plane's normal). Sizes are expressions. " +
+      "`rotate` turns the profile about each member (degrees). `corner` treats joints: miter (default; two members cut on the bisector), butt (the first member runs through, later ones are trimmed to it), none. `endCaps` closes open ends with a plate; `gusset` adds a triangular plate of that leg length in each two-member corner. " +
+      "Members are bodies \"<featureId>/<lineId>\"; their cut length and end angles are in the cut list (get_state / cut_list). Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["sketch", "profile"],
+      additionalProperties: false,
+      properties: {
+        sketch: { type: "string", description: "Layout sketch (its lines are the member centrelines)." },
+        lines: { type: "array", items: { type: "string" }, description: "Only these line ids (default: every non-construction line)." },
+        profile: {
+          type: "object", required: ["kind"], additionalProperties: false,
+          properties: {
+            kind: { type: "string", enum: ["rect_tube", "square_tube", "round_tube", "round_bar", "angle", "channel", "ibeam", "flat", "custom"] },
+            w: { type: ["string", "number"] }, h: { type: ["string", "number"] }, t: { type: ["string", "number"] }, d: { type: ["string", "number"] },
+            sketch: { type: "string", description: "Custom profile sketch." },
+          },
+        },
+        rotate: { type: ["string", "number"], description: "Turn the profile about each member (degrees)." },
+        corner: { type: "string", enum: ["miter", "butt", "none"] },
+        endCaps: { type: "boolean" },
+        gusset: { type: ["string", "number"], description: "Gusset leg length (mm) at each two-member corner." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A 40×40×3 square-tube frame with mitred corners", params: { sketch: "sketch1", profile: { kind: "square_tube", w: 40, t: 3 } } },
+      { note: "50×50×5 angle iron, butt joints, 60 mm gussets", params: { sketch: "sketch1", profile: { kind: "angle", w: 50, h: 50, t: 5 }, corner: "butt", gusset: 60 } },
+    ],
+    apply(draft, p: { sketch: string; lines?: string[]; profile: { kind: MemberFeature["profile"]["kind"]; w?: unknown; h?: unknown; t?: unknown; d?: unknown; sketch?: string }; rotate?: unknown; corner?: "miter" | "butt" | "none"; endCaps?: boolean; gusset?: unknown; name?: string }, ctx) {
+      if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
+      if (p.profile.kind === "custom" && !(p.profile.sketch && draft.sketches[p.profile.sketch])) throw new Error("a custom profile needs `profile.sketch`, an existing sketch");
+      const ex = (v: unknown) => (v == null ? undefined : String(v));
+      const id = ctx.alloc("mem");
+      draft.features[id] = {
+        id, kind: "member", name: p.name ?? "Members", sketchId: p.sketch, ...(p.lines ? { lines: [...p.lines] } : {}),
+        profile: { kind: p.profile.kind, w: ex(p.profile.w), h: ex(p.profile.h), t: ex(p.profile.t), d: ex(p.profile.d), ...(p.profile.sketch ? { sketch: p.profile.sketch } : {}) },
+        ...(p.rotate != null ? { rotateExpr: String(p.rotate) } : {}), corner: p.corner ?? "miter",
+        ...(p.endCaps ? { endCaps: true } : {}), ...(p.gusset != null ? { gussetExpr: String(p.gusset) } : {}),
+      };
+      return { createdIds: [id], message: `Structural members along ${draft.sketches[p.sketch].name}` };
     },
   },
   {

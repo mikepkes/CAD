@@ -168,6 +168,12 @@ on.
   (hidden bodies still export and measure), it's undoable, and it's saved. A
   configuration can hide things too, and agents use `set_visibility` /
   `isolate` to frame one part for `render_view`.
+- **Weldments:** `feature.member` lays a structural profile (rect, square or
+  round tube, round bar, flat, angle, channel, I-beam, or a custom sketch)
+  along every line of a layout sketch, one body per member. Corners are
+  mitred, butted, or left as drawn, with optional end caps and gusset plates.
+  The **cut list** (Inspector, or `cut_list`) groups members by profile, cut
+  length and end angles, and exports CSV.
 - **Surface analysis:** the toolbar switches the shaded view to **zebra**
   stripes (they break at a crease, kink at a tangent-only seam and flow through
   a curvature-continuous one), a **curvature** map (mean / Gaussian / max / min,

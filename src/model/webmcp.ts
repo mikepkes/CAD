@@ -12,6 +12,7 @@ import type { RenderViewOpts } from "../viewport/SceneManager";
 import type { TurntableOpts, TurntableResult } from "../viewport/turntableRecorder";
 import { sanitizeOutputName, timestampedStem } from "./saveOutput";
 import type { BodyTopology } from "../core/features";
+import { groupCutList, cutListCsv } from "../core/weldment";
 
 export interface WebMcpResult {
   content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
@@ -54,6 +55,8 @@ export interface WebMcpHost {
   distance?: (a: string, b: string) => Promise<number>;
   /** Switch the active configuration (name/id, or null for none). */
   setConfiguration?: (ref: string | null) => Promise<unknown>;
+  /** Structural-member rows of the current solids (for the cut list). */
+  members?: () => Promise<{ body: string; profile: string; length: number; angles: [number, number] }[]>;
   /** Curvature / continuity / combs per body. */
   analyze?: (opts: { bodyId?: string; combs?: boolean }) => Promise<{ featureId: string; name: string; edges: { name: string; continuity: string; angleDeg: number; curvatureJump: number }[]; stats: Record<string, number>; combs: Float32Array }[]>;
   /** Switch the viewport's surface-quality display. */
@@ -107,7 +110,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
         const r = await host.runCommand(t.name, args ?? {});
         return { ...ok(r), isError: !r.ok };
       } catch (e) {
-        return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+        return { ...ok({ ok: false, error: errorText(e) }), isError: true };
       }
     },
   }));
@@ -153,7 +156,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
         }
         return { content };
       } catch (e) {
-        return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+        return { ...ok({ ok: false, error: errorText(e) }), isError: true };
       }
     },
   });
@@ -195,7 +198,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
           const saved = await host.saveOutput!(name, r.bytes, "video/mp4");
           return ok({ ok: true, saved, codec: r.codec, width: r.width, height: r.height, fps: r.fps, frames: r.frames, seconds: opts.seconds, bytes: r.bytes.length });
         } catch (e) {
-          return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+          return { ...ok({ ok: false, error: errorText(e) }), isError: true };
         }
       },
     });
@@ -216,7 +219,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
     execute: async (args) => {
         const a = args as { point?: { x: number; y: number; z: number }; name?: string; face?: string };
         try { return ok({ ok: true, ...(await host.sketchOnFace!(a.point, a.name, a.face) as object) }); }
-        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+        catch (e) { return { ...ok({ ok: false, error: errorText(e) }), isError: true }; }
       },
     });
   }
@@ -253,7 +256,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       annotations: DESTRUCTIVE,
     execute: async (args) => {
         try { await host.deleteOperation!(String((args as { opId?: string }).opId)); return ok({ ok: true, state: host.describe() }); }
-        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+        catch (e) { return { ...ok({ ok: false, error: errorText(e) }), isError: true }; }
       },
     });
   }
@@ -281,7 +284,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
           }
           return ok(out);
         } catch (e) {
-          return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+          return { ...ok({ ok: false, error: errorText(e) }), isError: true };
         }
       },
     });
@@ -308,7 +311,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
             edges: b.edges.map((e) => ({ name: e.name, type: e.type.toLowerCase(), length: e.length, mid: e.mid })),
           })) });
         } catch (e) {
-          return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+          return { ...ok({ ok: false, error: errorText(e) }), isError: true };
         }
       },
     });
@@ -321,7 +324,26 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       annotations: { ...EDIT, idempotentHint: true },
       execute: async (args) => {
         try { return ok({ ok: true, ...(await host.setConfiguration!((args as { configuration?: string | null }).configuration ?? null) as object) }); }
-        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+        catch (e) { return { ...ok({ ok: false, error: errorText(e) }), isError: true }; }
+      },
+    });
+  }
+  if (host.members) {
+    tools.push({
+      name: "cut_list",
+      description: "The weldment cut list: every structural member grouped by profile, cut length (mm, to 0.1) and end-cut angles (0° = square, 45° = a right-angle mitre), with quantities and the member bodies in each row. `saveAs` (a filename) also writes it as CSV — in the desktop app into ~/Downloads/Chisel CAD/.",
+      inputSchema: { type: "object", properties: { saveAs: { type: "string" } } },
+      annotations: { ...READ_ONLY, idempotentHint: true },
+      execute: async (args) => {
+        try {
+          const rows = groupCutList(await host.members!());
+          const out: Record<string, unknown> = { ok: true, rows };
+          const name = (args as { saveAs?: string }).saveAs;
+          if (name && host.saveOutput) out.saved = await host.saveOutput(sanitizeOutputName(name, "csv", "cut list"), new TextEncoder().encode(cutListCsv(rows)), "text/csv");
+          return ok(out);
+        } catch (e) {
+          return { ...ok({ ok: false, error: errorText(e) }), isError: true };
+        }
       },
     });
   }
@@ -341,7 +363,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
             curvedEdgesWithCombs: b.combs.length > 0,
           })) });
         } catch (e) {
-          return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+          return { ...ok({ ok: false, error: errorText(e) }), isError: true };
         }
       },
     });
@@ -364,7 +386,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       annotations: { ...EDIT, idempotentHint: true },
       execute: async (args) => {
         try { return ok({ ok: true, analysis: await host.setAnalysis!(args) }); }
-        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+        catch (e) { return { ...ok({ ok: false, error: errorText(e) }), isError: true }; }
       },
     });
   }
@@ -377,7 +399,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       execute: async (args) => {
         const a = args as { filename?: string; base64?: string };
         try { return ok({ ok: true, bodies: await host.importFile!(String(a.filename ?? ""), base64Bytes(String(a.base64 ?? ""))) }); }
-        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+        catch (e) { return { ...ok({ ok: false, error: errorText(e) }), isError: true }; }
       },
     });
   }
@@ -390,7 +412,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       execute: async (args) => {
         const a = args as { ids?: string[]; visible?: boolean };
         try { return ok({ ok: true, ...(await host.setVisibility!(a.ids ?? [], a.visible !== false) as object) }); }
-        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+        catch (e) { return { ...ok({ ok: false, error: errorText(e) }), isError: true }; }
       },
     });
     tools.push({
@@ -400,7 +422,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       annotations: { ...EDIT, idempotentHint: true },
       execute: async (args) => {
         try { return ok({ ok: true, ...(await host.isolate!((args as { ids?: string[] | null }).ids ?? null) as object) }); }
-        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+        catch (e) { return { ...ok({ ok: false, error: errorText(e) }), isError: true }; }
       },
     });
   }
@@ -436,7 +458,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
           }
           return ok({ ok: true, files: saved });
         } catch (e) {
-          return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+          return { ...ok({ ok: false, error: errorText(e) }), isError: true };
         }
       },
     });
@@ -467,7 +489,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
         hotkeys.setBinding(String(a.action), a.slot === "secondary" ? "secondary" : "primary", a.key == null ? null : String(a.key));
         return { ...ok({ ok: true, hotkeys: hotkeys.describe() }) };
       } catch (e) {
-        return { ...ok({ ok: false, error: (e as Error).message }), isError: true };
+        return { ...ok({ ok: false, error: errorText(e) }), isError: true };
       }
     },
   });
@@ -503,7 +525,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
         if (!tool) { results.push({ step: i, tool: name, ok: false, ms: 0, result: { error: `Unknown tool "${name}"` } }); return finish(i); }
         let r: WebMcpResult;
         try { r = await tool.execute(steps[i].arguments ?? {}); }
-        catch (e) { r = { content: [{ type: "text", text: JSON.stringify({ ok: false, error: (e as Error).message }) }], isError: true }; }
+        catch (e) { r = { content: [{ type: "text", text: JSON.stringify({ ok: false, error: errorText(e) }) }], isError: true }; }
         const texts = r.content.filter((c): c is { type: "text"; text: string } => c.type === "text").map((c) => { try { return JSON.parse(c.text); } catch { return c.text; } });
         images.push(...r.content.filter((c) => c.type === "image"));
         results.push({ step: i, tool: name, ok: !r.isError, ms: Math.round(performance.now() - t0), result: texts.length === 1 ? texts[0] : texts });
@@ -519,6 +541,12 @@ const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 /** Numbers rounded to 1e-6 throughout (keeps tool output compact and readable). */
 function rounded<T>(v: T): T {
   return JSON.parse(JSON.stringify(v, (_k, x) => (typeof x === "number" ? round6(x) : x)));
+}
+
+/** A thrown value as text: Tauri's invoke rejects with a bare string, not an Error. */
+function errorText(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  return typeof e === "string" && e ? e : JSON.stringify(e) ?? "unknown error";
 }
 
 function base64Bytes(b64: string): Uint8Array {

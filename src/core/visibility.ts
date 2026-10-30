@@ -28,9 +28,13 @@ export function componentHidden(doc: CadDocument, componentId: string | undefine
 export const bodyComponent = (doc: CadDocument, body: { sketchId?: string }): string =>
   (body.sketchId && doc.sketches[body.sketchId]?.componentId) || doc.rootComponentId;
 
-/** Whether a body (by its creating feature id + sketch) is drawn. */
+/** The feature that made a body: its id, or the part before "/" for a feature
+ *  that makes several (structural members are "<feature>/<line>"). */
+const ownerOf = (bodyId: string) => bodyId.split("/")[0];
+
+/** Whether a body (by its id + sketch) is drawn: hiding the feature hides all its bodies. */
 export function bodyVisible(doc: CadDocument, body: { featureId: string; sketchId?: string }, hidden = hiddenIds(doc)): boolean {
-  return !hidden.has(body.featureId) && !componentHidden(doc, bodyComponent(doc, body), hidden);
+  return !hidden.has(body.featureId) && !hidden.has(ownerOf(body.featureId)) && !componentHidden(doc, bodyComponent(doc, body), hidden);
 }
 
 /** Whether a sketch is drawn. */
@@ -41,7 +45,7 @@ export function sketchVisible(doc: CadDocument, sketchId: string, hidden = hidde
 
 /** Ids that can be hidden: features (bodies), sketches, components, datum planes. */
 export function isHideable(doc: CadDocument, id: string): boolean {
-  return !!(doc.features[id] || doc.sketches[id] || doc.components[id] || doc.planes[id]);
+  return !!(doc.features[ownerOf(id)] || doc.sketches[id] || doc.components[id] || doc.planes[id]);
 }
 
 /**

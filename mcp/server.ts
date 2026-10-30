@@ -27,6 +27,7 @@ import { describeFeature } from "../src/model/agent";
 import { InlineGeometryBackend } from "../src/core/geometry/backend";
 import { isolationList } from "../src/core/visibility";
 import { importRequests } from "../src/core/importers";
+import { groupCutList, cutListCsv } from "../src/core/weldment";
 import type { Vec3 } from "../src/math/vec";
 
 /** Topology / distance queries share the backend's assembly-aware evaluation (the kernel is loaded by ensureKernel). */
@@ -61,7 +62,7 @@ const EDIT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, ide
 const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
 /** Meta tools by how they touch the document (registry commands carry their own flag). */
 const META_ANNOTATIONS: Record<string, ToolAnnotations> = {
-  get_document: READ_ONLY, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
+  get_document: READ_ONLY, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, cut_list: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
   export_model: READ_ONLY, export_document: READ_ONLY,
   delete_operation: DESTRUCTIVE, import_document: DESTRUCTIVE, batch: DESTRUCTIVE,
 };
@@ -396,6 +397,17 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
           continuity: { G0: b.edges.filter((e) => e.continuity === "G0").length, G1: b.edges.filter((e) => e.continuity === "G1").length, G2: b.edges.filter((e) => e.continuity === "G2").length },
           edges: b.edges,
         })) };
+      },
+    },
+    {
+      name: "cut_list",
+      description: "The weldment cut list: every structural member grouped by profile, cut length (mm, to 0.1) and end-cut angles (0° = square), with quantities. Also returned as CSV text.",
+      inputSchema: { type: "object", properties: {} },
+      handler: async () => {
+        await ensureKernel();
+        const solids = evaluateFeatures(session.doc, resolveParameters(session.doc.parameters).scope);
+        const rows = groupCutList(Object.values(solids).filter((b) => b.member).map((b) => ({ body: b.featureId, ...b.member! })));
+        return { ok: true, rows, csv: cutListCsv(rows) };
       },
     },
     {

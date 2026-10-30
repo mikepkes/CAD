@@ -412,7 +412,7 @@ export const useStore = create<AppState>((set, get) => {
     runCommand: async (type: string, params: Record<string, unknown>) => {
       const r = await runDispatch(type, params);
       if (r.ok && type === "sketch.create") set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
-      if (r.ok && (type === "feature.extrude" || type === "feature.revolve")) set({ mode: "model" });
+      if (r.ok && type.startsWith("feature.")) set({ mode: "model" }); // a new solid (members, primitives, imports…) is seen in model mode
       const out: { ok: boolean; createdIds?: string[]; message?: string; error?: string; frame?: unknown; warning?: string } =
         { ok: r.ok, createdIds: r.createdIds, message: r.message, error: r.error };
       // A new sketch reports its world frame so callers know which way u/v/normal point.
@@ -465,6 +465,10 @@ export const useStore = create<AppState>((set, get) => {
       return { active: ref, parameters: get().session.doc.parameters.filter((p) => p.configuredBy).map((p) => ({ name: p.name, expr: p.expr, value: p.value })) };
     },
     configurations: () => get().session.doc.configurations.map((c) => ({ id: c.id, name: c.name })),
+    members: async () => {
+      if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
+      return Object.values(get().solids).filter((b) => b.member).map((b) => ({ body: b.featureId, ...b.member! }));
+    },
     analyze: async (opts: { bodyId?: string; combs?: boolean }) => {
       await get().ensureKernel();
       return geometry.analyze(get().session.doc, opts);

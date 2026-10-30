@@ -888,6 +888,20 @@ export function readStl(bytes: Uint8Array): Shape3D {
   }
 }
 
+/** The part of a shape on the side of a plane its normal points to:
+ *  (p − origin)·normal ≥ 0. Returns a NEW shape (operand untouched). */
+export function keepHalfSpace(shape: Shape3D, origin: Vec3, normal: Vec3): Shape3D {
+  const n = Math.hypot(normal.x, normal.y, normal.z) || 1;
+  const nz = { x: normal.x / n, y: normal.y / n, z: normal.z / n };
+  // any direction across the plane will do for its x axis
+  const helper = Math.abs(nz.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const xd = { x: helper.y * nz.z - helper.z * nz.y, y: helper.z * nz.x - helper.x * nz.z, z: helper.x * nz.y - helper.y * nz.x };
+  const plane = new Plane([origin.x, origin.y, origin.z], [xd.x, xd.y, xd.z], [nz.x, nz.y, nz.z]);
+  const out = (shape as unknown as { cutPlane(p: Plane, offset: number, keep: "positive" | "negative"): Shape3D | null }).cutPlane(plane, 0, "positive");
+  if (!out) throw new Error("the cut removed the whole member");
+  return out;
+}
+
 /** Minimum distance between two shapes (0 when they touch or overlap). */
 export function distanceBetween(a: Shape3D, b: Shape3D): number {
   return measureDistanceBetween(a as never, b as never);

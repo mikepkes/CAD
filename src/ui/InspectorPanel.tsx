@@ -1,5 +1,7 @@
 import { activeSketch, useStore } from "../model/store";
 import { EyeToggle } from "./EyeToggle";
+import { groupCutList, cutListCsv } from "../core/weldment";
+import { saveOutput } from "../model/saveOutput";
 import { Constraint, DimensionConstraint, isDimension } from "../sketch/types";
 
 const dimLabel: Record<string, string> = {
@@ -15,6 +17,28 @@ const geomLabel: Record<string, string> = {
 
 const displayValue = (d: DimensionConstraint): string =>
   d.type === "angle" ? `${((d.value * 180) / Math.PI).toFixed(2)}°` : d.value.toFixed(3);
+
+/** The weldment cut list: identical members grouped, with a CSV export. */
+function CutList() {
+  const solids = useStore((s) => s.solids);
+  const pieces = Object.values(solids).filter((b) => b.member).map((b) => ({ body: b.featureId, ...b.member! }));
+  if (!pieces.length) return null;
+  const rows = groupCutList(pieces);
+  const save = () => void saveOutput("cut list.csv", new TextEncoder().encode(cutListCsv(rows)), "text/csv");
+  return (
+    <div className="inspector-section">
+      <div className="section-title">Cut list ({pieces.length}) <button className="icon-btn" title="Save as CSV" onClick={save}>⇩</button></div>
+      {rows.map((r, i) => (
+        <div className="dim-row" key={i} style={{ gridTemplateColumns: "1fr 64px 70px 28px" }} title={r.bodies.join(", ")}>
+          <span className="dim-type">{r.profile}</span>
+          <span className="dim-val">{r.length}</span>
+          <span className="muted-inline">{r.angles[0]}° / {r.angles[1]}°</span>
+          <span className="dim-val">×{r.quantity}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function ModelInspector() {
   const session = useStore((s) => s.session);
@@ -45,6 +69,7 @@ function ModelInspector() {
               f.kind === "sweep" ? "⟿ path" :
               f.kind === "primitive" ? `◧ ${f.shape}` :
               f.kind === "import" ? `⇩ ${f.format.toUpperCase()}` :
+              f.kind === "member" ? `⌸ ${f.profile.kind.replace("_", " ")}` :
               f.kind === "hole" ? `⌀ ${f.diameterExpr}${f.at.length > 1 ? `×${f.at.length}` : ""}` :
               f.kind === "thread" ? `⇅ ${f.spec.form} ${f.spec.diameter}` :
               `${f.kind === "fillet" ? "r" : "d"}=${f.sizeExpr}`;
@@ -77,6 +102,7 @@ function ModelInspector() {
           );
         })}
       </div>
+      <CutList />
     </div>
   );
 }

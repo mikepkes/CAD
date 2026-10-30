@@ -7,19 +7,20 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, ImportFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
+  CadDocument, ExtrudeFeature, FeatureDef, ImportFeature, MemberFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
-import { extractRegions, extractOpenPath, regionAt, Region } from "./geometry/profile";
+import { extractRegions, extractOpenPath, regionAt, Region, Profile, Loop } from "./geometry/profile";
 import { FaceRef } from "../sketch/types";
 import {
-  Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
+  Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
-  faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape,
+  faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape, keepHalfSpace,
 } from "./occ/kernel";
 import { genericNames, extrudeNames, revolveNames, holeCutterNames, inheritNames, copyNames, edgeNamesOf } from "./naming";
 import { stableJson, contentHash } from "./contentKey";
+import { standardProfile, profileLabel, profileReach, profileHalfWidth, memberLines, memberJoints, ProfileDims } from "./weldment";
 import type { Shape3D } from "replicad";
 import { Vec3 } from "../math/vec";
 import { Rigid, IDENTITY, axisAngle, compose, invert, applyPoint, applyVec } from "../math/transform";
@@ -44,6 +45,8 @@ export interface SolidEval {
   centroid?: Vec3;
   /** Cosmetic thread regions on this body (rendered as a shaded texture). */
   threadDecals?: ThreadDecal[];
+  /** A structural member (weldment): its profile, cut length and end-cut angles (0° = square). */
+  member?: { profile: string; length: number; angles: [number, number] };
 }
 
 /** Evaluate a parametric expression, writing the value back onto `holder[key]Value`. */
@@ -128,7 +131,12 @@ interface Body {
   faceNames: string[];
   /** Content signature of this body's shape (set when evaluating with a cache). */
   sig?: string;
+  /** Set on a structural member: what the cut list needs. */
+  member?: MemberMeta;
 }
+
+/** A member's axis (start, unit direction), profile name and end-cut angles. */
+interface MemberMeta { origin: Vec3; axis: Vec3; profile: string; angles: [number, number] }
 
 /** Row for a feature that modifies bodies but makes none (listed in the inspector/timeline, not rendered). */
 const modifierRow = (f: FeatureDef): SolidEval => ({ featureId: f.id, name: f.name, sketchId: "", distance: 0 });
@@ -327,6 +335,154 @@ function applyImport(f: ImportFeature, bodies: Body[], out: Record<string, Solid
     return;
   }
   addOrCombine(f, tool, bodies, out, "import");
+}
+
+/** A member's cut length: the extent of its mesh along its axis. */
+function extentAlong(positions: Float32Array, axis: Vec3): number {
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < positions.length; i += 3) {
+    const t = positions[i] * axis.x + positions[i + 1] * axis.y + positions[i + 2] * axis.z;
+    lo = Math.min(lo, t); hi = Math.max(hi, t);
+  }
+  return hi > lo ? hi - lo : 0;
+}
+
+/**
+ * Structural members: the profile extruded along each layout line (one body
+ * per line, id "<feature>/<line>"), then each corner treated. A mitred corner
+ * of two members cuts both on the bisector plane; a butt corner trims every
+ * later member to the earlier ones; open ends can get end caps; corners of two
+ * members can get a gusset plate (its own body). Members run a little past
+ * each treated joint before the cut, so the corner closes fully.
+ */
+function applyMembers(doc: CadDocument, scope: Scope, f: MemberFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  const made: Body[] = [];
+  try {
+    const sk = doc.sketches[f.sketchId];
+    if (!sk) throw new Error(`no layout sketch "${f.sketchId}"`);
+    const plane = resolveSketchPlane(sk);
+    const lines = memberLines(sk, plane, f.lines);
+    if (!lines.length) throw new Error("the layout sketch has no lines to lay members along");
+    const num = (e: string | undefined, fallback = 0) => (e == null || e === "" ? fallback : resolveExpr(e, fallback, scope));
+    const dims: ProfileDims = { kind: f.profile.kind, w: num(f.profile.w), h: num(f.profile.h), t: num(f.profile.t), d: num(f.profile.d) };
+    let section: Profile;
+    if (f.profile.kind === "custom") {
+      const psk = f.profile.sketch && doc.sketches[f.profile.sketch];
+      if (!psk) throw new Error("a custom member profile needs its profile sketch");
+      const regions = extractRegions(psk);
+      if (!regions.length) throw new Error("the profile sketch has no closed region");
+      section = regions[0];
+    } else section = standardProfile(dims);
+    const label = f.profile.kind === "custom" ? `Custom (${doc.sketches[f.profile.sketch!]?.name ?? f.profile.sketch})` : profileLabel(dims);
+    const reach = profileReach(section);
+    const rotate = (num(f.rotateExpr) * Math.PI) / 180;
+    const corner = f.corner ?? "miter";
+    const up = plane.normal;
+    const joints = memberJoints(lines);
+    // how far each member end runs past its joint before the corner is cut
+    const extend = lines.map(() => ({ a: 0, b: 0 }));
+    for (const j of joints) if (j.ends.length >= 2 && corner !== "none") for (const e of j.ends) extend[e.member][e.end] = 3 * reach;
+
+    const sub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+    const unit = (a: Vec3): Vec3 => { const m = Math.hypot(a.x, a.y, a.z) || 1; return { x: a.x / m, y: a.y / m, z: a.z / m }; };
+    const cross = (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+    const along = (p: Vec3, d: Vec3, k: number): Vec3 => ({ x: p.x + d.x * k, y: p.y + d.y * k, z: p.z + d.z * k });
+    const dirs = lines.map((m) => unit(sub(m.b, m.a)));
+    const angles = lines.map(() => [0, 0] as [number, number]);
+
+    lines.forEach((m, i) => {
+      const d = dirs[i];
+      // profile frame: x across the member, y toward the layout plane's normal, turned by `rotate`
+      let x = cross(up, d);
+      if (Math.hypot(x.x, x.y, x.z) < 1e-9) x = cross({ x: 1, y: 0, z: 0 }, d);
+      x = unit(x);
+      const y = cross(d, x);
+      const u = { x: x.x * Math.cos(rotate) + y.x * Math.sin(rotate), y: x.y * Math.cos(rotate) + y.y * Math.sin(rotate), z: x.z * Math.cos(rotate) + y.z * Math.sin(rotate) };
+      const v = cross(d, u);
+      const length = Math.hypot(m.b.x - m.a.x, m.b.y - m.a.y, m.b.z - m.a.z);
+      const wp: WorkPlane = { id: "custom", name: "member", origin: along(m.a, d, -extend[i].a), u, v, normal: d, color: "#888" };
+      const shape = buildRegionsSolid(wp, [section], length + extend[i].a + extend[i].b);
+      const id = `${f.id}/${m.lineId}`;
+      made.push({ id, name: `${f.name} ${i + 1}`, sketchId: f.sketchId, distance: length, shape, faceNames: genericNames(id, faceGeoms(shape)), member: { origin: m.a, axis: d, profile: label, angles: angles[i] } });
+    });
+
+    const trimTo = (b: Body, origin: Vec3, normal: Vec3) => {
+      const next = keepHalfSpace(b.shape, origin, normal);
+      b.faceNames = inheritNames(b.faceNames, surfaceParents(b.shape, next), next, b.id, "cut");
+      replaceShape(b, next);
+    };
+    for (const j of joints) {
+      if (j.ends.length < 2 || corner === "none") continue;
+      // away-from-joint direction of each member end
+      const away = j.ends.map((e) => (e.end === "a" ? dirs[e.member] : { x: -dirs[e.member].x, y: -dirs[e.member].y, z: -dirs[e.member].z }));
+      if (corner === "miter" && j.ends.length === 2) {
+        const [ea, eb] = j.ends, [da, db] = away;
+        const n = sub(da, db);
+        if (Math.hypot(n.x, n.y, n.z) < 1e-9) continue; // folded back on itself: nothing sensible to cut
+        trimTo(made[ea.member], j.at, n);
+        trimTo(made[eb.member], j.at, { x: -n.x, y: -n.y, z: -n.z });
+        const cut = (90 - (Math.acos(Math.max(-1, Math.min(1, da.x * db.x + da.y * db.y + da.z * db.z))) * 90) / Math.PI);
+        angles[ea.member][ea.end === "a" ? 0 : 1] = cut;
+        angles[eb.member][eb.end === "a" ? 0 : 1] = cut;
+      } else {
+        // butt: the first member runs through, square, to the far side of the
+        // others; each later member stops at the first one's side face (the
+        // plane half its width off its axis, on the later member's side).
+        const half = profileHalfWidth(section, rotate);
+        const [first, ...rest] = j.ends;
+        const d1 = dirs[first.member];
+        trimTo(made[first.member], along(j.at, away[0], -half), away[0]);
+        rest.forEach((e, k) => {
+          const aw = away[k + 1];
+          let m = unit(cross(up, d1));
+          if (m.x * aw.x + m.y * aw.y + m.z * aw.z < 0) m = { x: -m.x, y: -m.y, z: -m.z };
+          trimTo(made[e.member], along(j.at, m, half), m);
+          const cos = Math.abs(m.x * aw.x + m.y * aw.y + m.z * aw.z);
+          angles[e.member][e.end === "a" ? 0 : 1] = (Math.acos(Math.min(1, cos)) * 180) / Math.PI;
+        });
+      }
+    }
+    // end caps on open ends: a plate of the profile's outline, 3 mm or the wall thickness
+    if (f.endCaps) {
+      const capT = dims.t > 0 ? dims.t : 3;
+      for (const j of joints) {
+        if (j.ends.length !== 1) continue;
+        const e = j.ends[0], b = made[e.member], d = dirs[e.member];
+        const outward = e.end === "a" ? { x: -d.x, y: -d.y, z: -d.z } : d;
+        let x = cross(up, d); if (Math.hypot(x.x, x.y, x.z) < 1e-9) x = cross({ x: 1, y: 0, z: 0 }, d); x = unit(x);
+        const y = cross(d, x);
+        const u = { x: x.x * Math.cos(rotate) + y.x * Math.sin(rotate), y: x.y * Math.cos(rotate) + y.y * Math.sin(rotate), z: x.z * Math.cos(rotate) + y.z * Math.sin(rotate) };
+        const cap = buildRegionsSolid({ id: "custom", name: "cap", origin: j.at, u, v: cross(outward, u), normal: outward, color: "#888" }, [{ outer: section.outer, holes: [] }], capT);
+        try { booleanInto("join", b, cap, genericNames(`${b.id}:cap`, faceGeoms(cap)), f.id); } finally { cap.delete(); }
+      }
+    }
+    // gussets: a triangular plate in the inside corner of two members, clear of them
+    const gusset = num(f.gussetExpr);
+    if (gusset > 0) {
+      const t = dims.t > 0 ? dims.t : 3;
+      let k = 0;
+      for (const j of joints) {
+        if (j.ends.length !== 2) continue;
+        const da = j.ends[0].end === "a" ? dirs[j.ends[0].member] : { x: -dirs[j.ends[0].member].x, y: -dirs[j.ends[0].member].y, z: -dirs[j.ends[0].member].z };
+        const db = j.ends[1].end === "a" ? dirs[j.ends[1].member] : { x: -dirs[j.ends[1].member].x, y: -dirs[j.ends[1].member].y, z: -dirs[j.ends[1].member].z };
+        const nrm = cross(da, db);
+        if (Math.hypot(nrm.x, nrm.y, nrm.z) < 1e-6) continue; // straight through: no corner
+        const n = unit(nrm), u = da, vv = cross(n, u);
+        const local = (p: Vec3) => ({ x: (p.x - j.at.x) * u.x + (p.y - j.at.y) * u.y + (p.z - j.at.z) * u.z, y: (p.x - j.at.x) * vv.x + (p.y - j.at.y) * vv.y + (p.z - j.at.z) * vv.z });
+        const tri = [{ x: 0, y: 0 }, local(along(j.at, da, gusset)), local(along(j.at, db, gusset))];
+        const loop: Loop = { start: tri[0], segments: [{ kind: "line", to: tri[1] }, { kind: "line", to: tri[2] }, { kind: "line", to: tri[0] }], area: 0 };
+        let plate = buildRegionsSolid({ id: "custom", name: "gusset", origin: along(j.at, n, -t / 2), u, v: vv, normal: n, color: "#888" }, [{ outer: loop, holes: [] }], t);
+        for (const e of j.ends) { const next = cutShapes(plate, made[e.member].shape); plate.delete(); plate = next; }
+        const id = `${f.id}/gusset${++k}`;
+        made.push({ id, name: `${f.name} gusset ${k}`, sketchId: f.sketchId, distance: 0, shape: plate, faceNames: genericNames(id, faceGeoms(plate)) });
+      }
+    }
+    bodies.push(...made);
+  } catch (e) {
+    for (const b of made) { try { b.shape.delete(); } catch { /* already freed */ } }
+    out[f.id].error = kernelErrorMessage(e);
+  }
 }
 
 const V = {
@@ -652,7 +808,7 @@ function applyMirror(doc: CadDocument, f: MirrorFeature, bodies: Body[], out: Re
 // late in the timeline reuses everything before it. Meshes and mass
 // properties are cached per body signature.
 
-interface BodyState { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; faceNames: string[]; decals?: ThreadDecal[]; sig: string }
+interface BodyState { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; faceNames: string[]; decals?: ThreadDecal[]; sig: string; member?: MemberMeta }
 interface StepEffect { bodies: (BodyState & { added: boolean })[]; row?: SolidEval; planes: Record<string, WorkPlane> }
 interface BodyEval { mesh: SolidMesh; bounds?: Bounds3; mass: MassProps }
 
@@ -726,6 +882,7 @@ function featureSketches(f: FeatureDef): string[] {
     case "extrude": case "revolve": return [f.sketchId];
     case "loft": return f.sketchIds;
     case "sweep": return [f.profileSketch, f.pathSketch];
+    case "member": return f.profile.sketch ? [f.sketchId, f.profile.sketch] : [f.sketchId];
     default: return [];
   }
 }
@@ -741,6 +898,7 @@ function bodiesRead(doc: CadDocument, f: FeatureDef, bodies: Body[]): Body[] {
       return op === "new" ? [] : target();
     case "primitive": case "import": case "loft": case "sweep": return op === "new" ? [] : target();
     case "mirror": return f.bodies === "last" ? bodies.slice(-1) : bodies;
+    case "member": return []; // makes bodies of its own
     default: return target(); // hole, thread, fillet, chamfer, shell, pattern
   }
 }
@@ -768,7 +926,7 @@ function stepKey(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Body[], 
   }));
 }
 
-const bodyState = (b: Body): BodyState => ({ id: b.id, name: b.name, sketchId: b.sketchId, distance: b.distance, shape: cloneShape(b.shape), faceNames: b.faceNames.slice(), decals: cloneDecals(b.decals), sig: b.sig! });
+const bodyState = (b: Body): BodyState => ({ id: b.id, name: b.name, sketchId: b.sketchId, distance: b.distance, shape: cloneShape(b.shape), faceNames: b.faceNames.slice(), decals: cloneDecals(b.decals), sig: b.sig!, ...(b.member ? { member: structuredClone(b.member) } : {}) });
 
 /** Run one step through `run`, recording what it did; or replay a recorded effect. */
 function cachedStep(cache: GeometryCache, key: string, doc: CadDocument, f: FeatureDef, bodies: Body[], out: Record<string, SolidEval>, run: () => void) {
@@ -808,6 +966,7 @@ function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Bod
     case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
     case "primitive": applyPrimitive(scope, f, bodies, out); break;
     case "import": applyImport(f, bodies, out); break;
+    case "member": applyMembers(doc, scope, f, bodies, out); break;
     case "hole": applyHole(scope, f, bodies, out); break;
     case "thread": applyThread(f, bodies, out); break;
     case "loft": applyLoft(doc, f, bodies, out); break;
@@ -910,6 +1069,7 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
         if (Number.isFinite(ev.mass.volume)) row.volume = ev.mass.volume;
         if (Number.isFinite(ev.mass.area)) row.area = ev.mass.area;
         if (Number.isFinite(ev.mass.centroid.x)) row.centroid = ev.mass.centroid;
+        if (body.member) row.member = { profile: body.member.profile, length: extentAlong(ev.mesh.positions, body.member.axis), angles: body.member.angles };
       } catch (e) {
         row.error = kernelErrorMessage(e);
       } finally {
