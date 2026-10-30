@@ -812,6 +812,82 @@ export function readStep(text: string): Shape3D {
   }
 }
 
+/** Keep a shape's solids (a compound of them when several); throw when it has none. */
+function solidsOnly(shape: Shape3D, what: string): Shape3D {
+  const solids = (shape as unknown as { solids?: Shape3D[] }).solids ?? [];
+  if (!solids.length) { shape.delete(); throw new Error(`the ${what} has no solid geometry`); }
+  if (solids.length === 1) { shape.delete(); return solids[0]; }
+  for (const x of solids) x.delete();
+  return shape;
+}
+
+/** A shape as OpenCASCADE's native BREP text. */
+export function brepOfShape(shape: Shape3D | { wrapped: unknown }): string {
+  const oc = getOC() as unknown as { BRepToolsWrapper: { Write(s: unknown): string } };
+  return oc.BRepToolsWrapper.Write((shape as unknown as { wrapped: unknown }).wrapped);
+}
+
+/** Read OpenCASCADE's native BREP text (FreeCAD stores shapes this way). */
+export function readBrep(text: string): Shape3D {
+  const oc = getOC() as unknown as { BRepToolsWrapper: { Read(d: string): unknown } };
+  let raw: unknown;
+  try { raw = oc.BRepToolsWrapper.Read(text); } catch (e) { throw new Error(`not a readable BREP file (${kernelErrorMessage(e)})`); }
+  const shape = cast(raw as never) as unknown as Shape3D;
+  if (!isShape3D(shape as never)) throw new Error("the BREP file has no solid geometry");
+  return solidsOnly(shape, "BREP file");
+}
+
+/** Read an STL (binary or ASCII) into a solid: its facets sewn into a closed
+ *  shell, made a solid, then coplanar facets merged into faces. Faceted — fine
+ *  for reference geometry and simple prints, not a smooth B-rep. */
+export function readStl(bytes: Uint8Array): Shape3D {
+  type Obj = { delete(): void };
+  const oc = getOC() as unknown as {
+    FS: { writeFile(p: string, d: Uint8Array): void; unlink(p: string): void };
+    StlAPI_Reader: new () => { Read(s: unknown, f: string): boolean } & Obj;
+    TopoDS_Shell: new () => Obj;
+    BRepBuilderAPI_Sewing: new (tol: number) => { Add(s: unknown): void; Perform(): void; SewedShape(): unknown } & Obj;
+    TopExp_Explorer: new (s: unknown, find: unknown) => { More(): boolean; Next(): void; Current(): unknown } & Obj;
+    TopAbs_ShapeEnum: { TopAbs_SHELL: unknown };
+    TopoDS: { Shell(s: unknown): unknown };
+    BRepBuilderAPI_MakeSolid: new () => { Add(s: unknown): void; Solid(): unknown } & Obj;
+    ShapeUpgrade_UnifySameDomain: new (s: unknown, edges: boolean, faces: boolean, concat: boolean) => { Build(): void; Shape(): unknown } & Obj;
+  };
+  // OCC guesses ASCII vs binary from the leading bytes, so a binary file whose
+  // header and first coordinates happen to be plain ASCII (or whose header
+  // starts "solid", as some exporters write) is misread. When the size matches
+  // the binary layout, mark the free-form header so it reads as binary.
+  const facets = bytes.length >= 84 ? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(80, true) : -1;
+  if (facets >= 0 && bytes.length === 84 + 50 * facets) { bytes = bytes.slice(); bytes.fill(0xff, 0, 8); }
+  const file = `/chisel-import-${++importSeq}.stl`;
+  oc.FS.writeFile(file, bytes);
+  const owned: Obj[] = [];
+  const own = <T extends Obj>(x: T): T => { owned.push(x); return x; };
+  try {
+    const facets = own(new oc.TopoDS_Shell());
+    if (!own(new oc.StlAPI_Reader()).Read(facets, file)) throw new Error("not a readable STL file");
+    const sew = own(new oc.BRepBuilderAPI_Sewing(1e-6));
+    sew.Add(facets);
+    sew.Perform();
+    const sewn = sew.SewedShape();
+    const make = own(new oc.BRepBuilderAPI_MakeSolid());
+    let shells = 0;
+    for (const ex = own(new oc.TopExp_Explorer(sewn, oc.TopAbs_ShapeEnum.TopAbs_SHELL)); ex.More(); ex.Next()) { make.Add(oc.TopoDS.Shell(ex.Current())); shells++; }
+    if (!shells) throw new Error("the STL has no closed surface");
+    const unify = own(new oc.ShapeUpgrade_UnifySameDomain(make.Solid(), true, true, false));
+    unify.Build();
+    const solid = cast(unify.Shape() as never) as unknown as Shape3D;
+    const v = volumeOfShape(solid);
+    if (!Number.isFinite(v) || Math.abs(v) < 1e-12) { solid.delete(); throw new Error("the STL is not a closed mesh (no volume)"); }
+    return solid;
+  } catch (e) {
+    throw new Error(e instanceof Error ? e.message : `could not read the STL (${kernelErrorMessage(e)})`);
+  } finally {
+    for (const x of owned.reverse()) { try { x.delete(); } catch { /* already freed */ } }
+    try { oc.FS.unlink(file); } catch { /* already gone */ }
+  }
+}
+
 /** Minimum distance between two shapes (0 when they touch or overlap). */
 export function distanceBetween(a: Shape3D, b: Shape3D): number {
   return measureDistanceBetween(a as never, b as never);

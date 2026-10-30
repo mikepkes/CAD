@@ -54,6 +54,8 @@ export interface WebMcpHost {
   distance?: (a: string, b: string) => Promise<number>;
   /** Switch the active configuration (name/id, or null for none). */
   setConfiguration?: (ref: string | null) => Promise<unknown>;
+  /** Import a file (STEP / BREP / STL / FreeCAD .FCStd) as bodies. */
+  importFile?: (fileName: string, bytes: Uint8Array) => Promise<unknown>;
   /** Show or hide ids (bodies by feature id, sketches, components, datum planes). */
   setVisibility?: (ids: string[], visible: boolean) => Promise<unknown>;
   /** Show only these ids (null: show everything). */
@@ -315,6 +317,19 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       annotations: { ...EDIT, idempotentHint: true },
       execute: async (args) => {
         try { return ok({ ok: true, ...(await host.setConfiguration!((args as { configuration?: string | null }).configuration ?? null) as object) }); }
+        catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
+      },
+    });
+  }
+  if (host.importFile) {
+    tools.push({
+      name: "import_file",
+      description: "Import a CAD file as bodies: STEP (.step/.stp), BREP (.brep/.brp), STL (.stl, sewn into a faceted solid) or a FreeCAD document (.FCStd — each visible solid becomes a body). Give the file name (its extension picks the reader) and its bytes as base64. Several bodies import as one undoable step, all or none. Returns the new body ids.",
+      inputSchema: { type: "object", required: ["filename", "base64"], properties: { filename: { type: "string" }, base64: { type: "string" } } },
+      annotations: EDIT,
+      execute: async (args) => {
+        const a = args as { filename?: string; base64?: string };
+        try { return ok({ ok: true, bodies: await host.importFile!(String(a.filename ?? ""), base64Bytes(String(a.base64 ?? ""))) }); }
         catch (e) { return { ...ok({ ok: false, error: (e as Error).message }), isError: true }; }
       },
     });

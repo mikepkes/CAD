@@ -16,7 +16,7 @@ import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
-  faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep,
+  faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl,
 } from "./occ/kernel";
 import { genericNames, extrudeNames, revolveNames, holeCutterNames, inheritNames, copyNames, edgeNamesOf } from "./naming";
 import { stableJson, contentHash } from "./contentKey";
@@ -308,11 +308,18 @@ function applyPrimitive(scope: Scope, f: PrimitiveFeature, bodies: Body[], out: 
   addOrCombine(f, tool, bodies, out, f.shape);
 }
 
+const base64ToBytes = (b64: string): Uint8Array => {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+};
+
 /** Read an imported file into a body (or fold it into one). Faces are named by file order. */
 function applyImport(f: ImportFeature, bodies: Body[], out: Record<string, SolidEval>) {
   let tool: Named;
   try {
-    let shape = readStep(f.data);
+    let shape = f.format === "brep" ? readBrep(f.data) : f.format === "stl" ? readStl(base64ToBytes(f.data)) : readStep(f.data);
     if (f.at && (f.at.x || f.at.y || f.at.z)) { const moved = translateShape(shape, f.at); shape.delete(); shape = moved; }
     tool = { shape, names: faceGeoms(shape).map((_, i) => `${f.id}:f${i}`) };
   } catch (e) {

@@ -27,6 +27,7 @@
     "react-dom": "^18.3.1",
     "replicad": "^1.1.0",
     "replicad-opencascadejs": "^1.1.0",
+    "rhino3dm": "^8.35.0",
     "robust-predicates": "^3.0.3",
     "three": "^0.169.0",
     "zustand": "^4.5.5"

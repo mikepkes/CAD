@@ -1906,10 +1906,10 @@ export const BUILTINS: CommandDef<any>[] = [
   },
   {
     type: "feature.import",
-    title: "Import STEP",
-    summary: "Bring in a body from a STEP file (AP203/AP214/AP242), as a new body or combined with one.",
+    title: "Import",
+    summary: "Bring in a body from a STEP, BREP or STL file, as a new body or combined with one.",
     description:
-      "Reads the STEP text in `data` (the whole .step/.stp file) into a body; a file with several solids becomes one body holding them all. " +
+      "Reads `data` into a body; a file with several solids becomes one body holding them all. `format` step (default; the whole .step/.stp text, AP203/AP214/AP242), brep (OpenCASCADE's text format — FreeCAD's shapes), or stl (base64 of the file, binary or ASCII; facets are sewn into a faceted solid, so it must be a closed mesh). " +
       "The file is stored in the document, so the design stays self-contained. `at` offsets the geometry (world mm). " +
       "`operation` combines with an existing body Fusion-style (new/join/cut/intersect) — e.g. cut an imported fastener's shape out of a part; `body` picks which (its creating-feature id; default the most recent). " +
       "Faces are named \"<featureId>:f<i>\" in file order (see body_topology). Returns the feature id.",
@@ -1918,8 +1918,8 @@ export const BUILTINS: CommandDef<any>[] = [
       required: ["data"],
       additionalProperties: false,
       properties: {
-        format: { type: "string", enum: ["step"], description: "File format (default step)." },
-        data: { type: "string", description: "The STEP file's text (starts with ISO-10303-21)." },
+        format: { type: "string", enum: ["step", "brep", "stl"], description: "File format (default step)." },
+        data: { type: "string", description: "The file: STEP or BREP text, or STL as base64." },
         at: { type: "object", additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "World offset (default none)." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
         body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
@@ -1928,15 +1928,19 @@ export const BUILTINS: CommandDef<any>[] = [
       },
     },
     examples: [{ note: "Import a bracket, raised 10mm", params: { data: "ISO-10303-21;\nHEADER;…END-ISO-10303-21;", at: { x: 0, y: 0, z: 10 }, name: "Bracket" } }],
-    apply(draft, p: { format?: "step"; data: string; at?: Vec3; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
-      if (!/ISO-10303-21/.test(p.data.slice(0, 2000))) throw new Error("data is not a STEP file (no ISO-10303-21 header)");
+    apply(draft, p: { format?: "step" | "brep" | "stl"; data: string; at?: Vec3; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      const format = p.format ?? "step";
+      const head = p.data.slice(0, 2000);
+      if (format === "step" && !/ISO-10303-21/.test(head)) throw new Error("data is not a STEP file (no ISO-10303-21 header)");
+      if (format === "brep" && !/CASCADE Topology/.test(head)) throw new Error("data is not a BREP file (no CASCADE Topology header)");
+      if (format === "stl" && !/^[A-Za-z0-9+/=\s]+$/.test(head)) throw new Error("stl data must be base64");
       const id = ctx.alloc("import");
       draft.features[id] = {
-        id, kind: "import", name: p.name ?? "Imported", format: p.format ?? "step", data: p.data,
+        id, kind: "import", name: p.name ?? "Imported", format, data: p.data,
         ...(p.at ? { at: p.at } : {}), operation: p.operation ?? "new",
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
-      return { createdIds: [id], message: `Imported ${p.name ?? "STEP body"}` };
+      return { createdIds: [id], message: `Imported ${p.name ?? `${format.toUpperCase()} body`}` };
     },
   },
   {
