@@ -603,6 +603,8 @@ export interface Configuration {
   values: Record<string, string>;
   /** Features (ids) this configuration suppresses. */
   suppress?: string[];
+  /** Bodies / sketches / components / datum planes this configuration hides (display only). */
+  hide?: string[];
   /** Cells that point at nothing (a deleted parameter or feature); set by rebuild. */
   warnings?: string[];
 }
@@ -625,6 +627,9 @@ export interface CadDocument {
    *  timeline's own values. Document state, like rollbackIndex: switching is
    *  undoable but not a timeline step. */
   activeConfiguration?: string;
+  /** Ids hidden in the viewport (bodies by feature id, sketches, components,
+   *  datum planes). Display-only document state, like activeConfiguration. */
+  hidden?: string[];
 
   // ---- derived state (a cache, always reproducible from `operations`) ----
   parameters: Parameter[];

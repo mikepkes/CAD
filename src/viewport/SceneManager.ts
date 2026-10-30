@@ -60,6 +60,8 @@ export interface SolidView {
   material?: MaterialSpec;
   /** Per-body wood grain frame (grain axis + pith), for the procedural shader. */
   woodFrame?: WoodFrame;
+  /** A hidden body drawn as a faint, unpickable ghost ("show hidden" mode). */
+  ghost?: boolean;
 }
 
 export interface ViewData {
@@ -573,7 +575,7 @@ export class SceneManager {
         }
       }
       // Prefer a solid face (for sketch-on-face / face extrude), else an origin plane.
-      const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh);
+      const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh && !c.userData.ghost);
       const faceHits = this.raycaster.intersectObjects(solidMeshes, false);
       const planeHits = this.raycaster.intersectObjects(
         [...this.planeMeshes.values(), ...this.datumMeshes.values()],
@@ -859,7 +861,7 @@ export class SceneManager {
 
     // Solids render in model mode (and faded while sketching).
     this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
-    if (data.solids) data.solids.forEach((s, i) => this.renderSolid(s, data.mode === "sketch", i));
+    if (data.solids) data.solids.forEach((s, i) => this.renderSolid(s, data.mode === "sketch" || !!s.ghost, i));
 
     if (data.sketch && data.plane) {
       this.renderSketch(data.sketch, data.plane, data);
@@ -889,6 +891,7 @@ export class SceneManager {
       });
     }
     const mesh = new THREE.Mesh(geo, mat);
+    if (s.ghost) mesh.userData.ghost = true; // drawn, but never picked
     this.solidsGroup.add(mesh);
 
     // Section cap for THIS body: a stencil pass marks where the clip plane cuts

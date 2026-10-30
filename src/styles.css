@@ -1374,3 +1374,9 @@ body {
 .config-add { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 5px; font-size: 11px; width: 22px; padding: 0; }
 .config-paste textarea { width: 100%; box-sizing: border-box; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 5px; font: 12px ui-monospace, monospace; padding: 5px; }
 .param-value.configured { color: var(--accent); }
+
+/* ---- visibility toggles ---- */
+.eye-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 12px; padding: 0 3px; line-height: 1; margin-left: auto; }
+.eye-btn:hover { color: var(--text); }
+.eye-btn.off { color: var(--text-dim); opacity: 0.45; }
+.dim-row .eye-btn { margin-left: 0; }

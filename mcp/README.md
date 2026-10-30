@@ -83,6 +83,8 @@ Plus timeline / query / history tools:
   edit the configuration table. `set_configuration` makes a row active (or
   `null` for none). `export_model` takes a `configuration` to export a variant
   without switching to it
+- `set_visibility { ids, visible }` and `isolate { ids | null }`: display-only
+  hide/show (`get_document` lists `hidden`)
 - `batch` — run `steps: [{tool, arguments}]` as one transaction. The first
   failing step rolls the document and its undo history back (`atomic: false`
   keeps the successful steps)

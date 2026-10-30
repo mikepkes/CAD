@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../model/store";
+import { EyeToggle } from "./EyeToggle";
 import type { CadDocument, RoleRef } from "../core/document";
 import { resolveParameters } from "../core/parameters";
 import { compileExpr } from "../math/expr";
@@ -80,6 +81,7 @@ function ComponentNode({ doc, id, depth }: { doc: CadDocument; id: string; depth
           {placed && <span className="muted-inline"> · ({pos!.x}, {pos!.y}, {pos!.z})</span>}
         </span>
         {active && !isRoot && <span className="dof-dot ok" />}
+        <EyeToggle id={id} label={c.name} />
       </div>
 
       {connectors.map(([cn, conn]) => (
@@ -100,6 +102,7 @@ function ComponentNode({ doc, id, depth }: { doc: CadDocument; id: string; depth
             <span className="tree-icon">✎</span>
             <span className="tree-label">{sk.name} <span className="muted-inline">· {sk.planeId}</span></span>
             <span className={`dof-dot ${st.fullyConstrained ? "ok" : st.conflicting ? "bad" : "warn"}`} />
+            <EyeToggle id={sid} label={sk.name} />
           </div>
         );
       })}
@@ -239,6 +242,9 @@ export function BrowserPanel() {
   useStore((s) => s.rev); // re-render on changes
   const startSketch = useStore((s) => s.startSketch);
   const editJointValue = useStore((s) => s.editJointValue);
+  const showHiddenGhosts = useStore((s) => s.showHiddenGhosts);
+  const toggleGhosts = useStore((s) => s.toggleShowHiddenGhosts);
+  const isolate = useStore((s) => s.isolate);
   const doc = session.doc;
   const root = doc.components[doc.rootComponentId];
   const datums = Object.values(doc.planes);
@@ -248,6 +254,10 @@ export function BrowserPanel() {
     <div className="panel browser">
       <div className="panel-head">
         <span>Browser</span>
+        <span className="param-row-btns">
+          <button className={`icon-btn ${showHiddenGhosts ? "active" : ""}`} title="Draw hidden bodies as faint ghosts" onClick={toggleGhosts}>◎</button>
+          <button className="icon-btn" title="Show everything" disabled={!doc.hidden?.length} onClick={() => void isolate(null)}>◉</button>
+        </span>
       </div>
       <div className="tree">
         {datums.map((d) => (
@@ -255,6 +265,7 @@ export function BrowserPanel() {
             <span className="tree-icon" style={{ color: "#c9a227" }}>▱</span>
             <span className="tree-label">{d.name} <span className="muted-inline">· {d.kind === "frame" ? "point + normal" : `${d.base} +${d.offsetExpr}`}</span></span>
             {d.error && <span className="dof-dot bad" />}
+            <EyeToggle id={d.id} label={d.name} />
           </div>
         ))}
         <ComponentNode doc={doc} id={doc.rootComponentId} depth={0} />

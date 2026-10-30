@@ -19,6 +19,7 @@ import type { TurntableOpts } from "../viewport/turntableRecorder";
 import { saveOutput } from "./saveOutput";
 import { pickFace } from "../core/geometry/pick";
 import type { Vec3 } from "../math/vec";
+import { isolationList } from "../core/visibility";
 
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
@@ -99,6 +100,8 @@ export interface AppState {
   hover: string | null;
   showPlanes: boolean;
   showGrid: boolean;
+  /** Draw hidden bodies as faint, unpickable ghosts. */
+  showHiddenGhosts: boolean;
   showConstraints: boolean;
   /** Cross-section view: clip the solids on a base plane at an offset (null = off). */
   section: { plane: "XY" | "XZ" | "YZ"; offset: number; flip: boolean } | null;
@@ -161,6 +164,11 @@ export interface AppState {
   setHover: (id: string | null) => void;
   toggleShowPlanes: () => void;
   toggleShowGrid: () => void;
+  toggleShowHiddenGhosts: () => void;
+  /** Show or hide bodies (feature ids) / sketches / components / datum planes. Undoable. */
+  setVisibility: (ids: string[], visible: boolean) => Promise<void>;
+  /** Show only these (hide every other body and sketch); null shows everything. */
+  isolate: (ids: string[] | null) => Promise<void>;
   /** Turn the section view on/off, or update its plane/offset/flip. */
   setSection: (section: { plane: "XY" | "XZ" | "YZ"; offset: number; flip: boolean } | null) => void;
   setGridSize: (n: number) => void;
@@ -213,7 +221,7 @@ export interface AppState {
   setActiveConfiguration: (ref: string | null) => Promise<void>;
   /** Add a configuration row; with no `values`, it captures the current values of every parameter. */
   createConfiguration: (name: string, values?: Record<string, string>) => Promise<string | null>;
-  updateConfiguration: (ref: string, change: { name?: string; values?: Record<string, string | null>; suppress?: string[] }) => Promise<void>;
+  updateConfiguration: (ref: string, change: { name?: string; values?: Record<string, string | null>; suppress?: string[]; hide?: string[] }) => Promise<void>;
   deleteConfiguration: (ref: string) => Promise<void>;
   renameParameter: (name: string, newName: string) => Promise<void>;
   deleteParameter: (name: string) => Promise<void>;
@@ -420,6 +428,17 @@ export const useStore = create<AppState>((set, get) => {
       return { active: ref, parameters: get().session.doc.parameters.filter((p) => p.configuredBy).map((p) => ({ name: p.name, expr: p.expr, value: p.value })) };
     },
     configurations: () => get().session.doc.configurations.map((c) => ({ id: c.id, name: c.name })),
+    setVisibility: async (ids: string[], visible: boolean) => {
+      const r = await get().session.setVisibility(ids, visible);
+      if (!r.ok) throw new Error(r.error ?? "could not change visibility");
+      bump(); scheduleAutosave();
+      return { hidden: get().session.doc.hidden ?? [] };
+    },
+    isolate: async (ids: string[] | null) => {
+      if (ids && Object.keys(get().session.doc.features).length) await get().rebuildSolids();
+      await get().isolate(ids);
+      return { hidden: get().session.doc.hidden ?? [] };
+    },
     // A variant is exported from a rebuilt copy, so the live model never switches.
     exportModel: async (format: ExportFormat, body: string | null, configuration?: string | null) => {
       await get().ensureKernel();
@@ -493,6 +512,7 @@ export const useStore = create<AppState>((set, get) => {
     hover: null,
     showPlanes: true,
     showGrid: true,
+    showHiddenGhosts: false,
     section: null,
     gridSize: 10,
     gridSnap: false,
@@ -571,6 +591,19 @@ export const useStore = create<AppState>((set, get) => {
     setHover: (id) => set({ hover: id }),
     toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
     toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
+    toggleShowHiddenGhosts: () => set((s) => ({ showHiddenGhosts: !s.showHiddenGhosts })),
+    setVisibility: async (ids, visible) => {
+      const r = await get().session.setVisibility(ids, visible);
+      bump(r.ok ? {} : { toast: toastFor(r) });
+      scheduleAutosave();
+    },
+    isolate: async (ids) => {
+      const bodies = Object.values(get().solids).filter((b) => b.mesh);
+      const others = ids === null ? [] : isolationList(get().session.doc, bodies, ids);
+      const r = await get().session.setHidden(others);
+      bump(r.ok ? {} : { toast: toastFor(r) });
+      scheduleAutosave();
+    },
     setSection: (section) => set({ section }),
     setGridSize: (n) => set({ gridSize: Math.max(0.1, n) }),
     setGridSnap: (on) => set({ gridSnap: on }),

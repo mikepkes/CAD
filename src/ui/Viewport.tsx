@@ -6,6 +6,7 @@ import { AppState, useStore } from "../model/store";
 import { resolveSketchPlane, to3d } from "../geometry/plane";
 import { extractRegions, loopPolygon, Region } from "../core/geometry/profile";
 import { resolveParameters } from "../core/parameters";
+import { hiddenIds, bodyVisible, sketchVisible } from "../core/visibility";
 import { compileExpr } from "../math/expr";
 import { materialForComponent } from "../core/document";
 import { woodFrameFromBounds } from "../viewport/material";
@@ -63,15 +64,17 @@ function updateExtrudeHandle(scene: SceneManager, s: AppState) {
 function buildView(s: AppState): ViewData {
   const sketch = s.renderSketch();
   // Every sketch except the active one stays visible, dimmed, on its own plane.
-  const ghostSketches = Object.values(s.session.doc.sketches)
-    .filter((sk) => sk.id !== s.activeSketchId)
-    .map((sk) => ({ sketch: sk, plane: resolveSketchPlane(sk) }));
-  const datumPlanes = Object.values(s.session.doc.planes)
-    .filter((d) => d.plane)
-    .map((d) => ({ id: d.id, name: d.name, plane: d.plane! }));
   const doc = s.session.doc;
+  // Hidden items aren't drawn (bodies can come back as ghosts in "show hidden" mode).
+  const hidden = hiddenIds(doc);
+  const ghostSketches = Object.values(doc.sketches)
+    .filter((sk) => sk.id !== s.activeSketchId && sketchVisible(doc, sk.id, hidden))
+    .map((sk) => ({ sketch: sk, plane: resolveSketchPlane(sk) }));
+  const datumPlanes = Object.values(doc.planes)
+    .filter((d) => d.plane && !hidden.has(d.id))
+    .map((d) => ({ id: d.id, name: d.name, plane: d.plane! }));
   const solids = Object.values(s.solids)
-    .filter((sol) => sol.mesh)
+    .filter((sol) => sol.mesh && (s.showHiddenGhosts || bodyVisible(doc, sol, hidden)))
     .map((sol) => {
       // Resolve the body's material from its owning component (bodies inherit;
       // instance bodies keep their source sketch id, so this resolves for them too).
@@ -88,6 +91,7 @@ function buildView(s: AppState): ViewData {
         threadDecals: sol.threadDecals,
         material,
         woodFrame,
+        ...(bodyVisible(doc, sol, hidden) ? {} : { ghost: true }),
       };
     });
   return {

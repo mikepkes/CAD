@@ -25,6 +25,7 @@ import { pickFace } from "../src/core/geometry/pick";
 import { resolveSketchPlane } from "../src/geometry/plane";
 import { describeFeature } from "../src/model/agent";
 import { InlineGeometryBackend } from "../src/core/geometry/backend";
+import { isolationList } from "../src/core/visibility";
 import type { Vec3 } from "../src/math/vec";
 
 /** Topology / distance queries share the backend's assembly-aware evaluation (the kernel is loaded by ensureKernel). */
@@ -102,6 +103,7 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     parameters: session.doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value, error: p.error, ...(p.configuredBy ? { configuredBy: p.configuredBy, baseExpr: p.baseExpr } : {}) })),
     configurations: session.doc.configurations.map((c) => ({ id: c.id, name: c.name, values: c.values, suppress: c.suppress, warnings: c.warnings })),
     activeConfiguration: session.doc.configurations.find((c) => c.id === session.doc.activeConfiguration)?.name ?? null,
+    hidden: session.doc.hidden ?? [],
     sketches: Object.values(session.doc.sketches).map((s) => ({
       id: s.id,
       name: s.name,
@@ -359,6 +361,30 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
       description: "Make a configuration (a row of the configuration table, by name or id) active, or pass null for the timeline's own values. Its cells then override those parameters and its suppressed features are skipped everywhere. Undoable; not a timeline step.",
       inputSchema: { type: "object", required: ["configuration"], properties: { configuration: { type: ["string", "null"] } } },
       handler: async (a) => shapeDispatch(await session.setActiveConfiguration(a.configuration == null ? null : String(a.configuration))),
+    },
+    {
+      name: "set_visibility",
+      description: "Show or hide bodies (by the id of the feature that created them), sketches, components (hides everything inside) or datum planes. Display only: hidden bodies still take part in booleans, measure, collisions and export. Undoable.",
+      inputSchema: { type: "object", required: ["ids", "visible"], properties: { ids: { type: "array", items: { type: "string" } }, visible: { type: "boolean" } } },
+      handler: async (a) => {
+        const r = await session.setVisibility((a.ids as string[]) ?? [], a.visible !== false);
+        return r.ok ? { ok: true, hidden: session.doc.hidden ?? [] } : { ok: false, error: r.error };
+      },
+    },
+    {
+      name: "isolate",
+      description: "Show only the given bodies / sketches / components (everything inside a kept component stays visible), hiding the rest; `ids: null` shows everything. Undoable.",
+      inputSchema: { type: "object", required: ["ids"], properties: { ids: { type: ["array", "null"], items: { type: "string" } } } },
+      handler: async (a) => {
+        let list: string[] = [];
+        if (a.ids) {
+          await ensureKernel();
+          const bodies = Object.values(evaluateFeatures(session.doc, resolveParameters(session.doc.parameters).scope)).filter((b) => b.mesh);
+          try { list = isolationList(session.doc, bodies, a.ids as string[]); } catch (e) { return { ok: false, error: (e as Error).message }; }
+        }
+        const r = await session.setHidden(list);
+        return r.ok ? { ok: true, hidden: session.doc.hidden ?? [] } : { ok: false, error: r.error };
+      },
     },
     {
       name: "export_document",

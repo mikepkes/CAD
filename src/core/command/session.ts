@@ -16,6 +16,7 @@
 // constraints.
 
 import { CadDocument, findConfiguration } from "../document";
+import { isHideable } from "../visibility";
 import { ConstraintSolver } from "../solver/model";
 import { Evaluations, recompute } from "../recompute";
 import { rebuild } from "../build";
@@ -186,6 +187,29 @@ export class CadSession {
       draft.activeConfiguration = undefined;
     }
     return this.finish(before, evalsBefore, draft, undefined, false, {});
+  }
+
+  /** Replace the hidden list (display-only; undoable, not a timeline step). Ids
+   *  must name a feature (body), sketch, component or datum plane. */
+  async setHidden(ids: string[]): Promise<DispatchResult> {
+    // A stale entry (its feature since deleted) is dropped quietly; a new unknown id is an error.
+    const was = new Set(this.doc.hidden ?? []);
+    const unknown = ids.filter((id) => !isHideable(this.doc, id) && !was.has(id));
+    if (unknown.length) return this.fail(`Nothing to hide called ${unknown.map((u) => `"${u}"`).join(", ")}`);
+    ids = ids.filter((id) => isHideable(this.doc, id));
+    const before = this.doc;
+    const evalsBefore = this.evaluations;
+    const draft = clone(before);
+    const list = [...new Set(ids)];
+    draft.hidden = list.length ? list : undefined;
+    return this.finish(before, evalsBefore, draft, undefined, false, {});
+  }
+
+  /** Show or hide some ids, leaving the rest of the hidden list as it is. */
+  setVisibility(ids: string[], visible: boolean): Promise<DispatchResult> {
+    const now = new Set(this.doc.hidden ?? []);
+    for (const id of ids) { if (visible) now.delete(id); else now.add(id); }
+    return this.setHidden([...now]);
   }
 
   /** The document as it would be with configuration `ref` active (or none),
