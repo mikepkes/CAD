@@ -3,6 +3,7 @@
 //! that lets external agents drive the running document. See `mcp.rs`.
 
 mod mcp;
+mod spacemouse;
 
 use std::sync::{Arc, Mutex};
 
@@ -57,6 +58,12 @@ fn mcp_stop(state: State<'_, AppState>) -> McpStatus {
         h.stop();
     }
     status_of(&state)
+}
+
+/// The 3D mouse the desktop reader found (or why it found none).
+#[tauri::command]
+fn spacemouse_status(state: State<'_, spacemouse::SpaceMouse>) -> spacemouse::Status {
+    state.0.lock().unwrap().clone()
 }
 
 #[tauri::command]
@@ -146,7 +153,14 @@ fn render_file_name(name: &str) -> Result<&str, String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState { bridge: Arc::new(Bridge::default()), server: Mutex::new(None) })
-        .invoke_handler(tauri::generate_handler![mcp_start, mcp_stop, mcp_status, mcp_respond, save_render])
+        .manage(spacemouse::SpaceMouse::default())
+        .invoke_handler(tauri::generate_handler![mcp_start, mcp_stop, mcp_status, mcp_respond, save_render, spacemouse_status])
+        .setup(|app| {
+            // look for a 3D mouse for the life of the app
+            let shared: State<'_, spacemouse::SpaceMouse> = app.state();
+            spacemouse::start(app.handle().clone(), shared.inner().clone());
+            Ok(())
+        })
         .on_window_event(|window, event| {
             // Stop serving when the main window goes away so the port is released.
             if let tauri::WindowEvent::Destroyed = event {

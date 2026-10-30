@@ -173,6 +173,15 @@ export class HotkeyManager {
     return false;
   }
 
+  /** Run an action by id (a 3D-mouse button, a menu): honours its `when`.
+   *  Returns whether it ran. */
+  runAction(id: string): boolean {
+    const a = this.actions.get(id);
+    if (!a || (a.when && !a.when())) return false;
+    a.run();
+    return true;
+  }
+
   // ---- introspection (for UI + MCP) ----
 
   /** All registered actions, grouped by context in stack order (top-most last). */

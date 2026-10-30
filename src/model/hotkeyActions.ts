@@ -20,6 +20,9 @@ const toolAction = (tool: Tool, label: string, key: string): HotkeyAction => ({
 const ACTIONS: HotkeyAction[] = [
   // ---- global ----
   { id: "view.frame", label: "Frame selection / fit", context: "global", defaultPrimary: "f", run: () => fire("chisel:frame") },
+  ...(["iso", "front", "top", "right", "back", "left", "bottom"] as const).map((v) => ({
+    id: `view.${v}`, label: `View: ${v[0].toUpperCase()}${v.slice(1)}`, context: "global", run: () => window.dispatchEvent(new CustomEvent("chisel:view", { detail: v })),
+  })),
   { id: "edit.undo", label: "Undo", context: "global", defaultPrimary: "mod+z", run: () => st().undo() },
   { id: "edit.redo", label: "Redo", context: "global", defaultPrimary: "mod+shift+z", defaultSecondary: "mod+y", run: () => st().redo() },
   {
