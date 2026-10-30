@@ -1,3 +1,4 @@
+/// <reference path="../rhino3dm-module.d.ts" />
 // File import: turn a file (name + bytes) into feature.import requests, by
 // type. STEP and BREP are text the kernel reads directly; STL is passed as
 // base64; a FreeCAD document (.FCStd, a ZIP) yields the BREP shape of each
