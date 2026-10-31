@@ -250,8 +250,8 @@ function mountBox(s: CadSession, backend: GeometryBackend) {
 
 describe("LedgerPanel: built fixes for metric intents", () => {
   let s: CadSession;
-  beforeAll(async () => { s = await boxSession(); });
-  beforeEach(() => {
+  beforeEach(async () => {
+    s = await boxSession(); // fresh each time: intents are document operations now, so they would carry over
     localStorage.clear();
     clearFixCache();
     disposeSamplerBackend();
@@ -292,11 +292,11 @@ describe("LedgerPanel: built fixes for metric intents", () => {
   it("starts no sampler while no metric intent fails, and says so when nothing within the bounds fixes one", async () => {
     const { backend, evaluate } = boxBackend();
     const { createBackend } = mountBox(s, backend);
-    act(() => { useIntents.getState().add("h >= 20", "Tall"); }); // a parameter intent: the instant fix, no build
-    expect(screen.getByRole("group", { name: "Suggestion for Tall" }).textContent).toMatch(/Set h to 20/);
+    await act(async () => { await useIntents.getState().add("h >= 20", "Tall"); }); // a parameter intent: the instant fix, no build
+    expect((await screen.findByRole("group", { name: "Suggestion for Tall" })).textContent).toMatch(/Set h to 20/);
     expect(createBackend).not.toHaveBeenCalled();
     expect(screen.queryByRole("status")).toBeNull();
-    act(() => { useIntents.getState().add("mass <= 1", "Mass"); }); // the smallest box, 10 × 5 × 10, is still 1.35 g
+    await act(async () => { await useIntents.getState().add("mass <= 1", "Mass"); }); // the smallest box, 10 × 5 × 10, is still 1.35 g
     await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/No change to a bounded parameter fixes this/));
     expect(screen.getByRole("status").getAttribute("data-status")).toBe("done");
     expect(evaluate).toHaveBeenCalledTimes(4); // each side's bound only: w 50, w 10, h 25, h 5
@@ -310,17 +310,19 @@ describe("LedgerPanel: built fixes for metric intents", () => {
     let gated = true;
     const { backend, evaluate } = boxBackend(() => (gated ? gate : Promise.resolve()));
     mountBox(s, backend);
-    act(() => { useIntents.getState().add("mass <= 10", "Mass"); });
+    await act(async () => { await useIntents.getState().add("mass <= 10", "Mass"); });
     await screen.findByRole("status");
-    expect(evaluate).toHaveBeenCalledTimes(1); // the first probe, held by the gate
+    await waitFor(() => expect(useStore.getState().session.doc.intents.length).toBe(1)); // the intent.add op has landed
+    const probes = evaluate.mock.calls.length; // the first probe of each revision so far, each held by the gate
+    expect(probes).toBeGreaterThanOrEqual(1);
     gated = false;
     act(() => { useStore.setState({ rev: useStore.getState().rev + 1 }); }); // the document changed
     expect(screen.getByRole("status").textContent).toBe("Looking for a fix…");
     const cards = await screen.findAllByRole("group", { name: "Suggestion for Mass" });
     expect(cards.length).toBe(2);
-    expect(evaluate).toHaveBeenCalledTimes(1 + 8); // the new revision rebuilt everything: nothing of the old one is reused
+    expect(evaluate).toHaveBeenCalledTimes(probes + 8); // the new revision rebuilt everything: nothing of the old one is reused
     await act(async () => { release(); await new Promise((r) => setTimeout(r, 0)); });
-    expect(evaluate).toHaveBeenCalledTimes(9); // the old search stopped at its probe instead of carrying on
+    expect(evaluate).toHaveBeenCalledTimes(probes + 8); // the old searches stopped at their probe instead of carrying on
     expect(screen.getAllByRole("group", { name: "Suggestion for Mass" }).length).toBe(2);
   });
 
