@@ -4,7 +4,7 @@ Running notes for the automated tutorial video, newest pass first. Each pass
 records what to keep doing, what broke and how it was fixed, and what is still
 open, so the next pass starts from here rather than from memory.
 
-## Pass 2 (in progress): review fixes and new features
+## Pass 2 (2026-10-31): review fixes and new features
 
 ### Your review of pass 1, and what changed
 
@@ -17,7 +17,33 @@ open, so the next pass starts from here rather than from memory.
 | "Export options don't need to be top-level buttons" | STEP, STL and 3MF were toolbar buttons | One **Export ▾** menu: STEP, STL, 3MF and the Shop drawing |
 | "Show off drawings for the woodworking bench" | `core/drawings.ts` already made a third-angle sheet and cut list, with no way to see them | **Shop drawing** view (Export ▾, or the `model.drawing` action): the sheet, the cut list, SVG and CSV downloads, made on the geometry worker |
 
-Being built in parallel (separate branches, merged before recording): gears of every common printable kind and a clockwork example driven by expressions; strain in the Lens and a force-travel panel with the bistable switch's rests and snap; organizational assist (agent-named sketches and features, an inbox for MCP agents) and MCP tools to show or hide panels and run any action.
+Built in parallel by three agents (separate worktrees and branches, merged before recording):
+- **Gears** (`feature.gear`): spur, helical, herringbone, ring, rack, straight bevel, worm and worm wheel, with bores, hubs, spokes and print backlash, and meshing by expression. The **clockwork** example drives every type from one `turn` slider through the real tooth ratios. It also fixed backlash on internal gears, and a kernel memory leak per boolean that ran the examples suite out of memory.
+- **Compliant data**: a **Mechanism** tab with a force-travel chart (rests, tipping point, snap force, a live marker, Sweep) and per-flexure strain bars, and a **Strain** lens mode.
+- **Organizational assist**: default-named sketches and features are named by Claude (Haiku) a few seconds after you stop; a status-bar inbox; `get_assist_inbox` / `resolve_assist` and an inbox resource with change notifications for MCP agents; `set_panel` and `run_action` so an agent can open any panel or run any action.
+
+### Result
+
+`video/out/pass2/chisel-tutorial.mp4`: 5:49, 1440p60, 122 MB; `chisel-tutorial-preview.mp4`: the same at 720p, 24 MB, for a phone (`node video/edit.mjs --run pass2 --preview`). All 24 beats ran without a failure. Act 3 is now: gyroscope with a section cut and the motion study, the gears clockwork, the jointed scissor, the star box, the bistable switch (asking Claude, which opens the force analysis, sweeps it and turns the lens to strain), the gimbal, the Roubo bench and its shop drawing, and the coaster built by describing it.
+
+### What broke this pass, and the fix
+
+| Problem | Cause | Fix |
+|---|---|---|
+| Acts 2 and 3 recorded an empty page | Deleting the agents' worktrees while recording made Vite clear its cache and force a full reload; it was also watching `video/takes`, where the frames are written | Vite ignores `.claude/`, `video/takes/` and `video/out/`. Never change the working tree during a take |
+| A white frame and a reload one second into Act 1 | Vite pre-bundling dependencies on first use of newly merged code, then reloading the page | `record.mjs` warms the app up (loads it and the examples) before any take; the director notes any page reload during a take as "re-shoot this act" |
+| The clockwork sweep took 803 s in a dry run | The clip ran a turntable, and each sweep step waited for the camera to stop, so every step hit the 20 s timeout | `settle(…, { camera: false })` for sweeps; the montage frames each model after loading it |
+| Both extrudes were named "Back plate" | The mock's names are keyed by default name, and both were "Extrude" | A name list is used in order; one replay client per mock, so it advances across requests |
+| The lip's far face was behind the extrude panel | The base is 6 mm tall; in the side view it sits where the panel is | The selection picker, from a point on the back plate's far side (the same plane) |
+
+### Still open after pass 2
+
+- **The origin planes reappear after New in Act 1** (the preroll hides them; New shows them again). Hide them after New.
+- **The clockwork sweep runs at 19×**: every turn step rebuilds in the browser here, although the agent saw the slider update at once. Worth profiling.
+- **The lens HUD is half behind the agent panel** in the bistable clip.
+- **The timeline shows command names** ("Extrude", "Sketch 1 · face") while everything else shows the assist's names.
+- **The parameter sliders are still tiny** on camera.
+- The phone parameter and the lip's dimension are still puppeted, and the voiceover is still to record.
 
 ## Pass 1 (2026-10-31): first automated cut
 

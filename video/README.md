@@ -9,7 +9,12 @@ worked and what didn't on each pass is in [NOTES.md](NOTES.md).
 npm run dev                                   # the app on :5173 (or npm run tauri:dev)
 node video/record.mjs --run pass2             # record acts 1-3 in real time (about 7 min)
 node video/edit.mjs --run pass2               # cut, speed up, subtitle and encode (about 4 min)
+node video/edit.mjs --run pass2 --preview     # a 720p copy under 30 MB, for review on a phone
+node video/sheet.mjs --run pass2 --every 15   # contact sheets of the cut, for review
 ```
+
+Don't change files in the repo while a take records: the dev server reloads the page (it ignores `video/takes`,
+`video/out` and `.claude/`, but not your source). `record.mjs` warms the app up first and flags any reload.
 
 Output: `video/out/<run>/chisel-tutorial.mp4` (2560×1440, 60 fps, H.264),
 `subtitles.srt`, `cue-sheet.md` (the ADR sheet for recording the voiceover to

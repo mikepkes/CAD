@@ -56,7 +56,9 @@ window.sheet = async function sheet(indices) {
 
 window.render = async function render() {
   const plan = await (await fetch(q.get("plan"))).json();
-  const { fps, width: W, height: H } = plan;
+  const { fps } = plan;
+  // the overlays are laid out at 2560×1440 and the whole frame scaled for a smaller output (?w=&h=)
+  const W = Number(q.get("w") ?? plan.width), H = Number(q.get("h") ?? plan.height), scale = W / plan.width;
   const canvas = new OffscreenCanvas(W, H);
   const ctx = canvas.getContext("2d");
   let pending = Promise.resolve(), bytes = 0;
@@ -66,7 +68,7 @@ window.render = async function render() {
     onData: (data, position) => { bytes = Math.max(bytes, position + data.byteLength); const copy = data.slice(); pending = pending.then(() => fetch(`/write?pos=${position}`, { method: "POST", body: copy })); },
   });
   let codec = "avc1.640033", mux = "avc";
-  const cfg = { codec, width: W, height: H, bitrate: 14_000_000, framerate: fps, latencyMode: "quality", avc: { format: "avc" } };
+  const cfg = { codec, width: W, height: H, bitrate: Number(q.get("bitrate") ?? 14_000_000), framerate: fps, latencyMode: "quality", avc: { format: "avc" } };
   if (!(await VideoEncoder.isConfigSupported(cfg)).supported) { codec = "vp09.00.51.08"; mux = "vp9"; delete cfg.avc; cfg.codec = codec; }
   const muxer = new Muxer({ target, video: { codec: mux, width: W, height: H, frameRate: fps }, fastStart: false, firstTimestampBehavior: "offset" });
   const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => console.error(e.message) });
@@ -89,9 +91,11 @@ window.render = async function render() {
       const nk = plan.frames.slice(i + 1, i + 8).find((k) => k[0] !== key[0] || k[1] !== key[1]);
       if (nk) { nextKey = nk; next = load(nk); } else { nextKey = null; next = null; }
     }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(bitmap, 0, 0, W, H);
-    if (chyAt[i]) drawChyron(ctx, chyAt[i], W);
-    if (capAt[i]) drawSubtitle(ctx, capAt[i], W, H);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    if (chyAt[i]) drawChyron(ctx, chyAt[i], plan.width);
+    if (capAt[i]) drawSubtitle(ctx, capAt[i], plan.width, plan.height);
     const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) });
     encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
     frame.close();

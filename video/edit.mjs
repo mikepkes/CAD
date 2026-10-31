@@ -17,6 +17,8 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? proces
 const run = arg("--run");
 if (!run) { console.error("usage: node video/edit.mjs --run NAME"); process.exit(1); }
 const acts = arg("--acts", "1,2,3").split(",").map(Number);
+// --preview: a small 720p copy for review on a phone (under the 30 MB file limit), beside the full render
+const preview = process.argv.includes("--preview");
 const FPS = 60;
 const ROOT = new URL("..", import.meta.url).pathname;
 const takes = join(ROOT, "video", "takes", run);
@@ -98,7 +100,7 @@ writeFileSync(join(out, "plan.json"), JSON.stringify({ fps: FPS, width: 2560, he
 console.log(`plan: ${outFrame} frames (${tc(outFrame, ".")}), ${captions.length} captions, ${chyrons.length} chyrons`);
 
 // ---- render ----
-const mp4 = join(out, "chisel-tutorial.mp4");
+const mp4 = join(out, preview ? "chisel-tutorial-preview.mp4" : "chisel-tutorial.mp4");
 const fd = openSync(mp4, "w");
 const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".jpg": "image/jpeg" };
 const server = createServer((req, res) => {
@@ -121,7 +123,7 @@ const browser = await chromium.launch({ headless: false, args: ["--window-size=4
 const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
 page.on("console", (m) => console.log(`  [compositor] ${m.text()}`));
 page.on("pageerror", (e) => console.error(`  [compositor error] ${e.message}`));
-await page.goto(`http://localhost:${port}/video/compositor/index.html?plan=/video/out/${run}/plan.json`);
+await page.goto(`http://localhost:${port}/video/compositor/index.html?plan=/video/out/${run}/plan.json${preview ? "&w=1280&h=720&bitrate=550000" : ""}`);
 const result = await page.evaluate(() => window.render());
 console.log(`\nrendered ${result.frames} frames, ${(result.bytes / 1e6).toFixed(1)} MB, ${result.codec}`);
 await browser.close();

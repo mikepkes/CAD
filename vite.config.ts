@@ -12,7 +12,9 @@ export default defineConfig(({ command }) => ({
     port: 5173,
     // The optional Tauri shell (`npm run tauri:dev`) points at this exact port.
     strictPort: true,
-    watch: { ignored: ["**/src-tauri/**"] },
+    // Not the desktop shell, agent worktrees (a removed one forces a full reload), or the video's takes and renders
+    // (thousands of frames written during a take).
+    watch: { ignored: ["**/src-tauri/**", "**/.claude/**", "**/video/takes/**", "**/video/out/**"] },
   },
   // The OpenCASCADE emscripten glue has a `new URL('…wasm', import.meta.url)`
   // fallback that Vite's dep-scanner can't resolve (the package's exports map

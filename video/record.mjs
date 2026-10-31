@@ -14,6 +14,17 @@ const dry = process.argv.includes("--dry");
 const url = arg("--url", "http://localhost:5173/?demo");
 const root = join(new URL(".", import.meta.url).pathname, "takes", run);
 
+// Warm up first: the dev server pre-bundles dependencies on first use and reloads the page when it does, which
+// must not happen inside a take (pass 2 lost its first second to one). Load the app and every example once.
+if (!dry) {
+  const warm = await Director.open({ url, takeDir: join(root, "warmup"), record: false, headless: true });
+  for (const name of ["gyroscope", "clockwork", "bistable", "roubo"]) {
+    await warm.run(async (n) => { const r = await fetch(`/examples/${n}.json`); if (r.ok) await window.__chiselDemo.openText(await r.text(), `${n}.chisel.json`); }, name).catch(() => {});
+  }
+  await warm.close();
+  console.log("warmed up");
+}
+
 for (const n of acts) {
   const mod = await import(`./script/act${n}.mjs`);
   const takeDir = join(root, `act${n}`);

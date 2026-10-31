@@ -53,6 +53,8 @@ export class Director {
   // ---- capture ----
   async startRecording() {
     this.t0 = Date.now() / 1000;
+    // a reload mid-take (the dev server re-optimizing, a watched file changing) ruins it: say so loudly
+    this.page.on("framenavigated", (f) => { if (f === this.page.mainFrame()) { this.note(`the page reloaded during the take at ${this.now().toFixed(1)} s: re-shoot this act`); console.error("  ✗ page reloaded during the take"); } });
     if (!this.record) return;
     const dir = join(this.takeDir, "frames");
     mkdirSync(dir, { recursive: true });
