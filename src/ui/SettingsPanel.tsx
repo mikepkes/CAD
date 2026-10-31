@@ -28,7 +28,7 @@ function SpaceMouseSettingsSection() {
         <button className="btn ghost" onClick={() => void connectWebHid().then(setSt).catch((e) => setSt({ source: null, note: String(e?.message ?? e) }))}>Connect a 3D mouse…</button>
       )}
       <label className="field-label">Speed ({cfg.speed.toFixed(1)}×)</label>
-      <input className="field-input" type="range" min={0.2} max={3} step={0.1} value={cfg.speed} onChange={(e) => update({ speed: Number(e.target.value) })} />
+      <input className="field-input" type="range" min={0.2} max={5} step={0.1} value={cfg.speed} onChange={(e) => update({ speed: Number(e.target.value) })} />
       <label className="field-toggle"><input type="checkbox" checked={cfg.lockRotation} onChange={(e) => update({ lockRotation: e.target.checked })} /><span>Pan and zoom only (no rotation)</span></label>
       <div className="field-note">Invert:{" "}
         {axes.map(([k, label]) => (

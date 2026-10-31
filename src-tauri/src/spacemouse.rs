@@ -2,8 +2,9 @@
 //! WebHID, so a thread here finds the device, reads its HID reports and
 //! forwards them raw to the webview as `spacemouse-report` events; the page
 //! parses them (src/viewport/spaceMouse.ts), the same as WebHID reports in a
-//! browser. The device is opened non-exclusively so 3Dconnexion's driver, when
-//! installed, keeps working alongside.
+//! browser. The device is opened non-exclusively; 3Dconnexion's current macOS
+//! driver holds it exclusively all the same, so with 3DxWare installed the app
+//! goes through the driver instead (connexion.rs) and this reader isn't started.
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -28,10 +29,11 @@ pub struct Status {
     pub note: Option<String>,
 }
 
+/// One HID input report for the page (`data` without the report id).
 #[derive(Clone, Serialize)]
-struct Report {
-    id: u8,
-    data: Vec<u8>,
+pub struct Report {
+    pub id: u8,
+    pub data: Vec<u8>,
 }
 
 /// Shared with the `spacemouse_status` command.
@@ -39,7 +41,7 @@ struct Report {
 pub struct SpaceMouse(pub Arc<Mutex<Status>>);
 
 impl SpaceMouse {
-    fn set(&self, app: &AppHandle, status: Status) {
+    pub fn set(&self, app: &AppHandle, status: Status) {
         *self.0.lock().unwrap() = status.clone();
         let _ = app.emit("spacemouse-status", status);
     }
@@ -86,7 +88,7 @@ pub fn start(app: AppHandle, shared: SpaceMouse) {
                     shared.set(&app, Status { product: None, note: Some("The 3D mouse was disconnected.".into()) });
                 }
                 Err(e) => {
-                    shared.set(&app, Status { product: None, note: Some(format!("Found {product} but couldn't open it ({e}); another app may hold it.")) });
+                    shared.set(&app, Status { product: None, note: Some(format!("Found {product} but couldn't open it ({e}); another app or 3Dconnexion's driver may hold it.")) });
                     thread::sleep(Duration::from_secs(5));
                 }
             }
