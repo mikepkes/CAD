@@ -218,3 +218,11 @@
 .k-tabs { display: flex; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
 .k-tabs .k-pills { flex: 1; }
 .k-tabs .k-pills .k-btn { flex: 1; justify-content: center; }
+
+/* in-app confirm / prompt (Dialog.tsx); the frame is the app's .modal */
+.k-dialog { width: 380px; }
+.k-dialog-text { margin: 0; line-height: 1.45; }
+.k-dialog-field { display: block; margin-top: 8px; }
+.k-dialog-field .field-input { width: 100%; box-sizing: border-box; }
+.k-dialog-foot { gap: 8px; }
+.k-btn.accent.k-danger { color: var(--k-bad); border-color: var(--k-bad); background: transparent; }

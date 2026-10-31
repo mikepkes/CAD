@@ -18,6 +18,7 @@ import { WorkbenchOverlay, HistoryStrip } from "./concepts/workbench";
 import { LensOverlay } from "./concepts/lens";
 import { IntentLine } from "./concepts/intent";
 import { PanelToggles, RightPanel } from "./ConceptShell";
+import { Dialog } from "./kit/Dialog";
 
 function Toast() {
   const toast = useStore((s) => s.toast);
@@ -86,6 +87,7 @@ export function App() {
       <IntentLine />
       <SettingsPanel />
       <HotkeyPanel />
+      <Dialog />
     </div>
   );
 }

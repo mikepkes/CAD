@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Tool, TOOL_VARIANTS, useStore } from "../model/store";
 import { PLANES } from "../geometry/plane";
+import { ask } from "./kit/askDialog";
 
 function FileMenu() {
   const newDocument = useStore((s) => s.newDocument);
@@ -11,7 +12,7 @@ function FileMenu() {
   const importRef = useRef<HTMLInputElement>(null);
   return (
     <div className="file-menu">
-      <button className="btn ghost" title="New document" onClick={() => { if (confirm("Start a new document? Unsaved work is autosaved in this browser only.")) newDocument(); }}>New</button>
+      <button className="btn ghost" title="New document" onClick={() => void ask({ title: "New document", text: "Start a new document? The current one is replaced; unsaved work is autosaved in this browser or app only.", confirmLabel: "New document", danger: true }).then((ok) => { if (ok) newDocument(); })}>New</button>
       <button className="btn ghost" title="Open a .chisel.json file" onClick={() => inputRef.current?.click()}>Open</button>
       <button className="btn ghost" title="Save to a .chisel.json file" onClick={saveToFile}>Save</button>
       <button className="btn ghost" title="Import STEP, BREP, STL, FreeCAD (.FCStd) or Rhino (.3dm) as bodies" onClick={() => importRef.current?.click()}>Import</button>

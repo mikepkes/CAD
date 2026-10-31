@@ -200,7 +200,7 @@ export function formatBounds(b: Bounds3): string {
 export function deletePrompt(row: Pick<FeatureRow, "name">): string {
   return `Delete ${row.name}? Features that depend on it may fail.`;
 }
-export function shouldDelete(row: Pick<FeatureRow, "name">, ask: ((text: string) => boolean) | undefined): boolean {
+export async function shouldDelete(row: Pick<FeatureRow, "name">, ask: ((text: string) => boolean | Promise<boolean>) | undefined): Promise<boolean> {
   return ask ? ask(deletePrompt(row)) : true;
 }
 

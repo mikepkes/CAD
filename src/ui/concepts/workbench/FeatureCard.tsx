@@ -55,7 +55,7 @@ export function FeatureCard() {
             size="sm"
             ghost
             title="Delete this feature"
-            onClick={() => deleteFeature(row)}
+            onClick={() => void deleteFeature(row)}
           >
             Delete
           </Button>
