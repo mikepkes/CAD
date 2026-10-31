@@ -85,6 +85,7 @@ function Listeners() {
 }
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+const turn = { rate: 0, target: 0, raf: 0 };
 
 /** The director's handle on the app. Every method is plain data in, plain data out (it crosses Playwright). */
 const api = {
@@ -152,6 +153,28 @@ const api = {
   // ---- the camera: a smooth 3D-mouse-style drift (axes as the device reports them, about ±350) ----
   drift(axes: Partial<Record<"tx" | "ty" | "tz" | "rx" | "ry" | "rz", number>> | null) {
     getActiveScene()?.setNavigationInput({ tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0, buttons: 0, ...(axes ?? {}) });
+  },
+  /** A turntable: orbit the camera about the view's target and world Z at `degPerSec`, easing in and out
+   *  (null eases to a stop). Measured in degrees per second, unlike `drift`, whose rate depends on 3D-mouse tuning. */
+  turntable(degPerSec: number | null) {
+    turn.target = degPerSec ?? 0;
+    if (turn.raf) return;
+    let last = performance.now();
+    const tick = (t: number) => {
+      const dt = Math.min(0.05, (t - last) / 1000); last = t;
+      turn.rate += (turn.target - turn.rate) * Math.min(1, dt * 3); // about a second to reach speed or stop
+      const sc = getActiveScene();
+      if (sc && Math.abs(turn.rate) > 0.01) {
+        const cam = sc.camera, c = sc.controls.target, a = (turn.rate * dt * Math.PI) / 180;
+        const x = cam.position.x - c.x, y = cam.position.y - c.y;
+        cam.position.x = c.x + x * Math.cos(a) - y * Math.sin(a);
+        cam.position.y = c.y + x * Math.sin(a) + y * Math.cos(a);
+        cam.lookAt(c); sc.controls.update();
+      }
+      if (turn.target === 0 && Math.abs(turn.rate) < 0.05) { turn.rate = 0; turn.raf = 0; return; }
+      turn.raf = requestAnimationFrame(tick);
+    };
+    turn.raf = requestAnimationFrame(tick);
   },
   view(name: string) { window.dispatchEvent(new CustomEvent("chisel:view", { detail: name })); },
   frameAll() { window.dispatchEvent(new CustomEvent("chisel:frame")); },

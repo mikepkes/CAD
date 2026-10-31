@@ -96,7 +96,7 @@ function featureRegions(doc: CadDocument, f: SketchFeature): Region[] {
  * with its faces named (see naming.ts). `targetBounds` sizes a through-all
  * extrude against the body it will act on.
  */
-function buildFeatureSolid(doc: CadDocument, scope: Scope, f: SketchFeature, targetBounds?: Bounds3): Named {
+function buildFeatureSolid(doc: CadDocument, scope: Scope, f: SketchFeature, targetBounds?: Bounds3, bodies: Body[] = []): Named {
   const sketch = doc.sketches[f.sketchId];
   if (!sketch) throw new Error("sketch not found");
   const regions = featureRegions(doc, f);
@@ -116,11 +116,25 @@ function buildFeatureSolid(doc: CadDocument, scope: Scope, f: SketchFeature, tar
   // Through-all: a length that clears the target body from any face of it, both ways when symmetric.
   if (f.extent === "throughAll") distance = throughAllLength(targetBounds) * (f.symmetric ? 2 : 1);
   if (f.direction === "reverse") distance = -distance;
+  // To a face: the signed distance along the sketch normal to that face's plane, re-found on every rebuild.
+  if (f.extent === "toFace") distance = toFaceDistance(f, wp0, bodies);
   const d = Math.abs(distance) < 1e-9 ? 1e-6 : distance;
   const wp = f.symmetric ? offsetPlane(wp0, -d / 2) : wp0;
   const shape = buildRegionsSolid(wp, regions, d);
   const n = wp0.normal, dir = d >= 0 ? n : { x: -n.x, y: -n.y, z: -n.z };
   return { shape, names: nameSafely(shape, f.id, (g) => extrudeNames(f.id, g, sketch, wp0, dir)) };
+}
+
+/** How far an extrude must go along its sketch's normal to reach its `toFace` (negative = against the normal). */
+function toFaceDistance(f: ExtrudeFeature, wp: WorkPlane, bodies: Body[]): number {
+  if (!f.toFace) throw new Error("extrude to a face: no face chosen");
+  const tp = resolveFacePlane(bodies, f.toFace);
+  if (!tp) throw new Error("extrude to a face: that face is gone");
+  if (Math.abs(dot(tp.normal, wp.normal)) < 1 - 1e-6) throw new Error("extrude to a face: the face must be parallel to the sketch (an angled face is not supported yet)");
+  const d = dot({ x: tp.origin.x - wp.origin.x, y: tp.origin.y - wp.origin.y, z: tp.origin.z - wp.origin.z }, wp.normal);
+  if (Math.abs(d) < 1e-6) throw new Error("extrude to a face: the face is in the sketch's own plane");
+  f.distanceValue = d;
+  return d;
 }
 
 /** A solid plus the topological names of its faces (in face order). */
@@ -249,7 +263,7 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
   const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, f.kind) : undefined;
   let tool: Named;
   try {
-    tool = buildFeatureSolid(doc, scope, f, target ? safeBounds(target.shape) : undefined);
+    tool = buildFeatureSolid(doc, scope, f, target ? safeBounds(target.shape) : undefined, bodies);
   } catch (e) {
     out[f.id] = { featureId: f.id, name: f.name, sketchId: f.sketchId, distance, error: kernelErrorMessage(e) };
     return;

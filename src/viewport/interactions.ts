@@ -378,8 +378,10 @@ export class Interactions {
       if (!this.moved && this.downPt && this.base) {
         const pick = this.scene.pick(e.clientX, e.clientY, this.base);
         if (st.extrudeActive) {
-          // Extrude session: pick a region or a face to extrude.
-          if (pick.type === "region") st.setExtrudeRegion(pick.interior ?? null);
+          // Extrude session: pick a region or a face to extrude, or (extent "To face") the face to stop at.
+          if (st.extrudeExtent === "toFace" && st.extrudeTarget && pick.type === "face" && pick.world && pick.normal) {
+            st.pickExtrudeToFace({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);
+          } else if (pick.type === "region") st.setExtrudeRegion(pick.interior ?? null);
           else if (pick.type === "face" && pick.world && pick.normal) {
             void st.startFaceExtrude({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);
           }
