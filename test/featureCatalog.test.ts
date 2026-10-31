@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { realSession } from "./helpers";
-import { featureRows, featureSpec, featureSpecForOp, allFeatureSpecs, sentenceText, pinAnchor, evalParam, nameOf, unitLabel, paramsWith, unionBounds, boundsCentre } from "../src/model/concepts/featureCatalog";
+import { featureRows, featureSpec, featureSpecForOp, allFeatureSpecs, sentenceText, pinAnchor, evalParam, nameOf, nameFromTimeline, pushParamFor, unitLabel, paramsWith, unionBounds, boundsCentre, type FeatureRow } from "../src/model/concepts/featureCatalog";
 import { createDefaultRegistry } from "../src/core/command/builtins";
 
 describe("feature catalog", () => {
@@ -47,8 +47,8 @@ describe("feature catalog", () => {
 
     it("reads each feature back as a sentence", () => {
       const rows = featureRows(s.doc, s.timeline, s.rollbackIndex, {});
-      expect(sentenceText(rows[0], s.doc)).toMatch(/^Extrude .+ by 24 mm\.$/);
-      expect(sentenceText(rows[1], s.doc)).toBe("Round the edges to 1.5 mm.");
+      expect(sentenceText(rows[0], s.doc, s.timeline)).toMatch(/^Extrude .+ by 24 mm\.$/);
+      expect(sentenceText(rows[1], s.doc, s.timeline)).toBe("Round the edges to 1.5 mm.");
     });
 
     it("marks rolled-back and suppressed features", async () => {
@@ -92,9 +92,46 @@ describe("feature catalog", () => {
     it("names sketches and features for sentences", () => {
       const sketchId = Object.keys(s.doc.sketches)[0];
       const extrudeId = s.timeline.find((o) => o.type === "feature.extrude")!.createdIds[0];
-      expect(nameOf(s.doc, sketchId)).toBe(s.doc.sketches[sketchId].name || "the sketch");
-      expect(nameOf(s.doc, extrudeId)).toBe((s.doc.features[extrudeId] as { name?: string }).name || extrudeId);
-      expect(nameOf(s.doc, "nothing-here")).toBe("nothing-here");
+      expect(nameOf(s.doc, s.timeline, sketchId)).toBe(s.doc.sketches[sketchId].name || "the sketch");
+      expect(nameOf(s.doc, s.timeline, extrudeId)).toBe((s.doc.features[extrudeId] as { name?: string }).name || "Extrude 1");
+      expect(nameOf(s.doc, s.timeline, "nothing-here")).toBe("nothing-here");
+      expect(nameOf(s.doc, [], "nothing-here")).toBe("nothing-here");
+    });
+
+    it("keeps names once the history is rolled back past the sketch (from the timeline, not the document)", async () => {
+      const sketchId = Object.keys(s.doc.sketches)[0];
+      const extrudeId = s.timeline.find((o) => o.type === "feature.extrude")!.createdIds[0];
+      // roll back to just after the parameter: the sketch and both features leave the document
+      await s.moveRollback(1);
+      expect(s.doc.sketches[sketchId]).toBeUndefined();
+      expect(s.doc.features[extrudeId]).toBeUndefined();
+      const rows = featureRows(s.doc, s.timeline, s.rollbackIndex, {});
+      expect(rows.map((r) => r.rolledBack)).toEqual([true, true]);
+      expect(nameOf(s.doc, s.timeline, sketchId)).toBe("Sketch 1"); // numbered as the Timeline panel numbers it
+      expect(nameOf(s.doc, s.timeline, extrudeId)).toBe("Extrude 1");
+      expect(sentenceText(rows[0], s.doc, s.timeline)).toBe("Extrude Sketch 1 by 24 mm.");
+      expect(rows[0].name).toBe("Extrude 1");
+      await s.moveRollback(s.timeline.length);
+      expect(nameOf(s.doc, s.timeline, sketchId)).toBe(s.doc.sketches[sketchId].name);
+    });
+
+    it("names rolled-back sketches and features by their own name when the op has one, numbering sketches in timeline order", async () => {
+      const t = realSession();
+      const a = (await t.dispatch("sketch.create", { plane: "XY" })).createdIds[0];
+      const b = (await t.dispatch("sketch.create", { plane: "XZ", name: "Profile" })).createdIds[0];
+      const c = (await t.dispatch("sketch.create", { plane: "YZ" })).createdIds[0];
+      await t.dispatch("sketch.addRectangle", { sketch: b, corner: { x: 0, y: 0 }, opposite: { x: 10, y: 10 } });
+      const rev = (await t.dispatch("feature.revolve", { sketch: b, axis: { p1: { x: -1, y: 0 }, p2: { x: -1, y: 1 } }, angle: "90", name: "Spun" })).createdIds[0];
+      expect(rev).toBeDefined();
+      await t.moveRollback(0);
+      expect(Object.keys(t.doc.sketches)).toEqual([]);
+      expect(nameOf(t.doc, t.timeline, a)).toBe("Sketch 1");
+      expect(nameOf(t.doc, t.timeline, b)).toBe("Profile");
+      expect(nameOf(t.doc, t.timeline, c)).toBe("Sketch 3");
+      expect(nameOf(t.doc, t.timeline, rev)).toBe("Spun");
+      expect(nameFromTimeline(t.timeline, "pt-not-here")).toBeUndefined();
+      const rows = featureRows(t.doc, t.timeline, t.rollbackIndex, {});
+      expect(sentenceText(rows[0], t.doc, t.timeline)).toBe("Revolve Profile through 90°.");
     });
 
     it("builds editOperation params with one value changed as text", () => {
@@ -128,6 +165,24 @@ describe("feature catalog", () => {
   it("knows which param a push on a face drives", () => {
     expect(featureSpec("extrude")?.pushParam).toBe("distance");
     expect(featureSpec("fillet")?.pushParam).toBe("radius");
+    expect(featureSpec("revolve")?.pushParam).toBe("angle");
+    expect(featureSpec("pattern")?.pushParam).toBe("count");
     expect(featureSpec("mirror")?.pushParam).toBeUndefined();
+    // every kind with a number has a push, statically or (a primitive) by what the op carries
+    for (const spec of allFeatureSpecs()) {
+      if (spec.params.length) expect(spec.pushParam ?? pushParamFor({ spec, exprs: { [spec.params[0].key]: "1" } }), spec.kind).toBeDefined();
+      else expect(spec.pushParam, spec.kind).toBeUndefined();
+    }
+  });
+
+  it("picks the push param the op actually has: the spec's, else its first present param, else none", () => {
+    const row = (kind: Parameters<typeof featureSpec>[0], exprs: Record<string, string>): Pick<FeatureRow, "spec" | "exprs"> => ({ spec: featureSpec(kind)!, exprs });
+    expect(pushParamFor(row("extrude", { distance: "24" }))).toBe("distance");
+    expect(pushParamFor(row("primitive", { x: "10", y: "20", z: "30" }))).toBe("x");
+    expect(pushParamFor(row("primitive", { radius: "5", height: "12" }))).toBe("radius");
+    expect(pushParamFor(row("primitive", { radius: "5" }))).toBe("radius");
+    expect(pushParamFor(row("hole", { depth: "8" }))).toBe("depth"); // a hole op without a diameter still pushes something
+    expect(pushParamFor(row("flange", {}))).toBeUndefined();
+    expect(pushParamFor(row("mirror", {}))).toBeUndefined();
   });
 });

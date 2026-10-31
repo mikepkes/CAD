@@ -9,18 +9,38 @@
 //
 // Every mutation goes through the store: editOperation, moveRollback, suppressOperation,
 // deleteOperation, selectFace, activateComponent, and the chisel:lookAt window event.
+//
+// The face selection follows its context: one store subscription drops it (selectFace(null))
+// when the timeline length, the rollback marker, the active component or the mode changes
+// (`shouldDropSelection`), so the verbs card never outlives the face it was opened on.
 
 import "./workbench.css";
+import { useEffect } from "react";
+import { useStore } from "../../../model/store";
 import { Pins } from "./Pins";
 import { FeatureCard } from "./FeatureCard";
 import { FaceVerbs } from "./FaceVerbs";
+import { selectionContext, shouldDropSelection } from "./workbench";
 
 export { HistoryStrip } from "./HistoryStrip";
 export { Pins, FeatureCard, FaceVerbs };
 export * from "./workbench";
 export { useFeatureRows as useRows, useActiveComponent } from "../../kit/useFeatureRows";
 
+/** Clears the face selection whenever its context changes (see `shouldDropSelection`). */
+export function useDropSelectionOnContextChange() {
+  useEffect(() => {
+    let last = selectionContext(useStore.getState());
+    return useStore.subscribe((st) => {
+      const next = selectionContext(st);
+      if (shouldDropSelection(last, next) && st.faceSelection) st.selectFace(null);
+      last = next;
+    });
+  }, []);
+}
+
 export function WorkbenchOverlay() {
+  useDropSelectionOnContextChange();
   return (
     <>
       <Pins />

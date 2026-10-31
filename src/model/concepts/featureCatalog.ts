@@ -39,7 +39,8 @@ export interface FeatureSpec {
   params: ParamSpec[];
   /** The sentence read back in the Ledger. `names` resolves ids to display names. */
   sentence: (op: OperationRecord, names: (id: string) => string) => Segment[];
-  /** The op param a Push/Pull on this feature's face drives (if any). */
+  /** The op param a Push/Pull on this feature's face drives, when one param is the natural choice
+   *  (a primitive's depends on its shape: see `pushParamFor`). */
   pushParam?: string;
 }
 
@@ -53,7 +54,7 @@ const opVerb = (o: unknown) => (o === "cut" ? " cut from the body" : o === "join
 const SPECS: FeatureSpec[] = [
   { kind: "extrude", op: "feature.extrude", label: "Extrude", params: [mm("distance", "Distance", 0.5, 500)], pushParam: "distance",
     sentence: (op, names) => [T("Extrude "), { ref: String(op.params.sketch), text: names(String(op.params.sketch)) }, T(" by "), P("distance"), T(op.params.symmetric ? " each way" : ""), T(opVerb(op.params.operation)), T(".")] },
-  { kind: "revolve", op: "feature.revolve", label: "Revolve", params: [deg("angle", "Angle")],
+  { kind: "revolve", op: "feature.revolve", label: "Revolve", params: [deg("angle", "Angle")], pushParam: "angle",
     sentence: (op, names) => [T("Revolve "), { ref: String(op.params.sketch), text: names(String(op.params.sketch)) }, T(" through "), P("angle"), T(opVerb(op.params.operation)), T(".")] },
   { kind: "primitive", op: "feature.primitive", label: "Primitive", params: [mm("x", "X", 0.5, 500), mm("y", "Y", 0.5, 500), mm("z", "Z", 0.5, 500), mm("radius", "Radius", 0.5, 250), mm("height", "Height", 0.5, 500)],
     sentence: (op) => {
@@ -75,7 +76,7 @@ const SPECS: FeatureSpec[] = [
     sentence: () => [T("Chamfer the edges by "), P("distance"), T(".")] },
   { kind: "shell", op: "feature.shell", label: "Shell", params: [mm("thickness", "Wall", 0.2, 50, 0.1)], pushParam: "thickness",
     sentence: () => [T("Hollow it to a "), P("thickness"), T(" wall.")] },
-  { kind: "pattern", op: "feature.pattern", label: "Pattern", params: [count("count", "Count")],
+  { kind: "pattern", op: "feature.pattern", label: "Pattern", params: [count("count", "Count")], pushParam: "count",
     sentence: (op) => [T(`Repeat it ${op.params.mode === "circular" ? "around" : "along a line"}, `), P("count"), T(" times.")] },
   { kind: "mirror", op: "feature.mirror", label: "Mirror", params: [],
     sentence: (op) => [T(`Mirror it across the ${String(op.params.plane)} plane.`)] },
@@ -83,14 +84,14 @@ const SPECS: FeatureSpec[] = [
     sentence: (op, names) => [T("Make a sheet from "), { ref: String(op.params.sketch), text: names(String(op.params.sketch)) }, T(", "), P("thickness"), T(" thick.")] },
   { kind: "flange", op: "feature.flange", label: "Flange", params: [mm("length", "Length", 0.5, 500), deg("angle", "Angle"), mm("radius", "Bend radius", 0, 25, 0.1)], pushParam: "length",
     sentence: (op) => [T(`Add a flange on ${String(op.params.edge)}, `), P("length"), T(" long"), ...(op.params.angle != null ? [T(" at "), P("angle")] : []), T(".")] },
-  { kind: "fold", op: "feature.fold", label: "Fold", params: [deg("angle", "Angle"), mm("radius", "Bend radius", 0, 25, 0.1)],
+  { kind: "fold", op: "feature.fold", label: "Fold", params: [deg("angle", "Angle"), mm("radius", "Bend radius", 0, 25, 0.1)], pushParam: "angle",
     sentence: () => [T("Fold along the line by "), P("angle"), T(".")] },
   { kind: "unfold", op: "feature.unfold", label: "Unfold", params: [], sentence: () => [T("Unfold it flat.")] },
   { kind: "refold", op: "feature.refold", label: "Refold", params: [], sentence: () => [T("Fold it back up.")] },
   { kind: "member", op: "feature.member", label: "Member", params: [],
     sentence: (op) => [T(`Run ${String(op.params.profile)} stock along the sketch lines.`)] },
   { kind: "import", op: "feature.import", label: "Import", params: [], sentence: (op) => [T(`Import a ${String(op.params.format ?? "file")} body.`)] },
-  { kind: "surface", op: "feature.surface", label: "Surface", params: [mm("distance", "Distance", 0.5, 500)],
+  { kind: "surface", op: "feature.surface", label: "Surface", params: [mm("distance", "Distance", 0.5, 500)], pushParam: "distance",
     sentence: (op) => [T(`Make a ${String(op.params.mode)} surface`), ...(op.params.distance != null ? [T(" "), P("distance"), T(" deep")] : []), T(".")] },
   { kind: "stitch", op: "feature.stitch", label: "Stitch", params: [], sentence: () => [T("Sew the surfaces together.")] },
   { kind: "thicken", op: "feature.thicken", label: "Thicken", params: [mm("thickness", "Thickness", 0.1, 50, 0.1)], pushParam: "thickness",
@@ -196,12 +197,32 @@ function resolveBody(own: SolidEval | undefined, named: SolidEval | undefined, e
   return undefined;
 }
 
-/** Display name for a sketch / feature id, for sentences. */
-export function nameOf(doc: CadDocument, id: string): string {
+/** Display name for a sketch / feature id, for sentences. The document knows only what is built, so a
+ *  sketch or feature rolled back out of it is named from the timeline: the op whose createdIds hold the id
+ *  (its `params.name`, else "Sketch N" numbered among sketch.create ops as the Timeline panel numbers them,
+ *  else the feature's label and number as `featureRows` names it). The raw id only when nothing knows it. */
+export function nameOf(doc: CadDocument, timeline: OperationRecord[], id: string): string {
   const sk = doc.sketches[id];
   if (sk) return sk.name || "the sketch";
   const f = doc.features[id] as { name?: string } | undefined;
-  return f?.name || id;
+  if (f?.name) return f.name;
+  return nameFromTimeline(timeline, id) ?? id;
+}
+
+/** The name the timeline gives an id (see `nameOf`); undefined when no op created it. */
+export function nameFromTimeline(timeline: OperationRecord[], id: string): string | undefined {
+  let sketches = 0, features = 0;
+  for (const op of timeline) {
+    const isSketch = op.type === "sketch.create", spec = isSketch ? undefined : BY_OP.get(op.type);
+    if (isSketch) sketches++;
+    else if (spec) features++;
+    if (!op.createdIds.includes(id)) continue;
+    if (typeof op.params.name === "string" && op.params.name) return op.params.name;
+    if (isSketch) return `Sketch ${sketches}`;
+    if (spec) return `${spec.label} ${features}`;
+    return undefined;
+  }
+  return undefined;
 }
 
 /** Where a feature's pin anchors in world space: a hole's first centre, else the top of the bounds of
@@ -221,8 +242,8 @@ export function pinAnchor(row: FeatureRow): { x: number; y: number; z: number } 
 }
 
 /** The sentence of a row with its live values filled in, as plain text (for tests, search and the agent). */
-export function sentenceText(row: FeatureRow, doc: CadDocument): string {
-  return row.spec.sentence(row.op, (id) => nameOf(doc, id)).map((s) => {
+export function sentenceText(row: FeatureRow, doc: CadDocument, timeline: OperationRecord[]): string {
+  return row.spec.sentence(row.op, (id) => nameOf(doc, timeline, id)).map((s) => {
     if ("text" in s && !("ref" in s)) return s.text;
     if ("ref" in s) return s.text;
     const p = row.spec.params.find((q) => q.key === s.param);
@@ -236,6 +257,15 @@ export function sentenceText(row: FeatureRow, doc: CadDocument): string {
 /** The params editOperation receives for a row with one value changed (values travel as expression text). */
 export function paramsWith(row: Pick<FeatureRow, "op">, key: string, value: number): Record<string, unknown> {
   return { ...row.op.params, [key]: String(value) };
+}
+
+/** The op param a Push/Pull on one of the row's faces drives: the spec's `pushParam` when the op carries it,
+ *  else the first of the spec's params the op actually has (a primitive's x, else its radius; a flange's
+ *  length). Undefined for a feature with no number to push (mirror, stitch, a flange with none set). */
+export function pushParamFor(row: Pick<FeatureRow, "spec" | "exprs">): string | undefined {
+  const fixed = row.spec.pushParam;
+  if (fixed && row.exprs[fixed] != null) return fixed;
+  return row.spec.params.find((p) => row.exprs[p.key] != null)?.key;
 }
 
 export type Bounds3Like = { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
