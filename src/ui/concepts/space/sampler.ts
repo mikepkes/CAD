@@ -7,7 +7,7 @@
 
 import type { CadDocument } from "../../../core/document";
 import type { GeometryBackend } from "../../../core/geometry/backend";
-import { metricsOf } from "../../../model/concepts/intents";
+import { DEFAULT_DENSITY, metricsOf, type Metrics } from "../../../model/concepts/intents";
 import { cellOrder, axisValue, type CellSample, type GridSpec } from "./space";
 
 export interface SampleOpts {
@@ -18,14 +18,40 @@ export interface SampleOpts {
   skip?: (i: number, j: number) => boolean;
 }
 
-/** The variant document for one cell: a structured clone with the two axis parameters' expressions replaced. */
-export function variantDoc(doc: CadDocument, spec: GridSpec, x: number, y: number): CadDocument {
+/**
+ * A variant of the document: a structured clone with the named parameters'
+ * expressions replaced by plain values (any base expression or configuration
+ * cell on them is dropped, so the value is what gets built). The live document
+ * is never touched.
+ */
+export function overrideDoc(doc: CadDocument, overrides: Record<string, number>): CadDocument {
   const d = structuredClone(doc);
   for (const p of d.parameters) {
-    if (p.name === spec.x.name) { p.expr = String(x); p.value = x; delete p.baseExpr; delete p.configuredBy; }
-    else if (p.name === spec.y.name) { p.expr = String(y); p.value = y; delete p.baseExpr; delete p.configuredBy; }
+    const v = overrides[p.name];
+    if (v == null) continue;
+    p.expr = String(v); p.value = v; delete p.baseExpr; delete p.configuredBy;
   }
   return d;
+}
+
+/** The variant document for one cell: the two axis parameters set to the cell's values. */
+export function variantDoc(doc: CadDocument, spec: GridSpec, x: number, y: number): CadDocument {
+  return overrideDoc(doc, { [spec.x.name]: x, [spec.y.name]: y });
+}
+
+/**
+ * Evaluate one variant (the document with `overrides` applied) on `backend`
+ * into its metrics at `density`: null when nothing could be built (no bodies,
+ * or the kernel threw). What the Ledger's fix search samples with.
+ */
+export async function evaluateVariant(backend: GeometryBackend, doc: CadDocument, overrides: Record<string, number>, density = DEFAULT_DENSITY): Promise<Metrics | null> {
+  try {
+    const { solids } = await backend.evaluate(overrideDoc(doc, overrides));
+    const metrics = metricsOf(solids, density);
+    return metrics.bodies === 0 ? null : metrics;
+  } catch {
+    return null;
+  }
 }
 
 /** Evaluate one variant into its metrics (density 1: the caller re-expresses mass at the document's density). */

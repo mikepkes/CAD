@@ -1,10 +1,13 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { createDocument } from "../src/core/document";
-import { checkIntents, intentScope, metricsOf, parseIntent } from "../src/model/concepts/intents";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { createDocument, type Parameter } from "../src/core/document";
+import { checkIntents, intentScope, metricsOf, parseIntent, type Metrics } from "../src/model/concepts/intents";
 import {
   densityOf, formatDelta, formatMass, formatNow, intentDeps, intentGlyph, massGrams, mergeSegments, paramToken, plainNumber,
   rhsStep, rowClasses, suggestFixes, suggestionText, tidy, uncheckedResult, unitLabel, useIntents, useSuggestions, visibleSuggestions,
+  candidateValues, findMetricFixes, metricDeps, metricFailures, needsMetricSearch, metricNote, allPass, VariantCache, fixSearchText, mergeSuggestions,
+  type Suggestion,
 } from "../src/ui/concepts/ledger/ledger";
+import { evaluateVariant, overrideDoc } from "../src/ui/concepts/space/sampler";
 
 const T = (text: string) => ({ text });
 

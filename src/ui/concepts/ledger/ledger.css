@@ -46,3 +46,4 @@
 .ledger-suggestion-text { line-height: 1.5; }
 .ledger-suggestion-actions { display: flex; gap: 6px; }
 .ledger-confirm { font-size: 12px; }
+.ledger-searching { margin: 0; font-size: 12.5px; }
