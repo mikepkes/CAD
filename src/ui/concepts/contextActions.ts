@@ -12,10 +12,10 @@ import { useStore, type FaceSelection } from "../../model/store";
 import { useUi } from "../../model/concepts/uiState";
 import { featureRows, type FeatureRow } from "../../model/concepts/featureCatalog";
 import { createEditQueue } from "../kit/editQueue";
-import { pushEdit, rowForFace, shouldDelete } from "./workbench/workbench";
+import { pushEdit, rowForFace, shouldDelete, namedParam, paramNameProblem, suggestParamName, type CardParam, type PushEdit } from "./workbench/workbench";
 import { useLens, MODES, type LensMode } from "./lens/lens";
-import { cycleFeature, cycleRows, historyRange, nextLensSize, otherShape, parentComponent, stepRollback } from "./contextActions.logic";
-import { ask } from "../kit/askDialog";
+import { cycleFeature, cycleRows, faceEdgeSelector, historyRange, newSolidCentre, nextLensSize, otherShape, parentComponent, stepRollback } from "./contextActions.logic";
+import { ask, askText } from "../kit/askDialog";
 
 const st = () => useStore.getState();
 const ui = () => useUi.getState();
@@ -43,6 +43,10 @@ function face(): FaceSelection | null {
   return s.mode === "model" && s.faceSelection ? s.faceSelection : null;
 }
 const faceRow = (): FeatureRow | undefined => { const f = face(); return f ? rowForFace(rows(), f.faceName, f.bodyId) : undefined; };
+/** The document's parameter names (a number that is one of them is a dial: Push/Pull moves the parameter). */
+const paramNames = () => st().session.doc.parameters.map((p) => p.name);
+/** The Push/Pull step for the selected face: face-aware on a box or cylinder, the parameter itself when the number is named. */
+const facePush = (dir: -1 | 1) => pushEdit(faceRow(), dir, face()?.normal, paramNames());
 
 /** The open feature card's row (the card shows only with the workbench panel on, in model mode). */
 function openRow(): FeatureRow | undefined {
@@ -73,12 +77,71 @@ export async function deleteFeature(row: Pick<FeatureRow, "name" | "opId">): Pro
   return true;
 }
 
+/** Send one Push/Pull edit: the op, or the named parameter it reads. */
+export function applyPush(e: PushEdit): Promise<void> {
+  return e.kind === "param" ? st().setParameterExpr(e.name, e.expr) : st().editOperation(e.opId, e.params);
+}
+export const pushKey = (e: PushEdit) => JSON.stringify(e);
+
 /** Push/Pull steps from the keyboard: one edit in flight, each computed from the rows when it is sent, so a held
  *  key steps once per rebuild rather than queueing stale values. */
 const pushQueue = createEditQueue<-1 | 1>((dir) => {
-  const e = pushEdit(faceRow(), dir);
-  return e ? st().editOperation(e.opId, e.params) : undefined;
+  const e = facePush(dir);
+  return e ? applyPush(e) : undefined;
 }, (dir) => String(dir));
+
+/** Name a feature's number (the card's and the face verbs' "Name this number"): asks for a name, adds a parameter
+ *  holding the number's current expression, and points the feature at it, so the number becomes a dial. */
+export async function nameThisNumber(row: FeatureRow, p: CardParam): Promise<boolean> {
+  const taken = paramNames();
+  if (namedParam(p.expr, taken)) return false; // already a dial
+  const name = await askText({
+    title: "Name this number",
+    text: `${row.name}: ${p.label} = ${p.expr}${p.unit ? ` ${p.unit}` : ""}. A named number is a parameter: change it once and everything using it follows.`,
+    label: "Name", initial: suggestParamName(p.label, taken), confirmLabel: "Name it",
+  });
+  if (!name) return false;
+  const problem = paramNameProblem(name, paramNames());
+  if (problem) { st().setMessage(problem); return false; }
+  const r = await st().dispatch("parameter.add", { name, expression: p.expr });
+  if (!r.ok) return false;
+  const op = st().session.timeline.find((o) => o.opId === row.opId);
+  await st().editOperation(row.opId, { ...(op?.params ?? row.op.params), [p.key]: name });
+  return true;
+}
+
+/** Add a box or cylinder (the toolbar's and the ring's Box / Cylinder): on the floor, beside anything already built,
+ *  and open its card so its sizes are right there. */
+export async function addPrimitive(shape: "box" | "cylinder"): Promise<void> {
+  await st().ensureKernel();
+  const built = Object.values(st().solids).flatMap((b) => (b.mesh && b.bounds ? [b.bounds] : []));
+  const params = shape === "box"
+    ? { shape, x: "40", y: "40", z: "20", at: newSolidCentre(built, 20, 20), name: "Box" }
+    : { shape, radius: "10", height: "30", at: newSolidCentre(built, 10, 30), name: "Cylinder" };
+  const r = await st().dispatch("feature.primitive", params);
+  if (r.ok && r.createdIds[0]) {
+    if (!ui().panels.workbench) ui().togglePanel("workbench", true);
+    ui().setOpenFeature(r.createdIds[0]);
+  }
+}
+
+/** Round (fillet) or bevel (chamfer) every edge around the selected flat face, then open the new feature's card so
+ *  its size can be scrubbed or named. Faces square to an axis only (the edge selector names planes by axis). */
+export async function edgeFace(kind: "fillet" | "chamfer"): Promise<void> {
+  const f = face();
+  const sel = f ? faceEdgeSelector(f.point, f.normal) : null;
+  if (!f || !sel) return;
+  const params = kind === "fillet"
+    ? { radius: "2", edges: sel, body: f.bodyId, requireEffect: true }
+    : { distance: "1", edges: sel, body: f.bodyId, requireEffect: true };
+  const r = await st().dispatch(`feature.${kind}`, params);
+  if (r.ok && r.createdIds[0]) {
+    st().selectFace(null);
+    if (!ui().panels.workbench) ui().togglePanel("workbench", true);
+    ui().setOpenFeature(r.createdIds[0]);
+  }
+}
+const canEdgeFace = () => { const f = face(); return !!f && !!faceEdgeSelector(f.point, f.normal) && !st().kernelLoading; };
 
 // ---- the actions ----
 
@@ -110,7 +173,13 @@ export const CONTEXT_ACTIONS: HotkeyAction[] = [
     run: () => void st().moveRollback(st().session.timeline.length),
   },
 
+  // ---- model: direct modelling ----
+  { id: "model.box", label: "Add a box", context: "model", defaultPrimary: "b", when: () => st().mode === "model" && !st().kernelLoading, run: () => void addPrimitive("box") },
+  { id: "model.cylinder", label: "Add a cylinder", context: "model", when: () => st().mode === "model" && !st().kernelLoading, run: () => void addPrimitive("cylinder") },
+
   // ---- face (a face selected in model mode) ----
+  { id: "face.fillet", label: "Round this face's edges", context: "face", when: canEdgeFace, run: () => void edgeFace("fillet") },
+  { id: "face.chamfer", label: "Chamfer this face's edges", context: "face", when: canEdgeFace, run: () => void edgeFace("chamfer") },
   {
     id: "face.sketch", label: "Sketch on this face", context: "face", defaultPrimary: "s",
     when: () => !!face(),
@@ -123,12 +192,12 @@ export const CONTEXT_ACTIONS: HotkeyAction[] = [
   },
   {
     id: "face.push", label: "Push face out", context: "face", defaultPrimary: "=",
-    when: () => !!pushEdit(faceRow(), 1),
+    when: () => !!facePush(1),
     run: () => pushQueue.live(1),
   },
   {
     id: "face.pull", label: "Pull face in", context: "face", defaultPrimary: "-",
-    when: () => !!pushEdit(faceRow(), -1),
+    when: () => !!facePush(-1),
     run: () => pushQueue.live(-1),
   },
   {

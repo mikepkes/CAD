@@ -64,3 +64,27 @@ export function nextLensSize(size: LensSize): LensSize {
 export function otherShape(shape: LensShape): LensShape {
   return shape === "lens" ? "wipe" : "lens";
 }
+
+// ---- direct modelling ----
+
+type V3 = { x: number; y: number; z: number };
+type Box3 = { min: V3; max: V3 };
+
+/** Where a new box or cylinder goes: on the floor at the origin, or beside everything already built (10 mm clear
+ *  along +X) so it never lands inside a body. `half` is its half-width along X, `height` its height. */
+export function newSolidCentre(built: Box3[], half: number, height: number): V3 {
+  const z = height / 2;
+  if (!built.length) return { x: 0, y: 0, z };
+  const maxX = Math.max(...built.map((b) => b.max.x));
+  return { x: Math.round((maxX + 10 + half) * 1000) / 1000, y: 0, z };
+}
+
+/** The edges around a flat face, as an edge selector: the face's plane when it is square to an axis (the only faces
+ *  the selector can name), else null. XZ's normal is −Y, so its offset is −y. */
+export function faceEdgeSelector(point: V3, normal: V3): { inPlane: { plane: "XY" | "XZ" | "YZ"; offset: number } } | null {
+  const r = (v: number) => Math.round(v * 1e6) / 1e6;
+  if (Math.abs(normal.z) > 0.999) return { inPlane: { plane: "XY", offset: r(point.z) } };
+  if (Math.abs(normal.y) > 0.999) return { inPlane: { plane: "XZ", offset: r(-point.y) } };
+  if (Math.abs(normal.x) > 0.999) return { inPlane: { plane: "YZ", offset: r(point.x) } };
+  return null;
+}

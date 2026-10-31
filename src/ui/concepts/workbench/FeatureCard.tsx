@@ -9,10 +9,10 @@ import { placeCard, pinOffset, CARD_W } from "../../kit/anchor";
 import { Button, Card } from "../../kit/primitives";
 import { LiveNumber } from "../../kit/LiveNumber";
 import { useFeatureRows } from "../../kit/useFeatureRows";
-import { useEditQueue } from "../../kit/useEditQueue";
+import { createEditQueue } from "../../kit/editQueue";
 import { useCardSize } from "../../kit/useCardSize";
-import { cardHeight, cardParams, paramsWith, pinAnchors, quadrantDir } from "./workbench";
-import { deleteFeature } from "../contextActions";
+import { cardHeight, cardParams, namedParam, pinAnchors, pushTo, quadrantDir } from "./workbench";
+import { applyPush, deleteFeature, nameThisNumber, pushKey } from "../contextActions";
 
 export function FeatureCard() {
   const rows = useFeatureRows();
@@ -23,7 +23,8 @@ export function FeatureCard() {
   const setOpenFeature = useUi((s) => s.setOpenFeature);
   const setHotParam = useUi((s) => s.setHotParam);
   const rect = useViewportRect();
-  const edit = useEditQueue();
+  const queue = useMemo(() => createEditQueue(applyPush, pushKey), []);
+  const names = useStore((s) => s.session.doc.parameters).map((p) => p.name);
 
   const i = rows.findIndex((r) => r.featureId === openFeature);
   const row = i >= 0 ? rows[i] : undefined;
@@ -65,24 +66,33 @@ export function FeatureCard() {
       {row.error && <div className="k-dim wb-error" role="alert">{row.error}</div>}
       {row.rolledBack && <div className="k-dim">Rolled back — not built</div>}
       {params.length === 0 && !row.error && <div className="k-dim">No editable numbers</div>}
-      {params.map((p) => (
-        <div key={p.key} className="wb-param">
-          <span className="k-label">{p.label}</span>
-          {p.numeric ? (
-            <LiveNumber
-              value={p.value}
-              spec={p.spec}
-              unit={p.unit}
-              name={`${row.name} ${p.label.toLowerCase()}`}
-              onChange={(v) => edit.live(row.opId, paramsWith(row, p.key, v))}
-              onCommit={(v) => edit.commit(row.opId, paramsWith(row, p.key, v))}
-              onHover={(hot) => setHotParam(hot ? { featureId: row.featureId, key: p.key } : null)}
-            />
-          ) : (
-            <span className="k-mono k-dim" title="This expression could not be evaluated">{p.expr}</span>
-          )}
-        </div>
-      ))}
+      {params.map((p) => {
+        // a number that is a named parameter is a dial: scrubbing it moves the parameter (pushTo), never the link
+        const named = namedParam(p.expr, names);
+        return (
+          <div key={p.key} className="wb-param">
+            <span className="k-label">{p.label}</span>
+            {p.numeric ? (
+              <LiveNumber
+                value={p.value}
+                spec={p.spec}
+                unit={p.unit}
+                name={`${row.name} ${p.label.toLowerCase()}`}
+                onChange={(v) => queue.live(pushTo(row, { param: p }, v, names))}
+                onCommit={(v) => queue.commit(pushTo(row, { param: p }, v, names))}
+                onHover={(hot) => setHotParam(hot ? { featureId: row.featureId, key: p.key } : null)}
+              />
+            ) : (
+              <span className="k-mono k-dim" title="This expression could not be evaluated">{p.expr}</span>
+            )}
+            {named
+              ? <span className="k-mono k-dim wb-named" title={`This number is the parameter ${named}`}>= {named}</span>
+              : p.numeric && (
+                <Button size="sm" ghost icon ariaLabel={`Name this number (${p.label})`} title="Name this number: make it a parameter" onClick={() => void nameThisNumber(row, p)}>ƒ</Button>
+              )}
+          </div>
+        );
+      })}
     </Card>
   );
 }
