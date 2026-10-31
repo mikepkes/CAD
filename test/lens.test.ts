@@ -66,12 +66,19 @@ describe("lens geometry", () => {
     expect(arrowDelta("Enter")).toBeNull();
   });
 
-  it("places the HUD off the right rim and flips left when it would not fit", () => {
+  it("places the HUD beside the lens, never over it: right rim, else left rim, else below", () => {
     const f = { shape: "lens" as const, x: 400, y: 300, r: 100, wipeX: 400 };
     const card = { w: 300, h: 200 };
     expect(hudPlacement({ ...f, x: 300 }, card, B)).toEqual({ x: 416, y: 242 });
-    const left = hudPlacement(f, card, B); // 400 + 100 + 16 + 300 would run past 800
-    expect(left.x).toBe(500 - 16 - 300); // the anchor is the right rim (x + r)
+    const left = hudPlacement({ ...f, x: 450 }, card, B); // 450 + 100 + 16 + 300 would run past 800
+    expect(left.x).toBe(350 - 16 - 300); // so it hangs off the LEFT rim (x − r), clear of the lens
+    const below = hudPlacement({ ...f, x: 400, r: 300 }, card, { w: 800, h: 900 }); // no room either side
+    expect(below.y).toBe(600 + 16);
+    expect(below.x + card.w).toBeLessThanOrEqual(800 - 8);
+    const above = hudPlacement({ ...f, x: 400, y: 600, r: 300 }, card, { w: 800, h: 900 }); // only the top is free
+    expect(above.y).toBe(300 - 16 - 200);
+    const docked = hudPlacement({ ...f, x: 448, y: 325, r: 130 }, { w: 320, h: 255 }, { w: 896, h: 649 }); // nothing fits: far corner
+    expect(docked).toEqual({ x: 8, y: 8 }); // dead centre: the top-left corner is as far as any
     const wipe = hudPlacement({ ...f, shape: "wipe", wipeX: 600 }, card, B);
     expect(wipe.x + card.w).toBeLessThanOrEqual(B.w - 8);
     expect(wipe.y).toBe(8);

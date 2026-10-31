@@ -99,7 +99,7 @@ export function metricsOf(solids: Record<string, SolidEval>, density = DEFAULT_D
 
 /** The names an intent expression may use: every parameter and every metric. */
 export function intentScope(doc: CadDocument, metrics: Metrics): Record<string, number> {
-  const { scope } = resolveParameters(doc.parameters);
+  const { scope } = resolveParameters(doc.parameters ?? []); // a document mid-load may not have them yet
   return { ...scope, ...metrics };
 }
 
