@@ -21,7 +21,7 @@ const fakeScene = (map = (p: { x: number; y: number }) => ({ x: 400 + 10 * p.x, 
 import { useStore } from "../../src/model/store";
 import { useUi } from "../../src/model/concepts/uiState";
 import { featureRows, type FeatureRow } from "../../src/model/concepts/featureCatalog";
-import { WorkbenchOverlay, HistoryStrip, Pins, FeatureCard, FaceVerbs } from "../../src/ui/concepts/workbench";
+import { WorkbenchOverlay, HistoryStrip, Pins, FeatureCard, FaceVerbs, ComponentCrumb } from "../../src/ui/concepts/workbench";
 
 let s: CadSession;
 let rows: FeatureRow[];
@@ -325,7 +325,9 @@ describe("HistoryStrip", () => {
     const { container } = render(<HistoryStrip />);
     expect(screen.getByRole("button", { name: /Edges/ }).className).toContain("ghost");
     expect(screen.getByRole("button", { name: /Base/ }).className).toContain("at");
-    expect(container.querySelectorAll(".k-track.ghost").length).toBe(2);
+    // Edges, the Outer ring step and the ring's extrude are all behind the marker: three ghost tracks
+    expect(screen.getByRole("button", { name: "Outer ring" }).className).toContain("ghost");
+    expect(container.querySelectorAll(".k-track.ghost").length).toBe(3);
     expect(screen.getByText("At 1 · Base — new features insert here")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Roll to end" }));
     expect(a.moveRollback).toHaveBeenCalledWith(s.timeline.length);
@@ -340,10 +342,48 @@ describe("HistoryStrip", () => {
   });
 });
 
+describe("ComponentCrumb", () => {
+  it("shows the path root → active as buttons, the active one pressed, and activates a crumb on click", async () => {
+    useStore.setState({ activeComponentId: rows[2].componentId });
+    render(<ComponentCrumb />);
+    const nav = screen.getByRole("navigation", { name: "Component path" });
+    const crumbs = within(nav).getAllByRole("button");
+    expect(crumbs.map((c) => c.textContent)).toEqual(["Root Component", "Outer ring"]);
+    expect(crumbs[0].getAttribute("aria-pressed")).toBe("false");
+    expect(crumbs[1].getAttribute("aria-pressed")).toBe("true");
+    expect(nav.querySelectorAll(".wb-crumb-sep").length).toBe(1);
+    await userEvent.click(crumbs[0]);
+    expect(a.activateComponent).toHaveBeenCalledWith(s.doc.rootComponentId);
+    await userEvent.click(crumbs[1]);
+    expect(a.activateComponent).toHaveBeenLastCalledWith(rows[2].componentId);
+  });
+
+  it("shows the root alone when it is active, and nothing in sketch mode or on a single-component document", () => {
+    const { rerender } = render(<ComponentCrumb />);
+    const crumbs = within(screen.getByRole("navigation", { name: "Component path" })).getAllByRole("button");
+    expect(crumbs.map((c) => c.textContent)).toEqual(["Root Component"]);
+    expect(crumbs[0].getAttribute("aria-pressed")).toBe("true");
+    useStore.setState({ mode: "sketch" });
+    rerender(<ComponentCrumb />);
+    expect(screen.queryByRole("navigation", { name: "Component path" })).toBeNull();
+    useStore.setState({ mode: "model", session: realSession(), rev: 9, solids: {} });
+    rerender(<ComponentCrumb />);
+    expect(screen.queryByRole("navigation", { name: "Component path" })).toBeNull();
+  });
+});
+
 describe("WorkbenchOverlay", () => {
-  it("mounts all three pieces and renders nothing with an empty document and no scene", () => {
+  it("mounts the crumb with the pins, card and verbs", () => {
+    useStore.setState({ activeComponentId: rows[2].componentId });
+    render(<WorkbenchOverlay />);
+    const nav = screen.getByRole("navigation", { name: "Component path" });
+    expect(nav.className).toContain("wb-crumb");
+    expect(within(nav).getAllByRole("button").length).toBe(2);
+  });
+
+  it("renders nothing with an empty document and no scene", () => {
     useStore.setState({ session: realSession(), rev: 8, solids: {} });
     const { container } = render(<WorkbenchOverlay />);
-    expect(container.querySelectorAll(".k-pin, .k-card").length).toBe(0);
+    expect(container.querySelectorAll(".k-pin, .k-card, .wb-crumb").length).toBe(0);
   });
 });

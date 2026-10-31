@@ -277,6 +277,10 @@ describe("component scope: the crumb and the scoped strip", () => {
     expect(stepLabel(joint, s.doc)).toBe("Joint");
     expect(stepLabel({ ...joint, label: "" }, s.doc)).toBe("joint.create");
     expect(stepLabel({ ...joint, type: "component.create", createdIds: ["gone"] }, s.doc)).toBe("Joint");
+    // a component.create rolled back out of the document keeps the name it asked for
+    expect(stepLabel({ ...joint, type: "component.create", createdIds: ["gone"], params: { name: "Wrist" } }, s.doc)).toBe("Wrist");
+    const armOp = s.timeline.find((op) => op.type === "component.create")!;
+    expect(stepLabel(armOp, { ...s.doc, components: { [rootId]: s.doc.components[rootId] } })).toBe("Arm");
   });
 
   it("merges rows and steps at the root in timeline order, rows alone below it", () => {

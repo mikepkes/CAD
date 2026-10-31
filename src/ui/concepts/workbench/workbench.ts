@@ -292,11 +292,14 @@ export function isAssemblyStep(op: Pick<OperationRecord, "type">): boolean {
   return op.type.startsWith("joint.") || op.type.startsWith("component.") || op.type.startsWith("assembly.");
 }
 
-/** What a step chip reads: a new component by its name, anything else by the op's own label. */
+/** What a step chip reads: a new component by its name (the document's while it exists, else the name the op asked for,
+ *  so a rolled-back step keeps its name), anything else by the op's own label. */
 export function stepLabel(op: OperationRecord, doc: CadDocument): string {
   if (op.type === "component.create") {
     const c = doc.components[op.createdIds[0] ?? ""];
     if (c) return c.name;
+    const asked = (op.params as { name?: unknown }).name;
+    if (typeof asked === "string" && asked) return asked;
   }
   return op.label || op.type;
 }
