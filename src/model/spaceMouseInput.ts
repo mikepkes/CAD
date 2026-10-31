@@ -3,12 +3,15 @@
 //     device reconnects on its own next time), and
 //   - the desktop app's native HID reader (WKWebView has no WebHID), which
 //     forwards raw reports as `spacemouse-report` events.
-// Button presses run hotkey actions (fit, standard views, …) per the settings.
+// Button presses run hotkey actions per the settings, resolved through the active
+// context stack (buttonMap.ts), so a button can mean something else on a face.
 
 import { getActiveScene } from "../viewport/sceneRef";
 import { DEFAULT_SETTINGS, IDLE, SPACEMOUSE_VENDORS, SpaceMouseSettings, SpaceMouseState, parseSpaceMouseReport, pressed } from "../viewport/spaceMouse";
 import { hotkeys } from "./hotkeys";
 import { isTauri } from "./desktopMcp";
+import { isContextId } from "./contexts";
+import { buttonMapOf, resolveButton } from "./buttonMap";
 
 const SETTINGS_KEY = "chisel.spacemouse.v1";
 
@@ -30,6 +33,9 @@ let state: SpaceMouseState = IDLE;
 let settings: SpaceMouseSettings = loadSettings();
 let status: SpaceMouseStatus = { source: null };
 const listeners = new Set<(s: SpaceMouseStatus) => void>();
+const buttonListeners = new Set<(b: number) => void>();
+/** Buttons pressed since start, so Settings can offer rows for the ones this device has. */
+const seenButtons = new Set<number>();
 
 function loadSettings(): SpaceMouseSettings {
   try {
@@ -43,8 +49,12 @@ export const spaceMouseStatus = (): SpaceMouseStatus => status;
 export function onSpaceMouseStatus(fn: (s: SpaceMouseStatus) => void): () => void { listeners.add(fn); return () => listeners.delete(fn); }
 const setStatus = (s: SpaceMouseStatus) => { status = s; for (const fn of listeners) fn(s); };
 
+/** Every button press (index from 0), whatever it is bound to. */
+export function onSpaceMouseButton(fn: (b: number) => void): () => void { buttonListeners.add(fn); return () => buttonListeners.delete(fn); }
+export const seenSpaceMouseButtons = (): number[] => [...seenButtons].sort((a, b) => a - b);
+
 export function setSpaceMouseSettings(patch: Partial<SpaceMouseSettings>) {
-  settings = { ...settings, ...patch, invert: { ...settings.invert, ...(patch.invert ?? {}) } };
+  settings = { ...settings, ...patch, invert: { ...settings.invert, ...(patch.invert ?? {}) }, contextButtons: patch.contextButtons ?? settings.contextButtons ?? {} };
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* ignore */ }
   const scene = getActiveScene();
   if (scene) scene.navSettings = settings;
@@ -54,8 +64,10 @@ export function setSpaceMouseSettings(patch: Partial<SpaceMouseSettings>) {
 function onReport(reportId: number, data: DataView) {
   const next = parseSpaceMouseReport(reportId, data, state);
   for (const b of pressed(state.buttons, next.buttons)) {
-    const action = settings.buttons[b];
-    if (action) hotkeys.runAction(action);
+    seenButtons.add(b);
+    for (const fn of buttonListeners) fn(b);
+    const { actionId } = resolveButton(b, hotkeys.getContexts().filter(isContextId), buttonMapOf(settings), (id) => hotkeys.can(id));
+    if (actionId) hotkeys.runAction(actionId);
   }
   state = next;
   const scene = getActiveScene();

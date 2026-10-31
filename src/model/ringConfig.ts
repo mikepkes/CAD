@@ -45,16 +45,21 @@ export function parseSlot(v: unknown): number | null {
 export interface RingChoice { id: string; label: string; primary: string | null }
 export interface RingChoiceGroup { context: ContextId; label: string; actions: RingChoice[] }
 
-/** The actions a slot of `ctx`'s ring may hold, grouped by source context (base first). Never the ring key itself. */
-export function ringChoices(ctx: ContextId, hk: RingHotkeys = appHotkeys): RingChoiceGroup[] {
+/** The actions a binding in `ctx` may hold, grouped by source context (base first): its own and those it sits on. */
+export function actionChoices(ctx: ContextId, hk: RingHotkeys = appHotkeys, exclude: string[] = []): RingChoiceGroup[] {
   const byContext = new Map(hk.describe().contexts.map((c) => [c.context, c.actions]));
   return ringSources(ctx).map((c) => ({
     context: c,
     label: CONTEXT_LABELS[c],
     actions: (byContext.get(c) ?? [])
-      .filter((a) => a.id !== RING_ACTION_ID)
+      .filter((a) => !exclude.includes(a.id))
       .map((a) => ({ id: a.id, label: a.label, primary: a.primary })),
   }));
+}
+
+/** The actions a slot of `ctx`'s ring may hold. Never the ring key itself. */
+export function ringChoices(ctx: ContextId, hk: RingHotkeys = appHotkeys): RingChoiceGroup[] {
+  return actionChoices(ctx, hk, [RING_ACTION_ID]);
 }
 
 /** Why `id` can't sit in `ctx`'s ring, or null when it can. */
