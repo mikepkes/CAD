@@ -17,3 +17,7 @@ src-tauri/gen/schemas
 
 # generated before each build (scripts/third-party-licenses.mjs)
 public/THIRD_PARTY_LICENSES.txt
+
+# tutorial video: recorded takes and rendered output (large; regenerate with video/record.mjs + video/edit.mjs)
+video/takes/
+video/out/

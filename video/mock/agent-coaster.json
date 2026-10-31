@@ -1,0 +1,38 @@
+{
+  "prompt": "Make a round coaster, 90 mm across and 4 mm thick, with a 2 mm raised rim around the edge. Make the diameter a parameter.",
+  "model": "claude-opus-5-5",
+  "source": "Written by hand (Claude Opus 5.5) as a typical response to the prompt, for the first video pass; replace with a recorded run (demo API recordAgent) when an API key is available.",
+  "turns": [
+    {
+      "delayMs": 2200,
+      "stop_reason": "tool_use",
+      "content": [
+        { "type": "text", "text": "I'll make the diameter a parameter first, so the coaster resizes from one number. Then a 4 mm disc, and a rim on top." },
+        { "type": "tool_use", "id": "toolu_coaster_1", "name": "parameter__add", "input": { "name": "diameter", "expression": "90" } }
+      ]
+    },
+    {
+      "delayMs": 1600,
+      "stop_reason": "tool_use",
+      "content": [
+        { "type": "tool_use", "id": "toolu_coaster_2", "name": "feature__primitive", "input": { "shape": "cylinder", "radius": "diameter/2", "height": "4", "at": { "x": 0, "y": 0, "z": 2 }, "name": "Coaster" } }
+      ]
+    },
+    {
+      "delayMs": 1700,
+      "stop_reason": "tool_use",
+      "content": [
+        { "type": "text", "text": "Now the rim: a 2 mm ring, 3 mm wide, joined on top." },
+        { "type": "tool_use", "id": "toolu_coaster_3", "name": "feature__primitive", "input": { "shape": "cylinder", "radius": "diameter/2", "height": "2", "at": { "x": 0, "y": 0, "z": 5 }, "operation": "join", "name": "Rim" } },
+        { "type": "tool_use", "id": "toolu_coaster_4", "name": "feature__primitive", "input": { "shape": "cylinder", "radius": "diameter/2 - 3", "height": "2", "at": { "x": 0, "y": 0, "z": 5 }, "operation": "cut", "name": "Rim inside" } }
+      ]
+    },
+    {
+      "delayMs": 1400,
+      "stop_reason": "end_turn",
+      "content": [
+        { "type": "text", "text": "Done: a 90 mm coaster, 4 mm thick, with a 3 mm wide rim standing 2 mm proud. The diameter is the parameter `diameter`, so you can resize the whole thing from the Parameters panel." }
+      ]
+    }
+  ]
+}
