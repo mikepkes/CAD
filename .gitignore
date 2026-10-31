@@ -14,3 +14,6 @@ dist-mcp
 src-tauri/target
 src-tauri/gen/schemas
 .claude/worktrees/
+
+# generated before each build (scripts/third-party-licenses.mjs)
+public/THIRD_PARTY_LICENSES.txt
