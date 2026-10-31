@@ -182,7 +182,11 @@ describe("with a real session", () => {
   });
   it("drops a face selection when its context changes, and keeps it through a parameter edit", () => {
     const ctx = selectionContext({ session: s, activeComponentId: s.doc.rootComponentId, mode: "model" });
-    expect(ctx).toEqual({ timelineLength: s.timeline.length, rollbackIndex: s.rollbackIndex, activeComponentId: s.doc.rootComponentId, mode: "model" });
+    const shapeOps = s.timeline.filter((o) => !/^(parameter|intent|configuration)\./.test(o.type)).length;
+    expect(ctx).toEqual({ timelineLength: shapeOps, rollbackIndex: shapeOps, activeComponentId: s.doc.rootComponentId, mode: "model" });
+    // naming a number (a parameter.add) keeps every face where it was
+    const named = selectionContext({ session: { timeline: [...s.timeline, { type: "parameter.add" }], rollbackIndex: s.rollbackIndex + 1 }, activeComponentId: s.doc.rootComponentId, mode: "model" });
+    expect(shouldDropSelection(ctx, named)).toBe(false);
     expect(shouldDropSelection(ctx, { ...ctx })).toBe(false);
     expect(shouldDropSelection(ctx, { ...ctx, timelineLength: ctx.timelineLength + 1 })).toBe(true);
     expect(shouldDropSelection(ctx, { ...ctx, timelineLength: ctx.timelineLength - 1 })).toBe(true);

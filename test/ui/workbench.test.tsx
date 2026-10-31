@@ -267,6 +267,39 @@ describe("FaceVerbs", () => {
     fireEvent.keyDown(screen.getByRole("toolbar"), { key: "Escape" });
     expect(a.selectFace).toHaveBeenCalledTimes(2);
   });
+
+  it("names the pushed number: a parameter holding it, and the feature pointed at it", async () => {
+    const dispatch = vi.fn(() => Promise.resolve({ ok: true, createdIds: [] }));
+    useStore.setState({ dispatch } as never);
+    const askText = vi.spyOn(useDialog.getState(), "askText").mockResolvedValue("depth");
+    const base = s.timeline.find((o) => o.type === "feature.extrude")!;
+    const was = base.params.distance;
+    await s.editOperation(base.opId, { ...base.params, distance: "24" }); // a literal, so it can be named
+    select(`${extrudeId}:end`);
+    render(<FaceVerbs />);
+    await userEvent.click(screen.getByRole("button", { name: "Name this number (Distance)" }));
+    expect(askText).toHaveBeenCalledWith(expect.objectContaining({ title: "Name this number", initial: "distance" }));
+    expect(dispatch).toHaveBeenCalledWith("parameter.add", { name: "depth", expression: "24" });
+    expect(a.editOperation).toHaveBeenCalledWith(base.opId, expect.objectContaining({ distance: "depth" }));
+    askText.mockRestore();
+    await s.editOperation(base.opId, { ...base.params, distance: was });
+  });
+
+  it("shows a named number as its parameter, and rounds the face's edges", async () => {
+    const dispatch = vi.fn(() => Promise.resolve({ ok: true, createdIds: ["fil9"] }));
+    useStore.setState({ dispatch } as never);
+    const base = s.timeline.find((o) => o.type === "feature.extrude")!;
+    const was = base.params.distance;
+    await s.editOperation(base.opId, { ...base.params, distance: "h" });
+    select(`${extrudeId}:end`);
+    render(<FaceVerbs />);
+    expect(screen.getByText("= h")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Name this number/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Round edges" }));
+    expect(dispatch).toHaveBeenCalledWith("feature.fillet", { radius: "2", edges: { inPlane: { plane: "XY", offset: 24 } }, body: extrudeId, requireEffect: true });
+    expect(useUi.getState().openFeature).toBe("fil9");
+    await s.editOperation(base.opId, { ...base.params, distance: was });
+  });
 });
 
 describe("HistoryStrip", () => {

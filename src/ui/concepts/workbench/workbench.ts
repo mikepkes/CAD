@@ -230,21 +230,109 @@ export function pushParamOf(row: FeatureRow | undefined): CardParam | null {
   return cardParams(row).find((p) => p.key === key) ?? null;
 }
 
-/** One Push/Pull step (`dir` −1 pulls in, +1 pushes out) on a face's row: the op and its params with the pushed
- *  number, null when the row has no numeric push param. The face verbs' −/+ and the face.push/face.pull hotkeys send this. */
-export function pushEdit(row: FeatureRow | undefined, dir: -1 | 1): { opId: string; params: Record<string, unknown> } | null {
-  const p = pushParamOf(row);
-  if (!row || !p || !p.numeric) return null;
-  return { opId: row.opId, params: paramsWith(row, p.key, pushed(p.value, dir, p.spec)) };
+export type Axis = "x" | "y" | "z";
+
+/** What a Push/Pull on one face drives: the number, and for a face that should move on its own (a box's side, a
+ *  cylinder's end), the axis and side its centre shifts along so the opposite face stays put. */
+export interface PushTarget { param: CardParam; shift?: { axis: Axis; sign: 1 | -1 } }
+
+const dominant = (n: { x: number; y: number; z: number }): { axis: Axis; sign: 1 | -1 } => {
+  const a = Math.abs(n.x), b = Math.abs(n.y), c = Math.abs(n.z);
+  const axis: Axis = a >= b && a >= c ? "x" : b >= c ? "y" : "z";
+  return { axis, sign: n[axis] < 0 ? -1 : 1 };
+};
+
+/** The Push/Pull for the face with outward `normal` on `row`'s body. Direct modelling: a box's face drives its own
+ *  size along the face normal (and only that face moves); a cylinder's or cone's end drives its height, its side
+ *  its radius. Any other feature (or no normal) drives the feature's own push param, as before. */
+export function pushTargetOf(row: FeatureRow | undefined, normal?: { x: number; y: number; z: number }): PushTarget | null {
+  if (!row) return null;
+  if (row.spec.kind === "primitive" && normal) {
+    const shape = String(row.op.params.shape ?? "box");
+    const params = cardParams(row);
+    const find = (k: string) => params.find((p) => p.key === k) ?? null;
+    if (shape === "box") {
+      const d = dominant(normal);
+      const param = find(d.axis);
+      return param ? { param, shift: d } : null;
+    }
+    if (shape === "cylinder" || shape === "cone") {
+      if (Math.abs(normal.z) > 0.7) { const param = find("height"); return param ? { param, shift: { axis: "z", sign: normal.z < 0 ? -1 : 1 } } : null; }
+      const param = find("radius");
+      return param ? { param } : null;
+    }
+  }
+  const param = pushParamOf(row);
+  return param ? { param } : null;
+}
+
+const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** The parameter an expression is, when it is nothing but a parameter's name (a dial): editing that number should
+ *  move the parameter, not overwrite the link with a constant. Null for a literal or a formula. */
+export function namedParam(expr: string, names: string[]): string | null {
+  const e = expr.trim();
+  return NAME.test(e) && names.includes(e) ? e : null;
+}
+
+/** One Push/Pull edit: the op with its pushed number (and a box face's shifted centre), or, when the number is a
+ *  named parameter, that parameter's new value. */
+export type PushEdit =
+  | { kind: "op"; opId: string; params: Record<string, unknown> }
+  | { kind: "param"; name: string; expr: string };
+
+const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
+
+/** Push `target` on `row` to `value`. `names` are the document's parameter names. */
+export function pushTo(row: FeatureRow, target: PushTarget, value: number, names: string[] = []): PushEdit {
+  const named = namedParam(target.param.expr, names);
+  if (named) return { kind: "param", name: named, expr: String(value) };
+  const params = paramsWith(row, target.param.key, value);
+  if (target.shift && Number.isFinite(target.param.value)) {
+    const at = { x: 0, y: 0, z: 0, ...(row.op.params.at as Partial<Record<Axis, number>> | undefined) };
+    at[target.shift.axis] = round6(at[target.shift.axis] + (target.shift.sign * (value - target.param.value)) / 2);
+    params.at = at;
+  }
+  return { kind: "op", opId: row.opId, params };
+}
+
+/** One Push/Pull step (`dir` −1 pulls in, +1 pushes out) on a face of `row`: null when there is no numeric number to
+ *  push. The face verbs' −/+ and the face.push/face.pull hotkeys send this. */
+export function pushEdit(row: FeatureRow | undefined, dir: -1 | 1, normal?: { x: number; y: number; z: number }, names: string[] = []): PushEdit | null {
+  const t = pushTargetOf(row, normal);
+  if (!row || !t || !t.param.numeric) return null;
+  return pushTo(row, t, pushed(t.param.value, dir, t.param.spec), names);
+}
+
+/** A name to offer for a number: its label as an identifier ("Distance" → `distance`), numbered past the taken ones. */
+export function suggestParamName(label: string, taken: string[]): string {
+  const words = label.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  let base = words.map((w, i) => (i ? w[0].toUpperCase() + w.slice(1) : w)).join("") || "value";
+  if (/^[0-9]/.test(base)) base = `n${base}`;
+  let n = base, i = 2;
+  while (taken.includes(n)) n = `${base}${i++}`;
+  return n;
+}
+
+/** Why `name` can't name a new parameter, or null when it can. */
+export function paramNameProblem(name: string, taken: string[]): string | null {
+  if (!NAME.test(name)) return "A name is letters, digits and _, starting with a letter (like depth or phone_t).";
+  if (taken.includes(name)) return `There is already a parameter called ${name}.`;
+  return null;
 }
 
 /** What a face selection was made against: when any of it changes, the face the verbs card shows may no
- *  longer exist, so the card closes. */
+ *  longer exist, so the card closes. Counted in shape-changing ops only: adding or editing a parameter, an intent
+ *  or a configuration (naming a number from the card, say) leaves every face where it was. */
 export interface SelectionContext { timelineLength: number; rollbackIndex: number; activeComponentId: string; mode: string }
 
+const keepsFaces = (op: { type: string }) => /^(parameter|intent|configuration)\./.test(op.type);
+
 /** The context of a store state (the session is mutable, so take a snapshot to compare later). */
-export function selectionContext(st: { session: { timeline: { length: number }; rollbackIndex: number }; activeComponentId: string; mode: string }): SelectionContext {
-  return { timelineLength: st.session.timeline.length, rollbackIndex: st.session.rollbackIndex, activeComponentId: st.activeComponentId, mode: st.mode };
+export function selectionContext(st: { session: { timeline: { type: string }[]; rollbackIndex: number }; activeComponentId: string; mode: string }): SelectionContext {
+  const tl = st.session.timeline;
+  const shapeOps = (n: number) => { let k = 0; for (let i = 0; i < n && i < tl.length; i++) if (!keepsFaces(tl[i])) k++; return k; };
+  return { timelineLength: shapeOps(tl.length), rollbackIndex: shapeOps(st.session.rollbackIndex), activeComponentId: st.activeComponentId, mode: st.mode };
 }
 
 /** Whether a face selection made under `prev` should be dropped now that the context is `next`: a feature was

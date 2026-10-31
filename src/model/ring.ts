@@ -24,7 +24,7 @@ const row = (...ids: (string | null)[]): RingRow => Array.from({ length: SLOT_CO
 /** The shipped rings. `global` fills every slot so nothing is ever blank. */
 export const DEFAULT_RING: Record<ContextId, RingRow> = {
   global: row("view.top", "view.iso", "view.right", "view.frame", "view.front", "intent.open", "edit.undo", "edit.redo"),
-  model: row("model.sketch", "model.extrude", null, null, null, "view.lens", null, "model.component"),
+  model: row("model.sketch", "model.extrude", null, null, "model.box", "view.lens", null, "model.component"),
   sketch: row("tool.line", "tool.rectangle", "tool.circle", "tool.arc", "sketch.finish", "tool.dimension", null, "sketch.construction"),
   component: row("component.up", null, null, null, null, null, null, "component.root"),
   lens: row("lens.zebra", "lens.draft", "lens.curvature", "lens.xray", "lens.overhang", "lens.shape", null, "view.lens"),
