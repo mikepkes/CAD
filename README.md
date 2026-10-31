@@ -94,6 +94,19 @@ strips also resize for it. How it works is in
     against each other, so they must stretch. That makes the stage stiffen with
     travel, which is why precision stages use double parallelograms instead.
   - **Try:** `blade` length and `thickness`.
+- **Flexure gimbal:** https://mikepkes.github.io/CAD/?mode=customize&example=gimbal
+  - **What it is:** a two-axis flexure gimbal of the kind under a satellite's
+    fine-steering mirror: a ring rides on two yoke posts through cross-blade
+    pivots, and the mirror platform rides inside the ring on a second pair at
+    right angles, so it steers ±8° on each axis with no bearings to wear or
+    stick. Each pivot is two 0.4 mm titanium blades crossing at 90°, and each
+    blade is a `flexure` joint, so the readout lists all eight.
+  - **The sliders:** `alpha` and `beta` tilt the ring and the mirror and show
+    each blade's strain (0.2% at 8°, against Ti-6Al-4V's 0.5%) and the torque
+    each axis takes (1.7 N·m/rad, i.e. 4·EI/L); `L`, `t` and `w` resize the
+    blades and that stiffness follows t³/L, `platR` resizes the mirror
+    platform and everything around it, and `range` is the steer the posts are
+    sized for.
 - **Snap fits:** the star box above. Its tongues are cantilever springs, sized
   per material with the same beam solver.
 
@@ -358,6 +371,7 @@ straight from a URL:
 ?mode=customize&example=bistable       # bistable switch: curved beams that snap between two rest positions; span / arch / frame sliders
 ?mode=customize&example=gripper        # compliant gripper: 10 hinges, 3 loops, amplified jaws; jaw length slider, grip springs, PLA skeleton
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
+?mode=customize&example=gimbal         # two-axis flexure gimbal: eight cross-blade flexures, alpha/beta steer the mirror; blade, platform and range sliders
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```
 
