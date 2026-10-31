@@ -3,7 +3,11 @@
 
 import { readFileSync } from "node:fs";
 
+import { existsSync } from "node:fs";
+
 const agentCache = JSON.parse(readFileSync(new URL("../mock/agent-coaster.json", import.meta.url), "utf8"));
+const forcesCache = JSON.parse(readFileSync(new URL("../mock/agent-bistable-forces.json", import.meta.url), "utf8"));
+const hasExample = (name) => existsSync(new URL(`../../public/examples/${name}.json`, import.meta.url));
 
 async function load(d, name) {
   await d.cut(async () => {
@@ -75,14 +79,54 @@ export async function act3(d) {
     });
     await d.wait(1200);
   });
-  await clip("scissor", "scissor", "Scissor lift", "the number of stages is a slider", "A scissor lift, where even the number of stages is a parameter.", () => sweep(d, "stages", [3, 4, 5, 6, 7, 6, 5, 4, 3], 4200));
-  await clip("scissor-jointed", "scissor-jointed", "Jointed scissor", "patterned, and it still moves", "The same lift as a jointed assembly: patterned, and it still moves.", () => sweep(d, "theta", there(40, 18, 8).concat(range(40, 66, 8)), 4200));
-  await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", "A box that snaps together, with every snap sized for the material you print it in.", () => sweep(d, "width", there(64, 96, 8), 4000));
-  await clip("bistable", "bistable", "Bistable switch", "two stable rests, from beam theory", "A bistable switch: curved beams that snap between two rest positions.", () => sweep(d, "travel", there(0, 10, 9), 4000));
-  await clip("gripper", "gripper", "Compliant gripper", "ten flexure hinges, no pins", "A gripper with ten flexure hinges and not a single pin.", () => sweep(d, "push", there(0, 5, 7), 4000));
-  await clip("xystage", "xystage", "XY flexure stage", "two inputs, no bearings", "A precision XY stage that moves on flexing blades instead of bearings.", () => sweep(d, "x", there(-2, 2, 7), 4000));
+  if (hasExample("clockwork")) {
+    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel", "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train.", async () => {
+      // the driving parameter: the first bounded one (the clockwork's turn)
+      const drive = await d.run(() => window.__chiselDemo.store.getState().session.doc.parameters.find((p) => p.min != null && p.max != null));
+      if (!drive) throw new Error("the clockwork has no bounded drive parameter");
+      await d.api("turntable", 6);
+      await sweep(d, drive.name, range(drive.min, Math.min(drive.max, drive.min + 360), 40), 6000);
+      await d.api("turntable", null);
+    });
+  } else d.note("no clockwork example yet: gears clip skipped");
+  await clip("scissor-jointed", "scissor-jointed", "Jointed scissor lift", "the stage count is a slider, and it still moves", "A scissor lift where even the number of stages is a slider, patterned as a jointed assembly that still moves.", async () => { await sweep(d, "stages", [3, 4, 5, 4, 3], 2600); await sweep(d, "theta", there(40, 22, 6), 2600); });
+  await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", "A box that snaps together, with every snap sized for the material you print it in.", () => sweep(d, "width", [64, 76, 88, 76, 64], 3000));
+
+  // the bistable switch: ask Claude, which opens the force analysis itself (set_panel / run_action), sweeps it, and puts the lens on strain
+  await d.cut(async () => {
+    await load(d, "bistable");
+    await d.clickEl(".side-toggle.right"); // the Mechanism tab lives in the right panel
+    await d.run((c) => window.__chiselDemo.mockAgent(c), forcesCache);
+  });
+  await d.beat("bistable-forces", "Ask about a design, and Claude can drive the interface for you: here it opens the force analysis on a bistable switch, sweeps it through its travel, and turns the lens to strain. Both rest positions and the snap force are marked on the curve.", async () => {
+    await d.lower("Bistable switch", "Claude opens the force analysis for you");
+    await d.api("cursor", true);
+    await d.clickEl("button", "Agent");
+    await d.clickEl(".agent-input textarea");
+    await d.type(forcesCache.prompt, 40);
+    await d.key("Enter");
+    await d.fast("Claude working", () => d.page.waitForFunction(() => !window.__chiselDemo.store.getState().agentRunning, null, { timeout: 120000 }));
+    await d.page.waitForSelector("[data-testid=rest-marker]", { timeout: 60000 }).catch(() => d.note("no rest markers"));
+    await d.page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Sweep travel"), null, { timeout: 60000 }).catch(() => d.note("sweep did not finish"));
+    await d.api("cursor", false);
+    await d.wait(1200);
+  }, { minMs: 12000 });
+  await d.cut(async () => {
+    await d.run(() => { const D = window.__chiselDemo; D.ui.getState().togglePanel("lens", false); D.ui.getState().togglePanel("mechanism", false); D.store.getState().agentOpen && D.store.getState().toggleAgent(); });
+    await d.clickEl(".side-toggle.right");
+  });
+
   await clip("gimbal", "gimbal", "Flexure gimbal", "steers a mirror on eight blades", "A two-axis flexure gimbal, the kind satellites use to steer a mirror.", async () => { await sweep(d, "alpha", there(-8, 8, 6), 2400); await sweep(d, "beta", there(-8, 8, 6), 2400); });
-  await clip("roubo", "roubo", "Roubo workbench", "furniture, at full scale", "And not just mechanisms: a full-size woodworking bench, resized from one number.", () => sweep(d, "L", there(1700, 2300, 6), 3600));
+  await clip("roubo", "roubo", "Roubo workbench", "and the shop drawing to build it from", "A full-size woodworking bench, resized from one number, with the shop drawing and cut list to build it from.", async () => {
+    await sweep(d, "L", there(1700, 2100, 4), 2400);
+    await d.api("cursor", true);
+    await d.clickEl("button", "Export ▾"); await d.wait(400);
+    await d.clickEl("[role=menuitem]", "Shop drawing");
+    await d.fast("drawing the views", () => d.page.waitForSelector(".drawing-sheet svg", { timeout: 60000 }));
+    await d.api("cursor", false);
+    await d.wait(3000);
+    await d.key("Escape");
+  }, );
 
   await d.cut(async () => {
     await d.api("newDocument");

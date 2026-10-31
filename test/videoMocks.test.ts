@@ -13,6 +13,7 @@ beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
 
 const dir = fileURLToPath(new URL("../video/mock/", import.meta.url));
 const caches = readdirSync(dir).filter((f) => /^agent-.*\.json$/.test(f));
+const UI_TOOLS = new Set(["set_panel", "run_action", "get_state", "get_hotkeys", "get_ring", "get_assist_inbox", "render_view"]);
 
 describe("video mock agent caches", () => {
   it("has at least one", () => expect(caches.length).toBeGreaterThan(0));
@@ -23,13 +24,14 @@ describe("video mock agent caches", () => {
       for (const turn of cache.turns) {
         for (const b of turn.content) {
           if (b.type !== "tool_use") continue;
+          if (UI_TOOLS.has(b.name)) continue; // UI tools (panels, actions) need the app; the commands are what must still build
           const r = await s.dispatch(b.name.replace(/__/g, "."), b.input);
           expect(r.ok, `${f} ${b.id} ${b.name}: ${r.error}`).toBe(true);
         }
       }
       expect(cache.turns.at(-1).stop_reason).toBe("end_turn");
       const bodies = Object.values(evaluateFeatures(s.doc, resolveParameters(s.doc.parameters).scope)).filter((b) => b.mesh);
-      expect(bodies.length).toBeGreaterThan(0);
+      if (cache.turns.some((t: { content: { type: string; name?: string }[] }) => t.content.some((b) => b.type === "tool_use" && !UI_TOOLS.has(b.name!)))) expect(bodies.length).toBeGreaterThan(0);
     });
   }
 });
