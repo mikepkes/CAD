@@ -10,6 +10,7 @@ import { Sketch, SketchArc, SketchCircle, SketchPoint } from "../sketch/types";
 import { resolveSketchPlane } from "../geometry/plane";
 import { availableOps } from "../model/selectionOps";
 import { infer, InferResult } from "./snapping";
+import { useRing } from "../model/ring";
 
 type Vec3 = { x: number; y: number; z: number };
 
@@ -38,6 +39,8 @@ export class Interactions {
   private moved = false;
   private boxStart: { x: number; y: number } | null = null;
   private boxDiv: HTMLDivElement | null = null;
+  /** Where the last press of any button went down: a right-click opens the ring only if it did not drag. */
+  private pressAt: { x: number; y: number } | null = null;
 
   constructor(scene: SceneManager, dom: HTMLElement) {
     this.scene = scene;
@@ -281,6 +284,7 @@ export class Interactions {
   // ---- events ----
   private onDown = (e: PointerEvent) => {
     if (this.st().contextMenu) this.st().closeContextMenu();
+    this.pressAt = { x: e.clientX, y: e.clientY };
     if (e.button !== 0) return;
     this.downPt = { x: e.clientX, y: e.clientY };
     this.moved = false;
@@ -836,7 +840,18 @@ export class Interactions {
 
   private onContext = (e: MouseEvent) => {
     const st = this.st();
-    if (st.mode !== "sketch") return;
+    if (st.mode !== "sketch") {
+      // Model mode: a right-click (not a right-drag, which pans) opens the action
+      // ring at the cursor, left open to click a slot.
+      e.preventDefault();
+      const from = this.pressAt ?? { x: e.clientX, y: e.clientY };
+      const still = (x: number, y: number) => Math.hypot(x - from.x, y - from.y) < 4;
+      const openAt = (x: number, y: number) => { if (still(x, y) && this.st().mode === "model") useRing.getState().openRing({ x, y }); };
+      // macOS fires contextmenu on the press, before any drag: decide on release.
+      if (e.buttons !== 0) window.addEventListener("pointerup", (u) => openAt(u.clientX, u.clientY), { once: true, capture: true });
+      else openAt(e.clientX, e.clientY);
+      return;
+    }
     // During an active draw, right-click cancels the tool (Fusion behaviour).
     if (this.stage.kind !== "idle") {
       e.preventDefault();
