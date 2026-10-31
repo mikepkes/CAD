@@ -11,6 +11,8 @@ import { CadDocument, FeatureDef } from "../core/document";
 import { resolveSketchPlane } from "../geometry/plane";
 import type { SolidEval } from "../core/features";
 import { hotkeys } from "./hotkeys";
+import { CONTEXTS } from "./contexts";
+import { applyRingSlot, describeRing, GET_RING_DESCRIPTION, SET_RING_SLOT_DESCRIPTION } from "./ringConfig";
 import { describeIntent, evaluateIntents } from "./concepts/intents";
 
 export type ChatEntry =
@@ -80,6 +82,24 @@ export function buildTools(registry: CommandRegistry): Anthropic.Tool[] {
         action: { type: "string" },
         key: { type: ["string", "null"] },
         slot: { type: "string", enum: ["primary", "secondary"] },
+      },
+    },
+  });
+  tools.push({
+    name: "get_ring",
+    description: GET_RING_DESCRIPTION,
+    input_schema: { type: "object", properties: {} },
+  });
+  tools.push({
+    name: "set_ring_slot",
+    description: SET_RING_SLOT_DESCRIPTION,
+    input_schema: {
+      type: "object",
+      required: ["context", "slot", "action"],
+      properties: {
+        context: { type: "string", enum: [...CONTEXTS] },
+        slot: { type: ["integer", "string"] },
+        action: { type: ["string", "null"] },
       },
     },
   });
@@ -206,7 +226,7 @@ export async function runAgent(opts: {
         continue;
       }
       let result: { ok: boolean; createdIds?: string[]; message?: string; error?: string } | unknown;
-      const readOnly = b.name === "get_state" || b.name === "get_hotkeys";
+      const readOnly = b.name === "get_state" || b.name === "get_hotkeys" || b.name === "get_ring";
       try {
         if (b.name === "get_state") result = opts.ctx.describe();
         else if (b.name === "get_hotkeys") result = hotkeys.describe();
@@ -214,7 +234,9 @@ export async function runAgent(opts: {
           const a = b.input as { action?: string; key?: string | null; slot?: "primary" | "secondary" };
           hotkeys.setBinding(String(a.action), a.slot === "secondary" ? "secondary" : "primary", a.key == null ? null : String(a.key));
           result = { ok: true, hotkeys: hotkeys.describe() };
-        } else {
+        } else if (b.name === "get_ring") result = describeRing();
+        else if (b.name === "set_ring_slot") result = applyRingSlot(b.input as { context?: unknown; slot?: unknown; action?: unknown });
+        else {
           result = await opts.ctx.runCommand(desanitize(b.name), b.input as Record<string, unknown>);
         }
       } catch (e) {
@@ -222,7 +244,7 @@ export async function runAgent(opts: {
       }
       const ok = readOnly ? true : !!(result as { ok?: boolean }).ok;
       const detail = readOnly
-        ? (b.name === "get_hotkeys" ? "read hotkeys" : "read state")
+        ? (b.name === "get_hotkeys" ? "read hotkeys" : b.name === "get_ring" ? "read ring" : "read state")
         : (result as { message?: string; error?: string }).error ?? (result as { message?: string }).message ?? "ok";
       opts.onTool(b.name, ok, detail);
       results.push({ type: "tool_result", tool_use_id: b.id, content: JSON.stringify(result) });

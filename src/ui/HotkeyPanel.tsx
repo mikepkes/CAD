@@ -1,14 +1,19 @@
 import { useEffect, useReducer, useState } from "react";
 import { useStore } from "../model/store";
 import { hotkeys, eventToKey, prettyKey } from "../model/hotkeys";
+import { contextLabel } from "../model/ringConfig";
+import { Pills } from "./kit/primitives";
+import { RingEditor } from "./RingEditor";
 
 type Capture = { id: string; slot: "primary" | "secondary" } | null;
+type Tab = "keys" | "ring";
 
 export function HotkeyPanel() {
   const open = useStore((s) => s.hotkeysOpen);
   const close = () => useStore.getState().setHotkeysOpen(false);
   const [, bump] = useReducer((x) => x + 1, 0);
   const [capturing, setCapturing] = useState<Capture>(null);
+  const [tab, setTab] = useState<Tab>("keys");
 
   // Re-render whenever bindings / contexts change.
   useEffect(() => hotkeys.subscribe(bump), []);
@@ -58,37 +63,48 @@ export function HotkeyPanel() {
           <span>Keyboard shortcuts</span>
           <button className="icon-btn" onClick={close}>✕</button>
         </div>
+        <div className="hk-tabs">
+          <Pills<Tab>
+            ariaLabel="Hotkeys section"
+            value={tab}
+            onChange={(t) => { setCapturing(null); setTab(t); }}
+            options={[{ key: "keys", label: "Keys" }, { key: "ring", label: "Ring" }]}
+          />
+        </div>
         <div className="modal-body">
-          <p className="field-note">
-            Contexts stack top-down — a higher (active) context overrides the same key below it.
-            Conflicts only matter within one context. Click a key to rebind, × to clear.
-          </p>
-          {conflicts.length > 0 && (
-            <p className="hk-warn">⚠ {conflicts.length} conflict{conflicts.length === 1 ? "" : "s"} within a context (highlighted below).</p>
-          )}
-          {contexts.map((c) => (
-            <div key={c.context} className="hk-context">
-              <div className="hk-context-head">
-                <span className={`hk-ctx-name ${c.active ? "active" : ""}`}>{c.context}</span>
-                {c.active ? <span className="hk-badge">active</span> : <span className="hk-badge off">inactive</span>}
-              </div>
-              <div className="hk-rows">
-                <div className="hk-row hk-row-head">
-                  <span>Command</span><span>Primary</span><span>Secondary</span>
+          {tab === "ring" ? <RingEditor /> : <>
+            <p className="field-note">
+              Contexts stack top-down — a higher (active) context overrides the same key below it.
+              Conflicts only matter within one context. Click a key to rebind, × to clear.
+              The Ring tab sets what the action ring (Space) holds in each context.
+            </p>
+            {conflicts.length > 0 && (
+              <p className="hk-warn">⚠ {conflicts.length} conflict{conflicts.length === 1 ? "" : "s"} within a context (highlighted below).</p>
+            )}
+            {contexts.map((c) => (
+              <div key={c.context} className="hk-context">
+                <div className="hk-context-head">
+                  <span className={`hk-ctx-name ${c.active ? "active" : ""}`} title={c.context}>{contextLabel(c.context)}</span>
+                  {c.active ? <span className="hk-badge">active</span> : <span className="hk-badge off">inactive</span>}
                 </div>
-                {c.actions.map((a) => (
-                  <div key={a.id} className="hk-row">
-                    <span className="hk-label">{a.label}{a.customized && <em className="hk-custom" title="Customized"> ·</em>}</span>
-                    {cell(c.context, a.id, "primary", a.primary)}
-                    {cell(c.context, a.id, "secondary", a.secondary)}
+                <div className="hk-rows">
+                  <div className="hk-row hk-row-head">
+                    <span>Command</span><span>Primary</span><span>Secondary</span>
                   </div>
-                ))}
+                  {c.actions.map((a) => (
+                    <div key={a.id} className="hk-row">
+                      <span className="hk-label">{a.label}{a.customized && <em className="hk-custom" title="Customized"> ·</em>}</span>
+                      {cell(c.context, a.id, "primary", a.primary)}
+                      {cell(c.context, a.id, "secondary", a.secondary)}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </>}
         </div>
         <div className="modal-foot">
-          <button className="btn ghost" onClick={() => hotkeys.resetAll()}>Reset all to defaults</button>
+          {tab === "keys" ? <button className="btn ghost" onClick={() => hotkeys.resetAll()}>Reset all keys to defaults</button> : <span />}
           <button className="btn primary" onClick={close}>Done</button>
         </div>
       </div>
