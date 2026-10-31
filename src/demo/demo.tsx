@@ -184,7 +184,8 @@ const api = {
   documentText() { return JSON.stringify(useStore.getState().session.doc); },
   // ---- the agent ----
   mockAgent(cache: AgentCache | null) {
-    setAgentClientFactory(cache ? () => replayClient(cache) : null);
+    const client = cache ? replayClient(cache) : null; // one client, so turns and repeated names advance across requests
+    setAgentClientFactory(client ? () => client : null);
     if (cache && !useStore.getState().apiKey) useStore.setState({ apiKey: "demo-replay" }); // the panel wants a key; the replay never sends it
   },
   recordAgent(prompt: string) { setAgentClientFactory((key) => recordingClient(key, prompt)); },

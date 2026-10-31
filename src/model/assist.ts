@@ -438,12 +438,13 @@ export function parseNamingResponse(msg: Pick<Anthropic.Message, "content" | "st
 
 /** A canned reply to a naming request: the heuristic name for each item (or `names[currentName]` when
  *  given). The video's replay client answers naming requests with this, deterministically. */
-export function assistReplyMessage(body: Anthropic.MessageCreateParamsNonStreaming, names: Record<string, string> = {}): Anthropic.Message {
+export function assistReplyMessage(body: Anthropic.MessageCreateParamsNonStreaming, names: Record<string, string> | ((currentName: string) => string | undefined) = {}): Anthropic.Message {
+  const nameFor = typeof names === "function" ? names : (cur: string) => names[cur];
   const first = body.messages[0];
   const raw = typeof first?.content === "string" ? first.content : "";
   let items: { id: string; kind: AssistTargetKind; currentName: string; context: Record<string, unknown> }[] = [];
   try { items = JSON.parse(raw).items ?? []; } catch { /* nothing to name */ }
-  const reply = { names: items.map((i) => ({ id: i.id, name: names[i.currentName] ?? heuristicName({ targetKind: i.kind, from: i.currentName }, i.context ?? {}) })) };
+  const reply = { names: items.map((i) => ({ id: i.id, name: nameFor(i.currentName) ?? heuristicName({ targetKind: i.kind, from: i.currentName }, i.context ?? {}) })) };
   return {
     id: "msg_assist_replay", type: "message", role: "assistant", model: body.model, container: null,
     content: [{ type: "text", text: JSON.stringify(reply), citations: null }],

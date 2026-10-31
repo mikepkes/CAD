@@ -21,8 +21,9 @@ export interface AgentCache {
   /** Where this cache came from (written by hand as a likely result, or recorded). */
   source: string;
   turns: AgentTurn[];
-  /** Organizational assist's names by default name ("Sketch 1": "Base plate profile"); others get the heuristic name. */
-  names?: Record<string, string>;
+  /** Organizational assist's names by default name ("Sketch 1": "Base plate profile"); a list is used in order, for
+   *  default names that repeat (two features both called "Extrude"). Others get the heuristic name. */
+  names?: Record<string, string | string[]>;
 }
 
 const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -33,11 +34,19 @@ const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, r
 /** A client that answers each request with the cache's next turn. */
 export function replayClient(cache: AgentCache): MessagesClient {
   let i = 0;
+  const used: Record<string, number> = {};
+  const nameFor = (cur: string): string | undefined => {
+    const n = cache.names?.[cur];
+    if (!Array.isArray(n)) return n;
+    const k = used[cur] ?? 0;
+    used[cur] = k + 1;
+    return n[k];
+  };
   return {
     messages: {
       async create(body, opts) {
         // A naming request (organizational assist) is answered on the side, without using up a turn.
-        if (isAssistRequest(body)) { await wait(400, opts?.signal); return assistReplyMessage(body, cache.names); }
+        if (isAssistRequest(body)) { await wait(400, opts?.signal); return assistReplyMessage(body, nameFor); }
         const turn = cache.turns[i++] ?? { stop_reason: "end_turn", content: [{ type: "text", text: "", citations: null }] as Anthropic.ContentBlock[] };
         await wait(turn.delayMs ?? 1200, opts?.signal);
         return {

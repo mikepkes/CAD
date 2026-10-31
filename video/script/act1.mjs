@@ -3,8 +3,12 @@
 
 const W = (x, y, z) => ({ x, y, z });
 
+/** Organizational assist's answers for this act (the mock agent replies with these; others get its heuristic name). */
+const NAMES = { "Sketch 1": "Back plate profile", "Sketch 2": "Lip profile", "Extrude": ["Back plate", "Lip"] };
+
 /** Before recording: the finished stand for the cold open (built by the same steps the tests build). */
 export async function preroll(d) {
+  await d.run((names) => window.__chiselDemo.mockAgent({ prompt: "", model: "claude-haiku-5-5", source: "video act 1 names", turns: [], names }), NAMES);
   await d.run(async () => {
     const D = window.__chiselDemo, st = D.store.getState();
     await st.dispatch("parameter.add", { name: "phone", expression: "9" });
@@ -134,6 +138,7 @@ export async function act1(d) {
     await d.clickEl("[role=dialog] button", "New document");
     await d.settle(500);
     await d.api("view", "iso"); await d.settle(300);
+    await d.run((names) => window.__chiselDemo.mockAgent({ prompt: "", model: "claude-haiku-5-5", source: "video act 1 names", turns: [], names }), NAMES); // fresh names for the new document
     await d.move(820, 380, 700); await d.wait(700);
     await d.moveTo(await d.rect(".wb-strip"), 600); await d.wait(800);
     await d.moveTo(await d.rect(".panel-head", "Parameters"), 600); await d.wait(800);
