@@ -11,7 +11,10 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ListResourceTemplatesRequestSchema,
+  ReadResourceRequestSchema, SubscribeRequestSchema, UnsubscribeRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import { CadSession, DispatchResult } from "../src/core/command/session";
 import { createDefaultRegistry } from "../src/core/command/builtins";
 import { CadDocument, createDocument } from "../src/core/document";
@@ -24,6 +27,10 @@ import { resolveParameters } from "../src/core/parameters";
 import { pickFace } from "../src/core/geometry/pick";
 import { resolveSketchPlane } from "../src/geometry/plane";
 import { describeFeature } from "../src/model/agent";
+import {
+  AssistService, renameViaEdit, assistInboxTool, resolveAssistTool, ASSIST_INBOX_URI,
+  GET_ASSIST_INBOX_DESCRIPTION, GET_ASSIST_INBOX_SCHEMA, RESOLVE_ASSIST_DESCRIPTION, RESOLVE_ASSIST_SCHEMA,
+} from "../src/model/assist";
 import { describeIntent, evaluateIntents, intentsUseMetrics } from "../src/model/concepts/intents";
 import { InlineGeometryBackend } from "../src/core/geometry/backend";
 import { isolationList } from "../src/core/visibility";
@@ -64,7 +71,7 @@ const EDIT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, ide
 const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
 /** Meta tools by how they touch the document (registry commands carry their own flag). */
 const META_ANNOTATIONS: Record<string, ToolAnnotations> = {
-  get_document: READ_ONLY, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, cut_list: READ_ONLY, flat_pattern: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
+  get_document: READ_ONLY, get_assist_inbox: READ_ONLY, resolve_assist: EDIT, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, cut_list: READ_ONLY, flat_pattern: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
   export_model: READ_ONLY, export_document: READ_ONLY,
   delete_operation: DESTRUCTIVE, import_document: DESTRUCTIVE, batch: DESTRUCTIVE,
 };
@@ -78,8 +85,26 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
 
   const server = new Server(
     { name: "chisel-cad", version: "0.1.0" },
-    { capabilities: { tools: {} } }
+    { capabilities: { tools: {}, resources: { subscribe: true, listChanged: false } } }
   );
+
+  // Organizational assist over this session: sketches and features left with default names wait in an
+  // inbox (get_assist_inbox / the chisel://assist/inbox resource) for the agent to name (resolve_assist).
+  // Headless, a sketch counts as finished once a feature reads it or a newer sketch starts.
+  const assist = new AssistService({
+    doc: () => session.doc,
+    rename: (target, name) => renameViaEdit(session.doc, target, name, (opId, params) => session.editOperation(opId, params), () => session.doc),
+    status: () => ({ enabled: true, agent: false }),
+  });
+  const observeAssist = () => assist.observe({ scope: session, doc: session.doc });
+  observeAssist();
+  const subscribed = new Set<string>();
+  let inboxQueued = false;
+  assist.subscribe(() => {
+    if (!subscribed.has(ASSIST_INBOX_URI) || inboxQueued) return;
+    inboxQueued = true;
+    queueMicrotask(() => { inboxQueued = false; void server.sendResourceUpdated({ uri: ASSIST_INBOX_URI }).catch(() => { /* not connected */ }); });
+  });
 
   // ---- response shaping ----
   const diagnoseAll = (evals: Evaluations) =>
@@ -457,6 +482,10 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     },
   ];
   tools.push(...metaTools);
+  tools.push(
+    { name: "get_assist_inbox", description: GET_ASSIST_INBOX_DESCRIPTION, inputSchema: GET_ASSIST_INBOX_SCHEMA as JSONSchema, handler: async (a) => assistInboxTool(a, assist) },
+    { name: "resolve_assist", description: RESOLVE_ASSIST_DESCRIPTION, inputSchema: RESOLVE_ASSIST_SCHEMA as JSONSchema, handler: async (a) => resolveAssistTool(a, "external", assist) },
+  );
   tools.push({
     name: "batch",
     description: "Run several tool calls in order as one transaction: `steps` is a list of {tool, arguments}. By default (`atomic: true`) the first failing step rolls the document (and its undo history) back to before the batch; `atomic: false` keeps the steps that succeeded. Returns each step's result and time in ms, which step failed, and whether it rolled back.",
@@ -500,13 +529,30 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     tools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, annotations: t.annotations })),
   }));
 
+  const RESOURCES = [{
+    uri: ASSIST_INBOX_URI, name: "assist-inbox", title: "Organizational assist inbox", mimeType: "application/json",
+    description: "Sketches and features still carrying default names, with the context to name them; answer with resolve_assist. Subscribe to hear when it changes.",
+  }];
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ resourceTemplates: [] }));
+  server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
+    if (req.params.uri !== ASSIST_INBOX_URI) throw new Error(`Resource not found: ${req.params.uri}`);
+    return { contents: [{ uri: ASSIST_INBOX_URI, mimeType: "application/json", text: JSON.stringify(assistInboxTool({}, assist)) }] };
+  });
+  server.setRequestHandler(SubscribeRequestSchema, async (req) => {
+    if (req.params.uri !== ASSIST_INBOX_URI) throw new Error(`Resource not found: ${req.params.uri}`);
+    subscribed.add(req.params.uri);
+    return {};
+  });
+  server.setRequestHandler(UnsubscribeRequestSchema, async (req) => { subscribed.delete(req.params.uri); return {}; });
+
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const tool = byName.get(req.params.name);
     if (!tool) {
       return { content: [{ type: "text", text: `Unknown tool "${req.params.name}"` }], isError: true };
     }
     try {
-      const result = await tool.handler(req.params.arguments ?? {});
+      const result = await tool.handler(req.params.arguments ?? {}).finally(observeAssist);
       const isError = typeof result === "object" && result !== null && (result as { ok?: boolean }).ok === false;
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError };
     } catch (err) {
@@ -514,7 +560,7 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     }
   });
 
-  return { server, getSession: () => session, registry, commandToolNames: registry.list().map((d) => toToolName(d.type)), fromToolName };
+  return { server, getSession: () => session, assist, registry, commandToolNames: registry.list().map((d) => toToolName(d.type)), fromToolName };
 }
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;

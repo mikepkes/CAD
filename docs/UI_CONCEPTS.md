@@ -60,6 +60,10 @@ The focus contexts (`component`, `lens`, `feature`, `face`) exist only in model 
 - a phrase on the intent line, which matches the labels of the actions on the active stack;
 - runnable from a 3D-mouse button. Buttons bind per context like the ring (`model/buttonMap.ts`): the global row is the base, any context may override a button or set it to nothing, the rest inherit, and a press resolves top-down through the active stack, falling through an action that can't run (`hotkeys.can`). Settings → 3D mouse → Buttons offers every action from the chosen context and those it sits on, `ring.open` included. And it is listed for the agent and MCP in `get_hotkeys`.
 
+Agents reach the same surfaces: `run_action {action}` runs any registered action by id (honouring its context and `when`, like the ring), and `set_panel {panel, on}` switches any `useUi.panels` entry plus the app panels registered with `registerPanel` (agent chat, hotkeys, settings) — both in `src/model/uiControl.ts`, offered by the embedded agent and WebMCP/desktop MCP.
+
+**Organizational assist** (`src/model/assist.ts`, wired by `assistController.ts`, shown by `AssistChip` in the status bar): a sketch finished with a default name, or a feature created with one, is queued with its context; with an API key a quiet spell sends one Haiku naming request through `agentClient` (the agent's client hook), and each name is an `editOperation` of the op that made the thing. The toggle lives in `useAssist` (Settings), not the store.
+
 Don't wire a feature into the ring, the palette or a button map separately; register the action and let the surfaces find it. Its `when` keeps every surface honest at once: the key falls through, the ring greys the slot, the intent line says it isn't available.
 
 ## Layout

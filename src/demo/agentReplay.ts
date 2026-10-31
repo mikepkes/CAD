@@ -6,6 +6,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessagesClient } from "../model/agent";
+import { assistReplyMessage, isAssistRequest } from "../model/assist";
 
 export interface AgentTurn {
   /** How long "thinking" takes before this turn arrives, ms. */
@@ -20,6 +21,8 @@ export interface AgentCache {
   /** Where this cache came from (written by hand as a likely result, or recorded). */
   source: string;
   turns: AgentTurn[];
+  /** Organizational assist's names by default name ("Sketch 1": "Base plate profile"); others get the heuristic name. */
+  names?: Record<string, string>;
 }
 
 const wait = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -32,7 +35,9 @@ export function replayClient(cache: AgentCache): MessagesClient {
   let i = 0;
   return {
     messages: {
-      async create(_body, opts) {
+      async create(body, opts) {
+        // A naming request (organizational assist) is answered on the side, without using up a turn.
+        if (isAssistRequest(body)) { await wait(400, opts?.signal); return assistReplyMessage(body, cache.names); }
         const turn = cache.turns[i++] ?? { stop_reason: "end_turn", content: [{ type: "text", text: "", citations: null }] as Anthropic.ContentBlock[] };
         await wait(turn.delayMs ?? 1200, opts?.signal);
         return {
@@ -53,6 +58,7 @@ export function recordingClient(apiKey: string, prompt: string): MessagesClient 
   return {
     messages: {
       async create(body, opts) {
+        if (isAssistRequest(body)) return real.messages.create(body, opts); // naming requests aren't part of the recording
         const t0 = performance.now();
         const msg = await real.messages.create(body, opts);
         rec.model = msg.model;

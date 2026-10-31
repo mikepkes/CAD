@@ -367,6 +367,7 @@ name = "chisel-cad"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "futures-util",
  "hidapi",
  "http-body-util",
  "libc",

@@ -4,6 +4,7 @@ import { isTauri } from "../model/desktopMcp";
 import { connectWebHid, onSpaceMouseStatus, setSpaceMouseSettings, spaceMouseSettings, spaceMouseStatus, webHidAvailable, SpaceMouseStatus } from "../model/spaceMouseInput";
 import type { SpaceMouseSettings } from "../viewport/spaceMouse";
 import { SpaceMouseButtons } from "./SpaceMouseButtons";
+import { useAssist } from "../model/assistController";
 
 const MODELS = [
   { id: "claude-opus-5-5", label: "Claude Opus 5.5 (most capable)" },
@@ -55,6 +56,8 @@ export function SettingsPanel() {
   const desktopMcpPort = useStore((s) => s.desktopMcpPort);
   const setDesktopMcpPort = useStore((s) => s.setDesktopMcpPort);
   const desktopMcpStatus = useStore((s) => s.desktopMcp);
+  const assistOn = useAssist((s) => s.enabled);
+  const setAssistOn = useAssist((s) => s.setEnabled);
   const [draft, setDraft] = useState(apiKey);
   const [portDraft, setPortDraft] = useState(String(desktopMcpPort));
 
@@ -89,6 +92,17 @@ export function SettingsPanel() {
             {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
           <p className="field-note">The agent drives the same commands you use by hand — ask it to sketch, constrain, dimension, or extrude.</p>
+
+          <label className="field-toggle">
+            <input type="checkbox" checked={assistOn} onChange={(e) => setAssistOn(e.target.checked)} />
+            <span>Organizational assist</span>
+          </label>
+          <p className="field-note">
+            Names sketches and features left as “Sketch 12” or “Extrude” once you finish them, so the history reads well;
+            each name is an undoable rename. With an API key, Claude (Haiku) names them in the background, which sends
+            their context — plane or face, entities, dimensions, what uses them — to Anthropic’s API. Without one they
+            wait in the status bar, and for MCP agents (<code>get_assist_inbox</code>).
+          </p>
 
           <div className="field-divider" />
           <label className="field-toggle">

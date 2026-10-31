@@ -1,4 +1,5 @@
 import { activeSketch, useStore } from "../model/store";
+import { AssistChip } from "./AssistInbox";
 
 export function StatusBar() {
   const message = useStore((s) => s.lastMessage);
@@ -13,6 +14,7 @@ export function StatusBar() {
       <span className="status-mode">{mode === "sketch" ? `Sketch · ${tool}` : "Model"}</span>
       <span className="status-msg">{message}</span>
       <div className="spacer" />
+      <AssistChip />
       {mcp.running && mcp.port && (
         <span className="status-dof ok" title={`MCP server live at ${mcp.url}`}>● MCP :{mcp.port}</span>
       )}

@@ -1,0 +1,10 @@
+/* Organizational assist in the status bar: layout only (colours and controls come from the kit). */
+.assist-wrap { position: relative; display: inline-flex; }
+.assist-card { right: 0; bottom: calc(100% + 8px); width: 360px; max-height: 60vh; overflow: auto; }
+.assist-list { display: flex; flex-direction: column; gap: 6px; }
+.assist-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.assist-row .k-input { flex: 1; min-width: 120px; }
+.assist-from { min-width: 70px; font-size: 12px; }
+.assist-name { flex: 1; }
+.assist-by { font-size: 11px; }
+.assist-note { flex-basis: 100%; font-size: 11px; }

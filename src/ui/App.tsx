@@ -21,6 +21,8 @@ import { PanelToggles, RightPanel } from "./ConceptShell";
 import { Dialog } from "./kit/Dialog";
 import { DrawingView } from "./DrawingView";
 import { PickMenu } from "./PickMenu";
+import { startAssist } from "../model/assistController";
+import { registerAppPanels } from "../model/appPanels";
 
 function Toast() {
   const toast = useStore((s) => s.toast);
@@ -52,6 +54,8 @@ export function App() {
 
   useEffect(() => installHotkeys(), []);
   useEffect(() => installContextActions(), []);
+  useEffect(() => startAssist(), []);
+  useEffect(() => registerAppPanels(), []);
 
   return (
     <div className="app">
