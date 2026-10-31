@@ -13,3 +13,4 @@ dist-mcp
 # Tauri (optional desktop app)
 src-tauri/target
 src-tauri/gen/schemas
+.claude/worktrees/
