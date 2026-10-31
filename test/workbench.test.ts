@@ -6,6 +6,7 @@ import {
   featureIdOfFace, rowForFace, faceAreaFromMesh, measurements, formatArea, formatVolume, formatBounds,
   cardParams, paramsWith, pushed, pushParamOf, cardHeight, stripState, rollbackIndexForStep,
   visiblePins, clusterKey, hasMember, chooserSize, shouldDelete, deletePrompt,
+  selectionContext, shouldDropSelection,
 } from "../src/ui/concepts/workbench/workbench";
 import type { SolidMesh } from "../src/core/occ/kernel";
 
@@ -171,7 +172,20 @@ describe("with a real session", () => {
     expect(pushed(push.value, 1, push.spec)).toBe(24.5);
     expect(pushed(0.5, -1, push.spec)).toBe(0.5);
     expect(pushParamOf(undefined)).toBeNull();
-    expect(pushParamOf({ ...rows[0], spec: { ...rows[0].spec, pushParam: undefined } })).toBeNull();
+    // the catalog's choice falls back to the first param the op carries; none carried, no push
+    expect(pushParamOf({ ...rows[0], spec: { ...rows[0].spec, pushParam: undefined } })?.key).toBe("distance");
+    expect(pushParamOf({ ...rows[0], exprs: {}, values: {} })).toBeNull();
+    expect(pushParamOf({ ...rows[0], spec: { ...rows[0].spec, params: [], pushParam: undefined } })).toBeNull();
+  });
+  it("drops a face selection when its context changes, and keeps it through a parameter edit", () => {
+    const ctx = selectionContext({ session: s, activeComponentId: s.doc.rootComponentId, mode: "model" });
+    expect(ctx).toEqual({ timelineLength: s.timeline.length, rollbackIndex: s.rollbackIndex, activeComponentId: s.doc.rootComponentId, mode: "model" });
+    expect(shouldDropSelection(ctx, { ...ctx })).toBe(false);
+    expect(shouldDropSelection(ctx, { ...ctx, timelineLength: ctx.timelineLength + 1 })).toBe(true);
+    expect(shouldDropSelection(ctx, { ...ctx, timelineLength: ctx.timelineLength - 1 })).toBe(true);
+    expect(shouldDropSelection(ctx, { ...ctx, rollbackIndex: ctx.rollbackIndex - 1 })).toBe(true);
+    expect(shouldDropSelection(ctx, { ...ctx, activeComponentId: "other" })).toBe(true);
+    expect(shouldDropSelection(ctx, { ...ctx, mode: "sketch" })).toBe(true);
   });
   it("derives the strip: the row before the marker is 'at', later rows are ghosts", async () => {
     let st = stripState(rows, s.rollbackIndex, s.timeline.length);

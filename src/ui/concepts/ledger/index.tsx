@@ -47,7 +47,7 @@ export function LedgerPanel() {
         {rows.length === 0 ? (
           <p className="k-dim ledger-empty">Nothing built yet. Sketch and extrude, and the model reads back here.</p>
         ) : (
-          rows.map((row) => <Sentence key={row.opId} row={row} doc={doc} density={densityOf(materialForComponent(doc, row.componentId)).density} />)
+          rows.map((row) => <Sentence key={row.opId} row={row} doc={doc} timeline={session.timeline} density={densityOf(materialForComponent(doc, row.componentId)).density} />)
         )}
       </section>
       <IntentsSection />

@@ -314,4 +314,33 @@ describe("WorkbenchOverlay", () => {
     const { container } = render(<WorkbenchOverlay />);
     expect(container.querySelectorAll(".k-pin, .k-card").length).toBe(0);
   });
+
+  it("drops the face selection when the mode, the active component or the rollback changes, not on an edit", async () => {
+    const sel = { bodyId: extrudeId, faceName: `${extrudeId}:end`, point: { x: 20, y: 10, z: 24 }, normal: { x: 0, y: 0, z: 1 }, screen: { x: 300, y: 200 } };
+    const { unmount } = render(<WorkbenchOverlay />);
+    act(() => useStore.setState({ faceSelection: sel }));
+    expect(screen.getByRole("toolbar", { name: "Face of Base" })).toBeTruthy();
+    expect(a.selectFace).not.toHaveBeenCalled();
+    act(() => useStore.setState({ rev: 2 })); // a parameter edit: same timeline, same marker
+    expect(a.selectFace).not.toHaveBeenCalled();
+    act(() => useStore.setState({ mode: "sketch" }));
+    expect(a.selectFace).toHaveBeenCalledTimes(1);
+    expect(a.selectFace).toHaveBeenLastCalledWith(null);
+    act(() => useStore.setState({ mode: "model" }));
+    expect(a.selectFace).toHaveBeenCalledTimes(2);
+    act(() => useStore.setState({ activeComponentId: rows[2].componentId }));
+    expect(a.selectFace).toHaveBeenCalledTimes(3);
+    await s.moveRollback(rows[1].index);
+    act(() => useStore.setState({ rev: 3 }));
+    expect(a.selectFace).toHaveBeenCalledTimes(4);
+    await s.moveRollback(s.timeline.length);
+    act(() => useStore.setState({ rev: 4 }));
+    expect(a.selectFace).toHaveBeenCalledTimes(5);
+    // nothing selected: a context change asks for nothing
+    act(() => useStore.setState({ faceSelection: null, mode: "sketch" }));
+    expect(a.selectFace).toHaveBeenCalledTimes(5);
+    unmount();
+    act(() => useStore.setState({ faceSelection: sel, mode: "model" }));
+    expect(a.selectFace).toHaveBeenCalledTimes(5); // unsubscribed with the overlay
+  });
 });

@@ -4,7 +4,7 @@
 // the .tsx files only template this. The edit throttle is the kit's editQueue.
 
 import type { FeatureRow } from "../../../model/concepts/featureCatalog";
-import { pinAnchor, unionBounds, boundsCentre, unitLabel, paramsWith } from "../../../model/concepts/featureCatalog";
+import { pinAnchor, unionBounds, boundsCentre, unitLabel, paramsWith, pushParamFor } from "../../../model/concepts/featureCatalog";
 import { pinOffset, clampInside, CARD_W_NARROW, type Pt, type Box } from "../../kit/anchor";
 import { quantize, formatMagnitude, type NumberSpec } from "../../kit/numberMath";
 import type { SolidEval } from "../../../core/features";
@@ -219,10 +219,30 @@ export function pushed(value: number, dir: -1 | 1, spec: NumberSpec): number {
   return quantize(value + dir * spec.step, spec);
 }
 
-/** The Push/Pull param of the row a face belongs to, when its spec has one. */
+/** The Push/Pull param of the row a face belongs to: the catalog's choice for the op (`pushParamFor`),
+ *  null when the feature has no number to push. */
 export function pushParamOf(row: FeatureRow | undefined): CardParam | null {
-  if (!row?.spec.pushParam) return null;
-  return cardParams(row).find((p) => p.key === row.spec.pushParam) ?? null;
+  if (!row) return null;
+  const key = pushParamFor(row);
+  if (!key) return null;
+  return cardParams(row).find((p) => p.key === key) ?? null;
+}
+
+/** What a face selection was made against: when any of it changes, the face the verbs card shows may no
+ *  longer exist, so the card closes. */
+export interface SelectionContext { timelineLength: number; rollbackIndex: number; activeComponentId: string; mode: string }
+
+/** The context of a store state (the session is mutable, so take a snapshot to compare later). */
+export function selectionContext(st: { session: { timeline: { length: number }; rollbackIndex: number }; activeComponentId: string; mode: string }): SelectionContext {
+  return { timelineLength: st.session.timeline.length, rollbackIndex: st.session.rollbackIndex, activeComponentId: st.activeComponentId, mode: st.mode };
+}
+
+/** Whether a face selection made under `prev` should be dropped now that the context is `next`: a feature was
+ *  added or deleted, the history rolled, another component activated, or the mode switched. A parameter edit
+ *  (same length, same marker) keeps it, so Push/Pull keeps its card. */
+export function shouldDropSelection(prev: SelectionContext, next: SelectionContext): boolean {
+  return prev.timelineLength !== next.timelineLength || prev.rollbackIndex !== next.rollbackIndex
+    || prev.activeComponentId !== next.activeComponentId || prev.mode !== next.mode;
 }
 
 /** Height a feature card is assumed to have until it is measured (useCardSize): head, one row per param, foot. */

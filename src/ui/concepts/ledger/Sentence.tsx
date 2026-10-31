@@ -5,6 +5,7 @@
 
 import { useMemo } from "react";
 import type { CadDocument } from "../../../core/document";
+import type { OperationRecord } from "../../../core/command/types";
 import { useUi } from "../../../model/concepts/uiState";
 import { FeatureRow, nameOf, paramsWith, unitLabel } from "../../../model/concepts/featureCatalog";
 import { LiveNumber } from "../../kit/LiveNumber";
@@ -14,16 +15,18 @@ import { formatMass, massGrams, mergeSegments, paramToken, rowClasses } from "./
 export interface SentenceProps {
   row: FeatureRow;
   doc: CadDocument;
+  /** The session's timeline: names sketches and features the document no longer holds (rolled back). */
+  timeline: OperationRecord[];
   /** g/cm³ used for the mass estimate beside the paragraph. */
   density: number;
 }
 
-export function Sentence({ row, doc, density }: SentenceProps) {
+export function Sentence({ row, doc, timeline, density }: SentenceProps) {
   const hotFeature = useUi((s) => s.hotFeature);
   const hotParam = useUi((s) => s.hotParam);
   const { setHotFeature, setHotParam } = useUi.getState();
   const edit = useEditQueue();
-  const segments = useMemo(() => mergeSegments(row.spec.sentence(row.op, (id) => nameOf(doc, id))), [row.spec, row.op, doc]);
+  const segments = useMemo(() => mergeSegments(row.spec.sentence(row.op, (id) => nameOf(doc, timeline, id))), [row.spec, row.op, doc, timeline]);
   const mass = massGrams(row.solid?.volume, density);
   const title = [row.name, row.error && `Error: ${row.error}`, row.rolledBack && "Rolled back", row.suppressed && "Suppressed"].filter(Boolean).join(" · ");
 
