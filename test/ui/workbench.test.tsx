@@ -21,7 +21,7 @@ const fakeScene = (map = (p: { x: number; y: number }) => ({ x: 400 + 10 * p.x, 
 import { useStore } from "../../src/model/store";
 import { useUi } from "../../src/model/concepts/uiState";
 import { featureRows, type FeatureRow } from "../../src/model/concepts/featureCatalog";
-import { WorkbenchOverlay, HistoryStrip, Pins, FeatureCard, FaceVerbs } from "../../src/ui/concepts/workbench";
+import { WorkbenchOverlay, HistoryStrip, Pins, FeatureCard, FaceVerbs, ComponentCrumb } from "../../src/ui/concepts/workbench";
 
 let s: CadSession;
 let rows: FeatureRow[];
@@ -273,18 +273,50 @@ describe("HistoryStrip", () => {
     const chips = screen.getAllByRole("button", { name: /Base|Edges|Extrude/ });
     expect(chips.map((c) => c.textContent)).toEqual(["1Base", "2Edges", `3${rows[2].name}`]);
     expect(chips[2].className).toContain("at");
-    expect(screen.getByText("All 3 features built")).toBeTruthy();
+    // at the root the strip also shows the assembly steps: the component's creation, without a number
+    const step = screen.getByRole("button", { name: "Outer ring" });
+    expect(step.className).toContain("wb-step");
+    expect(step.querySelector(".k-num")).toBeNull();
+    expect(screen.getByText("All 3 features and 1 assembly step built")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /more in other/ })).toBeNull();
+    // the range runs over global timeline indices: from the first visible op to just after the last
     const range = screen.getByRole("slider", { name: "Rollback position" }) as HTMLInputElement;
-    expect(range.value).toBe("3"); expect(range.max).toBe("3");
+    expect(range.min).toBe(String(rows[0].index)); expect(range.max).toBe(String(rows[2].index + 1));
+    expect(range.value).toBe(String(rows[2].index + 1));
     expect(screen.queryByRole("button", { name: "Roll to end" })).toBeNull();
-    fireEvent.change(range, { target: { value: "1" } });
+    fireEvent.change(range, { target: { value: String(rows[0].index + 1) } });
     expect(a.moveRollback).toHaveBeenCalledWith(rows[0].index + 1);
+    // a value on an op the strip does not show (the ring's sketch) snaps to the nearest stop
+    fireEvent.change(range, { target: { value: String(rows[2].index - 1) } });
+    expect(a.moveRollback).toHaveBeenLastCalledWith(s.timeline.findIndex((op) => op.type === "component.create") + 1);
     await userEvent.click(chips[1]);
     expect(a.moveRollback).toHaveBeenCalledWith(rows[1].index + 1);
+    await userEvent.click(step);
+    expect(a.moveRollback).toHaveBeenLastCalledWith(s.timeline.findIndex((op) => op.type === "component.create") + 1);
     fireEvent.mouseEnter(chips[0]);
     expect(useUi.getState().hotFeature).toBe(extrudeId);
     fireEvent.mouseLeave(chips[0]);
     expect(useUi.getState().hotFeature).toBeNull();
+    fireEvent.mouseEnter(step);
+    expect(useUi.getState().hotFeature).toBeNull();
+  });
+
+  it("scopes to the active component: its features only, no assembly steps, and a chip for the rest that activates the root", async () => {
+    useStore.setState({ activeComponentId: rows[2].componentId });
+    render(<HistoryStrip />);
+    const chips = screen.getAllByRole("button", { name: /Base|Edges|Extrude|Outer ring/ });
+    expect(chips.map((c) => c.textContent)).toEqual([`3${rows[2].name}`]);
+    expect(chips[0].className).toContain("at");
+    const more = screen.getByRole("button", { name: "2 more in other components" });
+    expect(more.className).toContain("wb-more");
+    expect(screen.getByText("All 1 feature built")).toBeTruthy();
+    const range = screen.getByRole("slider", { name: "Rollback position" }) as HTMLInputElement;
+    expect(range.min).toBe(String(rows[2].index)); expect(range.max).toBe(String(rows[2].index + 1));
+    expect(range.value).toBe(String(rows[2].index + 1));
+    fireEvent.change(range, { target: { value: String(rows[2].index) } });
+    expect(a.moveRollback).toHaveBeenCalledWith(rows[2].index);
+    await userEvent.click(more);
+    expect(a.activateComponent).toHaveBeenCalledWith(s.doc.rootComponentId);
   });
 
   it("keeps rolled-back features as ghosts with a dashed track and offers Roll to end", async () => {
@@ -293,7 +325,9 @@ describe("HistoryStrip", () => {
     const { container } = render(<HistoryStrip />);
     expect(screen.getByRole("button", { name: /Edges/ }).className).toContain("ghost");
     expect(screen.getByRole("button", { name: /Base/ }).className).toContain("at");
-    expect(container.querySelectorAll(".k-track.ghost").length).toBe(2);
+    // Edges, the Outer ring step and the ring's extrude are all behind the marker: three ghost tracks
+    expect(screen.getByRole("button", { name: "Outer ring" }).className).toContain("ghost");
+    expect(container.querySelectorAll(".k-track.ghost").length).toBe(3);
     expect(screen.getByText("At 1 · Base — new features insert here")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Roll to end" }));
     expect(a.moveRollback).toHaveBeenCalledWith(s.timeline.length);
@@ -308,11 +342,49 @@ describe("HistoryStrip", () => {
   });
 });
 
+describe("ComponentCrumb", () => {
+  it("shows the path root → active as buttons, the active one pressed, and activates a crumb on click", async () => {
+    useStore.setState({ activeComponentId: rows[2].componentId });
+    render(<ComponentCrumb />);
+    const nav = screen.getByRole("navigation", { name: "Component path" });
+    const crumbs = within(nav).getAllByRole("button");
+    expect(crumbs.map((c) => c.textContent)).toEqual(["Root Component", "Outer ring"]);
+    expect(crumbs[0].getAttribute("aria-pressed")).toBe("false");
+    expect(crumbs[1].getAttribute("aria-pressed")).toBe("true");
+    expect(nav.querySelectorAll(".wb-crumb-sep").length).toBe(1);
+    await userEvent.click(crumbs[0]);
+    expect(a.activateComponent).toHaveBeenCalledWith(s.doc.rootComponentId);
+    await userEvent.click(crumbs[1]);
+    expect(a.activateComponent).toHaveBeenLastCalledWith(rows[2].componentId);
+  });
+
+  it("shows the root alone when it is active, and nothing in sketch mode or on a single-component document", () => {
+    const { rerender } = render(<ComponentCrumb />);
+    const crumbs = within(screen.getByRole("navigation", { name: "Component path" })).getAllByRole("button");
+    expect(crumbs.map((c) => c.textContent)).toEqual(["Root Component"]);
+    expect(crumbs[0].getAttribute("aria-pressed")).toBe("true");
+    useStore.setState({ mode: "sketch" });
+    rerender(<ComponentCrumb />);
+    expect(screen.queryByRole("navigation", { name: "Component path" })).toBeNull();
+    useStore.setState({ mode: "model", session: realSession(), rev: 9, solids: {} });
+    rerender(<ComponentCrumb />);
+    expect(screen.queryByRole("navigation", { name: "Component path" })).toBeNull();
+  });
+});
+
 describe("WorkbenchOverlay", () => {
-  it("mounts all three pieces and renders nothing with an empty document and no scene", () => {
+  it("mounts the crumb with the pins, card and verbs", () => {
+    useStore.setState({ activeComponentId: rows[2].componentId });
+    render(<WorkbenchOverlay />);
+    const nav = screen.getByRole("navigation", { name: "Component path" });
+    expect(nav.className).toContain("wb-crumb");
+    expect(within(nav).getAllByRole("button").length).toBe(2);
+  });
+
+  it("renders nothing with an empty document and no scene", () => {
     useStore.setState({ session: realSession(), rev: 8, solids: {} });
     const { container } = render(<WorkbenchOverlay />);
-    expect(container.querySelectorAll(".k-pin, .k-card").length).toBe(0);
+    expect(container.querySelectorAll(".k-pin, .k-card, .wb-crumb").length).toBe(0);
   });
 
   it("drops the face selection when the mode, the active component or the rollback changes, not on an edit", async () => {

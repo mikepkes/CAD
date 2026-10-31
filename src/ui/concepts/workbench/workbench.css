@@ -13,7 +13,14 @@
 .wb-verbs .wb-push { display: inline-flex; align-items: center; gap: 4px; }
 .wb-verbs .wb-measure { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* the component crumb: top-left of the viewport overlay, clear of the top-right .k-panel-toggle */
+.wb-crumb { position: absolute; left: 12px; top: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; max-width: calc(100% - 240px); z-index: 15; }
+.wb-crumb .k-btn { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-crumb-sep { padding: 0 2px; font-size: 14px; line-height: 1; }
+
 .wb-strip { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; min-width: 0; }
+.wb-strip .k-chip.wb-step { font-style: italic; }
+.wb-strip .k-chip.wb-more { border-style: dotted; }
 .wb-strip-row { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
 .wb-strip .k-strip { min-width: max-content; }
 .wb-range { width: 100%; margin: 0; accent-color: var(--k-accent); }
