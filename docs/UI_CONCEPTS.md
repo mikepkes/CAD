@@ -4,7 +4,7 @@ Five ways of working, prototyped on the design canvas, now built into Chisel:
 
 | # | Concept | What it adds | Lives in |
 |---|---------|--------------|----------|
-| 1 | **Workbench** | Numbered pins on the geometry each feature made; a feature card beside the pin; verbs on a clicked face (Push/Pull, Look at, Measure); a history strip whose rolled-back features stay as ghosts | `src/ui/concepts/workbench/` |
+| 1 | **Workbench** | Numbered pins on the geometry each feature made; a feature card beside the pin; verbs on a clicked face (Push/Pull, Look at, Measure; the card closes when the history, component or mode changes); a history strip whose rolled-back features stay as ghosts | `src/ui/concepts/workbench/` |
 | 2 | **Ledger** | The history read back as sentences with live numbers; hover a sentence ↔ hover the part; design intent checks; the agent's suggestions as tracked changes | `src/ui/concepts/ledger/` |
 | 3 | **Design Space** | Two parameters on a map, intents drawn as frontiers, mass shaded, pinned variants compared as ghosts | `src/ui/concepts/space/` |
 | 4 | **Lens** | Analysis (zebra, draft, curvature, x-ray, overhang) only under a draggable lens or wipe | `src/ui/concepts/lens/` |
@@ -23,7 +23,7 @@ Five ways of working, prototyped on the design canvas, now built into Chisel:
 
 ## Plumbing the concepts use
 
-- **Features:** `featureRows(doc, session.timeline, session.rollbackIndex, solids)` → `FeatureRow[]` (num, spec, values, exprs, suppressed, rolledBack, solid, componentId). `pinAnchor(row)` → world point. `sentenceText(row, doc)` for tests and the agent. Edit a param: `useStore.getState().editOperation(row.opId, { ...row.op.params, [key]: String(value) })`.
+- **Features:** `featureRows(doc, session.timeline, session.rollbackIndex, solids)` → `FeatureRow[]` (num, spec, values, exprs, suppressed, rolledBack, solid, componentId). `pinAnchor(row)` → world point. `sentenceText(row, doc, session.timeline)` for tests and the agent; `nameOf(doc, timeline, id)` names a sketch or feature even once it is rolled back out of the document (from the op that created it). `pushParamFor(row)` is the param a Push/Pull drives (the spec's, else the first the op carries). Edit a param: `useStore.getState().editOperation(row.opId, { ...row.op.params, [key]: String(value) })`.
 - **History:** `session.timeline`, `session.rollbackIndex`, `moveRollback(i)`, `suppressOperation(opId, bool)`, `deleteOperation(opId)`. Re-render on `useStore((s) => s.rev)`.
 - **Faces:** a model-mode click sets `store.faceSelection: { bodyId, faceName?, point, normal, screen }` (null on empty). Face names follow `src/core/naming.ts` (`"extrude3:end"`, `"hole9:bore"`): the prefix before `:` is the feature id, so a face maps to its feature row. `geometry.topology`/`measure` through the WebMCP host give exact face areas.
 - **Views:** `window.dispatchEvent(new CustomEvent("chisel:view", { detail: "front" }))`, `"chisel:frame"`, `"chisel:lookAt"`; or `hotkeys.runAction("view.front")`.
