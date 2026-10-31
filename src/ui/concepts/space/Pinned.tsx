@@ -5,6 +5,7 @@
 import type { Metrics } from "../../../model/concepts/intents";
 import { Button, Card, Readout } from "../../kit/primitives";
 import { METRICS, formatMetric, formatDelta, metricDeltas, metricInfo, readoutState, type MetricKey, type Pin, type PinLetter } from "./space";
+import { ghostStatusText, type GhostStatus } from "./ghost";
 
 export interface PinnedProps {
   pins: Pin[];
@@ -12,6 +13,8 @@ export interface PinnedProps {
   /** The current design's metrics (the "to" side of a compare). */
   current: Metrics | null;
   compare: PinLetter | null;
+  /** Whether the compared pin is on the part as a ghost yet (index.tsx evaluates it). */
+  ghost?: { status: GhostStatus; error?: string | null } | null;
   onGo: (pin: Pin) => void;
   onCompare: (letter: PinLetter | null) => void;
   onRemove: (letter: PinLetter) => void;
@@ -35,7 +38,8 @@ export function Pinned(p: PinnedProps) {
             </div>
             <div className="space-row">
               <Button size="sm" onClick={() => p.onGo(pin)} title={`Set ${pin.xName} and ${pin.yName} to this pin`}>Go to</Button>
-              <Button size="sm" on={comparing} onClick={() => p.onCompare(comparing ? null : pin.letter)} title="Show how the current design differs from this pin">Compare</Button>
+              <Button size="sm" on={comparing} onClick={() => p.onCompare(comparing ? null : pin.letter)} title="Show how the current design differs from this pin, and this pin's design as a ghost on the part">Compare</Button>
+              {comparing && p.ghost && <span className="k-dim space-ghost-status" aria-live="polite" data-testid="space-ghost-status">{ghostStatusText(p.ghost.status, p.ghost.error)}</span>}
             </div>
           </Card>
         );

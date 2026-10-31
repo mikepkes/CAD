@@ -23,6 +23,8 @@ import {
   type CellSample, type CellVerdict, type GridSize, type GridSpec, type MetricKey, type Move, type Pin, type SampleStatus,
 } from "./space";
 import { GridCache, disposeSamplerBackend, getSamplerBackend, sampleGrid } from "./sampler";
+import { GhostCache, evaluateVariant, ghostKey, ghostLabel, pinApplies, type GhostResult, type GhostStatus } from "./ghost";
+import { useGhost } from "../../../model/concepts/ghostVariant";
 import { useSpace } from "./spaceState";
 import { DesignSpaceMap } from "./Map";
 import { Pinned } from "./Pinned";
@@ -34,11 +36,12 @@ export interface DesignSpacePanelProps {
 }
 
 const cache = new GridCache();
-/** Forget every sampled grid and the sampler backend (tests, or after the kernel is swapped). */
-export function clearGridCache(): void { cache.clear(); disposeSamplerBackend(); }
+const ghostCache = new GhostCache();
+/** Forget every sampled grid, every evaluated ghost, the ghost on the part and the sampler backend (tests, or after the kernel is swapped). */
+export function clearGridCache(): void { cache.clear(); ghostCache.clear(); useGhost.getState().clear(); disposeSamplerBackend(); }
 
-// The panel is unmounted on every tab switch; the backend goes only when the Space panel itself is switched off.
-useUi.subscribe((s, prev) => { if (prev.panels.space && !s.panels.space) disposeSamplerBackend(); });
+// The panel is unmounted on every tab switch; the backend (and the compared pin's ghost) go only when the Space panel itself is switched off.
+useUi.subscribe((s, prev) => { if (prev.panels.space && !s.panels.space) { disposeSamplerBackend(); useGhost.getState().clear(); } });
 
 /** One parameter edit in flight: the newest requested point wins; each move names its own axes. */
 function createMoveQueue() {
@@ -119,6 +122,45 @@ export function DesignSpacePanel(p: DesignSpacePanelProps = {}) {
 
   useEffect(() => () => { runToken.current++; }, []);
 
+  // ---- the compared pin as a ghost on the part ----
+  // The pin's variant is evaluated once per (pin, recipe) on the sampler backend
+  // and handed to useGhost for the viewport; dragging the design never re-runs
+  // it (the key blanks the pin's own parameters), any other edit does. Clearing
+  // Compare, unpinning, a pin whose parameters are gone, or a new document all clear it.
+  const comparedPin = compare ? pins.find((q) => q.letter === compare) ?? null : null;
+  const ghostKeyStr = comparedPin && pinApplies(doc, comparedPin) ? ghostKey(comparedPin, session.timeline, session.rollbackIndex, doc.activeConfiguration) : "";
+  const [ghostStatus, setGhostStatus] = useState<{ status: GhostStatus; error?: string | null } | null>(null);
+  const ghostToken = useRef(0);
+
+  useEffect(() => {
+    const token = ++ghostToken.current;
+    if (!comparedPin || !ghostKeyStr) { useGhost.getState().clear(); setGhostStatus(null); return; }
+    const label = ghostLabel(comparedPin, spec ? { x: spec.x, y: spec.y } : undefined);
+    const docId = doc.id;
+    const apply = (r: GhostResult) => {
+      if (r.solids.length) useGhost.getState().set(r.solids, label, docId); else useGhost.getState().clear();
+      setGhostStatus({ status: r.status, error: r.error });
+    };
+    const hit = ghostCache.get(ghostKeyStr);
+    if (hit) { apply(hit); return; }
+    setGhostStatus({ status: "evaluating" });
+    const docSnapshot = doc;
+    (async () => {
+      try {
+        const backend = await getSamplerBackend(p.createBackend);
+        if (token !== ghostToken.current) return;
+        const r = await evaluateVariant(backend, docSnapshot, comparedPin);
+        if (token !== ghostToken.current) return;
+        ghostCache.set(ghostKeyStr, r);
+        apply(r);
+      } catch (e) {
+        if (token !== ghostToken.current) return;
+        setGhostStatus({ status: "error", error: e instanceof Error ? e.message : String(e) });
+      }
+    })();
+    return () => { ghostToken.current++; };
+  }, [ghostKeyStr, compare, doc.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const cells = useMemo<(CellVerdict | undefined)[]>(() => {
     if (!spec) return [];
     const out: (CellVerdict | undefined)[] = new Array(spec.n * spec.n);
@@ -172,7 +214,7 @@ export function DesignSpacePanel(p: DesignSpacePanelProps = {}) {
         <Button size="sm" accent disabled={!lightest} onClick={() => lightest && goTo({ xName: spec.x.name, yName: spec.y.name, x: lightest.x, y: lightest.y })} title={lightest ? `${spec.x.name} ${lightest.x}, ${spec.y.name} ${lightest.y}: ${formatMetric(lightest.metrics?.[metric], metric)}` : "No passing cell sampled yet"}>Jump to lightest</Button>
         <Button size="sm" disabled={pins.length >= 3} onClick={pinCurrent} title="Keep this design as a pin (A, B, C)">Pin</Button>
       </div>
-      <Pinned pins={pins} metric={metric} current={currentMetrics} compare={compare} onGo={onGo} onCompare={setCompare} onRemove={unpin} />
+      <Pinned pins={pins} metric={metric} current={currentMetrics} compare={compare} ghost={ghostStatus} onGo={onGo} onCompare={setCompare} onRemove={unpin} />
     </div>
   );
 }

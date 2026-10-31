@@ -18,8 +18,8 @@ export interface SampleOpts {
   skip?: (i: number, j: number) => boolean;
 }
 
-/** The variant document for one cell: a structured clone with the two axis parameters' expressions replaced. */
-export function variantDoc(doc: CadDocument, spec: GridSpec, x: number, y: number): CadDocument {
+/** The variant document for one cell (or a pin): a structured clone with the two axis parameters' expressions replaced. */
+export function variantDoc(doc: CadDocument, spec: { x: { name: string }; y: { name: string } }, x: number, y: number): CadDocument {
   const d = structuredClone(doc);
   for (const p of d.parameters) {
     if (p.name === spec.x.name) { p.expr = String(x); p.value = x; delete p.baseExpr; delete p.configuredBy; }
