@@ -118,7 +118,17 @@ export function overhangClass(d: number, h: number, bedTol = 0.01): OverhangClas
 
 /** Where the HUD card sits: off the circle's right rim, or beside the wipe line's top; flipped and clamped inside. */
 export function hudPlacement(f: LensFrame, card: Box, bounds: Box): Pt {
-  if (f.shape === "lens") return placeCard({ anchor: { x: f.x + f.r, y: f.y - f.r * 0.5 }, size: card, bounds, prefer: "right", gap: 16 });
+  if (f.shape === "lens") {
+    // beside the lens, never over it: right of its right edge, else left of its left edge, else under it
+    const y = f.y - f.r * 0.5, gap = 16, m = 8;
+    if (f.x + f.r + gap + card.w + m <= bounds.w) return placeCard({ anchor: { x: f.x + f.r, y }, size: card, bounds, prefer: "right", gap });
+    if (f.x - f.r - gap - card.w - m >= 0) return placeCard({ anchor: { x: f.x - f.r, y }, size: card, bounds, prefer: "left", gap });
+    const cx = f.x - card.w / 2 + 8;
+    if (f.y + f.r + gap + card.h + m <= bounds.h) return placeCard({ anchor: { x: cx, y: f.y + f.r }, size: card, bounds, prefer: "below", gap });
+    if (f.y - f.r - gap - card.h - m >= 0) return placeCard({ anchor: { x: cx, y: f.y - f.r }, size: card, bounds, prefer: "above", gap });
+    // no room on any side: dock it in the corner farthest from the lens
+    return clampInside({ x: f.x < bounds.w / 2 ? bounds.w : 0, y: f.y < bounds.h / 2 ? bounds.h : 0 }, card, bounds, m);
+  }
   return placeCard({ anchor: { x: f.wipeX, y: 12 }, size: card, bounds, prefer: "right", gap: 12 });
 }
 

@@ -38,7 +38,7 @@ export function IntentsSection() {
             <li key={intent.id} className={`ledger-intent ${g.state}`}>
               <span className={`ledger-glyph ${g.state}`} role="img" aria-label={g.label}>{g.glyph}</span>
               <span className="ledger-intent-text">
-                <span className="ledger-intent-label">{intent.label}: </span>
+                {intent.label !== intent.lhs && <span className="ledger-intent-label">{intent.label}: </span>}
                 <span className="k-mono">{intent.lhs} {intent.op} </span>
                 {rhs != null ? (
                   <LiveNumber
