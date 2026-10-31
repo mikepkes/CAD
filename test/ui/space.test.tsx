@@ -12,6 +12,8 @@ import { DesignSpacePanel, clearGridCache } from "../../src/ui/concepts/space";
 import { DesignSpaceMap } from "../../src/ui/concepts/space/Map";
 import { Pinned } from "../../src/ui/concepts/space/Pinned";
 import { useSpace } from "../../src/ui/concepts/space/spaceState";
+import { useGhost } from "../../src/model/concepts/ghostVariant";
+import { useUi } from "../../src/model/concepts/uiState";
 import { layout, gridToSvg, cellKey, judgeCell, axisValue, type GridSpec, type CellVerdict } from "../../src/ui/concepts/space/space";
 import { metricsOf } from "../../src/model/concepts/intents";
 
@@ -207,6 +209,66 @@ describe("DesignSpacePanel", () => {
     expect((screen.getByRole("combobox", { name: "X parameter" }) as HTMLSelectElement).value).toBe("h");
   });
 
+  it("Compare puts the pin's design on the part as a ghost, keeps it through a drag, and clears it with Compare, unpin or a new document", async () => {
+    const evaluated: string[] = [];
+    const backend: GeometryBackend = { ...boxBackend(), evaluate: async (doc) => { evaluated.push(doc.parameters.map((q) => q.expr).join("/")); return boxBackend().evaluate(doc); } };
+    mount(s, { solids: currentSolids, backend });
+    await waitFor(() => expect(screen.getByText("25 cells")).toBeTruthy());
+    evaluated.length = 0;
+    act(() => { useSpace.getState().pin({ x: 20, y: 5, xName: "w", yName: "h", metrics: null, verdict: "unknown" }); });
+    const list = screen.getByRole("list", { name: "Pinned designs" });
+    const a = within(list).getByRole("listitem", { name: "Pin A" });
+    expect(useGhost.getState().solids).toBeNull();
+    expect(within(a).queryByTestId("space-ghost-status")).toBeNull();
+
+    await userEvent.click(within(a).getByRole("button", { name: "Compare" }));
+    await waitFor(() => expect(useGhost.getState().solids?.length).toBe(1));
+    expect(evaluated).toEqual(["20/5/2"]); // the pin's variant, on the sampler backend
+    expect(useGhost.getState().solids![0].volume).toBe(1000);
+    expect(useGhost.getState()).toMatchObject({ label: "Pin A: w 20 · h 5", docId: s.doc.id });
+    expect(within(a).getByTestId("space-ghost-status").textContent).toBe("shown as a ghost on the part");
+
+    // the design is dragged (a new revision, same recipe): the ghost stays and is not re-evaluated
+    act(() => { useStore.setState({ rev: useStore.getState().rev + 1, solids: { b: { ...currentSolids.b, volume: 6000 } } as never }); });
+    expect(useGhost.getState().solids?.length).toBe(1);
+    expect(evaluated.length).toBe(1);
+
+    // Compare off → ghost gone; on again → from the cache, no evaluation
+    await userEvent.click(within(a).getByRole("button", { name: "Compare" }));
+    expect(useGhost.getState().solids).toBeNull();
+    expect(within(a).queryByTestId("space-ghost-status")).toBeNull();
+    await userEvent.click(within(a).getByRole("button", { name: "Compare" }));
+    expect(useGhost.getState().solids?.length).toBe(1);
+    expect(evaluated.length).toBe(1);
+
+    // unpinning the compared pin clears it
+    await userEvent.click(within(a).getByRole("button", { name: "Remove pin A" }));
+    expect(useGhost.getState().solids).toBeNull();
+
+    // a new document clears it, even while Compare is still set
+    act(() => { useSpace.getState().pin({ x: 20, y: 5, xName: "w", yName: "h", metrics: null, verdict: "unknown" }); useSpace.getState().setCompare("A"); });
+    await waitFor(() => expect(useGhost.getState().solids?.length).toBe(1));
+    act(() => { useStore.setState({ session: realSession(), rev: useStore.getState().rev + 1 }); });
+    expect(useGhost.getState().solids).toBeNull();
+    await act(async () => { await Promise.resolve(); });
+    expect(useGhost.getState().solids).toBeNull(); // the pin's parameters are not in the new document: nothing to show
+  });
+
+  it("says when the compared pin's design does not build, and clears the ghost when the Space panel is switched off", async () => {
+    const backend: GeometryBackend = { ...boxBackend(), evaluate: async (doc) => { const { scope } = resolveParameters(doc.parameters); if (scope.w * scope.h > 1000) throw new Error("too big to build"); return boxBackend().evaluate(doc); } };
+    mount(s, { solids: currentSolids, backend });
+    act(() => { useSpace.getState().pin({ x: 50, y: 25, xName: "w", yName: "h", metrics: null, verdict: "unknown" }); useSpace.getState().setCompare("A"); });
+    const a = within(screen.getByRole("list", { name: "Pinned designs" })).getByRole("listitem", { name: "Pin A" });
+    await waitFor(() => expect(within(a).getByTestId("space-ghost-status").textContent).toBe("ghost: did not build (too big to build)"));
+    expect(useGhost.getState().solids).toBeNull();
+
+    act(() => { useSpace.getState().pin({ x: 20, y: 5, xName: "w", yName: "h", metrics: null, verdict: "unknown" }); useSpace.getState().setCompare("B"); });
+    await waitFor(() => expect(useGhost.getState().solids?.length).toBe(1));
+    act(() => { useUi.setState({ panels: { ...useUi.getState().panels, space: true } }); });
+    act(() => { useUi.getState().togglePanel("space", false); });
+    expect(useGhost.getState().solids).toBeNull();
+  });
+
   it("retries the sampler backend after a failed start instead of failing every later run", async () => {
     let fail = true;
     const backend = boxBackend();
@@ -269,5 +331,15 @@ describe("DesignSpaceMap and Pinned (props only)", () => {
     expect(onCompare).toHaveBeenCalledWith("B");
     await userEvent.click(within(card).getByRole("button", { name: "Remove pin B" }));
     expect(onRemove).toHaveBeenCalledWith("B");
+  });
+
+  it("Pinned shows the ghost's state only under the compared pin", () => {
+    const m = metricsOf({ b: { featureId: "b", name: "b", mesh: {} as never, volume: 1000, bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } } } as never }, 2.7);
+    const pins = [{ letter: "A" as const, x: 10, y: 5, xName: "w", yName: "h", metrics: m, verdict: "pass" as const }, { letter: "B" as const, x: 20, y: 5, xName: "w", yName: "h", metrics: m, verdict: "pass" as const }];
+    const { rerender } = render(<Pinned pins={pins} metric="mass" current={m} compare="B" ghost={{ status: "evaluating" }} onGo={vi.fn()} onCompare={vi.fn()} onRemove={vi.fn()} />);
+    expect(within(screen.getByRole("listitem", { name: "Pin B" })).getByTestId("space-ghost-status").textContent).toBe("ghost: building…");
+    expect(within(screen.getByRole("listitem", { name: "Pin A" })).queryByTestId("space-ghost-status")).toBeNull();
+    rerender(<Pinned pins={pins} metric="mass" current={m} compare="B" ghost={null} onGo={vi.fn()} onCompare={vi.fn()} onRemove={vi.fn()} />);
+    expect(screen.queryByTestId("space-ghost-status")).toBeNull();
   });
 });

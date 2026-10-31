@@ -4,6 +4,7 @@
 .space-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .space-row .k-label { display: inline-flex; align-items: center; gap: 4px; }
 .space-progress { margin-left: auto; }
+.space-ghost-status { margin-left: auto; }
 
 .space-select { max-width: 140px; }
 

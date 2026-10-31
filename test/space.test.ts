@@ -15,6 +15,11 @@ import {
 } from "../src/ui/concepts/space/space";
 import { sampleGrid, sampleCell, variantDoc, GridCache, getSamplerBackend, disposeSamplerBackend } from "../src/ui/concepts/space/sampler";
 import { useSpace } from "../src/ui/concepts/space/spaceState";
+import { variantDocForPin, pinApplies, ghostKey, ghostLabel, evaluateVariant, ghostStatusText, GhostCache } from "../src/ui/concepts/space/ghost";
+import { useGhost, ghostSolidViews } from "../src/model/concepts/ghostVariant";
+import { useStore } from "../src/model/store";
+import type { SolidEval } from "../src/core/features";
+import type { Pin } from "../src/ui/concepts/space/space";
 
 const param = (name: string, expr: string, extra: Record<string, unknown> = {}) => ({ id: name, name, expr, value: Number(expr), ...extra }) as never;
 
@@ -403,5 +408,113 @@ describe("design space: sampler", () => {
     expect(c.get("a")!.size).toBe(1);
     c.clear();
     expect(c.get("a")).toBeUndefined();
+  });
+});
+
+describe("design space: the compared pin as a ghost", () => {
+  const pinAt = (x: number, y: number, xName = "w", yName = "h", letter: Pin["letter"] = "A"): Pin => ({ letter, x, y, xName, yName, metrics: null, verdict: "unknown" });
+
+  it("builds the pin's variant from the pin's own parameters, whatever the map shows, and knows when they are gone", async () => {
+    const s = await twoParamSession();
+    const v = variantDocForPin(s.doc, pinAt(20, 40, "h", "w"));
+    expect(v).not.toBe(s.doc);
+    expect(resolveParameters(v.parameters).scope).toMatchObject({ w: 40, h: 20, free: 2 });
+    expect(s.doc.parameters.map((p) => p.expr)).toEqual(["30", "15", "2"]); // the document itself is untouched
+    expect(pinApplies(s.doc, pinAt(1, 2))).toBe(true);
+    expect(pinApplies(s.doc, pinAt(1, 2, "w", "gone"))).toBe(false);
+    expect(pinApplies(createDocument(), pinAt(1, 2))).toBe(false);
+  });
+
+  it("keys a ghost by the pin and the recipe with the pin's parameters blanked: a drag keeps it, another edit or another pin does not", async () => {
+    const s = await twoParamSession();
+    const key = () => ghostKey(pinAt(20, 5), s.timeline, s.rollbackIndex, s.doc.activeConfiguration);
+    const k1 = key();
+    const w = s.timeline.find((o) => o.params.name === "w")!;
+    await s.editOperation(w.opId, { ...w.params, expression: "45" }); // the design moves along an axis
+    expect(key()).toBe(k1);
+    const free = s.timeline.find((o) => o.params.name === "free")!;
+    await s.editOperation(free.opId, { ...free.params, expression: "3" }); // the recipe changes
+    const k2 = key();
+    expect(k2).not.toBe(k1);
+    expect(ghostKey(pinAt(25, 5), s.timeline, s.rollbackIndex, undefined)).not.toBe(k2);
+    expect(ghostKey(pinAt(5, 20, "h", "w"), s.timeline, s.rollbackIndex, undefined)).not.toBe(k2);
+    expect(ghostKey(pinAt(20, 5), s.timeline, s.rollbackIndex, "cfg")).not.toBe(k2);
+  });
+
+  it("evaluates the variant into its built bodies, or says why there are none", async () => {
+    const s = await twoParamSession();
+    const seen: string[] = [];
+    const ok = await evaluateVariant(boxBackend((d) => seen.push(d.parameters.map((p) => p.expr).join("/"))), s.doc, pinAt(20, 5));
+    expect(seen).toEqual(["20/5/2"]);
+    expect(ok.status).toBe("shown");
+    expect(ok.solids.map((b) => b.volume)).toEqual([1000]);
+    const bad = await evaluateVariant(boxBackend(), s.doc, pinAt(50, 25));
+    expect(bad).toEqual({ solids: [], status: "error", error: "too big to build" });
+    const none = await evaluateVariant({ ...boxBackend(), evaluate: async () => ({ solids: {}, facePlanes: {} }) }, s.doc, pinAt(20, 5));
+    expect(none).toEqual({ solids: [], status: "empty" });
+    const unbuilt = await evaluateVariant({ ...boxBackend(), evaluate: async () => ({ solids: { b: { featureId: "b", name: "b", sketchId: "", distance: 0, error: "open profile" } }, facePlanes: {} }) }, s.doc, pinAt(20, 5));
+    expect(unbuilt).toEqual({ solids: [], status: "error", error: "open profile" });
+  });
+
+  it("labels the ghost at the axes' precision and words its status honestly", () => {
+    expect(ghostLabel(pinAt(20, 5))).toBe("Pin A: w 20 · h 5");
+    expect(ghostLabel(pinAt(20, 5.25, "w", "h", "B"), { x: { name: "w", min: 10, max: 50, step: 5 }, y: { name: "h", min: 5, max: 25 } })).toBe("Pin B: w 20 · h 5.3");
+    expect(ghostLabel(pinAt(20, 5.25, "h", "w"), { x: { name: "w", min: 10, max: 50, step: 5 } })).toBe("Pin A: h 20 · w 5.25"); // axes that are not the pin's are ignored
+    expect(ghostStatusText("evaluating")).toBe("ghost: building…");
+    expect(ghostStatusText("shown")).toBe("shown as a ghost on the part");
+    expect(ghostStatusText("empty")).toBe("ghost: no bodies");
+    expect(ghostStatusText("error", "too big")).toBe("ghost: did not build (too big)");
+    expect(ghostStatusText("error")).toBe("ghost: did not build");
+    expect(ghostStatusText(null)).toBe("");
+  });
+
+  it("GhostCache keeps the most recent variants and refreshes on read", () => {
+    const c = new GhostCache(2);
+    c.set("a", { solids: [], status: "empty" });
+    c.set("b", { solids: [], status: "empty" });
+    c.get("a");
+    c.set("c", { solids: [], status: "empty" }); // evicts b
+    expect(c.get("b")).toBeUndefined();
+    expect(c.get("a")).toBeTruthy();
+    c.set("a", { solids: [], status: "error", error: "x" }); // overwrite keeps one entry
+    expect(c.get("a")!.status).toBe("error");
+    c.clear();
+    expect(c.get("a")).toBeUndefined();
+  });
+
+  it("useGhost holds the variant, maps it to ghost + variant solid views for its own document only, and forgets it when the document changes", () => {
+    const mesh = { positions: new Float32Array([0, 0, 0]), normals: new Float32Array([0, 0, 1]), indices: new Uint32Array([0]), edges: new Float32Array([0, 0, 0, 1, 1, 1]), triangleCount: 0 };
+    const body: SolidEval = { featureId: "b", name: "b", sketchId: "", distance: 0, mesh: mesh as never, volume: 1 };
+    const unbuilt: SolidEval = { featureId: "c", name: "c", sketchId: "", distance: 0, error: "nope" };
+    useGhost.getState().clear();
+    expect(ghostSolidViews(useGhost.getState(), "d1")).toEqual([]);
+    useGhost.getState().set([body, unbuilt], "Pin A: w 20 · h 5", "d1");
+    expect(useGhost.getState()).toMatchObject({ label: "Pin A: w 20 · h 5", docId: "d1" });
+    const views = ghostSolidViews(useGhost.getState(), "d1");
+    expect(views.length).toBe(1); // only bodies with a mesh
+    expect(views[0]).toEqual({ positions: mesh.positions, normals: mesh.normals, indices: mesh.indices, edges: mesh.edges, ghost: true, variant: true });
+    expect(views[0].id).toBeUndefined(); // never picked, never confused with the real body
+    expect(ghostSolidViews(useGhost.getState(), "other")).toEqual([]); // another document's view never draws it
+    expect(ghostSolidViews(useGhost.getState(), "d1", () => false)).toEqual([]); // hidden bodies stay hidden
+    // clear() only notifies when there was something to clear
+    let notified = 0;
+    const unsub = useGhost.subscribe(() => notified++);
+    useGhost.getState().clear();
+    useGhost.getState().clear();
+    expect(notified).toBe(1);
+    expect(useGhost.getState()).toMatchObject({ solids: null, label: null, docId: null });
+    unsub();
+    // a new document (a new session) in the store clears the ghost; a revision of the same one does not.
+    // Every fresh document is "doc1" (createDocument's default), so the id alone could not tell them apart.
+    const s1 = realSession();
+    useStore.setState({ session: s1 });
+    useGhost.getState().set([body], "Pin A", s1.doc.id);
+    useStore.setState({ rev: useStore.getState().rev + 1 });
+    useStore.setState({ session: s1 }); // the same session set again is not a switch
+    expect(useGhost.getState().solids).not.toBeNull();
+    const s2 = realSession();
+    expect(s2.doc.id).toBe(s1.doc.id);
+    useStore.setState({ session: s2 });
+    expect(useGhost.getState().solids).toBeNull();
   });
 });

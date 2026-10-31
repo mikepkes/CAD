@@ -65,6 +65,8 @@ export interface SolidView {
   woodFrame?: WoodFrame;
   /** A hidden body drawn as a faint, unpickable ghost ("show hidden" mode). */
   ghost?: boolean;
+  /** A ghost that is another design (a compared Design Space pin): the kit's ghost accent, dashed edges. Implies `ghost`. */
+  variant?: boolean;
   /** Principal curvatures (k1, k2) per vertex, for the curvature map. */
   curvature?: Float32Array;
   /** Curvature-comb line segments along the body's curved edges (flat xyz pairs). */
@@ -128,6 +130,7 @@ const COLORS = {
   grid: 0x2d3340,
   gridMajor: 0x3a4152,
   ghost: 0x5b6472,
+  variant: 0xf0a44b, // mirrors the kit's --k-ghost (kit.css); change both together
   geometry: 0xdfe6f2,
   underConstrained: 0x5a8cff, // Fusion-style blue for under-constrained geometry
   profileFill: 0x4f8cff,
@@ -1048,8 +1051,11 @@ export class SceneManager {
     const color = clip ? bodyColor(index) : 0x7b86e0;
     let mat: THREE.Material;
     const analysis = this.lastData?.analysis;
-    const analysisMat = !faded && !clip && analysis && analysis.mode !== "none" ? this.analysisMaterial(analysis, s, geo) : null;
-    if (analysisMat) {
+    const analysisMat = !s.variant && !faded && !clip && analysis && analysis.mode !== "none" ? this.analysisMaterial(analysis, s, geo) : null; // a variant ghost never carries analysis
+    if (s.variant) {
+      // A compared design variant: translucent in the kit's ghost accent, drawn without writing depth so the real part stays legible through it.
+      mat = new THREE.MeshStandardMaterial({ color: COLORS.variant, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.28, depthWrite: false, clippingPlanes: clip ?? undefined });
+    } else if (analysisMat) {
       mat = analysisMat;
     } else if (s.material && !clip) {
       mat = this.materialFor(s);
@@ -1062,7 +1068,7 @@ export class SceneManager {
       });
     }
     const mesh = new THREE.Mesh(geo, mat);
-    if (s.ghost) mesh.userData.ghost = true; // drawn, but never picked
+    if (s.ghost || s.variant) mesh.userData.ghost = true; // drawn, but never picked
     if (s.id) mesh.userData.bodyId = s.id; // so a face pick names its body
     this.solidsGroup.add(mesh);
     if (analysis?.combs && s.combs?.length && !faded) {
@@ -1074,7 +1080,7 @@ export class SceneManager {
     // Section cap for THIS body: a stencil pass marks where the clip plane cuts
     // its material (back faces increment, front decrement), then a coloured quad
     // fills those pixels and resets the stencil so the next body starts clean.
-    if (clip) {
+    if (clip && !s.variant) { // a variant ghost gets no section cap: it is see-through by design
       const base = 10 + index * 3;
       for (const [side, op] of [[THREE.BackSide, THREE.IncrementWrapStencilOp], [THREE.FrontSide, THREE.DecrementWrapStencilOp]] as const) {
         const sm = new THREE.MeshBasicMaterial({ depthWrite: false, depthTest: false, colorWrite: false, clippingPlanes: clip });
@@ -1094,8 +1100,11 @@ export class SceneManager {
       egeo.setAttribute("position", new THREE.BufferAttribute(s.edges, 3));
       const eseg = new THREE.LineSegments(
         egeo,
-        new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1, clippingPlanes: clip ?? undefined })
+        s.variant
+          ? new THREE.LineDashedMaterial({ color: COLORS.variant, dashSize: 1.5, gapSize: 1, transparent: true, opacity: 0.85, clippingPlanes: clip ?? undefined }) // variant ghost: dashed accent edges
+          : new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1, clippingPlanes: clip ?? undefined })
       );
+      if (s.variant) { eseg.computeLineDistances(); eseg.userData.ghost = true; } // dashes need distances; the lens skips ghosts
       eseg.userData.edges = true; // the body's B-rep edges (the lens redraws these)
       this.solidsGroup.add(eseg);
     }

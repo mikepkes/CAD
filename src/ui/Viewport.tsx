@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ViewportOverlay } from "./kit/ViewportOverlay";
-import { SceneManager, ViewData } from "../viewport/SceneManager";
+import { SceneManager, SolidView, ViewData } from "../viewport/SceneManager";
 import { Interactions } from "../viewport/interactions";
 import { setActiveScene } from "../viewport/sceneRef";
 import { AppState, useStore } from "../model/store";
@@ -11,6 +11,7 @@ import { hiddenIds, bodyVisible, sketchVisible } from "../core/visibility";
 import { compileExpr } from "../math/expr";
 import { materialForComponent } from "../core/document";
 import { woodFrameFromBounds } from "../viewport/material";
+import { ghostSolidViews, useGhost } from "../model/concepts/ghostVariant";
 import { ContextMenu } from "./ContextMenu";
 
 function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
@@ -74,7 +75,7 @@ function buildView(s: AppState): ViewData {
   const datumPlanes = Object.values(doc.planes)
     .filter((d) => d.plane && !hidden.has(d.id))
     .map((d) => ({ id: d.id, name: d.name, plane: d.plane! }));
-  const solids = Object.values(s.solids)
+  const solids: SolidView[] = Object.values(s.solids)
     .filter((sol) => sol.mesh && (s.showHiddenGhosts || bodyVisible(doc, sol, hidden)))
     .map((sol) => {
       // Resolve the body's material from its owning component (bodies inherit;
@@ -97,6 +98,8 @@ function buildView(s: AppState): ViewData {
         ...(() => { const a = s.analysisData[sol.featureId]; return a && a.vertices * 3 === sol.mesh!.positions.length ? { curvature: a.curvature, combs: a.combs } : {}; })(),
       };
     });
+  // A compared design variant (Design Space) rides along as dashed, translucent, unpickable ghosts; hidden bodies stay hidden in it too.
+  solids.push(...ghostSolidViews(useGhost.getState(), doc.id, (sol) => bodyVisible(doc, sol, hidden)));
   return {
     mode: s.mode,
     planeId: sketch ? sketch.planeId : null,
@@ -184,6 +187,8 @@ function ViewportInner({ overlays }: { overlays?: ReactNode }) {
     controller.setBase(buildView(useStore.getState()));
     updateExtrudeHandle(scene, useStore.getState());
 
+    // The ghost variant lives outside the document store; a change to it redraws the same view.
+    const unsubGhost = useGhost.subscribe(() => controller.setBase(buildView(useStore.getState())));
     const unsub = useStore.subscribe((s) => {
       controller.setBase(buildView(s));
       updateExtrudeHandle(scene, s);
@@ -201,6 +206,7 @@ function ViewportInner({ overlays }: { overlays?: ReactNode }) {
 
     return () => {
       unsub();
+      unsubGhost();
       setActiveScene(null);
       controller.dispose();
       scene.dispose();

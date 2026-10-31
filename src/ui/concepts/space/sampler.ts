@@ -35,7 +35,7 @@ export function overrideDoc(doc: CadDocument, overrides: Record<string, number>)
 }
 
 /** The variant document for one cell: the two axis parameters set to the cell's values. */
-export function variantDoc(doc: CadDocument, spec: GridSpec, x: number, y: number): CadDocument {
+export function variantDoc(doc: CadDocument, spec: { x: { name: string }; y: { name: string } }, x: number, y: number): CadDocument {
   return overrideDoc(doc, { [spec.x.name]: x, [spec.y.name]: y });
 }
 
