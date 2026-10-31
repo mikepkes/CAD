@@ -68,7 +68,7 @@ function featureBodies(doc: CadDocument): Map<string, string | undefined> {
   let last: string | undefined;
   for (const f of Object.values(doc.features)) {
     const op = "operation" in f ? f.operation ?? "new" : undefined;
-    const makesSolid = f.kind === "extrude" || f.kind === "revolve" || f.kind === "primitive" || f.kind === "loft" || f.kind === "sweep"
+    const makesSolid = f.kind === "extrude" || f.kind === "revolve" || f.kind === "primitive" || f.kind === "gear" || f.kind === "loft" || f.kind === "sweep"
       || (f.kind === "thread" && !f.spec.internal);
     if (makesSolid && (op === "new" || !last)) { out.set(f.id, f.id); last = f.id; continue; }
     out.set(f.id, "body" in f && f.body && f.body !== "last" ? f.body : last);

@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument, Material, RoleRef, MemberFeature, SurfaceFeature, SheetFoldDef, FlangeFeature, findConfiguration } from "../document";
+import { CadDocument, Material, RoleRef, MemberFeature, SurfaceFeature, SheetFoldDef, FlangeFeature, GearDim, GearFeature, GearKind, findConfiguration } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -18,6 +18,7 @@ import { resolveParameters } from "../parameters";
 import { ProjectedCurve } from "../geometry/project";
 import { blendCorner, copyEntities, extendCurve, offsetCurve, trimCurve, Vec } from "./sketch-ops";
 import { gearOutline, GearType } from "../geometry/gear";
+import { GEAR_DIMS, GEAR_LABEL, checkGear, checkMesh, gearMeshExprs } from "../gears";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 
@@ -1999,6 +2000,129 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       return { createdIds: [id], message: `${p.shape}` };
+    },
+  },
+  {
+    type: "feature.gear",
+    title: "Gear",
+    summary: "Make a 3D involute gear in one step — spur, helical, herringbone, ring (internal), rack, straight bevel or worm — with a printable bore (D-flat / keyway), hub and spokes; `mesh` places it in mesh with another gear.",
+    description:
+      "Builds a gear solid on a sketch's plane: its axis is the sketch normal through (`x`, `y`) in sketch coordinates, raised `offset` along the normal, turned `rotation` degrees about it (its phase; at 0 a tooth is centred on the sketch's +u). It belongs to that sketch's component, so a revolute joint on the component turns it. Omit `sketch` to get a fresh placement sketch on `plane` (default XY) in `component`. Every number is an expression — a parameter name makes it a slider. " +
+      "`type`: spur (default); helical (`helixAngle`, default 20°); herringbone (two mirrored helical halves, default 30°); ring (an internal gear: a toothed bore in a rim `rim` mm thick; `helixAngle` makes it helical, `herringbone: true` double helical); rack (along sketch u, teeth toward +v, pitch line through (x, y), `teeth` along its length, `rim` = body depth below the roots; helical / herringbone like the ring); bevel (straight bevel for shafts at 90°: pitch cone angle atan(teeth/`mateTeeth`), the heel on the sketch plane, teeth tapering to the apex up the axis, Tredgold tooth form); worm (`teeth` = number of starts, `wormDiameter` its pitch diameter, `faceWidth` its length along the axis; the sign of `helixAngle` picks the hand, + = right). " +
+      "Sizes: `module` (mm; pitch diameter = module × teeth; transverse, so centre distances don't depend on the helix angle), `pressureAngle` (20°), `addendum` / `dedendum` (× module: 1 / 1.25), `rootFillet` (× module, 0.38), `backlash` (mm of tooth thinning at the pitch line, default 0.1 — the clearance a printed pair needs; 0 = exact), `faceWidth` (default 5 × module; a bevel's is measured along the cone). " +
+      "Printable extras: `bore` diameter, with `dFlat` (across-flat size of a D-shaft, e.g. 4.5 for a 5 mm shaft) or `keyway` width (+ `keywayDepth`, default half the width); `hubDiameter` + `hubLength` (on the top face; behind a bevel's heel); `spokes` (≥ 2 windows through the web). " +
+      "MESHING — `mesh: {gear, angle}` does it for you: give an existing spur/helical/herringbone/ring/rack gear feature on the same plane and the direction `angle`° from its centre to this one's (a rack: `along`, mm from its middle, instead), and this gear's `x`, `y`, `rotation`, default `module`, `offset` and `helixAngle` (opposite hand for an external pair, the same for a ring or rack) become expressions of that gear's, so the pair stays meshed when either changes. By hand: an external pair's centres are module×(N1+N2)/2 apart, helical hands opposite; ring + pinion module×(Nring−Npinion)/2, same hand; a pinion on a rack sits a pitch radius above its pitch line, same hand. Phase: with the mate in direction ψ from a gear turned r1, s = frac((ψ − r1)·N1/360); the mate's rotation is ψ + 180 − (½ − s)·360/N2 (external) or ψ − (½ + s)·360/N2 (inside a ring). " +
+      "A bevel pair: gear 2's axis passes through gear 1's apex, which is module×N2/2 above gear 1's heel; gear 2's heel plane is module×N1/2 from gear 1's axis (e.g. gear 1 on XY at the origin, gear 2 on a YZ plane at x = m·N1/2 facing −X, centred at height m·N2/2). A worm + wheel: the wheel is a helical gear of the same module with helixAngle = the lead angle deg(atan(starts·module/wormDiameter)), same hand, centres (wormDiameter + module×N)/2 apart. " +
+      "Turning (for joint expressions): an external mate turns −θ·N1/N2, a pinion in a ring +θ·Nring/Npinion, a rack slides θ·π·module·N/360 mm per θ° of its pinion, a bevel mate θ·N1/N2 (about its own axis), a worm wheel θ·starts/N. Returns [gearId] (plus the new placement sketch's ids when it made one).",
+    paramsSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        type: { type: "string", enum: ["spur", "helical", "herringbone", "ring", "rack", "bevel", "worm"], description: "What kind of gear (default spur)." },
+        sketch: { type: "string", description: "Placement sketch (its plane and component). Omit to make one on `plane` in `component`." },
+        plane: { type: "string", enum: PLANE_ENUM, description: "Without `sketch`: the origin plane for the new placement sketch (default XY)." },
+        component: { type: "string", description: "Without `sketch`: the component the new placement sketch (and so the gear) belongs to (default root)." },
+        mesh: {
+          type: "object", required: ["gear"], additionalProperties: false,
+          description: "Place this gear in mesh with an existing gear feature on the same plane.",
+          properties: {
+            gear: { type: "string", description: "The gear feature id to mesh with (spur, helical, herringbone, ring or rack)." },
+            angle: { type: ["string", "number"], description: "Direction from that gear's centre to this one's, degrees (expr; default 0)." },
+            along: { type: ["string", "number"], description: "Rack: this pinion's position along the rack from its middle, mm (expr; default 0)." },
+          },
+        },
+        module: { type: ["string", "number"], description: "Module, mm (expr; default 2)." },
+        teeth: { type: ["string", "number"], description: "Tooth count (expr; default 20). Rack: teeth along its length. Worm: number of starts (default 1)." },
+        faceWidth: { type: ["string", "number"], description: "Face width / rack depth / worm length, mm (expr; default 5 × module)." },
+        helixAngle: { type: ["string", "number"], description: "Helix angle at the pitch circle, degrees; + right hand, − left (expr)." },
+        herringbone: { type: "boolean", description: "ring / rack: double helical." },
+        pressureAngle: { type: ["string", "number"], description: "Degrees (expr; default 20)." },
+        backlash: { type: ["string", "number"], description: "Tooth thinning at the pitch line, mm (expr; default 0.1)." },
+        addendum: { type: ["string", "number"], description: "× module (expr; default 1)." },
+        dedendum: { type: ["string", "number"], description: "× module (expr; default 1.25)." },
+        rootFillet: { type: ["string", "number"], description: "Cutter tip radius × module (expr; default 0.38)." },
+        rim: { type: ["string", "number"], description: "ring: rim outside the roots; rack: depth below the roots; spoked gear: rim inside the roots, mm (expr)." },
+        mateTeeth: { type: ["string", "number"], description: "bevel: the mating gear's tooth count (expr; default = teeth, a miter pair)." },
+        wormDiameter: { type: ["string", "number"], description: "worm: pitch diameter, mm (expr; default 8 × module)." },
+        bore: { type: ["string", "number"], description: "Bore diameter, mm (expr; 0 = none)." },
+        dFlat: { type: ["string", "number"], description: "D-shaft bore: across-flat size, mm (expr)." },
+        keyway: { type: ["string", "number"], description: "Keyway width, mm (expr)." },
+        keywayDepth: { type: ["string", "number"], description: "Keyway depth beyond the bore wall, mm (expr; default width/2)." },
+        hubDiameter: { type: ["string", "number"], description: "Hub diameter, mm (expr)." },
+        hubLength: { type: ["string", "number"], description: "Hub length, mm (expr)." },
+        spokes: { type: ["string", "number"], description: "Number of spokes (windows through the web; expr; 0 = solid)." },
+        x: { type: ["string", "number"], description: "Axis position along the sketch's u, mm (expr)." },
+        y: { type: ["string", "number"], description: "Axis position along the sketch's v, mm (expr)." },
+        offset: { type: ["string", "number"], description: "Shift along the sketch normal, mm (expr)." },
+        rotation: { type: ["string", "number"], description: "Phase: turn about the axis, degrees (expr)." },
+        operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
+        body: { type: "string", description: "Target body (feature id) for join/cut; default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a cut/join that changes nothing an error." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A 20-tooth module-2 spur gear on XY with a 5 mm D-shaft bore and a hub", params: { type: "spur", module: 2, teeth: 20, faceWidth: 8, bore: 5, dFlat: 4.5, hubDiameter: 12, hubLength: 5 } },
+      { note: "A 12-tooth pinion meshing with it (gear1), to its right: centre, phase and module follow gear1", params: { type: "spur", teeth: 12, faceWidth: 8, bore: 5, mesh: { gear: "gear1", angle: 0 } } },
+      { note: "A helical pair: the mate gets the opposite hand from `mesh`", params: { type: "helical", teeth: 15, mesh: { gear: "gear4", angle: 90 } } },
+      { note: "A herringbone gear in a component, its module a parameter", params: { type: "herringbone", component: "comp3", module: "m", teeth: 24, faceWidth: 12, helixAngle: 30, bore: 8, spokes: 5 } },
+      { note: "A 36-tooth ring gear, and a planet inside it at 120°", params: { type: "ring", module: 1.5, teeth: 36, faceWidth: 8, rim: 4 } },
+      { note: "(the planet)", params: { type: "spur", teeth: 12, mesh: { gear: "gear7", angle: 120 } } },
+      { note: "A 16:24 bevel pair's pinion", params: { type: "bevel", module: 2, teeth: 16, mateTeeth: 24, faceWidth: 8, bore: 5 } },
+      { note: "A single-start worm, 16 mm pitch diameter, 40 long, along X", params: { type: "worm", plane: "YZ", module: 2, teeth: 1, wormDiameter: 16, faceWidth: 40, bore: 5 } },
+    ],
+    apply(draft, p: Record<string, unknown> & { type?: GearKind; sketch?: string; plane?: string; component?: string; mesh?: { gear: string; angle?: string | number; along?: string | number }; herringbone?: boolean; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      const type: GearKind = p.type ?? "spur";
+      if (p.sketch && !draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
+      if (p.component && !draft.components[p.component]) throw new Error(`No component "${p.component}"`);
+      const dims: Partial<Record<GearDim, string>> = {};
+      for (const k of GEAR_DIMS) if (p[k] != null) dims[k] = String(p[k]);
+      const scope = resolveParameters(draft.parameters).scope;
+      let note = "";
+      if (p.mesh) {
+        const mate = draft.features[p.mesh.gear];
+        if (!mate || mate.kind !== "gear") throw new Error(`mesh: "${p.mesh.gear}" is not a gear feature`);
+        const placed = gearMeshExprs(mate, type, dims, p.mesh, !!p.herringbone);
+        Object.assign(dims, placed.dims);
+        const here = p.sketch ? draft.sketches[p.sketch] : undefined, there = draft.sketches[mate.sketchId];
+        const plane = (sk: typeof here) => (sk ? (sk.planeId === "custom" || sk.planeId === "datum" ? sk.id : sk.planeId) : (p.plane ?? "XY"));
+        if (plane(here) !== plane(there)) throw new Error(`mesh: "${p.mesh.gear}" is on another plane — put both gears' sketches on the same plane`);
+        note = placed.note;
+      }
+      // Reject a bad expression or an impossible gear now, before anything is made.
+      const num: Partial<Record<GearDim, number>> = {};
+      for (const [k, e] of Object.entries(dims) as [GearDim, string][]) {
+        let v: number;
+        try { v = compileExpr(e).eval(scope); } catch (err) { throw new Error(`gear ${k} "${e}": ${err instanceof Error ? err.message : String(err)}`); }
+        if (!Number.isFinite(v)) throw new Error(`gear ${k} "${e}" is not a number`);
+        num[k] = v;
+      }
+      checkGear(type, num, !!p.herringbone);
+      if (p.mesh) checkMesh(draft.features[p.mesh.gear] as GearFeature, type, num, scope);
+      const id = ctx.alloc("gear");
+      let sketchId = p.sketch;
+      const created = [id];
+      if (!sketchId) {
+        sketchId = ctx.alloc("sketch");
+        const originId = ctx.alloc("pt");
+        const comp = p.component ?? draft.rootComponentId;
+        draft.sketches[sketchId] = {
+          id: sketchId, name: `${p.name ?? "Gear"} plane`, planeId: p.plane ?? "XY", componentId: comp, originPointId: originId,
+          entities: { [originId]: { id: originId, kind: "point", x: 0, y: 0, fixed: true } }, constraints: {},
+          status: { dof: 0, fullyConstrained: false, converged: true, conflicting: false },
+        };
+        draft.components[comp].sketches.push(sketchId);
+        created.push(sketchId, originId);
+      }
+      const label = GEAR_LABEL[type];
+      draft.features[id] = {
+        id, kind: "gear", name: p.name ?? label, sketchId, gearType: type, dims,
+        ...(p.herringbone ? { herringbone: true } : {}), operation: p.operation ?? "new",
+        ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
+      };
+      const m = num.module ?? 2, z = num.teeth ?? (type === "worm" ? 1 : 20);
+      const what = type === "worm" ? `${z}-start worm, module ${m}` : type === "rack" ? `${z}-tooth rack, module ${m}` : `${z}-tooth ${label.toLowerCase()}, module ${m}, pitch ⌀${+(m * z).toFixed(3)}`;
+      return { createdIds: created, message: what + note };
     },
   },
   {

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Tool, TOOL_VARIANTS, useStore } from "../model/store";
 import { PLANES } from "../geometry/plane";
 import { ask } from "./kit/askDialog";
-import { addPrimitive } from "./concepts/contextActions";
+import { addPrimitive, addGear } from "./concepts/contextActions";
 
 function FileMenu() {
   const newDocument = useStore((s) => s.newDocument);
@@ -340,6 +340,7 @@ export function Toolbar() {
           <div className="tool-group">
             <button className="btn" disabled={kernelLoading} title="Add a box (B): click a face to push and pull it to size" onClick={() => void addPrimitive("box")}>▣ Box</button>
             <button className="btn" disabled={kernelLoading} title="Add a cylinder: click its end or side to push and pull it" onClick={() => void addPrimitive("cylinder")}>◯ Cylinder</button>
+            <button className="btn" disabled={kernelLoading} title="Add a gear (G): spur, helical, herringbone, ring, rack, bevel or worm — its card sets the type, teeth and sizes" onClick={() => void addGear()}>⚙ Gear</button>
             <button
               className="btn"
               disabled={!lastSketch || kernelLoading}

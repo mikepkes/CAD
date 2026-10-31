@@ -247,14 +247,25 @@ function externalTooth(g: ReturnType<typeof resolved>) {
 function externalOutline(spec: GearSpec): GearOutline {
   const g = resolved(spec);
   const { tooth, radii } = externalTooth(g);
-  const N = g.N, step = TAU / N;
+  const edges = toothRing(tooth, radii, g.N, (p) => p, (r) => r, 1);
+  return {
+    type: "external", ...edges, circles: [], radii,
+    reference: [{ name: "pitch", r: radii.pitch }, { name: "base", r: radii.base }, { name: "tip", r: radii.tip }, { name: "root", r: radii.root }],
+    summary: `External involute gear: ${g.N} teeth, module ${g.m}, ${f3((g.alpha * 180) / Math.PI)}° PA; pitch r=${f3(radii.pitch)}, base r=${f3(radii.base)}, tip r=${f3(radii.tip)}, root r=${f3(radii.root)}${tooth.fillet ? `, root fillet ρ=${f3(g.rho)}` : ", sharp root"}`,
+  };
+}
+
+/** N copies of one tooth (centred at angle 0, in the frame `map` carries points out of) around the
+ *  circle, walked CCW: right half (mirrored, root → tip), tip arc, left half (tip → root), root arc.
+ *  `radius` maps a tooth-frame circle radius, `angle` scales tooth-frame angles (a bevel's back cone). */
+function toothRing(tooth: ToothCurves, radii: { tip: number; root: number }, N: number, map: (p: Pt) => Pt, radius: (r: number) => number, angle: number): { start: Pt; edges: OutlineEdge[] } {
+  const step = TAU / N;
   const mirror = (p: Pt): Pt => ({ x: p.x, y: -p.y });
   const edges: OutlineEdge[] = [];
-  // Per tooth (centred at k·step), walked CCW: right half (mirrored, root → tip), tip arc, left half (tip → root), root arc.
-  const rootPt = (k: number, side: 1 | -1) => rot(polar(radii.root, side * tooth.rootHalfAngle), k * step);
+  const rootPt = (k: number, side: 1 | -1) => rot(polar(radius(radii.root), side * tooth.rootHalfAngle * angle), k * step);
   const start = rootPt(0, -1);
   for (let k = 0; k < N; k++) {
-    const R = (p: Pt) => rot(p, k * step);
+    const R = (p: Pt) => rot(map(p), k * step);
     const rightFillet = tooth.fillet ? tooth.fillet.map(mirror).map(R) : null;
     const rightFlank = tooth.flank.map(mirror).map(R);
     const leftFlank = tooth.flank.map(R);
@@ -262,18 +273,14 @@ function externalOutline(spec: GearSpec): GearOutline {
     if (rightFillet) edges.push({ kind: "spline", through: rightFillet.slice(1) });
     else if (tooth.stem) edges.push({ kind: "line", to: rightFlank[0] });
     edges.push({ kind: "spline", through: rightFlank.slice(1) });
-    edges.push({ kind: "arc", to: leftFlank[leftFlank.length - 1], r: radii.tip, ccw: true });
+    edges.push({ kind: "arc", to: leftFlank[leftFlank.length - 1], r: radius(radii.tip), ccw: true });
     edges.push({ kind: "spline", through: [...leftFlank].reverse().slice(1) });
     if (leftFillet) edges.push({ kind: "spline", through: [...leftFillet].reverse().slice(1) });
     else if (tooth.stem) edges.push({ kind: "line", to: R(mirror(tooth.stem)) });
     // Root arc to the next tooth (back to the start on the last one).
-    edges.push({ kind: "arc", to: rootPt((k + 1) % N, -1), r: radii.root, ccw: true });
+    edges.push({ kind: "arc", to: rootPt((k + 1) % N, -1), r: radius(radii.root), ccw: true });
   }
-  return {
-    type: "external", start, edges, circles: [], radii,
-    reference: [{ name: "pitch", r: radii.pitch }, { name: "base", r: radii.base }, { name: "tip", r: radii.tip }, { name: "root", r: radii.root }],
-    summary: `External involute gear: ${N} teeth, module ${g.m}, ${f3((g.alpha * 180) / Math.PI)}° PA; pitch r=${f3(radii.pitch)}, base r=${f3(radii.base)}, tip r=${f3(radii.tip)}, root r=${f3(radii.root)}${tooth.fillet ? `, root fillet ρ=${f3(g.rho)}` : ", sharp root"}`,
-  };
+  return { start, edges };
 }
 
 // ---- internal (ring) gear -----------------------------------------------------
@@ -287,8 +294,9 @@ function internalOutline(spec: GearSpec): GearOutline {
   const rim = rr + (spec.rimThickness ?? 3) * m;
   if (rt <= 0) throw new Error("addendum too large for this internal gear");
   const tAt = (r: number) => Math.sqrt(Math.max(0, (r / rb) ** 2 - 1));
-  // The internal tooth is the material between two external-type spaces: its half angle is π/N − (external half angle).
-  const thetaP = ((Math.PI * m) / 2 - backlash) / (2 * rp);
+  // The internal tooth is the material between two external-type spaces: its half angle is π/N − (space half angle).
+  // Backlash thins the ring's tooth, so it widens the space.
+  const thetaP = ((Math.PI * m) / 2 + backlash) / (2 * rp);
   const thetaB = thetaP + inv(Math.tan(alpha));
   const halfAngle = (r: number) => Math.PI / N - (thetaB - inv(tAt(r)));
   const hasStem = rt < rb;
@@ -381,3 +389,117 @@ export function gearOutline(spec: GearSpec): GearOutline {
 
 /** Centre distance for two external gears of the same module (standard, no profile shift). */
 export const centreDistance = (module: number, teeth1: number, teeth2: number) => (module * (teeth1 + teeth2)) / 2;
+
+// ---- gear pairs: the placement maths ---------------------------------------------------
+//
+// Every outline above has a tooth centred on angle 0 (a ring gear: a tooth of
+// the ring; a rack: a tooth on u = 0 for an odd count, a space for an even
+// one). Two gears mesh when, along the line of centres, a tooth of one faces a
+// space of the other. Measure each gear's "phase" at the contact direction ψ in
+// teeth: s = (ψ − rotation)·N / 2π (an integer = a tooth points at the contact).
+//   external pair:  s₁ + s₂ ≡ ½ (mod 1), the second gear's contact direction being ψ + π;
+//   internal pair:  s_pinion − s_ring ≡ ½ (both measure the same direction ψ);
+//   rack + pinion:  s_pinion − (x_pinion − x_tooth)/(π·m) ≡ ½ with ψ = −90° (rack below).
+// Turning one gear by θ turns its mate by −θ·N₁/N₂ (external), +θ·N₁/N₂
+// (internal) or slides the rack θ·r_pitch (θ in radians: θ°·π·m·N/360 mm),
+// which keeps those sums fixed — so a phase that is right at rest stays right.
+
+const mod1 = (x: number) => x - Math.floor(x);
+const deg = (r: number) => (r * 180) / Math.PI;
+const radOf = (d: number) => (d * Math.PI) / 180;
+
+/** Rotation (degrees) that meshes gear B (NB teeth) with gear A (NA teeth, turned by `rotA` degrees),
+ *  B's centre lying in direction `dirDeg` from A's. External: two outside gears; internal: A is the
+ *  ring, B the pinion inside it (its centre at the ring's centre + a·dir). */
+export function meshRotation(kind: "external" | "internal", NA: number, rotA: number, NB: number, dirDeg: number): number {
+  const psi = radOf(dirDeg);
+  const sA = mod1(((psi - radOf(rotA)) * NA) / (2 * Math.PI));
+  if (kind === "external") {
+    // s_B = (ψ + π − rot_B)·N_B/2π ≡ ½ − s_A  →  rot_B = ψ + π − (½ − s_A)·2π/N_B
+    return normDeg(deg(psi + Math.PI - ((0.5 - sA) * 2 * Math.PI) / NB));
+  }
+  // pinion B inside ring A: s_B − s_A ≡ ½, both at ψ  →  rot_B = ψ − (½ + s_A)·2π/N_B
+  return normDeg(deg(psi - ((0.5 + sA) * 2 * Math.PI) / NB));
+}
+
+/** Rotation (degrees) of a pinion of N teeth whose centre sits above a rack, at x offset `dx` from a
+ *  rack tooth centre (the rack's centre for an odd tooth count; half a pitch off it for an even one). */
+export function rackPinionRotation(module: number, N: number, dx: number): number {
+  const sR = mod1(dx / (Math.PI * module));
+  // s_P = (−π/2 − rot)·N/2π ≡ ½ + s_R
+  return normDeg(deg(-Math.PI / 2 - ((0.5 + sR) * 2 * Math.PI) / N));
+}
+
+const normDeg = (d: number) => { const x = ((d % 360) + 540) % 360 - 180; return Math.abs(x) < 1e-9 ? 0 : x; };
+
+/** Centre distance of an internal pair (ring NR, pinion NP). */
+export const internalCentreDistance = (module: number, ringTeeth: number, pinionTeeth: number) => (module * (ringTeeth - pinionTeeth)) / 2;
+
+/** A straight bevel gear on shafts at 90°: pitch cone angle δ = atan(N / N_mate), pitch radius,
+ *  cone distance (apex to the pitch circle along the cone) and the apex height above the heel. */
+export function bevelGeometry(module: number, teeth: number, mateTeeth: number) {
+  const pitchAngle = Math.atan2(teeth, mateTeeth);
+  const pitchRadius = (module * teeth) / 2;
+  return { pitchAngle, pitchRadius, coneDistance: pitchRadius / Math.sin(pitchAngle), apexHeight: pitchRadius / Math.tan(pitchAngle) };
+}
+
+/**
+ * A straight bevel gear's tooth outline in its heel plane (z = 0, axis +Z, the pitch-cone apex at
+ * z = apexHeight). Tredgold's construction: on the back cone (the cone whose elements meet the pitch
+ * cone square at the pitch circle) the teeth are those of a "virtual" spur gear of N / cos δ teeth
+ * and pitch radius r / cos δ, wrapped onto it. Every flank of the gear is a cone through the apex, so
+ * the outline in the heel plane is that back-cone profile projected from the apex; scaled toward the
+ * apex it is the outline at any other plane (the toe). The pitch circle stays r = m·N/2.
+ */
+export function bevelOutline(spec: GearSpec & { mateTeeth: number }): GearOutline & { bevel: ReturnType<typeof bevelGeometry> } {
+  const g = resolved({ ...spec, type: "external" });
+  const bg = bevelGeometry(g.m, g.N, spec.mateTeeth);
+  const cos = Math.cos(bg.pitchAngle), sin = Math.sin(bg.pitchAngle);
+  const H = bg.apexHeight, zBack = -bg.pitchRadius * Math.tan(bg.pitchAngle); // the back cone's apex on the axis
+  const { tooth, radii } = externalTooth({ ...g, N: g.N / cos }); // the virtual gear (a fractional tooth count)
+  // A virtual-gear point (ρ from its centre, angle θ) lies on the back cone at radius ρ·cos δ, height
+  // zBack + ρ·sin δ, azimuth θ / cos δ; seen from the apex it crosses the heel plane at H/(H − z) times that radius.
+  const radius = (rho: number) => { const z = zBack + rho * sin; if (z >= H - 1e-9) throw new Error("bevel tooth reaches the apex — use a smaller module or more teeth"); return (rho * cos * H) / (H - z); };
+  const map = (p: Pt): Pt => polar(radius(Math.hypot(p.x, p.y)), Math.atan2(p.y, p.x) / cos);
+  const ring = toothRing(tooth, radii, g.N, map, radius, 1 / cos);
+  const heel = { pitch: bg.pitchRadius, base: radius(radii.base), tip: radius(radii.tip), root: radius(radii.root) };
+  return {
+    type: "external", ...ring, circles: [], radii: heel, bevel: bg,
+    reference: [{ name: "pitch", r: heel.pitch }, { name: "tip", r: heel.tip }, { name: "root", r: heel.root }],
+    summary: `Straight bevel gear: ${g.N} teeth (mates ${spec.mateTeeth}), module ${g.m}; pitch cone ${f3((bg.pitchAngle * 180) / Math.PI)}°, cone distance ${f3(bg.coneDistance)}, apex ${f3(H)} above the heel`,
+  };
+}
+
+/** A cylindrical worm: axial pitch π·m, lead = starts × pitch, lead angle atan(lead / π·d); its thread's
+ *  axial section is the basic rack (flank widths at the root and tip). A wheel to mesh with it is a
+ *  helical gear of the same module (transverse) with helix angle = the lead angle, same hand, at centre
+ *  distance (d + m·N)/2. */
+export function wormGeometry(module: number, starts: number, pitchDiameter: number, o: { pressureAngle?: number; addendum?: number; dedendum?: number; backlash?: number } = {}) {
+  const alpha = radOf(o.pressureAngle ?? 20);
+  const ha = (o.addendum ?? 1) * module, hf = (o.dedendum ?? 1.25) * module;
+  const axialPitch = Math.PI * module, lead = axialPitch * starts;
+  const rp = pitchDiameter / 2;
+  if (rp - hf <= 0.5) throw new Error("worm diameter too small for its module");
+  const wP = axialPitch / 2 - (o.backlash ?? 0);
+  const rootWidth = wP + 2 * hf * Math.tan(alpha), tipWidth = wP - 2 * ha * Math.tan(alpha);
+  if (tipWidth <= 0) throw new Error("worm thread comes to a point — reduce the addendum or pressure angle");
+  if (rootWidth >= axialPitch * 0.98) throw new Error("worm threads overlap at the root — reduce the dedendum");
+  return { starts, axialPitch, lead, pitchRadius: rp, tipRadius: rp + ha, rootRadius: rp - hf, rootWidth, tipWidth, leadAngle: Math.atan(lead / (Math.PI * pitchDiameter)) };
+}
+
+/** The defaults `feature.gear` builds with when a number is left out (mm / degrees). */
+export function gearDefaults(type: "spur" | "helical" | "herringbone" | "ring" | "rack" | "bevel" | "worm", module: number, teeth: number, mateTeeth: number) {
+  const m = module;
+  const faceWidth = type === "worm" ? Math.round(4 * Math.PI * m * 10) / 10
+    : type === "bevel" ? Math.round(Math.min(10 * m, 0.3 * bevelGeometry(m, Math.max(3, teeth), Math.max(1, mateTeeth)).coneDistance) * 10) / 10
+      : 5 * m;
+  return {
+    faceWidth, pressureAngle: 20,
+    helixAngle: type === "helical" ? 20 : type === "herringbone" ? 30 : type === "worm" ? 1 : 0,
+    backlash: 0.1, addendum: 1, dedendum: 1.25, rootFillet: 0.38,
+    rim: type === "ring" || type === "rack" ? 2.5 * m : 1.5 * m,
+    mateTeeth: teeth, wormDiameter: 8 * m,
+    bore: 0, dFlat: 0, keyway: 0, keywayDepth: 0, hubDiameter: 0, hubLength: 0, spokes: 0,
+    x: 0, y: 0, offset: 0, rotation: 0,
+  };
+}
