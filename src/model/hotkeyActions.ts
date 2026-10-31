@@ -1,11 +1,14 @@
 // Registers the app's hotkey actions with the HotkeyManager and keeps the
-// active context stack in sync with the app mode. Each action declares the
-// context it lives in; the "sketch" context stacks on top of "global" while a
-// sketch is open, so e.g. "f" resolves to Look At there and Frame otherwise.
+// active context stack in sync with the app (contexts.ts says which contexts
+// stack when). Each action declares the context it lives in; e.g. "sketch"
+// stacks on top of "global" while a sketch is open, so "f" resolves to Look At
+// there and Frame otherwise.
 
 import { hotkeys, HotkeyAction } from "./hotkeys";
 import { useStore, Tool } from "./store";
 import { useUi } from "./concepts/uiState";
+import { contextStack, ContextInput } from "./contexts";
+import { useRing, RING_ACTION_ID } from "./ring";
 
 const st = () => useStore.getState();
 const fire = (name: string) => window.dispatchEvent(new CustomEvent(name));
@@ -29,6 +32,7 @@ const ACTIONS: HotkeyAction[] = [
   { id: "view.lens", label: "Toggle the lens", context: "global", run: () => useUi.getState().togglePanel("lens") },
   { id: "view.ledger", label: "Toggle the Ledger tab", context: "global", run: () => useUi.getState().togglePanel("ledger") },
   { id: "view.space", label: "Toggle the Design Space tab", context: "global", run: () => useUi.getState().togglePanel("space") },
+  { id: RING_ACTION_ID, label: "Action ring (hold, point, release)", context: "global", defaultPrimary: "space", run: () => useRing.getState().openRing() },
   { id: "edit.undo", label: "Undo", context: "global", defaultPrimary: "mod+z", run: () => st().undo() },
   { id: "edit.redo", label: "Redo", context: "global", defaultPrimary: "mod+shift+z", defaultSecondary: "mod+y", run: () => st().redo() },
   {
@@ -72,6 +76,18 @@ const ACTIONS: HotkeyAction[] = [
   },
 ];
 
+/** What contextStack needs, read from the store and useUi. */
+export function contextInput(): ContextInput {
+  const s = st(), ui = useUi.getState();
+  return {
+    mode: s.mode,
+    face: !!s.faceSelection,
+    feature: !!ui.openFeature && ui.panels.workbench,
+    lens: ui.panels.lens,
+    component: s.activeComponentId !== s.session.doc.rootComponentId,
+  };
+}
+
 let installed = false;
 
 /** Register all actions, attach the key listener, and track the context stack. */
@@ -81,12 +97,18 @@ export function installHotkeys(): () => void {
   const offActions = hotkeys.registerAll(ACTIONS);
   const offKeys = hotkeys.attach(window);
 
-  const syncContexts = (mode: string) => hotkeys.setContexts(mode === "sketch" ? ["global", "sketch"] : ["global"]);
-  syncContexts(st().mode);
-  let lastMode = st().mode;
-  const offStore = useStore.subscribe((s) => {
-    if (s.mode !== lastMode) { lastMode = s.mode; syncContexts(s.mode); }
-  });
+  // The context stack follows the store (mode, face, component) and useUi (open feature, lens).
+  let last = "";
+  const sync = () => {
+    const stack = contextStack(contextInput());
+    const key = stack.join(">");
+    if (key !== last) { last = key; hotkeys.setContexts(stack); }
+  };
+  sync();
+  const offStore = (() => {
+    const a = useStore.subscribe(sync), b = useUi.subscribe(sync);
+    return () => { a(); b(); };
+  })();
 
   return () => { offActions(); offKeys(); offStore(); installed = false; };
 }

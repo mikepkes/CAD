@@ -182,6 +182,19 @@ export class HotkeyManager {
     return true;
   }
 
+  /** Whether the action would run now: registered, its context on the active
+   *  stack, and its `when` (if any) passing. The ring greys out slots that can't. */
+  can(id: string): boolean {
+    const a = this.actions.get(id);
+    return !!a && this.active.includes(a.context) && (!a.when || a.when());
+  }
+
+  /** An action's label and context, or null when nothing is registered under `id`. */
+  info(id: string): { label: string; context: string } | null {
+    const a = this.actions.get(id);
+    return a ? { label: a.label, context: a.context } : null;
+  }
+
   // ---- introspection (for UI + MCP) ----
 
   /** All registered actions, grouped by context in stack order (top-most last). */
