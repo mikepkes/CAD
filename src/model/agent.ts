@@ -14,6 +14,8 @@ import { hotkeys } from "./hotkeys";
 import { CONTEXTS } from "./contexts";
 import { applyRingSlot, describeRing, GET_RING_DESCRIPTION, SET_RING_SLOT_DESCRIPTION } from "./ringConfig";
 import { describeIntent, evaluateIntents } from "./concepts/intents";
+import { assistInboxTool, resolveAssistTool, GET_ASSIST_INBOX_DESCRIPTION, GET_ASSIST_INBOX_SCHEMA, RESOLVE_ASSIST_DESCRIPTION, RESOLVE_ASSIST_SCHEMA } from "./assist";
+import { runActionTool, setPanel, RUN_ACTION_DESCRIPTION, RUN_ACTION_SCHEMA, SET_PANEL_DESCRIPTION, SET_PANEL_SCHEMA } from "./uiControl";
 
 export type ChatEntry =
   | { role: "user"; text: string }
@@ -35,6 +37,7 @@ Core rules:
 - To begin, call sketch__create with a plane ("XY", "XZ", or "YZ"); its createdIds[0] is the new sketch id, createdIds[1] is the fixed origin point. Pass that sketch id to subsequent commands.
 - Points are {x, y} to create a new point, or {ref: "<pointId>"} to reuse one (reusing a point id makes endpoints coincident). Chain lines by passing the previous end point's ref as the next start.
 - Prefer making shapes fully constrained when asked: add horizontal/vertical/parallel/perpendicular/coincident constraints and parametric dimensions (expressions may reference named parameters).
+- The app itself: set_panel shows or hides a panel; run_action runs any action a key can (drawing tools, views, lens modes) by an id from get_hotkeys.
 - Work in millimetres. Keep going until the request is complete, then give a brief one- or two-sentence summary of what you built. Do not ask for confirmation on routine steps.`;
 
 const sanitize = (name: string) => name.replace(/\./g, "__");
@@ -103,6 +106,10 @@ export function buildTools(registry: CommandRegistry): Anthropic.Tool[] {
       },
     },
   });
+  tools.push({ name: "set_panel", description: SET_PANEL_DESCRIPTION, input_schema: SET_PANEL_SCHEMA as Anthropic.Tool.InputSchema });
+  tools.push({ name: "run_action", description: RUN_ACTION_DESCRIPTION, input_schema: RUN_ACTION_SCHEMA as Anthropic.Tool.InputSchema });
+  tools.push({ name: "get_assist_inbox", description: GET_ASSIST_INBOX_DESCRIPTION, input_schema: GET_ASSIST_INBOX_SCHEMA as Anthropic.Tool.InputSchema });
+  tools.push({ name: "resolve_assist", description: RESOLVE_ASSIST_DESCRIPTION, input_schema: RESOLVE_ASSIST_SCHEMA as Anthropic.Tool.InputSchema });
   return tools;
 }
 
@@ -192,6 +199,11 @@ export interface MessagesClient {
 let clientFactory: ((apiKey: string) => MessagesClient) | null = null;
 /** Use `f` instead of the Anthropic SDK for every agent request (null restores the SDK). */
 export function setAgentClientFactory(f: ((apiKey: string) => MessagesClient) | null) { clientFactory = f; }
+/** The client every request goes through: the installed stand-in, else the SDK. Organizational assist's
+ *  naming requests use it too, so a stand-in answers them as well (see `isAssistRequest`). */
+export function agentClient(apiKey: string): MessagesClient {
+  return clientFactory ? clientFactory(apiKey) : new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+}
 
 export async function runAgent(opts: {
   apiKey: string;
@@ -203,7 +215,7 @@ export async function runAgent(opts: {
   onTool: (name: string, ok: boolean, detail: string) => void;
   signal?: AbortSignal;
 }): Promise<Anthropic.MessageParam[]> {
-  const client = clientFactory ? clientFactory(opts.apiKey) : new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true });
+  const client = agentClient(opts.apiKey);
   const tools = buildTools(opts.registry);
   const messages: Anthropic.MessageParam[] = [...opts.history];
 
@@ -234,7 +246,7 @@ export async function runAgent(opts: {
         continue;
       }
       let result: { ok: boolean; createdIds?: string[]; message?: string; error?: string } | unknown;
-      const readOnly = b.name === "get_state" || b.name === "get_hotkeys" || b.name === "get_ring";
+      const readOnly = b.name === "get_state" || b.name === "get_hotkeys" || b.name === "get_ring" || b.name === "get_assist_inbox";
       try {
         if (b.name === "get_state") result = opts.ctx.describe();
         else if (b.name === "get_hotkeys") result = hotkeys.describe();
@@ -244,6 +256,10 @@ export async function runAgent(opts: {
           result = { ok: true, hotkeys: hotkeys.describe() };
         } else if (b.name === "get_ring") result = describeRing();
         else if (b.name === "set_ring_slot") result = applyRingSlot(b.input as { context?: unknown; slot?: unknown; action?: unknown });
+        else if (b.name === "set_panel") result = setPanel(b.input as { panel?: unknown; on?: unknown });
+        else if (b.name === "run_action") result = runActionTool(b.input as { action?: unknown });
+        else if (b.name === "get_assist_inbox") result = assistInboxTool(b.input as { all?: unknown });
+        else if (b.name === "resolve_assist") result = await resolveAssistTool(b.input as { id?: unknown; name?: unknown; dismiss?: unknown }, "agent");
         else {
           result = await opts.ctx.runCommand(desanitize(b.name), b.input as Record<string, unknown>);
         }
@@ -252,7 +268,7 @@ export async function runAgent(opts: {
       }
       const ok = readOnly ? true : !!(result as { ok?: boolean }).ok;
       const detail = readOnly
-        ? (b.name === "get_hotkeys" ? "read hotkeys" : b.name === "get_ring" ? "read ring" : "read state")
+        ? (b.name === "get_hotkeys" ? "read hotkeys" : b.name === "get_ring" ? "read ring" : b.name === "get_assist_inbox" ? "read assist inbox" : "read state")
         : (result as { message?: string; error?: string }).error ?? (result as { message?: string }).message ?? "ok";
       opts.onTool(b.name, ok, detail);
       results.push({ type: "tool_result", tool_use_id: b.id, content: JSON.stringify(result) });

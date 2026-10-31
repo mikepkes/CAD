@@ -98,6 +98,15 @@ Plus timeline / query / history tools:
   failing step rolls the document and its undo history back (`atomic: false`
   keeps the successful steps)
 
+- organizational assist: `get_assist_inbox` lists sketches and features still
+  carrying default names ("Sketch 3", "Extrude"), each with the context to name
+  it (plane or face, entities, dimensions, what uses it); `resolve_assist
+  {id, name}` renames it (an undoable edit of the op that made it) or
+  `{id, dismiss: true}` leaves it. The same inbox is the resource
+  `chisel://assist/inbox`: `resources/subscribe` to it and the server sends
+  `notifications/resources/updated` whenever it changes. Headless, a sketch is
+  queued once a feature reads it or a newer sketch starts.
+
 Every tool carries MCP annotations: queries are `readOnlyHint`, and deletes,
 `import_document` and `batch` are `destructiveHint`.
 

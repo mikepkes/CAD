@@ -83,6 +83,13 @@ fn mcp_respond(state: State<'_, AppState>, id: u64, response: Value) -> Result<(
     }
 }
 
+/// A server->client notification from the webview (e.g. the assist inbox changed),
+/// sent to every MCP client listening on `GET /mcp`. Returns how many it reached.
+#[tauri::command]
+fn mcp_notify(state: State<'_, AppState>, notification: Value) -> usize {
+    state.bridge.notify(notification)
+}
+
 /// Write an output the MCP tools produced (a PNG still, an MP4 turntable, or an
 /// exported STEP/STL/3MF model) into
 /// `~/Downloads/Chisel CAD/`. The request body is the raw file bytes and the name
@@ -156,7 +163,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState { bridge: Arc::new(Bridge::default()), server: Mutex::new(None) })
         .manage(spacemouse::SpaceMouse::default())
-        .invoke_handler(tauri::generate_handler![mcp_start, mcp_stop, mcp_status, mcp_respond, save_render, spacemouse_status])
+        .invoke_handler(tauri::generate_handler![mcp_start, mcp_stop, mcp_status, mcp_respond, mcp_notify, save_render, spacemouse_status])
         .setup(|app| {
             // a 3D mouse: through 3Dconnexion's driver when it's installed (it
             // holds the device), else read directly, for the life of the app

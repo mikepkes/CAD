@@ -9,7 +9,8 @@
 // Everything Tauri-specific is reached through dynamic imports behind
 // `isTauri()`, so the static web build (GitHub Pages) never loads it.
 
-import { buildTools, WEBMCP_INFO, WebMcpHost, WebMcpTool } from "./webmcp";
+import { buildTools, readWebMcpResource, assistUpdatedNotification, WEBMCP_INFO, WEBMCP_RESOURCES, WebMcpHost, WebMcpTool } from "./webmcp";
+import { onAssistChange } from "./assist";
 
 export const DEFAULT_DESKTOP_MCP_PORT = 4673;
 
@@ -31,6 +32,7 @@ interface RpcRequest { jsonrpc?: string; id?: unknown; method?: string; params?:
 
 let tools: WebMcpTool[] = [];
 let unlisten: (() => void) | null = null;
+let unwatchAssist: (() => void) | null = null;
 
 const result = (id: unknown, value: unknown) => ({ jsonrpc: "2.0", id, result: value });
 const failure = (id: unknown, code: number, message: string) => ({ jsonrpc: "2.0", id, error: { code, message } });
@@ -44,7 +46,8 @@ export async function handleMcpRpc(req: RpcRequest, toolset: WebMcpTool[] = tool
       const asked = String(params.protocolVersion ?? "");
       return result(id, {
         protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
-        capabilities: { tools: { listChanged: false } },
+        // Resources: the assist inbox. The server is stateless, so an update goes to every open GET stream.
+        capabilities: { tools: { listChanged: false }, resources: { subscribe: true, listChanged: false } },
         serverInfo: { name: "chisel-cad", title: WEBMCP_INFO.name, version: "0.1.0" },
         instructions: WEBMCP_INFO.description,
       });
@@ -53,6 +56,18 @@ export async function handleMcpRpc(req: RpcRequest, toolset: WebMcpTool[] = tool
       return result(id, {});
     case "tools/list":
       return result(id, { tools: toolset.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, ...(t.annotations ? { annotations: t.annotations } : {}) })) });
+    case "resources/list":
+      return result(id, { resources: WEBMCP_RESOURCES });
+    case "resources/templates/list":
+      return result(id, { resourceTemplates: [] });
+    case "resources/read": {
+      const r = readWebMcpResource(String(params.uri ?? ""));
+      return r ? result(id, r) : failure(id, -32002, `Resource not found: ${String(params.uri ?? "")}`);
+    }
+    case "resources/subscribe":
+    case "resources/unsubscribe":
+      // Stateless: every client with an open GET stream hears every resource update.
+      return WEBMCP_RESOURCES.some((r) => r.uri === params.uri) ? result(id, {}) : failure(id, -32002, `Resource not found: ${String(params.uri ?? "")}`);
     case "tools/call": {
       const name = String(params.name ?? "");
       const tool = toolset.find((t) => t.name === name);
@@ -91,6 +106,8 @@ export async function startDesktopMcp(host: WebMcpHost, port: number): Promise<D
       }
     });
   }
+  // Server→client: push an inbox change to every client listening on GET /mcp (Server-Sent Events).
+  unwatchAssist ??= onAssistChange(() => { void invoke("mcp_notify", { notification: assistUpdatedNotification() }).catch(() => { /* server stopped */ }); });
   return invoke<DesktopMcpStatus>("mcp_start", { port });
 }
 
@@ -100,6 +117,8 @@ export async function stopDesktopMcp(): Promise<DesktopMcpStatus> {
   const status = await invoke<DesktopMcpStatus>("mcp_stop");
   unlisten?.();
   unlisten = null;
+  unwatchAssist?.();
+  unwatchAssist = null;
   tools = [];
   return status;
 }

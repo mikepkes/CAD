@@ -150,7 +150,15 @@ on.
   eight compass slots of hotkey actions that follow the context (sketch tools
   while sketching, face verbs with a face selected; empty slots inherit from the
   context below). Configurable per context in the hotkey manager's *Ring* tab
-  and over the agent and WebMCP (`get_ring` / `set_ring_slot`).
+  and over the agent and WebMCP (`get_ring` / `set_ring_slot`). Agents can
+  also run any of these actions by id (`run_action`) and show or hide panels
+  (`set_panel`).
+- **Organizational assist** (Settings, on by default): sketches and features
+  left as "Sketch 25" or "Extrude" go into an inbox (✎ in the status bar). With
+  an API key, Claude Haiku names them in the background — one short request,
+  applied as undoable renames; without one you accept a suggestion or type a
+  name. MCP agents see the same inbox (`get_assist_inbox` / `resolve_assist`,
+  and the subscribable resource `chisel://assist/inbox`).
 - **PlaneGCS** (FreeCAD's constraint solver, via WebAssembly) solves the sketch
   and reports **degrees of freedom**, a **fully-constrained** state, and on
   over-constraint **which constraints conflict** — surfaced as a toast and

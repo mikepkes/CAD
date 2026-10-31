@@ -1,7 +1,10 @@
 //! Local MCP endpoint for the desktop app.
 //!
 //! The Rust side is *transport only*: it serves MCP's Streamable HTTP transport
-//! (JSON-RPC over `POST /mcp`, stateless, JSON responses) on 127.0.0.1 and
+//! (JSON-RPC over `POST /mcp`, stateless, JSON responses; `GET /mcp` opens a
+//! Server-Sent Events stream of server->client notifications, which the webview
+//! pushes with `mcp_notify` -- e.g. `notifications/resources/updated` when the
+//! organizational-assist inbox changes) on 127.0.0.1 and
 //! bridges every request into the webview, where the app answers it with the
 //! same tool set it already exposes over WebMCP — so an external MCP client
 //! (Claude Code, Claude Desktop, …) drives the *live* document the user sees.
@@ -10,6 +13,7 @@
 //!        → webview handles JSON-RPC → `mcp_respond` command → oneshot → HTTP 200.
 
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -22,7 +26,7 @@ use axum::routing::{any, get};
 use axum::Router;
 use serde::Serialize;
 use serde_json::{json, Value};
-use tokio::sync::oneshot;
+use tokio::sync::{broadcast, oneshot, watch};
 
 /// How long a single tool call may take before the HTTP request fails. Kernel
 /// rebuilds and renders can be slow on a big model, so be generous.
@@ -32,14 +36,32 @@ pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 /// tests it's a closure that answers directly.
 pub type Forward = Arc<dyn Fn(u64, Value) + Send + Sync>;
 
-/// Correlates in-flight HTTP requests with the webview's answers.
-#[derive(Default)]
+/// Correlates in-flight HTTP requests with the webview's answers, and fans the
+/// webview's notifications out to every open GET stream.
 pub struct Bridge {
     pending: Mutex<HashMap<u64, oneshot::Sender<Value>>>,
     next_id: AtomicU64,
+    notify_tx: broadcast::Sender<String>,
+}
+
+impl Default for Bridge {
+    fn default() -> Self {
+        let (notify_tx, _) = broadcast::channel(64);
+        Bridge { pending: Mutex::new(HashMap::new()), next_id: AtomicU64::new(0), notify_tx }
+    }
 }
 
 impl Bridge {
+    /// Send a JSON-RPC notification to every client listening on `GET /mcp`.
+    /// Returns how many streams it reached (0 when nobody listens).
+    pub fn notify(&self, notification: Value) -> usize {
+        self.notify_tx.send(notification.to_string()).unwrap_or(0)
+    }
+
+    fn listen(&self) -> broadcast::Receiver<String> {
+        self.notify_tx.subscribe()
+    }
+
     pub async fn request(&self, forward: &Forward, request: Value, timeout: Duration) -> Result<Value, String> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
         let (tx, rx) = oneshot::channel();
@@ -76,6 +98,9 @@ impl Bridge {
 struct Ctx {
     bridge: Arc<Bridge>,
     forward: Forward,
+    /// Flips to true when the server stops, ending open SSE streams (so a graceful shutdown can finish).
+    stop: watch::Receiver<bool>,
+    _stop_tx: Arc<watch::Sender<bool>>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -98,10 +123,15 @@ impl McpStatus {
 pub struct ServerHandle {
     pub port: u16,
     shutdown: Option<oneshot::Sender<()>>,
+    stop_streams: Arc<watch::Sender<bool>>,
 }
 
 impl ServerHandle {
     pub fn stop(mut self) {
+        self.shut();
+    }
+    fn shut(&mut self) {
+        let _ = self.stop_streams.send(true);
         if let Some(tx) = self.shutdown.take() {
             let _ = tx.send(());
         }
@@ -110,17 +140,20 @@ impl ServerHandle {
 
 impl Drop for ServerHandle {
     fn drop(&mut self) {
-        if let Some(tx) = self.shutdown.take() {
-            let _ = tx.send(());
-        }
+        self.shut();
     }
 }
 
 pub fn router(bridge: Arc<Bridge>, forward: Forward) -> Router {
+    router_with_stop(bridge, forward, Arc::new(watch::channel(false).0))
+}
+
+fn router_with_stop(bridge: Arc<Bridge>, forward: Forward, stop_tx: Arc<watch::Sender<bool>>) -> Router {
+    let stop = stop_tx.subscribe();
     Router::new()
         .route("/", get(root))
         .route("/mcp", any(mcp_endpoint))
-        .with_state(Ctx { bridge, forward })
+        .with_state(Ctx { bridge, forward, stop, _stop_tx: stop_tx })
 }
 
 /// Bind 127.0.0.1:`port` and serve until the returned handle is stopped/dropped.
@@ -131,7 +164,8 @@ pub async fn start(bridge: Arc<Bridge>, forward: Forward, port: u16) -> Result<S
         .map_err(|e| format!("cannot listen on 127.0.0.1:{port}: {e}"))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     let (tx, rx) = oneshot::channel::<()>();
-    let app = router(bridge, forward);
+    let stop_streams = Arc::new(watch::channel(false).0);
+    let app = router_with_stop(bridge, forward, stop_streams.clone());
     tokio::spawn(async move {
         let _ = axum::serve(listener, app)
             .with_graceful_shutdown(async {
@@ -139,7 +173,7 @@ pub async fn start(bridge: Arc<Bridge>, forward: Forward, port: u16) -> Result<S
             })
             .await;
     });
-    Ok(ServerHandle { port, shutdown: Some(tx) })
+    Ok(ServerHandle { port, shutdown: Some(tx), stop_streams })
 }
 
 async fn root() -> Response {
@@ -168,12 +202,47 @@ async fn mcp_endpoint(State(ctx): State<Ctx>, method: axum::http::Method, header
             }
             handle_post(&ctx, body).await
         }
-        // No server-initiated stream (stateless server): tell the client so.
-        axum::http::Method::GET => StatusCode::METHOD_NOT_ALLOWED.into_response(),
+        // The server-initiated stream: notifications the app pushes (SSE). A client
+        // that doesn't accept an event stream gets 405, as from a server without one.
+        axum::http::Method::GET => {
+            let accept = headers.get(header::ACCEPT).and_then(|v| v.to_str().ok()).unwrap_or("");
+            if accept.to_ascii_lowercase().contains("text/event-stream") {
+                sse_stream(&ctx)
+            } else {
+                StatusCode::METHOD_NOT_ALLOWED.into_response()
+            }
+        }
         // Session termination: nothing to terminate.
         axum::http::Method::DELETE => StatusCode::OK.into_response(),
         _ => StatusCode::METHOD_NOT_ALLOWED.into_response(),
     }
+}
+
+/// An SSE response carrying every notification sent after it opened, until the server stops.
+fn sse_stream(ctx: &Ctx) -> Response {
+    let rx = ctx.bridge.listen();
+    let stop = ctx.stop.clone();
+    // A comment first, so the client sees the stream open before any notification.
+    let hello = futures_util::stream::once(async { Ok::<Bytes, Infallible>(Bytes::from_static(b": chisel-cad notifications\n\n")) });
+    let events = futures_util::stream::unfold((rx, stop), |(mut rx, mut stop)| async move {
+        loop {
+            if *stop.borrow() {
+                return None;
+            }
+            tokio::select! {
+                msg = rx.recv() => match msg {
+                    Ok(text) => return Some((Ok::<Bytes, Infallible>(Bytes::from(format!("event: message\ndata: {text}\n\n"))), (rx, stop))),
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => return None,
+                },
+                changed = stop.changed() => if changed.is_err() || *stop.borrow() { return None; },
+            }
+        }
+    });
+    let mut r = Response::new(axum::body::Body::from_stream(futures_util::StreamExt::chain(hello, events)));
+    r.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/event-stream"));
+    r.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    r
 }
 
 /// Is this a request from the local machine (the DNS-rebinding guard)?
@@ -308,6 +377,49 @@ mod tests {
         assert_eq!(v["id"], 7);
         assert_eq!(v["result"]["method"], "tools/list");
         assert_eq!(bridge.pending_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn get_without_event_stream_is_405() {
+        let (bridge, forward) = echo_bridge();
+        let resp = router(bridge, forward)
+            .oneshot(Request::get("/mcp").header("origin", "http://localhost:5173").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    #[tokio::test]
+    async fn get_stream_carries_notifications() {
+        let (bridge, forward) = echo_bridge();
+        let resp = router(bridge.clone(), forward)
+            .oneshot(
+                Request::get("/mcp")
+                    .header("accept", "text/event-stream")
+                    .header("origin", "http://localhost:5173")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers().get(header::CONTENT_TYPE).unwrap(), "text/event-stream");
+        let mut body = resp.into_body();
+        let hello = body.frame().await.unwrap().unwrap().into_data().unwrap();
+        assert!(String::from_utf8_lossy(&hello).starts_with(':'));
+        let n = json!({ "jsonrpc": "2.0", "method": "notifications/resources/updated", "params": { "uri": "chisel://assist/inbox" } });
+        assert_eq!(bridge.notify(n.clone()), 1);
+        let frame = body.frame().await.unwrap().unwrap().into_data().unwrap();
+        let text = String::from_utf8(frame.to_vec()).unwrap();
+        assert!(text.starts_with("event: message\ndata: "));
+        let data: Value = serde_json::from_str(text.trim_start_matches("event: message\ndata: ").trim()).unwrap();
+        assert_eq!(data, n);
+    }
+
+    #[test]
+    fn notify_without_listeners_reaches_nobody() {
+        let bridge = Bridge::default();
+        assert_eq!(bridge.notify(json!({ "jsonrpc": "2.0", "method": "x" })), 0);
     }
 
     #[tokio::test]

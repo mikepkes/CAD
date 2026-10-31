@@ -16,6 +16,11 @@ import { sanitizeOutputName, timestampedStem } from "./saveOutput";
 import type { BodyTopology } from "../core/features";
 import { groupCutList, cutListCsv } from "../core/weldment";
 import { flatPatternSvg, flatPatternDxf, sheetSummary, SheetRow } from "../core/sheet";
+import {
+  assistInboxTool, onAssistChange, resolveAssistTool, ASSIST_INBOX_URI,
+  GET_ASSIST_INBOX_DESCRIPTION, GET_ASSIST_INBOX_SCHEMA, RESOLVE_ASSIST_DESCRIPTION, RESOLVE_ASSIST_SCHEMA,
+} from "./assist";
+import { runActionTool, setPanel, RUN_ACTION_DESCRIPTION, RUN_ACTION_SCHEMA, SET_PANEL_DESCRIPTION, SET_PANEL_SCHEMA } from "./uiControl";
 
 export interface WebMcpResult {
   content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
@@ -553,6 +558,48 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
     },
   });
   tools.push({
+    name: "set_panel",
+    description: SET_PANEL_DESCRIPTION,
+    inputSchema: SET_PANEL_SCHEMA,
+    annotations: { ...EDIT, idempotentHint: true },
+    execute: async (args) => { const r = setPanel(args ?? {}); return { ...ok(r), ...(r.ok ? {} : { isError: true }) }; },
+  });
+  tools.push({
+    name: "run_action",
+    description: RUN_ACTION_DESCRIPTION,
+    inputSchema: RUN_ACTION_SCHEMA,
+    annotations: EDIT,
+    execute: async (args) => {
+      try {
+        const r = runActionTool(args ?? {});
+        return { ...ok(r), ...(r.ok ? {} : { isError: true }) };
+      } catch (e) {
+        return { ...ok({ ok: false, error: errorText(e) }), isError: true };
+      }
+    },
+  });
+  tools.push({
+    name: "get_assist_inbox",
+    description: GET_ASSIST_INBOX_DESCRIPTION,
+    inputSchema: GET_ASSIST_INBOX_SCHEMA,
+    annotations: READ_ONLY,
+    execute: async (args) => ok(assistInboxTool(args ?? {})),
+  });
+  tools.push({
+    name: "resolve_assist",
+    description: RESOLVE_ASSIST_DESCRIPTION,
+    inputSchema: RESOLVE_ASSIST_SCHEMA,
+    annotations: EDIT,
+    execute: async (args) => {
+      try {
+        const r = await resolveAssistTool(args ?? {}, "external");
+        return { ...ok(r), ...(r.ok ? {} : { isError: true }) };
+      } catch (e) {
+        return { ...ok({ ok: false, error: errorText(e) }), isError: true };
+      }
+    },
+  });
+  tools.push({
     name: "batch",
     description: "Run several tool calls in order as one transaction: `steps` is a list of {tool, arguments}. By default (`atomic: true`) the first failing step rolls the document back to before the batch, so a half-built feature never lingers; `atomic: false` keeps the steps that succeeded. Returns each step's result and time in ms, which step failed, and whether it rolled back. Images from render_view steps are returned after the summary.",
     inputSchema: {
@@ -615,6 +662,24 @@ function base64Bytes(b64: string): Uint8Array {
   return out;
 }
 
+/** MCP resources the app serves (the desktop server and window.chiselWebMCP): the assist inbox. */
+export const WEBMCP_RESOURCES = [{
+  uri: ASSIST_INBOX_URI,
+  name: "assist-inbox",
+  title: "Organizational assist inbox",
+  description: "Pending housekeeping an agent can help with (naming sketches and features), with the context to do it; answer items with resolve_assist. Updated (notifications/resources/updated) whenever it changes.",
+  mimeType: "application/json",
+}];
+
+/** resources/read for a resource URI, or null when the app has no such resource. */
+export function readWebMcpResource(uri: string): { contents: { uri: string; mimeType: string; text: string }[] } | null {
+  if (uri !== ASSIST_INBOX_URI) return null;
+  return { contents: [{ uri, mimeType: "application/json", text: JSON.stringify(assistInboxTool({})) }] };
+}
+
+/** The notification an inbox change sends to MCP clients. */
+export const assistUpdatedNotification = () => ({ jsonrpc: "2.0", method: "notifications/resources/updated", params: { uri: ASSIST_INBOX_URI } });
+
 export function isWebMcpActive(): boolean {
   return registered;
 }
@@ -623,9 +688,21 @@ export function enableWebMcp(host: WebMcpHost): void {
   if (registered) return;
   const tools = buildTools(host);
 
+  // Server→client notifications for in-page agents: listeners on the window surface, and a DOM event.
+  const listeners = new Set<(n: unknown) => void>();
+  unregister.push(onAssistChange(() => {
+    const n = assistUpdatedNotification();
+    for (const fn of [...listeners]) { try { fn(n); } catch { /* a listener's own problem */ } }
+    window.dispatchEvent(new CustomEvent("chisel:mcp-notification", { detail: n }));
+  }));
+
   // Stable, framework-agnostic surface for any external agent/extension.
   (window as unknown as Record<string, unknown>).chiselWebMCP = {
     info: WEBMCP_INFO,
+    listResources: () => WEBMCP_RESOURCES,
+    readResource: (uri: string) => readWebMcpResource(uri),
+    /** Hear MCP notifications (notifications/resources/updated for the assist inbox). Returns an unsubscribe function. */
+    onNotification: (fn: (n: unknown) => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     listTools: () => tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, ...(t.annotations ? { annotations: t.annotations } : {}) })),
     callTool: async (name: string, args: Record<string, unknown>): Promise<WebMcpResult> => {
       const t = tools.find((x) => x.name === name);
