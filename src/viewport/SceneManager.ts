@@ -1051,7 +1051,7 @@ export class SceneManager {
     const color = clip ? bodyColor(index) : 0x7b86e0;
     let mat: THREE.Material;
     const analysis = this.lastData?.analysis;
-    const analysisMat = !faded && !clip && analysis && analysis.mode !== "none" ? this.analysisMaterial(analysis, s, geo) : null;
+    const analysisMat = !s.variant && !faded && !clip && analysis && analysis.mode !== "none" ? this.analysisMaterial(analysis, s, geo) : null; // a variant ghost never carries analysis
     if (s.variant) {
       // A compared design variant: translucent in the kit's ghost accent, drawn without writing depth so the real part stays legible through it.
       mat = new THREE.MeshStandardMaterial({ color: COLORS.variant, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.28, depthWrite: false, clippingPlanes: clip ?? undefined });

@@ -15,7 +15,7 @@ export interface GhostState {
   solids: SolidEval[] | null;
   /** What the ghost is ("Pin A: w 20 · h 5"), for tooltips and the status line. */
   label: string | null;
-  /** The document the ghost belongs to; a ghost from another document is never drawn. */
+  /** The id of the document the ghost belongs to; a view of a document with another id never draws it (ids can repeat, so the session swap above is what really clears it). */
   docId: string | null;
   set: (solids: SolidEval[], label: string, docId: string) => void;
   clear: () => void;
@@ -46,6 +46,8 @@ export function ghostSolidViews(ghost: Pick<GhostState, "solids" | "docId">, doc
 }
 
 // Switching documents forgets the ghost: a variant of one document means nothing on another.
+// A new document is a new CadSession in the store (loadDocument, or an undo across a load);
+// the document id alone is not enough, since every new document is "doc1" until it is saved as something else.
 useStore.subscribe((s, prev) => {
-  if (s.session.doc.id !== prev.session.doc.id) useGhost.getState().clear();
+  if (s.session !== prev.session) useGhost.getState().clear();
 });

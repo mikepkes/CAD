@@ -504,13 +504,17 @@ describe("design space: the compared pin as a ghost", () => {
     expect(notified).toBe(1);
     expect(useGhost.getState()).toMatchObject({ solids: null, label: null, docId: null });
     unsub();
-    // a new document in the store clears the ghost; a revision of the same one does not
+    // a new document (a new session) in the store clears the ghost; a revision of the same one does not.
+    // Every fresh document is "doc1" (createDocument's default), so the id alone could not tell them apart.
     const s1 = realSession();
     useStore.setState({ session: s1 });
     useGhost.getState().set([body], "Pin A", s1.doc.id);
     useStore.setState({ rev: useStore.getState().rev + 1 });
+    useStore.setState({ session: s1 }); // the same session set again is not a switch
     expect(useGhost.getState().solids).not.toBeNull();
-    useStore.setState({ session: realSession() });
+    const s2 = realSession();
+    expect(s2.doc.id).toBe(s1.doc.id);
+    useStore.setState({ session: s2 });
     expect(useGhost.getState().solids).toBeNull();
   });
 });
