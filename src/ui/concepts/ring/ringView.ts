@@ -8,9 +8,9 @@ import { RING_ACTION_ID, RingSlot, SLOT_COUNT, SLOT_NAMES } from "../../../model
 import { ContextId } from "../../../model/contexts";
 
 /** Radius of the slot centres, px. */
-export const RING_R = 96;
+export const RING_R = 110;
 /** How far a slot's button reaches past its centre (half its widest label), px: keeps it on screen. */
-export const RING_PAD = 72;
+export const RING_PAD = 80;
 /** Pointer this close to the centre points at no slot, px. */
 export const DEAD_ZONE = 28;
 
@@ -39,7 +39,7 @@ export interface SlotView {
 
 /** A hotkey label cut to fit a ring slot: "View: Top" → "Top", "Toggle the lens" → "Lens",
  *  "Line tool" → "Line", "Frame selection / fit" → "Frame selection". */
-export function shortLabel(label: string, max = 16): string {
+export function shortLabel(label: string, max = 20): string {
   let s = label.trim();
   s = s.replace(/\s*\(.*\)\s*$/, ""); // "Action ring (hold, point, release)"
   s = s.split(" / ")[0]; // "Frame selection / fit"

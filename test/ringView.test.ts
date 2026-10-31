@@ -20,8 +20,8 @@ describe("ring labels", () => {
     expect(shortLabel("Action ring (hold, point, release)")).toBe("Action ring");
     expect(shortLabel("Toggle feature pins (Workbench)")).toBe("Feature pins");
     expect(shortLabel("Undo")).toBe("Undo");
-    expect(shortLabel("Suppress the open feature and everything after")).toBe("Suppress the op…");
-    expect(shortLabel("Suppress the open feature and everything after").length).toBe(16);
+    expect(shortLabel("Suppress the open feature and everything after")).toBe("Suppress the open f…");
+    expect(shortLabel("Suppress the open feature and everything after").length).toBe(20);
   });
 
   it("presents the resolved ring: labels, key hints, disabled and empty slots", () => {
