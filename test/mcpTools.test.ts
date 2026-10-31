@@ -141,4 +141,25 @@ describe("headless MCP server", () => {
     const m = text(await client.callTool({ name: "measure", arguments: {} }));
     expect(m.bodies[0].volume).toBe(8000);
   });
+
+  it("design intents are document state the server edits and reports pass/fail, metrics from the built bodies", async () => {
+    const { client, getSession } = await connect();
+    await client.callTool({ name: "feature__primitive", arguments: { shape: "box", x: 20, y: 20, z: 20 } });
+    await client.callTool({ name: "parameter__add", arguments: { name: "wall", expression: "3" } });
+    const a = text(await client.callTool({ name: "intent__add", arguments: { label: "Light", lhs: "mass", op: "<=", rhs: "20", unit: "g" } }));
+    const b = text(await client.callTool({ name: "intent__add", arguments: { lhs: "wall", op: ">=", rhs: "2" } }));
+    expect(a.ok && b.ok).toBe(true);
+    expect(getSession().doc.intents.map((i) => i.id)).toEqual([a.createdIds[0], b.createdIds[0]]);
+    let d = text(await client.callTool({ name: "get_document", arguments: {} }));
+    // 8 cm³ of aluminium (2.7 g/cm³) is 21.6 g: over the limit.
+    expect(d.intents).toEqual([
+      { id: a.createdIds[0], label: "Light", check: "mass <= 20", unit: "g", status: "fail", lhs: 21.6, rhs: 20 },
+      { id: b.createdIds[0], label: "wall", check: "wall >= 2", status: "pass", lhs: 3, rhs: 2 },
+    ]);
+    await client.callTool({ name: "intent__update", arguments: { id: a.createdIds[0], rhs: "25" } });
+    await client.callTool({ name: "intent__delete", arguments: { id: b.createdIds[0] } });
+    d = text(await client.callTool({ name: "get_document", arguments: {} }));
+    expect(d.intents).toMatchObject([{ id: a.createdIds[0], check: "mass <= 25", status: "pass" }]);
+    expect(getSession().doc.operations.filter((o) => o.type.startsWith("intent.")).length).toBe(4);
+  });
 });

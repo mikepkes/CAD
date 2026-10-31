@@ -40,6 +40,7 @@ type PointRef = { x: number | string; y: number | string } | { ref: string };
 type EdgeSelectorParams = import("../document").EdgeSelector;
 type FaceSelectorParams = import("../document").FaceSelector;
 type ThreadSpecParams = import("../document").ThreadSpec;
+type IntentComparatorParam = import("../document").IntentComparator;
 
 const V3_SCHEMA: JSONSchema = { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } };
 const ROLE_REF_SCHEMA: JSONSchema = {
@@ -279,6 +280,16 @@ function checkOptions(p: { min?: number; max?: number; step?: number; values?: n
   return names;
 }
 
+const INTENT_OPS = ["<=", ">=", "<", ">", "=="];
+
+/** One side of an intent: non-empty and a parseable expression (names are checked at evaluation, since metrics are not parameters). */
+function checkIntentSide(expr: string, side: "lhs" | "rhs"): string {
+  const t = String(expr ?? "").trim();
+  if (!t) throw new Error(`Intent ${side} is empty`);
+  try { compileExpr(t); } catch (e) { throw new Error(`Intent ${side} "${t}": ${e instanceof Error ? e.message : String(e)}`); }
+  return t;
+}
+
 export const BUILTINS: CommandDef<any>[] = [
   // ---- parameters ----
   {
@@ -407,6 +418,89 @@ export const BUILTINS: CommandDef<any>[] = [
     apply(draft, p: { name: string }) {
       draft.parameters = draft.parameters.filter((x) => x.name !== p.name);
       return { message: `Deleted parameter ${p.name}` };
+    },
+  },
+
+  // ---- design intents ----
+  {
+    type: "intent.add",
+    title: "Add intent",
+    summary: "Add a design intent: a check the design must keep passing, e.g. mass <= 120 or wall >= t_min*2.",
+    description:
+      "Adds a design intent `lhs op rhs`. Both sides are expressions over the parameters and the model metrics " +
+      "(volume mm³, mass g, density g/cm³, width/depth/height mm of the bounding box, bodies). It does not change the geometry: " +
+      "the Ledger and get_state report each intent as pass/fail against the current model. Returns the intent id.",
+    paramsSchema: {
+      type: "object",
+      required: ["lhs", "op", "rhs"],
+      additionalProperties: false,
+      properties: {
+        label: { type: "string", description: "What is checked, in words (default: the left side)." },
+        lhs: { type: "string", description: "Left side: a parameter, a metric, or an expression of them." },
+        op: { type: "string", enum: INTENT_OPS, description: "Comparator." },
+        rhs: { type: "string", description: "Right side (a number or an expression)." },
+        unit: { type: "string", description: "Unit the sides are read in, for display only." },
+      },
+    },
+    examples: [
+      { params: { label: "Light", lhs: "mass", op: "<=", rhs: "120", unit: "g" } },
+      { note: "Keep the wall at least twice the minimum", params: { lhs: "wall", op: ">=", rhs: "t_min*2" } },
+    ],
+    apply(draft, p: { label?: string; lhs: string; op: string; rhs: string; unit?: string }, ctx) {
+      const lhs = checkIntentSide(p.lhs, "lhs"), rhs = checkIntentSide(p.rhs, "rhs");
+      const label = p.label?.trim() || lhs;
+      const id = ctx.alloc("intent");
+      draft.intents.push({ id, label, lhs, op: p.op as IntentComparatorParam, rhs, ...(p.unit?.trim() ? { unit: p.unit.trim() } : {}) });
+      return { createdIds: [id], message: `Added intent: ${lhs} ${p.op} ${rhs}` };
+    },
+  },
+  {
+    type: "intent.update",
+    title: "Edit intent",
+    summary: "Change an intent's label, sides, comparator or unit.",
+    description: "Updates the given fields of an existing design intent by id; the others keep their values. Pass an empty unit to clear it.",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      additionalProperties: false,
+      properties: {
+        id: { type: "string", description: "The intent id (from intent.add's createdIds or get_state)." },
+        label: { type: "string" },
+        lhs: { type: "string" },
+        op: { type: "string", enum: INTENT_OPS },
+        rhs: { type: "string" },
+        unit: { type: "string" },
+      },
+    },
+    examples: [{ params: { id: "intent7", rhs: "150" } }],
+    apply(draft, p: { id: string; label?: string; lhs?: string; op?: string; rhs?: string; unit?: string }) {
+      const intent = draft.intents.find((i) => i.id === p.id);
+      if (!intent) throw new Error(`No intent "${p.id}"`);
+      if (p.lhs !== undefined) intent.lhs = checkIntentSide(p.lhs, "lhs");
+      if (p.rhs !== undefined) intent.rhs = checkIntentSide(p.rhs, "rhs");
+      if (p.op !== undefined) intent.op = p.op as IntentComparatorParam;
+      if (p.label !== undefined) intent.label = p.label.trim() || intent.lhs;
+      if (p.unit !== undefined) { if (p.unit.trim()) intent.unit = p.unit.trim(); else delete intent.unit; }
+      return { message: `Intent ${intent.label}: ${intent.lhs} ${intent.op} ${intent.rhs}` };
+    },
+  },
+  {
+    type: "intent.delete",
+    title: "Delete intent",
+    summary: "Remove a design intent by id.",
+    description: "Removes a design intent. The geometry is unchanged.",
+    paramsSchema: {
+      type: "object",
+      required: ["id"],
+      additionalProperties: false,
+      properties: { id: { type: "string" } },
+    },
+    destructive: true,
+    apply(draft, p: { id: string }) {
+      const intent = draft.intents.find((i) => i.id === p.id);
+      if (!intent) throw new Error(`No intent "${p.id}"`);
+      draft.intents = draft.intents.filter((i) => i.id !== p.id);
+      return { message: `Deleted intent ${intent.label}` };
     },
   },
 

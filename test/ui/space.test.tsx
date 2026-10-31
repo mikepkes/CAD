@@ -52,6 +52,7 @@ describe("DesignSpacePanel", () => {
   beforeEach(() => {
     localStorage.clear();
     clearGridCache();
+    s.doc.intents = []; // intents are document state; `mount` bumps the store, which re-reads them
     useIntents.setState({ docId: s.doc.id, intents: [], results: [], scope: {} });
     useSpace.setState({ xName: null, yName: null, n: 5, metric: "mass", pins: [], compare: null });
   });
@@ -84,7 +85,7 @@ describe("DesignSpacePanel", () => {
   });
 
   it("samples the grid on its own backend, shows progress, shades passes and hatches fails, with a frontier per intent", async () => {
-    useIntents.setState({ intents: [parseIntent("volume <= 6000", "i1", "Volume cap")!, parseIntent("w >= 20", "i2", "Wide enough")!] });
+    s.doc.intents = [parseIntent("volume <= 6000", "i1", "Volume cap")!, parseIntent("w >= 20", "i2", "Wide enough")!];
     const { createBackend } = mount(s, { solids: currentSolids });
     await waitFor(() => expect(screen.getByText("25 cells")).toBeTruthy());
     expect(createBackend).toHaveBeenCalledTimes(1);
@@ -150,7 +151,7 @@ describe("DesignSpacePanel", () => {
   });
 
   it("jumps to the lightest passing cell", async () => {
-    useIntents.setState({ intents: [parseIntent("w >= 20", "i2", "Wide enough")!] });
+    s.doc.intents = [parseIntent("w >= 20", "i2", "Wide enough")!];
     const { setParameterExpr } = mount(s, { solids: currentSolids });
     await waitFor(() => expect((screen.getByRole("button", { name: "Jump to lightest" }) as HTMLButtonElement).disabled).toBe(false));
     await userEvent.click(screen.getByRole("button", { name: "Jump to lightest" }));
