@@ -2,7 +2,9 @@
 // active context stack in sync with the app (contexts.ts says which contexts
 // stack when). Each action declares the context it lives in; e.g. "sketch"
 // stacks on top of "global" while a sketch is open, so "f" resolves to Look At
-// there and Frame otherwise.
+// there and Frame otherwise. The focus contexts' actions (face, feature card,
+// lens, component) and the history steps read the concept modules, so they
+// are registered by src/ui/concepts/contextActions.ts, mounted beside this.
 
 import { hotkeys, HotkeyAction } from "./hotkeys";
 import { useStore, Tool } from "./store";
@@ -21,6 +23,14 @@ const toolAction = (tool: Tool, label: string, key: string): HotkeyAction => ({
   run: () => st().setTool(tool),
 });
 
+/** There is a sketch to extrude (the toolbar's Extrude button: the root's last sketch, the kernel loaded). */
+const canExtrude = () => {
+  const s = st(), root = s.session.doc.components[s.session.doc.rootComponentId];
+  return !!root?.sketches.length && !s.kernelLoading;
+};
+/** Something is built (what export and projection need). */
+const hasSolid = () => Object.keys(st().session.doc.features).length > 0;
+
 const ACTIONS: HotkeyAction[] = [
   // ---- global ----
   { id: "view.frame", label: "Frame selection / fit", context: "global", defaultPrimary: "f", run: () => fire("chisel:frame") },
@@ -29,7 +39,7 @@ const ACTIONS: HotkeyAction[] = [
   })),
   // concept panels (toggle; unbound by default, bindable in the Hotkeys panel)
   { id: "view.workbench", label: "Toggle feature pins (Workbench)", context: "global", run: () => useUi.getState().togglePanel("workbench") },
-  { id: "view.lens", label: "Toggle the lens", context: "global", run: () => useUi.getState().togglePanel("lens") },
+  { id: "view.lens", label: "Toggle the lens", context: "global", defaultPrimary: "shift+l", run: () => useUi.getState().togglePanel("lens") },
   { id: "view.ledger", label: "Toggle the Ledger tab", context: "global", run: () => useUi.getState().togglePanel("ledger") },
   { id: "view.space", label: "Toggle the Design Space tab", context: "global", run: () => useUi.getState().togglePanel("space") },
   { id: RING_ACTION_ID, label: "Action ring (hold, point, release)", context: "global", defaultPrimary: "space", run: () => useRing.getState().openRing() },
@@ -46,9 +56,19 @@ const ACTIONS: HotkeyAction[] = [
       if (s.extrudeActive) { s.closeExtrude(); return; }
       if (s.sketchPlacing) { s.setSketchPlacing(false); return; }
       if (s.constraintTool) { s.setConstraintTool(null); return; }
+      if (s.faceSelection) { s.selectFace(null); return; }
+      const ui = useUi.getState();
+      if (ui.openFeature) { ui.setOpenFeature(null); return; }
       fire("chisel:cancel");
     },
   },
+
+  // ---- model (stacks on top of global; the history steps are in src/ui/concepts/contextActions.ts) ----
+  { id: "model.sketch", label: "New sketch (pick a plane)", context: "model", defaultPrimary: "s", when: () => !st().sketchPlacing, run: () => st().setSketchPlacing(true) },
+  { id: "model.extrude", label: "Extrude", context: "model", defaultPrimary: "e", when: canExtrude, run: () => st().openExtrude() },
+  { id: "model.component", label: "New component", context: "model", run: () => void st().createComponent() },
+  { id: "model.exportStep", label: "Export STEP", context: "model", when: hasSolid, run: () => void st().exportSolid("step") },
+  { id: "model.exportStl", label: "Export STL", context: "model", when: hasSolid, run: () => void st().exportSolid("stl") },
 
   // ---- sketch (stacks on top of global) ----
   toolAction("select", "Select tool", "s"),
@@ -63,6 +83,8 @@ const ACTIONS: HotkeyAction[] = [
   toolAction("dimension", "Dimension tool", "d"),
   toolAction("trim", "Trim tool", "t"),
   toolAction("extend", "Extend tool", "e"),
+  { id: "sketch.finish", label: "Finish sketch", context: "sketch", defaultPrimary: "mod+enter", run: () => st().finishSketch() },
+  { id: "sketch.project", label: "Project bodies", context: "sketch", when: hasSolid, run: () => void st().projectBodies(false) },
   { id: "sketch.construction", label: "Toggle construction", context: "sketch", defaultPrimary: "x", run: () => st().toggleConstruction() },
   { id: "sketch.lookAt", label: "Look at sketch plane", context: "sketch", defaultPrimary: "f", run: () => fire("chisel:lookAt") },
   {

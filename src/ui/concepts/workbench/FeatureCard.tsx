@@ -11,14 +11,14 @@ import { LiveNumber } from "../../kit/LiveNumber";
 import { useFeatureRows } from "../../kit/useFeatureRows";
 import { useEditQueue } from "../../kit/useEditQueue";
 import { useCardSize } from "../../kit/useCardSize";
-import { cardHeight, cardParams, paramsWith, pinAnchors, quadrantDir, shouldDelete } from "./workbench";
+import { cardHeight, cardParams, paramsWith, pinAnchors, quadrantDir } from "./workbench";
+import { deleteFeature } from "../contextActions";
 
 export function FeatureCard() {
   const rows = useFeatureRows();
   const mode = useStore((s) => s.mode);
   const moveRollback = useStore((s) => s.moveRollback);
   const suppressOperation = useStore((s) => s.suppressOperation);
-  const deleteOperation = useStore((s) => s.deleteOperation);
   const openFeature = useUi((s) => s.openFeature);
   const setOpenFeature = useUi((s) => s.setOpenFeature);
   const setHotParam = useUi((s) => s.setHotParam);
@@ -55,11 +55,7 @@ export function FeatureCard() {
             size="sm"
             ghost
             title="Delete this feature"
-            onClick={() => {
-              if (!shouldDelete(row, typeof confirm === "function" ? confirm : undefined)) return;
-              setOpenFeature(null);
-              void deleteOperation(row.opId);
-            }}
+            onClick={() => deleteFeature(row)}
           >
             Delete
           </Button>

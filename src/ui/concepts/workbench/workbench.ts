@@ -230,6 +230,14 @@ export function pushParamOf(row: FeatureRow | undefined): CardParam | null {
   return cardParams(row).find((p) => p.key === key) ?? null;
 }
 
+/** One Push/Pull step (`dir` −1 pulls in, +1 pushes out) on a face's row: the op and its params with the pushed
+ *  number, null when the row has no numeric push param. The face verbs' −/+ and the face.push/face.pull hotkeys send this. */
+export function pushEdit(row: FeatureRow | undefined, dir: -1 | 1): { opId: string; params: Record<string, unknown> } | null {
+  const p = pushParamOf(row);
+  if (!row || !p || !p.numeric) return null;
+  return { opId: row.opId, params: paramsWith(row, p.key, pushed(p.value, dir, p.spec)) };
+}
+
 /** What a face selection was made against: when any of it changes, the face the verbs card shows may no
  *  longer exist, so the card closes. */
 export interface SelectionContext { timelineLength: number; rollbackIndex: number; activeComponentId: string; mode: string }

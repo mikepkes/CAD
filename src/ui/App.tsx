@@ -12,6 +12,7 @@ import { ExtrudePanel } from "./ExtrudePanel";
 import { HotkeyPanel } from "./HotkeyPanel";
 import { useStore } from "../model/store";
 import { installHotkeys } from "../model/hotkeyActions";
+import { installContextActions } from "./concepts/contextActions";
 import { useUi } from "../model/concepts/uiState";
 import { WorkbenchOverlay, HistoryStrip } from "./concepts/workbench";
 import { LensOverlay } from "./concepts/lens";
@@ -47,6 +48,7 @@ export function App() {
   }, [initApp]);
 
   useEffect(() => installHotkeys(), []);
+  useEffect(() => installContextActions(), []);
 
   return (
     <div className="app">
