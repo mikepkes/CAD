@@ -1,0 +1,72 @@
+/* The action ring: layout and motion only. Colours, radii and the button look
+   come from kit.css (.k-btn, .accent for the pointed slot, --k-float*). */
+
+/* a dimming layer over the whole window while the ring is open: a press on it closes the ring, and
+   the dim keeps the slots legible over cards and panels underneath */
+.ring-scrim { position: fixed; inset: 0; z-index: 70; background: rgba(8, 10, 12, 0.32); }
+
+/* zero-size box at the ring centre; everything inside is placed from it */
+.ring {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+  animation: ring-in 120ms ease-out;
+}
+@keyframes ring-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring { animation: none; }
+}
+
+.ring-track {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid var(--k-float-line);
+  box-sizing: border-box;
+}
+
+.ring-centre {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  max-width: 120px;
+  text-align: center;
+  border-radius: var(--k-radius);
+  border: 1px solid var(--k-float-line);
+  background: var(--k-float);
+  box-shadow: var(--k-shadow);
+}
+.ring-hint { font-size: 10px; white-space: nowrap; }
+
+.ring-slot.k-btn {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  max-width: calc(2 * 80px); /* RING_PAD in ringView.ts */
+  background: var(--k-float);
+  box-shadow: var(--k-shadow);
+}
+/* a slot that can't run now stays solid (the kit's disabled opacity would let what's beneath show through); only its text dims */
+.ring-slot.k-btn:disabled { opacity: 1; }
+.ring-slot.k-btn:disabled > * { opacity: 0.45; }
+.ring-slot.k-btn.accent { background: linear-gradient(var(--k-accent-tint), var(--k-accent-tint)), var(--k-float); }
+.ring-slot .ring-label { overflow: hidden; text-overflow: ellipsis; }
+.ring-key { font-size: 11px; }
+
+.ring-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--k-float-line);
+}

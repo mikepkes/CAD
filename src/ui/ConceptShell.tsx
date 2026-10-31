@@ -1,6 +1,7 @@
 // The pieces of the app shell the concept UI adds: the panel switches over the
-// viewport and the tabbed right side panel. Thin templates over useUi; which
-// tab can show is decided in uiState.ts (rightTabFor).
+// viewport (with the action ring, which portals over the whole window) and the
+// tabbed right side panel. Thin templates over useUi; which tab can show is
+// decided in uiState.ts (rightTabFor).
 
 import { InspectorPanel } from "./InspectorPanel";
 import { useUi, type RightTab } from "../model/concepts/uiState";
@@ -8,19 +9,24 @@ import { Button, Pills } from "./kit/primitives";
 import { LedgerPanel } from "./concepts/ledger";
 import { DesignSpacePanel } from "./concepts/space";
 import { IntentButton } from "./concepts/intent";
+import { RingOverlay } from "./concepts/ring";
 
-/** Switches for the concept surfaces, at the top-right of the viewport. */
+/** Switches for the concept surfaces, at the top-right of the viewport; also
+ *  mounts the action ring once (it renders into document.body while open). */
 export function PanelToggles() {
   const panels = useUi((s) => s.panels);
   const toggle = useUi((s) => s.togglePanel);
   return (
-    <div className="k-panel-toggle" role="toolbar" aria-label="Concept panels">
-      <Button size="sm" on={panels.workbench} title="Feature pins and history strip on the part" onClick={() => toggle("workbench")}>Pins</Button>
-      <Button size="sm" on={panels.lens} title="Analysis under a draggable lens" onClick={() => toggle("lens")}>Lens</Button>
-      <Button size="sm" on={panels.ledger} title="The model read back as sentences, with design intents" onClick={() => toggle("ledger")}>Ledger</Button>
-      <Button size="sm" on={panels.space} title="Two parameters on a map, intents as frontiers" onClick={() => toggle("space")}>Space</Button>
-      <IntentButton size="sm" />
-    </div>
+    <>
+      <div className="k-panel-toggle" role="toolbar" aria-label="Concept panels">
+        <Button size="sm" on={panels.workbench} title="Feature pins and history strip on the part" onClick={() => toggle("workbench")}>Pins</Button>
+        <Button size="sm" on={panels.lens} title="Analysis under a draggable lens" onClick={() => toggle("lens")}>Lens</Button>
+        <Button size="sm" on={panels.ledger} title="The model read back as sentences, with design intents" onClick={() => toggle("ledger")}>Ledger</Button>
+        <Button size="sm" on={panels.space} title="Two parameters on a map, intents as frontiers" onClick={() => toggle("space")}>Space</Button>
+        <IntentButton size="sm" />
+      </div>
+      <RingOverlay />
+    </>
   );
 }
 

@@ -8,6 +8,8 @@
 
 import { CommandRegistry } from "../core/command/registry";
 import { hotkeys } from "./hotkeys";
+import { CONTEXTS } from "./contexts";
+import { applyRingSlot, describeRing, GET_RING_DESCRIPTION, SET_RING_SLOT_DESCRIPTION } from "./ringConfig";
 import type { RenderViewOpts } from "../viewport/SceneManager";
 import type { TurntableOpts, TurntableResult } from "../viewport/turntableRecorder";
 import { sanitizeOutputName, timestampedStem } from "./saveOutput";
@@ -517,6 +519,34 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       try {
         hotkeys.setBinding(String(a.action), a.slot === "secondary" ? "secondary" : "primary", a.key == null ? null : String(a.key));
         return { ...ok({ ok: true, hotkeys: hotkeys.describe() }) };
+      } catch (e) {
+        return { ...ok({ ok: false, error: errorText(e) }), isError: true };
+      }
+    },
+  });
+  tools.push({
+    name: "get_ring",
+    description: GET_RING_DESCRIPTION,
+    inputSchema: { type: "object", properties: {} },
+    annotations: READ_ONLY,
+    execute: async () => ok(describeRing()),
+  });
+  tools.push({
+    name: "set_ring_slot",
+    description: SET_RING_SLOT_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      required: ["context", "slot", "action"],
+      properties: {
+        context: { type: "string", enum: [...CONTEXTS] },
+        slot: { type: ["integer", "string"] },
+        action: { type: ["string", "null"] },
+      },
+    },
+    annotations: { ...EDIT, idempotentHint: true },
+    execute: async (args) => {
+      try {
+        return ok(applyRingSlot((args ?? {}) as { context?: unknown; slot?: unknown; action?: unknown }));
       } catch (e) {
         return { ...ok({ ok: false, error: errorText(e) }), isError: true };
       }
