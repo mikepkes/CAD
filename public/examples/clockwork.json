@@ -1,0 +1,2581 @@
+{
+  "format": "chisel-cad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 448,
+  "rollbackIndex": 141,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "turn",
+        "expression": "0",
+        "min": -180,
+        "max": 180,
+        "step": 1
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1793479059140
+    },
+    {
+      "opId": "op3",
+      "type": "material.create",
+      "params": {
+        "name": "Brass",
+        "kind": "metal",
+        "color": "#c9a54a",
+        "finish": "polished"
+      },
+      "createdIds": [
+        "mat4"
+      ],
+      "label": "Create material",
+      "at": 1793479059141
+    },
+    {
+      "opId": "op5",
+      "type": "material.create",
+      "params": {
+        "name": "Bronze",
+        "kind": "metal",
+        "color": "#b0703a",
+        "finish": "satin"
+      },
+      "createdIds": [
+        "mat6"
+      ],
+      "label": "Create material",
+      "at": 1793479059141
+    },
+    {
+      "opId": "op7",
+      "type": "material.create",
+      "params": {
+        "name": "Steel",
+        "kind": "metal",
+        "color": "#a9aeb5",
+        "finish": "brushed"
+      },
+      "createdIds": [
+        "mat8"
+      ],
+      "label": "Create material",
+      "at": 1793479059141
+    },
+    {
+      "opId": "op9",
+      "type": "material.create",
+      "params": {
+        "name": "Base, painted",
+        "kind": "painted",
+        "color": "#2f343c"
+      },
+      "createdIds": [
+        "mat10"
+      ],
+      "label": "Create material",
+      "at": 1793479059142
+    },
+    {
+      "opId": "op11",
+      "type": "component.create",
+      "params": {
+        "name": "Frame"
+      },
+      "createdIds": [
+        "cmp12"
+      ],
+      "label": "New component",
+      "at": 1793479059142
+    },
+    {
+      "opId": "op13",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp12",
+        "material": "mat10"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059142
+    },
+    {
+      "opId": "op14",
+      "type": "component.create",
+      "params": {
+        "name": "Pins"
+      },
+      "createdIds": [
+        "cmp15"
+      ],
+      "label": "New component",
+      "at": 1793479059142
+    },
+    {
+      "opId": "op16",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp15",
+        "material": "mat8"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059142
+    },
+    {
+      "opId": "op17",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": -6,
+        "component": "cmp12",
+        "name": "Base plate"
+      },
+      "createdIds": [
+        "sketch18",
+        "pt19"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059143
+    },
+    {
+      "opId": "op20",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch18",
+        "corner": {
+          "x": -159.513,
+          "y": -48
+        },
+        "opposite": {
+          "x": 66,
+          "y": 68.316
+        },
+        "cornerRadius": 8
+      },
+      "createdIds": [
+        "pt21",
+        "pt22",
+        "pt23",
+        "pt24",
+        "ln25",
+        "ln26",
+        "ln27",
+        "ln28",
+        "c29",
+        "c30",
+        "c31",
+        "c32",
+        "pt33",
+        "pt34",
+        "pt35",
+        "ar36",
+        "pt37",
+        "pt38",
+        "pt39",
+        "ar40",
+        "pt41",
+        "pt42",
+        "pt43",
+        "ar44",
+        "pt45",
+        "pt46",
+        "pt47",
+        "ar48"
+      ],
+      "label": "Add rectangle",
+      "at": 1793479059164
+    },
+    {
+      "opId": "op49",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch18",
+        "distance": "6",
+        "name": "Base plate"
+      },
+      "createdIds": [
+        "ext50"
+      ],
+      "label": "Extrude",
+      "at": 1793479059169
+    },
+    {
+      "opId": "op51",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 0,
+        "component": "cmp12",
+        "name": "Rail, left"
+      },
+      "createdIds": [
+        "sketch52",
+        "pt53"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059170
+    },
+    {
+      "opId": "op54",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch52",
+        "corner": {
+          "x": -70,
+          "y": -38.5
+        },
+        "opposite": {
+          "x": -14,
+          "y": -33.5
+        }
+      },
+      "createdIds": [
+        "pt55",
+        "pt56",
+        "pt57",
+        "pt58",
+        "ln59",
+        "ln60",
+        "ln61",
+        "ln62",
+        "c63",
+        "c64",
+        "c65",
+        "c66"
+      ],
+      "label": "Add rectangle",
+      "at": 1793479059171
+    },
+    {
+      "opId": "op67",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch52",
+        "distance": "12.5",
+        "name": "Rail, left"
+      },
+      "createdIds": [
+        "ext68"
+      ],
+      "label": "Extrude",
+      "at": 1793479059172
+    },
+    {
+      "opId": "op69",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 0,
+        "component": "cmp12",
+        "name": "Rail, right"
+      },
+      "createdIds": [
+        "sketch70",
+        "pt71"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059172
+    },
+    {
+      "opId": "op72",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch70",
+        "corner": {
+          "x": 14,
+          "y": -38.5
+        },
+        "opposite": {
+          "x": 62,
+          "y": -33.5
+        }
+      },
+      "createdIds": [
+        "pt73",
+        "pt74",
+        "pt75",
+        "pt76",
+        "ln77",
+        "ln78",
+        "ln79",
+        "ln80",
+        "c81",
+        "c82",
+        "c83",
+        "c84"
+      ],
+      "label": "Add rectangle",
+      "at": 1793479059173
+    },
+    {
+      "opId": "op85",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch70",
+        "distance": "12.5",
+        "name": "Rail, right"
+      },
+      "createdIds": [
+        "ext86"
+      ],
+      "label": "Extrude",
+      "at": 1793479059174
+    },
+    {
+      "opId": "op87",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "offset": -111.51265280484687,
+        "component": "cmp12",
+        "name": "Bearing, bevel side"
+      },
+      "createdIds": [
+        "sketch88",
+        "pt89"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059175
+    },
+    {
+      "opId": "op90",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch88",
+        "corner": {
+          "x": 7.618,
+          "y": 0
+        },
+        "opposite": {
+          "x": 21.618,
+          "y": 41.5
+        },
+        "cornerRadius": 3
+      },
+      "createdIds": [
+        "pt91",
+        "pt92",
+        "pt93",
+        "pt94",
+        "ln95",
+        "ln96",
+        "ln97",
+        "ln98",
+        "c99",
+        "c100",
+        "c101",
+        "c102",
+        "pt103",
+        "pt104",
+        "pt105",
+        "ar106",
+        "pt107",
+        "pt108",
+        "pt109",
+        "ar110",
+        "pt111",
+        "pt112",
+        "pt113",
+        "ar114",
+        "pt115",
+        "pt116",
+        "pt117",
+        "ar118"
+      ],
+      "label": "Add rectangle",
+      "at": 1793479059176
+    },
+    {
+      "opId": "op119",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch88",
+        "center": {
+          "x": 14.618,
+          "y": 34.5
+        },
+        "radius": 2.6
+      },
+      "createdIds": [
+        "pt120",
+        "ci121"
+      ],
+      "label": "Add circle",
+      "at": 1793479059177
+    },
+    {
+      "opId": "op122",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch88",
+        "distance": "6",
+        "name": "Bearing, bevel side"
+      },
+      "createdIds": [
+        "ext123"
+      ],
+      "label": "Extrude",
+      "at": 1793479059179
+    },
+    {
+      "opId": "op124",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "offset": -153.51265280484688,
+        "component": "cmp12",
+        "name": "Bearing, far"
+      },
+      "createdIds": [
+        "sketch125",
+        "pt126"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059181
+    },
+    {
+      "opId": "op127",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch125",
+        "corner": {
+          "x": 7.618,
+          "y": 0
+        },
+        "opposite": {
+          "x": 21.618,
+          "y": 41.5
+        },
+        "cornerRadius": 3
+      },
+      "createdIds": [
+        "pt128",
+        "pt129",
+        "pt130",
+        "pt131",
+        "ln132",
+        "ln133",
+        "ln134",
+        "ln135",
+        "c136",
+        "c137",
+        "c138",
+        "c139",
+        "pt140",
+        "pt141",
+        "pt142",
+        "ar143",
+        "pt144",
+        "pt145",
+        "pt146",
+        "ar147",
+        "pt148",
+        "pt149",
+        "pt150",
+        "ar151",
+        "pt152",
+        "pt153",
+        "pt154",
+        "ar155"
+      ],
+      "label": "Add rectangle",
+      "at": 1793479059183
+    },
+    {
+      "opId": "op156",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch125",
+        "center": {
+          "x": 14.618,
+          "y": 34.5
+        },
+        "radius": 2.6
+      },
+      "createdIds": [
+        "pt157",
+        "ci158"
+      ],
+      "label": "Add circle",
+      "at": 1793479059184
+    },
+    {
+      "opId": "op159",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch125",
+        "distance": "6",
+        "name": "Bearing, far"
+      },
+      "createdIds": [
+        "ext160"
+      ],
+      "label": "Extrude",
+      "at": 1793479059188
+    },
+    {
+      "opId": "op161",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 0,
+        "component": "cmp15",
+        "name": "Pins S2, S3"
+      },
+      "createdIds": [
+        "sketch162",
+        "pt163"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059190
+    },
+    {
+      "opId": "op164",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch162",
+        "center": {
+          "x": -7.814,
+          "y": 44.316
+        },
+        "radius": 2.4
+      },
+      "createdIds": [
+        "pt165",
+        "ci166"
+      ],
+      "label": "Add circle",
+      "at": 1793479059193
+    },
+    {
+      "opId": "op167",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch162",
+        "center": {
+          "x": -49.814,
+          "y": 44.316
+        },
+        "radius": 2.4
+      },
+      "createdIds": [
+        "pt168",
+        "ci169"
+      ],
+      "label": "Add circle",
+      "at": 1793479059199
+    },
+    {
+      "opId": "op170",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch162",
+        "distance": "27.5",
+        "name": "Pins S2, S3"
+      },
+      "createdIds": [
+        "ext171"
+      ],
+      "label": "Extrude",
+      "at": 1793479059201
+    },
+    {
+      "opId": "op172",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 0,
+        "component": "cmp15",
+        "name": "Pin S4"
+      },
+      "createdIds": [
+        "sketch173",
+        "pt174"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059203
+    },
+    {
+      "opId": "op175",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch173",
+        "center": {
+          "x": -79.513,
+          "y": 14.618
+        },
+        "radius": 2.4
+      },
+      "createdIds": [
+        "pt176",
+        "ci177"
+      ],
+      "label": "Add circle",
+      "at": 1793479059204
+    },
+    {
+      "opId": "op178",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch173",
+        "distance": "24.5",
+        "name": "Pin S4"
+      },
+      "createdIds": [
+        "ext179"
+      ],
+      "label": "Extrude",
+      "at": 1793479059209
+    },
+    {
+      "opId": "op180",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 0,
+        "component": "cmp15",
+        "name": "Pin, wheel"
+      },
+      "createdIds": [
+        "sketch181",
+        "pt182"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059211
+    },
+    {
+      "opId": "op183",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch181",
+        "center": {
+          "x": -129.513,
+          "y": -17.382
+        },
+        "radius": 2.4
+      },
+      "createdIds": [
+        "pt184",
+        "ci185"
+      ],
+      "label": "Add circle",
+      "at": 1793479059212
+    },
+    {
+      "opId": "op186",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch181",
+        "distance": "38",
+        "name": "Pin, wheel"
+      },
+      "createdIds": [
+        "ext187"
+      ],
+      "label": "Extrude",
+      "at": 1793479059214
+    },
+    {
+      "opId": "op188",
+      "type": "component.create",
+      "params": {
+        "name": "Ring"
+      },
+      "createdIds": [
+        "cmp189"
+      ],
+      "label": "New component",
+      "at": 1793479059216
+    },
+    {
+      "opId": "op190",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp189",
+        "material": "mat4"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059218
+    },
+    {
+      "opId": "op191",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp189",
+        "backlash": 0.1,
+        "type": "ring",
+        "module": 1.5,
+        "teeth": 36,
+        "faceWidth": 9,
+        "rim": 3.5,
+        "name": "Ring gear"
+      },
+      "createdIds": [
+        "gear192",
+        "sketch193",
+        "pt194"
+      ],
+      "label": "Gear",
+      "at": 1793479059219
+    },
+    {
+      "opId": "op195",
+      "type": "component.create",
+      "params": {
+        "name": "Carrier"
+      },
+      "createdIds": [
+        "cmp196"
+      ],
+      "label": "New component",
+      "at": 1793479059222
+    },
+    {
+      "opId": "op197",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp196",
+        "material": "mat4"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059224
+    },
+    {
+      "opId": "op198",
+      "type": "component.create",
+      "params": {
+        "name": "Planet 1"
+      },
+      "createdIds": [
+        "cmp199"
+      ],
+      "label": "New component",
+      "at": 1793479059226
+    },
+    {
+      "opId": "op200",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp199",
+        "material": "mat6"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059228
+    },
+    {
+      "opId": "op201",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp199",
+        "backlash": 0.1,
+        "type": "spur",
+        "teeth": 12,
+        "faceWidth": 7,
+        "offset": 1,
+        "bore": 5,
+        "mesh": {
+          "gear": "gear192",
+          "angle": 90
+        },
+        "name": "Planet 1"
+      },
+      "createdIds": [
+        "gear202",
+        "sketch203",
+        "pt204"
+      ],
+      "label": "Gear",
+      "at": 1793479059230
+    },
+    {
+      "opId": "op205",
+      "type": "component.create",
+      "params": {
+        "name": "Planet 2"
+      },
+      "createdIds": [
+        "cmp206"
+      ],
+      "label": "New component",
+      "at": 1793479059240
+    },
+    {
+      "opId": "op207",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp206",
+        "material": "mat6"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059243
+    },
+    {
+      "opId": "op208",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp206",
+        "backlash": 0.1,
+        "type": "spur",
+        "teeth": 12,
+        "faceWidth": 7,
+        "offset": 1,
+        "bore": 5,
+        "mesh": {
+          "gear": "gear192",
+          "angle": 210
+        },
+        "name": "Planet 2"
+      },
+      "createdIds": [
+        "gear209",
+        "sketch210",
+        "pt211"
+      ],
+      "label": "Gear",
+      "at": 1793479059246
+    },
+    {
+      "opId": "op212",
+      "type": "component.create",
+      "params": {
+        "name": "Planet 3"
+      },
+      "createdIds": [
+        "cmp213"
+      ],
+      "label": "New component",
+      "at": 1793479059250
+    },
+    {
+      "opId": "op214",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp213",
+        "material": "mat6"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059254
+    },
+    {
+      "opId": "op215",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp213",
+        "backlash": 0.1,
+        "type": "spur",
+        "teeth": 12,
+        "faceWidth": 7,
+        "offset": 1,
+        "bore": 5,
+        "mesh": {
+          "gear": "gear192",
+          "angle": 330
+        },
+        "name": "Planet 3"
+      },
+      "createdIds": [
+        "gear216",
+        "sketch217",
+        "pt218"
+      ],
+      "label": "Gear",
+      "at": 1793479059258
+    },
+    {
+      "opId": "op219",
+      "type": "component.create",
+      "params": {
+        "name": "Drive"
+      },
+      "createdIds": [
+        "cmp220"
+      ],
+      "label": "New component",
+      "at": 1793479059263
+    },
+    {
+      "opId": "op221",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp220",
+        "material": "mat8"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059269
+    },
+    {
+      "opId": "op222",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp220",
+        "backlash": 0.1,
+        "type": "spur",
+        "teeth": 12,
+        "faceWidth": 7,
+        "mesh": {
+          "gear": "gear202",
+          "angle": 270
+        },
+        "name": "Sun"
+      },
+      "createdIds": [
+        "gear223",
+        "sketch224",
+        "pt225"
+      ],
+      "label": "Gear",
+      "at": 1793479059275
+    },
+    {
+      "opId": "op226",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 8,
+        "component": "cmp220",
+        "name": "Drive shaft"
+      },
+      "createdIds": [
+        "sketch227",
+        "pt228"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059281
+    },
+    {
+      "opId": "op229",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch227",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 2.4
+      },
+      "createdIds": [
+        "pt230",
+        "ci231"
+      ],
+      "label": "Add circle",
+      "at": 1793479059288
+    },
+    {
+      "opId": "op232",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch227",
+        "distance": "13",
+        "name": "Drive shaft"
+      },
+      "createdIds": [
+        "ext233"
+      ],
+      "label": "Extrude",
+      "at": 1793479059294
+    },
+    {
+      "opId": "op234",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 21,
+        "component": "cmp220",
+        "name": "Knob"
+      },
+      "createdIds": [
+        "sketch235",
+        "pt236"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059301
+    },
+    {
+      "opId": "op237",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch235",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 9
+      },
+      "createdIds": [
+        "pt238",
+        "ci239"
+      ],
+      "label": "Add circle",
+      "at": 1793479059309
+    },
+    {
+      "opId": "op240",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch235",
+        "distance": "8",
+        "name": "Knob"
+      },
+      "createdIds": [
+        "ext241"
+      ],
+      "label": "Extrude",
+      "at": 1793479059315
+    },
+    {
+      "opId": "op242",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 29,
+        "component": "cmp220",
+        "name": "Knob handle"
+      },
+      "createdIds": [
+        "sketch243",
+        "pt244"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059322
+    },
+    {
+      "opId": "op245",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch243",
+        "center": {
+          "x": 5.5,
+          "y": 0
+        },
+        "radius": 2.2
+      },
+      "createdIds": [
+        "pt246",
+        "ci247"
+      ],
+      "label": "Add circle",
+      "at": 1793479059328
+    },
+    {
+      "opId": "op248",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch243",
+        "distance": "8",
+        "name": "Knob handle"
+      },
+      "createdIds": [
+        "ext249"
+      ],
+      "label": "Extrude",
+      "at": 1793479059335
+    },
+    {
+      "opId": "op250",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 9.5,
+        "component": "cmp196",
+        "name": "Carrier hub"
+      },
+      "createdIds": [
+        "sketch251",
+        "pt252"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059339
+    },
+    {
+      "opId": "op253",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch251",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 8
+      },
+      "createdIds": [
+        "pt254",
+        "ci255"
+      ],
+      "label": "Add circle",
+      "at": 1793479059345
+    },
+    {
+      "opId": "op256",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch251",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 2.6
+      },
+      "createdIds": [
+        "pt257",
+        "ci258"
+      ],
+      "label": "Add circle",
+      "at": 1793479059350
+    },
+    {
+      "opId": "op259",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch251",
+        "distance": "3",
+        "name": "Carrier hub"
+      },
+      "createdIds": [
+        "ext260"
+      ],
+      "label": "Extrude",
+      "at": 1793479059355
+    },
+    {
+      "opId": "op261",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 9.5,
+        "component": "cmp196",
+        "name": "Carrier arm 1"
+      },
+      "createdIds": [
+        "sketch262",
+        "pt263"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059362
+    },
+    {
+      "opId": "op264",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch262",
+        "x": -3.5,
+        "y": 5
+      },
+      "createdIds": [
+        "pt265"
+      ],
+      "label": "Add point",
+      "at": 1793479059367
+    },
+    {
+      "opId": "op266",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch262",
+        "x": 3.5,
+        "y": 5
+      },
+      "createdIds": [
+        "pt267"
+      ],
+      "label": "Add point",
+      "at": 1793479059372
+    },
+    {
+      "opId": "op268",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch262",
+        "x": 3.5,
+        "y": 21
+      },
+      "createdIds": [
+        "pt269"
+      ],
+      "label": "Add point",
+      "at": 1793479059377
+    },
+    {
+      "opId": "op270",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch262",
+        "x": -3.5,
+        "y": 21
+      },
+      "createdIds": [
+        "pt271"
+      ],
+      "label": "Add point",
+      "at": 1793479059382
+    },
+    {
+      "opId": "op272",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch262",
+        "start": {
+          "ref": "pt265"
+        },
+        "end": {
+          "ref": "pt267"
+        }
+      },
+      "createdIds": [
+        "ln273"
+      ],
+      "label": "Add line",
+      "at": 1793479059389
+    },
+    {
+      "opId": "op274",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch262",
+        "start": {
+          "ref": "pt267"
+        },
+        "end": {
+          "ref": "pt269"
+        }
+      },
+      "createdIds": [
+        "ln275"
+      ],
+      "label": "Add line",
+      "at": 1793479059393
+    },
+    {
+      "opId": "op276",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch262",
+        "start": {
+          "ref": "pt269"
+        },
+        "end": {
+          "ref": "pt271"
+        }
+      },
+      "createdIds": [
+        "ln277"
+      ],
+      "label": "Add line",
+      "at": 1793479059397
+    },
+    {
+      "opId": "op278",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch262",
+        "start": {
+          "ref": "pt271"
+        },
+        "end": {
+          "ref": "pt265"
+        }
+      },
+      "createdIds": [
+        "ln279"
+      ],
+      "label": "Add line",
+      "at": 1793479059402
+    },
+    {
+      "opId": "op280",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch262",
+        "distance": "3",
+        "operation": "join",
+        "body": "ext260",
+        "name": "Carrier arm 1"
+      },
+      "createdIds": [
+        "ext281"
+      ],
+      "label": "Extrude",
+      "at": 1793479059409
+    },
+    {
+      "opId": "op282",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 9.5,
+        "component": "cmp196",
+        "name": "Carrier arm 2"
+      },
+      "createdIds": [
+        "sketch283",
+        "pt284"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059417
+    },
+    {
+      "opId": "op285",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch283",
+        "x": -2.58,
+        "y": -5.531
+      },
+      "createdIds": [
+        "pt286"
+      ],
+      "label": "Add point",
+      "at": 1793479059422
+    },
+    {
+      "opId": "op287",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch283",
+        "x": -6.08,
+        "y": 0.531
+      },
+      "createdIds": [
+        "pt288"
+      ],
+      "label": "Add point",
+      "at": 1793479059426
+    },
+    {
+      "opId": "op289",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch283",
+        "x": -19.937,
+        "y": -7.469
+      },
+      "createdIds": [
+        "pt290"
+      ],
+      "label": "Add point",
+      "at": 1793479059430
+    },
+    {
+      "opId": "op291",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch283",
+        "x": -16.437,
+        "y": -13.531
+      },
+      "createdIds": [
+        "pt292"
+      ],
+      "label": "Add point",
+      "at": 1793479059435
+    },
+    {
+      "opId": "op293",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch283",
+        "start": {
+          "ref": "pt286"
+        },
+        "end": {
+          "ref": "pt288"
+        }
+      },
+      "createdIds": [
+        "ln294"
+      ],
+      "label": "Add line",
+      "at": 1793479059440
+    },
+    {
+      "opId": "op295",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch283",
+        "start": {
+          "ref": "pt288"
+        },
+        "end": {
+          "ref": "pt290"
+        }
+      },
+      "createdIds": [
+        "ln296"
+      ],
+      "label": "Add line",
+      "at": 1793479059444
+    },
+    {
+      "opId": "op297",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch283",
+        "start": {
+          "ref": "pt290"
+        },
+        "end": {
+          "ref": "pt292"
+        }
+      },
+      "createdIds": [
+        "ln298"
+      ],
+      "label": "Add line",
+      "at": 1793479059448
+    },
+    {
+      "opId": "op299",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch283",
+        "start": {
+          "ref": "pt292"
+        },
+        "end": {
+          "ref": "pt286"
+        }
+      },
+      "createdIds": [
+        "ln300"
+      ],
+      "label": "Add line",
+      "at": 1793479059453
+    },
+    {
+      "opId": "op301",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch283",
+        "distance": "3",
+        "operation": "join",
+        "body": "ext260",
+        "name": "Carrier arm 2"
+      },
+      "createdIds": [
+        "ext302"
+      ],
+      "label": "Extrude",
+      "at": 1793479059458
+    },
+    {
+      "opId": "op303",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 9.5,
+        "component": "cmp196",
+        "name": "Carrier arm 3"
+      },
+      "createdIds": [
+        "sketch304",
+        "pt305"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059463
+    },
+    {
+      "opId": "op306",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch304",
+        "x": 6.08,
+        "y": 0.531
+      },
+      "createdIds": [
+        "pt307"
+      ],
+      "label": "Add point",
+      "at": 1793479059467
+    },
+    {
+      "opId": "op308",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch304",
+        "x": 2.58,
+        "y": -5.531
+      },
+      "createdIds": [
+        "pt309"
+      ],
+      "label": "Add point",
+      "at": 1793479059472
+    },
+    {
+      "opId": "op310",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch304",
+        "x": 16.437,
+        "y": -13.531
+      },
+      "createdIds": [
+        "pt311"
+      ],
+      "label": "Add point",
+      "at": 1793479059477
+    },
+    {
+      "opId": "op312",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch304",
+        "x": 19.937,
+        "y": -7.469
+      },
+      "createdIds": [
+        "pt313"
+      ],
+      "label": "Add point",
+      "at": 1793479059481
+    },
+    {
+      "opId": "op314",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch304",
+        "start": {
+          "ref": "pt307"
+        },
+        "end": {
+          "ref": "pt309"
+        }
+      },
+      "createdIds": [
+        "ln315"
+      ],
+      "label": "Add line",
+      "at": 1793479059486
+    },
+    {
+      "opId": "op316",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch304",
+        "start": {
+          "ref": "pt309"
+        },
+        "end": {
+          "ref": "pt311"
+        }
+      },
+      "createdIds": [
+        "ln317"
+      ],
+      "label": "Add line",
+      "at": 1793479059491
+    },
+    {
+      "opId": "op318",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch304",
+        "start": {
+          "ref": "pt311"
+        },
+        "end": {
+          "ref": "pt313"
+        }
+      },
+      "createdIds": [
+        "ln319"
+      ],
+      "label": "Add line",
+      "at": 1793479059495
+    },
+    {
+      "opId": "op320",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch304",
+        "start": {
+          "ref": "pt313"
+        },
+        "end": {
+          "ref": "pt307"
+        }
+      },
+      "createdIds": [
+        "ln321"
+      ],
+      "label": "Add line",
+      "at": 1793479059500
+    },
+    {
+      "opId": "op322",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch304",
+        "distance": "3",
+        "operation": "join",
+        "body": "ext260",
+        "name": "Carrier arm 3"
+      },
+      "createdIds": [
+        "ext323"
+      ],
+      "label": "Extrude",
+      "at": 1793479059505
+    },
+    {
+      "opId": "op324",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 1,
+        "component": "cmp196",
+        "name": "Planet pins"
+      },
+      "createdIds": [
+        "sketch325",
+        "pt326"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059510
+    },
+    {
+      "opId": "op327",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch325",
+        "center": {
+          "x": 0,
+          "y": 18
+        },
+        "radius": 2.4
+      },
+      "createdIds": [
+        "pt328",
+        "ci329"
+      ],
+      "label": "Add circle",
+      "at": 1793479059515
+    },
+    {
+      "opId": "op330",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch325",
+        "center": {
+          "x": -15.588,
+          "y": -9
+        },
+        "radius": 2.4
+      },
+      "createdIds": [
+        "pt331",
+        "ci332"
+      ],
+      "label": "Add circle",
+      "at": 1793479059521
+    },
+    {
+      "opId": "op333",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch325",
+        "center": {
+          "x": 15.588,
+          "y": -9
+        },
+        "radius": 2.4
+      },
+      "createdIds": [
+        "pt334",
+        "ci335"
+      ],
+      "label": "Add circle",
+      "at": 1793479059525
+    },
+    {
+      "opId": "op336",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch325",
+        "distance": "8.5",
+        "name": "Planet pins"
+      },
+      "createdIds": [
+        "ext337"
+      ],
+      "label": "Extrude",
+      "at": 1793479059530
+    },
+    {
+      "opId": "op338",
+      "type": "component.create",
+      "params": {
+        "name": "Rack"
+      },
+      "createdIds": [
+        "cmp339"
+      ],
+      "label": "New component",
+      "at": 1793479059535
+    },
+    {
+      "opId": "op340",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp339",
+        "material": "mat4"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059540
+    },
+    {
+      "opId": "op341",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp339",
+        "backlash": 0.1,
+        "type": "rack",
+        "module": 2,
+        "teeth": 17,
+        "faceWidth": 7,
+        "y": -30,
+        "offset": 12.5,
+        "rim": 6,
+        "name": "Rack"
+      },
+      "createdIds": [
+        "gear342",
+        "sketch343",
+        "pt344"
+      ],
+      "label": "Gear",
+      "at": 1793479059545
+    },
+    {
+      "opId": "op345",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp196",
+        "backlash": 0.1,
+        "type": "spur",
+        "teeth": 30,
+        "faceWidth": 7,
+        "bore": 5.2,
+        "spokes": 5,
+        "hubDiameter": 12,
+        "mesh": {
+          "gear": "gear342",
+          "along": 0
+        },
+        "name": "Spur A"
+      },
+      "createdIds": [
+        "gear346",
+        "sketch347",
+        "pt348"
+      ],
+      "label": "Gear",
+      "at": 1793479059551
+    },
+    {
+      "opId": "op349",
+      "type": "component.create",
+      "params": {
+        "name": "Shaft 2"
+      },
+      "createdIds": [
+        "cmp350"
+      ],
+      "label": "New component",
+      "at": 1793479059558
+    },
+    {
+      "opId": "op351",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp350",
+        "material": "mat4"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059565
+    },
+    {
+      "opId": "op352",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp350",
+        "backlash": 0.1,
+        "type": "spur",
+        "teeth": 15,
+        "faceWidth": 7,
+        "bore": 5,
+        "hubDiameter": 11,
+        "hubLength": 1,
+        "mesh": {
+          "gear": "gear346",
+          "angle": 100
+        },
+        "name": "Spur B"
+      },
+      "createdIds": [
+        "gear353",
+        "sketch354",
+        "pt355"
+      ],
+      "label": "Gear",
+      "at": 1793479059573
+    },
+    {
+      "opId": "op356",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp350",
+        "backlash": 0.1,
+        "type": "helical",
+        "module": 2,
+        "teeth": 28,
+        "faceWidth": 7,
+        "helixAngle": 20,
+        "bore": 5,
+        "spokes": 5,
+        "x": -7.814,
+        "y": 44.316,
+        "offset": 20.5,
+        "name": "Helical C"
+      },
+      "createdIds": [
+        "gear357",
+        "sketch358",
+        "pt359"
+      ],
+      "label": "Gear",
+      "at": 1793479059582
+    },
+    {
+      "opId": "op360",
+      "type": "component.create",
+      "params": {
+        "name": "Shaft 3"
+      },
+      "createdIds": [
+        "cmp361"
+      ],
+      "label": "New component",
+      "at": 1793479059590
+    },
+    {
+      "opId": "op362",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp361",
+        "material": "mat6"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059597
+    },
+    {
+      "opId": "op363",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp361",
+        "backlash": 0.1,
+        "type": "helical",
+        "teeth": 14,
+        "faceWidth": 7,
+        "bore": 5,
+        "mesh": {
+          "gear": "gear357",
+          "angle": 180
+        },
+        "name": "Helical D"
+      },
+      "createdIds": [
+        "gear364",
+        "sketch365",
+        "pt366"
+      ],
+      "label": "Gear",
+      "at": 1793479059608
+    },
+    {
+      "opId": "op367",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp361",
+        "backlash": 0.1,
+        "type": "herringbone",
+        "module": 2,
+        "teeth": 28,
+        "faceWidth": 7,
+        "helixAngle": 30,
+        "bore": 5,
+        "spokes": 5,
+        "hubDiameter": 11,
+        "hubLength": 12.5,
+        "x": -49.814,
+        "y": 44.316,
+        "offset": 1,
+        "name": "Herringbone E"
+      },
+      "createdIds": [
+        "gear368",
+        "sketch369",
+        "pt370"
+      ],
+      "label": "Gear",
+      "at": 1793479059619
+    },
+    {
+      "opId": "op371",
+      "type": "component.create",
+      "params": {
+        "name": "Shaft 4"
+      },
+      "createdIds": [
+        "cmp372"
+      ],
+      "label": "New component",
+      "at": 1793479059632
+    },
+    {
+      "opId": "op373",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp372",
+        "material": "mat4"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059647
+    },
+    {
+      "opId": "op374",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp372",
+        "backlash": 0.1,
+        "type": "herringbone",
+        "teeth": 14,
+        "faceWidth": 7,
+        "bore": 5,
+        "hubDiameter": 11,
+        "hubLength": 12.5,
+        "mesh": {
+          "gear": "gear368",
+          "angle": 225
+        },
+        "name": "Herringbone F"
+      },
+      "createdIds": [
+        "gear375",
+        "sketch376",
+        "pt377"
+      ],
+      "label": "Gear",
+      "at": 1793479059657
+    },
+    {
+      "opId": "op378",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp372",
+        "backlash": 0.1,
+        "type": "bevel",
+        "module": 2,
+        "teeth": 21,
+        "mateTeeth": 14,
+        "faceWidth": 7,
+        "bore": 5,
+        "x": -79.513,
+        "y": 14.618,
+        "offset": 20.5,
+        "name": "Bevel H"
+      },
+      "createdIds": [
+        "gear379",
+        "sketch380",
+        "pt381"
+      ],
+      "label": "Gear",
+      "at": 1793479059668
+    },
+    {
+      "opId": "op382",
+      "type": "component.create",
+      "params": {
+        "name": "Cross shaft"
+      },
+      "createdIds": [
+        "cmp383"
+      ],
+      "label": "New component",
+      "at": 1793479059679
+    },
+    {
+      "opId": "op384",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp383",
+        "material": "mat8"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059695
+    },
+    {
+      "opId": "op385",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp383",
+        "backlash": 0.1,
+        "type": "bevel",
+        "plane": "YZ",
+        "module": 2,
+        "teeth": 14,
+        "mateTeeth": 21,
+        "faceWidth": 7,
+        "bore": 5,
+        "offset": -100.513,
+        "x": 14.618,
+        "y": 34.5,
+        "rotation": -90,
+        "name": "Bevel I"
+      },
+      "createdIds": [
+        "gear386",
+        "sketch387",
+        "pt388"
+      ],
+      "label": "Gear",
+      "at": 1793479059708
+    },
+    {
+      "opId": "op389",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp383",
+        "backlash": 0.1,
+        "type": "worm",
+        "plane": "YZ",
+        "module": 2,
+        "teeth": 1,
+        "wormDiameter": 16,
+        "faceWidth": 30,
+        "bore": 5,
+        "offset": -144.513,
+        "x": 14.618,
+        "y": 34.5,
+        "name": "Worm"
+      },
+      "createdIds": [
+        "gear390",
+        "sketch391",
+        "pt392"
+      ],
+      "label": "Gear",
+      "at": 1793479059720
+    },
+    {
+      "opId": "op393",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "offset": -156.513,
+        "component": "cmp383",
+        "name": "Cross shaft"
+      },
+      "createdIds": [
+        "sketch394",
+        "pt395"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059736
+    },
+    {
+      "opId": "op396",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch394",
+        "center": {
+          "x": 14.618,
+          "y": 34.5
+        },
+        "radius": 2.4
+      },
+      "createdIds": [
+        "pt397",
+        "ci398"
+      ],
+      "label": "Add circle",
+      "at": 1793479059748
+    },
+    {
+      "opId": "op399",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch394",
+        "distance": "60",
+        "name": "Cross shaft"
+      },
+      "createdIds": [
+        "ext400"
+      ],
+      "label": "Extrude",
+      "at": 1793479059761
+    },
+    {
+      "opId": "op401",
+      "type": "component.create",
+      "params": {
+        "name": "Wheel"
+      },
+      "createdIds": [
+        "cmp402"
+      ],
+      "label": "New component",
+      "at": 1793479059777
+    },
+    {
+      "opId": "op403",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp402",
+        "material": "mat4"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793479059793
+    },
+    {
+      "opId": "op404",
+      "type": "feature.gear",
+      "params": {
+        "component": "cmp402",
+        "backlash": 0.1,
+        "type": "helical",
+        "module": 2,
+        "teeth": 24,
+        "faceWidth": 7,
+        "helixAngle": "deg(atan(1*2/16))",
+        "bore": 5,
+        "spokes": 6,
+        "x": -129.513,
+        "y": -17.382,
+        "offset": 31,
+        "rotation": 94.765,
+        "name": "Worm wheel"
+      },
+      "createdIds": [
+        "gear405",
+        "sketch406",
+        "pt407"
+      ],
+      "label": "Gear",
+      "at": 1793479059810
+    },
+    {
+      "opId": "op408",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 38,
+        "component": "cmp402",
+        "name": "Hand"
+      },
+      "createdIds": [
+        "sketch409",
+        "pt410"
+      ],
+      "label": "Create sketch",
+      "at": 1793479059822
+    },
+    {
+      "opId": "op411",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch409",
+        "corner": {
+          "x": -127.513,
+          "y": -18.882
+        },
+        "opposite": {
+          "x": -110.513,
+          "y": -15.882
+        }
+      },
+      "createdIds": [
+        "pt412",
+        "pt413",
+        "pt414",
+        "pt415",
+        "ln416",
+        "ln417",
+        "ln418",
+        "ln419",
+        "c420",
+        "c421",
+        "c422",
+        "c423"
+      ],
+      "label": "Add rectangle",
+      "at": 1793479059835
+    },
+    {
+      "opId": "op424",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch409",
+        "distance": "1.5",
+        "name": "Hand"
+      },
+      "createdIds": [
+        "ext425"
+      ],
+      "label": "Extrude",
+      "at": 1793479059846
+    },
+    {
+      "opId": "op426",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp220",
+        "baseOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "value": "turn",
+        "name": "Knob"
+      },
+      "createdIds": [
+        "jnt427"
+      ],
+      "label": "Joint",
+      "at": 1793479059858
+    },
+    {
+      "opId": "op428",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp196",
+        "baseOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "value": "turn*12/(12+36)",
+        "name": "Carrier"
+      },
+      "createdIds": [
+        "jnt429"
+      ],
+      "label": "Joint",
+      "at": 1793479059870
+    },
+    {
+      "opId": "op430",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp199",
+        "base": "cmp196",
+        "baseOrigin": {
+          "x": 0,
+          "y": 18,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 18,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "value": "-(turn - turn*12/(12+36))*12/12",
+        "name": "Planet 1"
+      },
+      "createdIds": [
+        "jnt431"
+      ],
+      "label": "Joint",
+      "at": 1793479059883
+    },
+    {
+      "opId": "op432",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp206",
+        "base": "cmp196",
+        "baseOrigin": {
+          "x": -15.588,
+          "y": -9,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": -15.588,
+          "y": -9,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "value": "-(turn - turn*12/(12+36))*12/12",
+        "name": "Planet 2"
+      },
+      "createdIds": [
+        "jnt433"
+      ],
+      "label": "Joint",
+      "at": 1793479059896
+    },
+    {
+      "opId": "op434",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp213",
+        "base": "cmp196",
+        "baseOrigin": {
+          "x": 15.588,
+          "y": -9,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 15.588,
+          "y": -9,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "value": "-(turn - turn*12/(12+36))*12/12",
+        "name": "Planet 3"
+      },
+      "createdIds": [
+        "jnt435"
+      ],
+      "label": "Joint",
+      "at": 1793479059909
+    },
+    {
+      "opId": "op436",
+      "type": "joint.create",
+      "params": {
+        "kind": "slider",
+        "moved": "cmp339",
+        "baseOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "axis": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "value": "turn*12/(12+36)*pi*2*30/360",
+        "name": "Rack"
+      },
+      "createdIds": [
+        "jnt437"
+      ],
+      "label": "Joint",
+      "at": 1793479059921
+    },
+    {
+      "opId": "op438",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp350",
+        "baseOrigin": {
+          "x": -7.814,
+          "y": 44.316,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": -7.814,
+          "y": 44.316,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "value": "-turn*12/(12+36)*30/15",
+        "name": "Shaft 2"
+      },
+      "createdIds": [
+        "jnt439"
+      ],
+      "label": "Joint",
+      "at": 1793479059933
+    },
+    {
+      "opId": "op440",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp361",
+        "baseOrigin": {
+          "x": -49.814,
+          "y": 44.316,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": -49.814,
+          "y": 44.316,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "value": "turn*12/(12+36)*30/15*28/14",
+        "name": "Shaft 3"
+      },
+      "createdIds": [
+        "jnt441"
+      ],
+      "label": "Joint",
+      "at": 1793479059945
+    },
+    {
+      "opId": "op442",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp372",
+        "baseOrigin": {
+          "x": -79.513,
+          "y": 14.618,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": -79.513,
+          "y": 14.618,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "value": "-turn*12/(12+36)*30/15*28/14*28/14",
+        "name": "Shaft 4"
+      },
+      "createdIds": [
+        "jnt443"
+      ],
+      "label": "Joint",
+      "at": 1793479059958
+    },
+    {
+      "opId": "op444",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp383",
+        "baseOrigin": {
+          "x": -100.513,
+          "y": 14.618,
+          "z": 34.5
+        },
+        "movedOrigin": {
+          "x": -100.513,
+          "y": 14.618,
+          "z": 34.5
+        },
+        "axis": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "value": "turn*12/(12+36)*30/15*28/14*28/14*21/14",
+        "name": "Cross shaft"
+      },
+      "createdIds": [
+        "jnt445"
+      ],
+      "label": "Joint",
+      "at": 1793479059970
+    },
+    {
+      "opId": "op446",
+      "type": "joint.create",
+      "params": {
+        "kind": "revolute",
+        "moved": "cmp402",
+        "baseOrigin": {
+          "x": -129.513,
+          "y": -17.382,
+          "z": 0
+        },
+        "movedOrigin": {
+          "x": -129.513,
+          "y": -17.382,
+          "z": 0
+        },
+        "axis": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "value": "turn*12/(12+36)*30/15*28/14*28/14*21/14*1/24",
+        "name": "Wheel"
+      },
+      "createdIds": [
+        "jnt447"
+      ],
+      "label": "Joint",
+      "at": 1793479059982
+    }
+  ],
+  "timelineGroups": []
+}

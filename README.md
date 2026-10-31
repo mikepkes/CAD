@@ -32,6 +32,19 @@ sized with the beam solver to stay within the material's strain limit across
 the print layers. It opens on the single half you print (print it twice); tick
 `fullBox` to see the closed box.
 
+And **https://mikepkes.github.io/CAD/?mode=customize&example=clockwork** — a
+**clockwork of every kind of gear**, all on one slider. Drag `turn` (the knob)
+and a planetary stage (sun, three planets, a fixed ring gear) steps it down
+4:1; the carrier's spur gear drives a **rack** along the front and a **spur**,
+a **helical** and a **herringbone** pair, each stepping it back up ×2; a
+**straight bevel** pair turns the drive through 90° onto a cross shaft, whose
+**worm** turns a wheel with a hand at 1/8 of the knob. Every gear is one
+`feature.gear`, each pair placed by its `mesh` option (centre distance and
+tooth phase as expressions of its mate's), and every shaft is a revolute joint
+whose value is `turn` times the tooth ratios down the train — so the teeth stay
+in mesh, which the motion study checks. Printable: 5 mm bores on pins, 0.1 mm
+backlash a side.
+
 ### Compliant mechanisms
 
 Parts that move by **bending** instead of sliding on pins, printed flat as one
@@ -235,6 +248,16 @@ on.
   flanks, trochoidal root fillets from the rack cutter's tip radius (with real
   undercut on small tooth counts), exact basic-rack conjugates with tangent
   root fillets, reference circles, backlash. See `docs/images/gear-*.png`.
+- **3D gears in one step:** `feature.gear` (toolbar ⚙ Gear, hotkey G) builds
+  **spur, helical, herringbone, ring (internal; straight, helical or
+  herringbone), rack (straight, helical or chevron), straight bevel (Tredgold
+  tooth form, tapering to the pitch-cone apex) and worm** gears, with a
+  printable bore (round, D-flat or keyway), hub and spokes and a printing
+  backlash by default; every number is an expression. `mesh: {gear, angle}`
+  places a gear in mesh with another — centre distance, phase, module and
+  helix hand as expressions of the mate's, so the pair stays meshed when
+  either changes. A gear on a revolute joint is built once and placed, so a
+  train of helical gears turns at slider speed.
 - **Command-driven, with a parametric timeline separate from undo/redo.** Edit
   an earlier operation and it propagates downstream (Fusion-style), and that
   edit is undoable. Drag a point for live preview; release commits one step.
@@ -380,6 +403,7 @@ straight from a URL:
 ?mode=customize&example=gripper        # compliant gripper: 10 hinges, 3 loops, amplified jaws; jaw length slider, grip springs, PLA skeleton
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&example=gimbal         # two-axis flexure gimbal: eight cross-blade flexures, alpha/beta steer the mirror; blade, platform and range sliders
+?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm), driven by `turn`
 ?mode=customize&model=<url-to.json>    # any Chisel CAD model file
 ```
 

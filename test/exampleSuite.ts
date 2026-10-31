@@ -10,6 +10,13 @@
 //   3. build without error at the min and max of every customize slider.
 // An example under examples/ or public/examples/ is picked up automatically; its
 // first run writes the snapshot to commit alongside it.
+//
+// The checks live here; test/examples.test.ts runs them for every example, in
+// one kernel. An example in OWN_KERNEL runs them in a test file of its own
+// (test/examples.<name>.test.ts), so in a kernel of its own: OCC keeps some
+// memory from every boolean (tens of MB for a pair of helical gears), and a gear
+// train's collision sweep, sharing the kernel with every other example, ran it
+// out of memory.
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -27,10 +34,13 @@ import type { CadDocument } from "../src/core/document";
 const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
 
 const DIRS = ["../examples/", "../public/examples/"];
-const EXAMPLES = DIRS.flatMap((d) => {
+export const EXAMPLES = DIRS.flatMap((d) => {
   const dir = new URL(d, import.meta.url);
   return readdirSync(dir).filter((f) => f.endsWith(".json")).sort().map((f) => ({ name: `${d.replace("../", "")}${f}`, url: new URL(f, dir) }));
 });
+
+/** Examples checked in a kernel (a test file) of their own — see above. */
+export const OWN_KERNEL = ["public/examples/clockwork.json"];
 
 /** Examples whose bodies interpenetrate BY CONSTRUCTION, with why. Their overlap
  *  at rest and at every motion sample is snapshotted instead (so any change shows
@@ -94,107 +104,110 @@ async function load(url: URL) {
   return s;
 }
 
-describe("bundled examples", () => {
-  const backend = new InlineGeometryBackend();
-  beforeAll(async () => { await backend.init({ wasmBinary: wasm }); }, 60000);
+/** The checks, for the examples `which` picks (by name, e.g. "public/examples/gimbal.json"). */
+export function defineExampleSuite(which: (name: string) => boolean): void {
+  describe("bundled examples", () => {
+    const backend = new InlineGeometryBackend();
+    beforeAll(async () => { await backend.init({ wasmBinary: wasm }); }, 60000);
 
-  it("finds the examples", () => {
-    expect(EXAMPLES.length).toBeGreaterThanOrEqual(6);
-    for (const k of Object.keys(KNOWN_OVERLAPS)) expect(EXAMPLES.map((e) => e.name), `stale KNOWN_OVERLAPS entry ${k}`).toContain(k);
-  });
+    it("finds the examples", () => {
+      expect(EXAMPLES.length).toBeGreaterThanOrEqual(6);
+      for (const k of [...Object.keys(KNOWN_OVERLAPS), ...OWN_KERNEL]) expect(EXAMPLES.map((e) => e.name), `stale entry ${k}`).toContain(k);
+    });
 
-  for (const ex of EXAMPLES) {
-    describe(ex.name, () => {
-      it("replays, builds on both geometry paths, and matches its snapshot", async () => {
-        const s = await load(ex.url);
-        for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name} conflicts`).toBe(false);
+    for (const ex of EXAMPLES.filter((e) => which(e.name))) {
+      describe(ex.name, () => {
+        it("replays, builds on both geometry paths, and matches its snapshot", async () => {
+          const s = await load(ex.url);
+          for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name} conflicts`).toBe(false);
 
-        // Render path (what the viewport shows).
-        const rendered = Object.values((await backend.evaluate(s.doc)).solids);
-        for (const row of rendered) expect(row.error, `${row.name}: ${row.error}`).toBeUndefined();
-        const bodies = rendered.filter((b) => b.mesh);
-        expect(bodies.length).toBeGreaterThan(0);
+          // Render path (what the viewport shows).
+          const rendered = Object.values((await backend.evaluate(s.doc)).solids);
+          for (const row of rendered) expect(row.error, `${row.name}: ${row.error}`).toBeUndefined();
+          const bodies = rendered.filter((b) => b.mesh);
+          expect(bodies.length).toBeGreaterThan(0);
 
-        // Rebuild path (collision, motion study, export): the same bodies.
-        const scope = resolveParameters(s.doc.parameters).scope;
-        const geo = expandAssembly(s.doc, scope);
-        placeComponentSketches(geo, scope);
-        const rebuilt = evaluateFeatures(geo, scope);
-        for (const row of Object.values(rebuilt)) expect(row.error, `${row.name}: ${row.error}`).toBeUndefined();
-        expect(Object.values(rebuilt).filter((b) => b.mesh).length).toBe(bodies.length);
-        for (const b of bodies) {
-          const r = rebuilt[b.featureId];
-          expect(r?.mesh, `${b.name} missing on the rebuild path`).toBeTruthy();
-          const vr = meshVolume(b.mesh!.positions, b.mesh!.indices), vb = meshVolume(r.mesh!.positions, r.mesh!.indices);
-          expect(Math.abs(vr - vb) / Math.max(vr, 1), `${b.name} volume differs between paths (${vr} vs ${vb})`).toBeLessThan(2e-3);
-        }
+          // Rebuild path (collision, motion study, export): the same bodies.
+          const scope = resolveParameters(s.doc.parameters).scope;
+          const geo = expandAssembly(s.doc, scope);
+          placeComponentSketches(geo, scope);
+          const rebuilt = evaluateFeatures(geo, scope);
+          for (const row of Object.values(rebuilt)) expect(row.error, `${row.name}: ${row.error}`).toBeUndefined();
+          expect(Object.values(rebuilt).filter((b) => b.mesh).length).toBe(bodies.length);
+          for (const b of bodies) {
+            const r = rebuilt[b.featureId];
+            expect(r?.mesh, `${b.name} missing on the rebuild path`).toBeTruthy();
+            const vr = meshVolume(b.mesh!.positions, b.mesh!.indices), vb = meshVolume(r.mesh!.positions, r.mesh!.indices);
+            expect(Math.abs(vr - vb) / Math.max(vr, 1), `${b.name} volume differs between paths (${vr} vs ${vb})`).toBeLessThan(2e-3);
+          }
 
-        expect(fingerprint(rebuilt)).toMatchSnapshot();
-      }, 300000);
+          expect(fingerprint(rebuilt)).toMatchSnapshot();
+        }, 300000);
 
-      it("is clear at rest and while its joints are driven", async () => {
-        const s = await load(ex.url);
-        const known = KNOWN_OVERLAPS[ex.name];
-        const trace: string[] = [];
-        const check = (c: CollisionResult, at: string) => {
-          expect(c.buildError, at).toBeUndefined();
-          if (known) trace.push(`${at}: ${c.overlaps.map((o) => `${pairKey(o)} ${r1(o.volume)}`).sort().join(", ")}`);
-          else for (const o of c.overlaps) expect(o.volume, `${o.a} hits ${o.b} at ${at}`).toBeLessThan(1);
-        };
+        it("is clear at rest and while its joints are driven", async () => {
+          const s = await load(ex.url);
+          const known = KNOWN_OVERLAPS[ex.name];
+          const trace: string[] = [];
+          const check = (c: CollisionResult, at: string) => {
+            expect(c.buildError, at).toBeUndefined();
+            if (known) trace.push(`${at}: ${c.overlaps.map((o) => `${pairKey(o)} ${r1(o.volume)}`).sort().join(", ")}`);
+            else for (const o of c.overlaps) expect(o.volume, `${o.a} hits ${o.b} at ${at}`).toBeLessThan(1);
+          };
 
-        const rest = await backend.collide(s.doc);
-        check(rest, "rest");
-        if (known) expect(rest.maxOverlap, `${ex.name} no longer overlaps: remove its KNOWN_OVERLAPS entry`).toBeGreaterThan(1);
-        const samples = motionSamples(s.doc);
-        for (const { name, values } of samples) {
-          // the other drives stay at their saved values
-          const others = Object.fromEntries(samples.filter((m) => m.name !== name).map((m) => [m.name, String(s.doc.parameters.find((p) => p.name === m.name)!.value)]));
-          for (const v of values) {
-            const overrides = { ...others, [name]: String(v) };
-            check(await backend.collide(s.doc, overrides), `${name} = ${r1(v)}`);
-            // a compliant mechanism also has to close its loops and keep every hinge under its strain limit
-            if (hasFlexures(s.doc)) {
-              const f = flexureState(s.doc, overrides);
-              expect(f.error, `${name} = ${r1(v)}`).toBeUndefined();
-              expect(f.utilisation, `flexure strain / allowable at ${name} = ${r1(v)}`).toBeLessThan(1);
+          const rest = await backend.collide(s.doc);
+          check(rest, "rest");
+          if (known) expect(rest.maxOverlap, `${ex.name} no longer overlaps: remove its KNOWN_OVERLAPS entry`).toBeGreaterThan(1);
+          const samples = motionSamples(s.doc);
+          for (const { name, values } of samples) {
+            // the other drives stay at their saved values
+            const others = Object.fromEntries(samples.filter((m) => m.name !== name).map((m) => [m.name, String(s.doc.parameters.find((p) => p.name === m.name)!.value)]));
+            for (const v of values) {
+              const overrides = { ...others, [name]: String(v) };
+              check(await backend.collide(s.doc, overrides), `${name} = ${r1(v)}`);
+              // a compliant mechanism also has to close its loops and keep every hinge under its strain limit
+              if (hasFlexures(s.doc)) {
+                const f = flexureState(s.doc, overrides);
+                expect(f.error, `${name} = ${r1(v)}`).toBeUndefined();
+                expect(f.utilisation, `flexure strain / allowable at ${name} = ${r1(v)}`).toBeLessThan(1);
+              }
             }
           }
-        }
-        if (known) expect(trace).toMatchSnapshot();
-      }, 600000);
+          if (known) expect(trace).toMatchSnapshot();
+        }, 600000);
 
-      // The download: a compliant part prints at rest, as one piece, and all of
-      // it. (Its drives were zeroed for the print along with every size the
-      // drive's expression mentioned, so the gripper printed with no hinges.)
-      it("prints all of itself: the download holds every body", async () => {
-        const s = await load(ex.url);
-        if (!hasFlexures(s.doc)) return;
-        const bodies = Object.values((await backend.evaluate(s.doc)).solids).filter((b) => b.mesh);
-        const modelled = bodies.reduce((v, b) => v + meshVolume(b.mesh!.positions, b.mesh!.indices), 0);
-        const stl = (await backend.exportBytes(s.doc, null, "stl"))!;
-        const dv = new DataView(stl.buffer, stl.byteOffset, stl.byteLength), n = dv.getUint32(80, true);
-        const pos = new Float32Array(9 * n), idx = Uint32Array.from({ length: 3 * n }, (_, i) => i);
-        for (let t = 0; t < n; t++) for (let k = 0; k < 9; k++) pos[9 * t + k] = dv.getFloat32(84 + 50 * t + 12 + 4 * k, true);
-        const printed = meshVolume(pos, idx);
-        expect(Math.abs(printed - modelled) / modelled, `printed ${r1(printed)} mm³ of ${r1(modelled)}`).toBeLessThan(5e-3);
-      }, 300000);
+        // The download: a compliant part prints at rest, as one piece, and all of
+        // it. (Its drives were zeroed for the print along with every size the
+        // drive's expression mentioned, so the gripper printed with no hinges.)
+        it("prints all of itself: the download holds every body", async () => {
+          const s = await load(ex.url);
+          if (!hasFlexures(s.doc)) return;
+          const bodies = Object.values((await backend.evaluate(s.doc)).solids).filter((b) => b.mesh);
+          const modelled = bodies.reduce((v, b) => v + meshVolume(b.mesh!.positions, b.mesh!.indices), 0);
+          const stl = (await backend.exportBytes(s.doc, null, "stl"))!;
+          const dv = new DataView(stl.buffer, stl.byteOffset, stl.byteLength), n = dv.getUint32(80, true);
+          const pos = new Float32Array(9 * n), idx = Uint32Array.from({ length: 3 * n }, (_, i) => i);
+          for (let t = 0; t < n; t++) for (let k = 0; k < 9; k++) pos[9 * t + k] = dv.getFloat32(84 + 50 * t + 12 + 4 * k, true);
+          const printed = meshVolume(pos, idx);
+          expect(Math.abs(printed - modelled) / modelled, `printed ${r1(printed)} mm³ of ${r1(modelled)}`).toBeLessThan(5e-3);
+        }, 300000);
 
-      // Through the same path as the slider: set the parameter and recompute, so
-      // sketches re-solve and expression-positioned geometry moves.
-      it("builds at the ends of every customize slider", async () => {
-        const s = await load(ex.url);
-        for (const p of [...s.doc.parameters]) {
-          const ends = p.values?.length ? [Math.min(...p.values), Math.max(...p.values)] : p.min != null && p.max != null ? [p.min, p.max] : [];
-          for (const v of ends) {
-            const r = await s.dispatch("parameter.set", { name: p.name, expression: String(v) });
-            expect(r.ok, `${p.name} = ${v}: ${r.error}`).toBe(true);
-            for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `${p.name} = ${v}: sketch ${sk.name} conflicts`).toBe(false);
-            const c = await backend.collide(s.doc);
-            expect(c.buildError, `${p.name} = ${v}`).toBeUndefined();
+        // Through the same path as the slider: set the parameter and recompute, so
+        // sketches re-solve and expression-positioned geometry moves.
+        it("builds at the ends of every customize slider", async () => {
+          const s = await load(ex.url);
+          for (const p of [...s.doc.parameters]) {
+            const ends = p.values?.length ? [Math.min(...p.values), Math.max(...p.values)] : p.min != null && p.max != null ? [p.min, p.max] : [];
+            for (const v of ends) {
+              const r = await s.dispatch("parameter.set", { name: p.name, expression: String(v) });
+              expect(r.ok, `${p.name} = ${v}: ${r.error}`).toBe(true);
+              for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `${p.name} = ${v}: sketch ${sk.name} conflicts`).toBe(false);
+              const c = await backend.collide(s.doc);
+              expect(c.buildError, `${p.name} = ${v}`).toBeUndefined();
+            }
+            await s.dispatch("parameter.set", { name: p.name, expression: p.expr }); // back to its saved value
           }
-          await s.dispatch("parameter.set", { name: p.name, expression: p.expr }); // back to its saved value
-        }
-      }, 900000);
-    });
-  }
-});
+        }, 900000);
+      });
+    }
+  });
+}
