@@ -125,6 +125,19 @@ export async function addPrimitive(shape: "box" | "cylinder"): Promise<void> {
   }
 }
 
+/** Add a gear (the toolbar's and the ring's Gear): a 20-tooth module-2 spur gear with a 5 mm bore, lying on the
+ *  floor beside anything already built, and open its card so its type, teeth and sizes are right there. */
+export async function addGear(): Promise<void> {
+  await st().ensureKernel();
+  const built = Object.values(st().solids).flatMap((b) => (b.mesh && b.bounds ? [b.bounds] : []));
+  const at = newSolidCentre(built, 22, 0);
+  const r = await st().dispatch("feature.gear", { type: "spur", module: "2", teeth: "20", faceWidth: "8", bore: "5", x: at.x, y: at.y, name: "Gear" });
+  if (r.ok && r.createdIds[0]) {
+    if (!ui().panels.workbench) ui().togglePanel("workbench", true);
+    ui().setOpenFeature(r.createdIds[0]);
+  }
+}
+
 /** Round (fillet) or bevel (chamfer) every edge around the selected flat face, then open the new feature's card so
  *  its size can be scrubbed or named. Faces square to an axis only (the edge selector names planes by axis). */
 export async function edgeFace(kind: "fillet" | "chamfer"): Promise<void> {
@@ -177,6 +190,7 @@ export const CONTEXT_ACTIONS: HotkeyAction[] = [
   { id: "model.box", label: "Add a box", context: "model", defaultPrimary: "b", when: () => st().mode === "model" && !st().kernelLoading, run: () => void addPrimitive("box") },
   { id: "model.drawing", label: "Shop drawing", context: "model", when: () => st().mode === "model" && Object.keys(st().session.doc.features).length > 0, run: () => void st().openDrawing() },
   { id: "model.cylinder", label: "Add a cylinder", context: "model", when: () => st().mode === "model" && !st().kernelLoading, run: () => void addPrimitive("cylinder") },
+  { id: "model.gear", label: "Add a gear", context: "model", defaultPrimary: "g", when: () => st().mode === "model" && !st().kernelLoading, run: () => void addGear() },
 
   // ---- face (a face selected in model mode) ----
   { id: "face.fillet", label: "Round this face's edges", context: "face", when: canEdgeFace, run: () => void edgeFace("fillet") },

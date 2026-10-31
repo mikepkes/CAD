@@ -129,6 +129,35 @@ export interface PrimitiveFeature {
   requireEffect?: boolean;
 }
 
+/** The kinds of gear `feature.gear` builds. */
+export type GearKind = "spur" | "helical" | "herringbone" | "ring" | "rack" | "bevel" | "worm";
+
+/** A gear's numbers, each an expression (see feature.gear for what each means). */
+export type GearDim =
+  | "module" | "teeth" | "faceWidth" | "pressureAngle" | "helixAngle" | "backlash" | "addendum" | "dedendum" | "rootFillet"
+  | "rim" | "mateTeeth" | "wormDiameter" | "bore" | "dFlat" | "keyway" | "keywayDepth" | "hubDiameter" | "hubLength" | "spokes"
+  | "x" | "y" | "offset" | "rotation";
+
+/** An involute gear solid in one step: spur, helical, herringbone, ring (internal), rack, straight
+ *  bevel or worm, with an optional bore (D-flat / keyway), hub and spokes. Placed on a sketch's plane
+ *  (its axis is the sketch normal through (x, y), raised `offset` along it, turned `rotation`°), so it
+ *  moves with the sketch's component — a revolute joint on that component turns it. */
+export interface GearFeature {
+  id: string;
+  kind: "gear";
+  name: string;
+  /** The placement sketch (its plane and component; it need hold nothing). */
+  sketchId: string;
+  gearType: GearKind;
+  dims: Partial<Record<GearDim, string>>;
+  dimValues?: Partial<Record<GearDim, number>>;
+  /** Ring / rack: double helical. (The "herringbone" type is the round gear.) */
+  herringbone?: boolean;
+  operation?: BooleanOp;
+  body?: string;
+  requireEffect?: boolean;
+}
+
 /** A surface body (open shell / faces, no volume) from sketch curves: extruded,
  *  revolved, lofted, swept, or a flat patch filling a closed loop. */
 export interface SurfaceFeature {
@@ -537,7 +566,7 @@ export interface InstanceFrame {
   template: string;  // the source (template) component it was cloned from
 }
 
-export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | ImportFeature | MemberFeature | SheetFeature | FlangeFeature | FoldFeature | UnfoldFeature | SurfaceFeature | StitchFeature | ThickenFeature | TrimFeature | UntrimFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
+export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | GearFeature | ImportFeature | MemberFeature | SheetFeature | FlangeFeature | FoldFeature | UnfoldFeature | SurfaceFeature | StitchFeature | ThickenFeature | TrimFeature | UntrimFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
   instanceFrame?: InstanceFrame;
   /** Switched off by the active configuration (derived; set by rebuild). */
   configSuppressed?: boolean;

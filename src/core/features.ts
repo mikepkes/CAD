@@ -7,7 +7,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
+  CadDocument, ExtrudeFeature, FeatureDef, GearFeature, GearDim, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, extractChains, regionAt, Region, Profile, Loop } from "./geometry/profile";
@@ -29,6 +29,8 @@ import { resolveComponentWorld } from "./recompute";
 import { SheetState, SheetFold, SheetRow, blankEdges, contourBlank, addFlange, jogFolds, flatPointOf, chordAcross } from "./sheet";
 import { buildSheet, SheetBuild } from "./sheetBuild";
 import { flatBlankOf } from "./occ/sheet";
+import { localGearSolid, peekLocalGear, placeShape, gearExtent, Annulus } from "./occ/gear";
+import { gearDefaults } from "./geometry/gear";
 
 export interface SolidEval {
   featureId: string;
@@ -149,6 +151,12 @@ const named = (shape: Shape3D, featureId: string): Named => ({ shape, names: gen
 
 interface Body {
   id: string; name: string; sketchId: string; distance: number; shape: Shape3D; decals?: ThreadDecal[];
+  /** A gear placed as is: its local solid's key, where it was put, and the shape it put there (once
+   *  another feature changes the body, its shape is another and the pose no longer describes it). */
+  pose?: { key: string; T: Rigid; shape: Shape3D };
+  /** Round bodies (a gear, a pin): annuli about world axes that hold all of `shape` — what a
+   *  collision check rules pairs out with before a boolean. Stale once the shape is another. */
+  hull?: { shape: Shape3D; parts: Hull[] };
   /** Topological name of each face of `shape`, in face order. */
   faceNames: string[];
   /** Content signature of this body's shape (set when evaluating with a cache). */
@@ -269,7 +277,8 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
     return;
   }
   if (!target) {
-    bodies.push({ id: f.id, name: f.name, sketchId: f.sketchId, distance, shape: tool.shape, faceNames: tool.names });
+    const parts = f.kind === "extrude" ? roundExtrudeHull(doc, f, distance) : undefined;
+    bodies.push({ id: f.id, name: f.name, sketchId: f.sketchId, distance, shape: tool.shape, faceNames: tool.names, ...(parts ? { hull: { shape: tool.shape, parts } } : {}) });
     return;
   }
   try {
@@ -287,6 +296,25 @@ function applySketchFeature(doc: CadDocument, scope: Scope, f: SketchFeature, bo
   } finally {
     tool.shape.delete();
   }
+}
+
+/** An extrude of circles only (each with at most concentric circular holes): its annuli, for the
+ *  collision check's prefilter. Undefined for anything else. */
+function roundExtrudeHull(doc: CadDocument, f: ExtrudeFeature, distance: number): Hull[] | undefined {
+  if (f.extent && f.extent !== "blind") return undefined;
+  const sketch = doc.sketches[f.sketchId];
+  if (!sketch) return undefined;
+  const regions = featureRegions(doc, f);
+  if (!regions.length || !regions.every((r) => r.outer.circle && r.holes.length <= 1 && r.holes.every((h) => h.circle && Math.hypot(h.circle.center.x - r.outer.circle!.center.x, h.circle.center.y - r.outer.circle!.center.y) < 1e-9))) return undefined;
+  const wp = resolveSketchPlane(sketch);
+  let d = f.direction === "reverse" ? -distance : distance;
+  let z0 = 0;
+  if (f.symmetric) z0 = -Math.abs(d) / 2, d = Math.abs(d);
+  const lo = Math.min(z0, z0 + d), hi = Math.max(z0, z0 + d);
+  return regions.map((r) => {
+    const c = r.outer.circle!;
+    return { o: to3d(wp, c.center.x, c.center.y), d: wp.normal, rIn: r.holes[0]?.circle ? Math.max(0, r.holes[0].circle.r - 1e-3) : 0, rOut: c.r + 1e-3, z0: lo, z1: hi };
+  });
 }
 
 function safeBounds(shape: Shape3D): Bounds3 | undefined {
@@ -340,6 +368,86 @@ function applyPrimitive(scope: Scope, f: PrimitiveFeature, bodies: Body[], out: 
     return;
   }
   addOrCombine(f, tool, bodies, out, f.shape);
+}
+
+/** Per gear spec (see localGearSolid): its faces' geometry and its display mesh / mass properties in its own frame. */
+const GEAR_LOCAL = new Map<string, { geoms: FaceGeom[]; extent: Annulus[] | null; ev?: BodyEval }>();
+
+/** A body evaluation carried by a rigid transform: the same mesh moved, the same volume, the centroid
+ *  moved, and the moved shape's own bounds (`bounds`: a turned box would be loose). */
+function posedEval(ev: BodyEval, T: Rigid, bounds: Bounds3 | undefined): BodyEval {
+  const mv = (src: Float32Array, vec: boolean): Float32Array => {
+    const out = new Float32Array(src.length);
+    for (let i = 0; i < src.length; i += 3) {
+      const p = { x: src[i], y: src[i + 1], z: src[i + 2] };
+      const q = vec ? applyVec(T, p) : applyPoint(T, p);
+      out[i] = q.x; out[i + 1] = q.y; out[i + 2] = q.z;
+    }
+    return out;
+  };
+  const mesh = { ...cloneMesh(ev.mesh), positions: mv(ev.mesh.positions, false), normals: mv(ev.mesh.normals, true), edges: mv(ev.mesh.edges, false) };
+  return { mesh, bounds, mass: { ...ev.mass, centroid: applyPoint(T, ev.mass.centroid) }, ...(ev.surface ? { surface: true } : {}) };
+}
+
+/** A gear's numbers now: each expression (or its default) evaluated, written back to dimValues. */
+export function gearValues(f: GearFeature, scope: Scope): Record<GearDim, number> {
+  const out = {} as Record<GearDim, number>;
+  const val = (k: GearDim, fallback: number): number => {
+    const expr = f.dims[k];
+    const v = expr == null ? fallback : resolveExpr(expr, (f.dimValues?.[k] as number) ?? fallback, scope);
+    (f.dimValues ??= {})[k] = v;
+    out[k] = v;
+    return v;
+  };
+  const m = val("module", 2), z = val("teeth", f.gearType === "worm" ? 1 : 20);
+  const d = gearDefaults(f.gearType, m, z, f.dims.mateTeeth != null ? resolveExpr(f.dims.mateTeeth, z, scope) : z);
+  for (const k of ["faceWidth", "pressureAngle", "helixAngle", "backlash", "addendum", "dedendum", "rootFillet", "rim", "mateTeeth", "wormDiameter", "bore", "dFlat", "keyway", "keywayDepth", "hubDiameter", "hubLength", "spokes", "x", "y", "offset", "rotation"] as GearDim[]) {
+    val(k, d[k as keyof typeof d] ?? 0);
+  }
+  return out;
+}
+
+/** A gear: built in its own frame (axis +Z), placed on its sketch's plane at (x, y), `offset` up
+ *  the normal and turned `rotation`° about it, then added as a body of the sketch's component. */
+function applyGear(doc: CadDocument, scope: Scope, f: GearFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  let tool: Named;
+  let pose: Body["pose"];
+  try {
+    const sk = doc.sketches[f.sketchId];
+    if (!sk) throw new Error(`gear: no sketch "${f.sketchId}"`);
+    const v = gearValues(f, scope);
+    const spec: Parameters<typeof localGearSolid>[0] = {
+      type: f.gearType, module: v.module, teeth: v.teeth, faceWidth: v.faceWidth, pressureAngle: v.pressureAngle, helixAngle: v.helixAngle,
+      herringbone: !!f.herringbone, backlash: v.backlash, addendum: v.addendum, dedendum: v.dedendum, rootFillet: v.rootFillet, rim: v.rim,
+      mateTeeth: v.mateTeeth, wormDiameter: v.wormDiameter, bore: v.bore, dFlat: v.dFlat, keyway: v.keyway, keywayDepth: v.keywayDepth > 0 ? v.keywayDepth : undefined,
+      hubDiameter: v.hubDiameter, hubLength: v.hubLength, spokes: v.spokes,
+    };
+    const { key, shape: local } = localGearSolid(spec);
+    const wp = resolveSketchPlane(sk);
+    const a = (v.rotation * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+    const T: Rigid = {
+      origin: { x: wp.origin.x + v.x * wp.u.x + v.y * wp.v.x + v.offset * wp.normal.x, y: wp.origin.y + v.x * wp.u.y + v.y * wp.v.y + v.offset * wp.normal.y, z: wp.origin.z + v.x * wp.u.z + v.y * wp.v.z + v.offset * wp.normal.z },
+      x: { x: c * wp.u.x + s * wp.v.x, y: c * wp.u.y + s * wp.v.y, z: c * wp.u.z + s * wp.v.z },
+      y: { x: -s * wp.u.x + c * wp.v.x, y: -s * wp.u.y + c * wp.v.y, z: -s * wp.u.z + c * wp.v.z },
+      z: { ...wp.normal },
+    };
+    // faces named in the gear's own frame (so a turned gear keeps its names), from geometry kept per spec
+    let local0 = GEAR_LOCAL.get(key);
+    if (!local0) { local0 = { geoms: faceGeoms(local), extent: gearExtent(spec) }; GEAR_LOCAL.set(key, local0); while (GEAR_LOCAL.size > 48) GEAR_LOCAL.delete(GEAR_LOCAL.keys().next().value as string); }
+    tool = { shape: placeShape(local, T), names: genericNames(f.id, local0.geoms) };
+    pose = { key, T, shape: tool.shape };
+  } catch (e) {
+    out[f.id] = { ...modifierRow(f), sketchId: f.sketchId, error: kernelErrorMessage(e) };
+    return;
+  }
+  const op = f.operation ?? "new";
+  if (op === "new" || !bodies.length) {
+    const ext = GEAR_LOCAL.get(pose!.key)?.extent;
+    const hull = ext ? { shape: tool.shape, parts: ext.map((e) => ({ o: pose!.T.origin, d: pose!.T.z, ...e })) } : undefined;
+    bodies.push({ id: f.id, name: f.name, sketchId: f.sketchId, distance: 0, shape: tool.shape, faceNames: tool.names, pose, ...(hull ? { hull } : {}) });
+    return;
+  }
+  combineBody(op, pickBody(bodies, f.body, "gear"), tool, f, "gear", out);
 }
 
 const base64ToBytes = (b64: string): Uint8Array => {
@@ -1223,7 +1331,7 @@ function cloneMesh(m: SolidMesh): SolidMesh {
 /** Sketches a feature reads. */
 function featureSketches(f: FeatureDef): string[] {
   switch (f.kind) {
-    case "extrude": case "revolve": return [f.sketchId];
+    case "extrude": case "revolve": case "gear": return [f.sketchId];
     case "loft": return f.sketchIds;
     case "sweep": return [f.profileSketch, f.pathSketch];
     case "member": return f.profile.sketch ? [f.sketchId, f.profile.sketch] : [f.sketchId];
@@ -1243,7 +1351,7 @@ function bodiesRead(doc: CadDocument, f: FeatureDef, bodies: Body[]): Body[] {
     case "extrude": case "revolve":
       if (doc.sketches[f.sketchId]?.faceRef) return bodies; // re-resolves its plane against every body
       return op === "new" ? [] : target();
-    case "primitive": case "import": case "loft": case "sweep": return op === "new" ? [] : target();
+    case "primitive": case "gear": case "import": case "loft": case "sweep": return op === "new" ? [] : target();
     case "mirror": return f.bodies === "last" ? bodies.slice(-1) : bodies;
     case "member": case "surface": case "sheet": return []; // make bodies of their own
     case "stitch": return f.bodies.map((id) => bodies.find((b) => b.id === id)).filter((b): b is Body => !!b);
@@ -1321,6 +1429,7 @@ function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Bod
     case "extrude":
     case "revolve": applySketchFeature(doc, scope, f, bodies, out); break;
     case "primitive": applyPrimitive(scope, f, bodies, out); break;
+    case "gear": applyGear(doc, scope, f, bodies, out); break;
     case "import": applyImport(f, bodies, out); break;
     case "member": applyMembers(doc, scope, f, bodies, out); break;
     case "sheet": applySheet(doc, scope, f, bodies, out); break;
@@ -1424,6 +1533,16 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
       if (body.decals?.length) row.threadDecals = body.decals;
       try {
         let ev = cache && body.sig ? cache.bodyEval(body.sig) : undefined;
+        if (!ev && body.pose) {
+          // a gear: meshed and measured once in its own frame, then moved
+          const local = GEAR_LOCAL.get(body.pose.key);
+          const lshape = local && body.pose.shape === body.shape ? peekLocalGear(body.pose.key) : undefined;
+          if (local && lshape) {
+            local.ev ??= { mesh: meshShape(lshape), bounds: safeBounds(lshape), mass: massPropsOfShape(lshape) };
+            ev = posedEval(local.ev, body.pose.T, safeBounds(body.shape));
+            if (cache && body.sig) cache.storeBodyEval(body.sig, ev);
+          }
+        }
         if (!ev) {
           ev = { mesh: meshShape(body.shape), bounds: safeBounds(body.shape), mass: massPropsOfShape(body.shape), ...(hasSolid(body.shape) ? {} : { surface: true }) };
           if (cache && body.sig) cache.storeBodyEval(body.sig, ev);
@@ -1544,6 +1663,33 @@ export interface CollisionResult {
   buildError?: string;
 }
 
+/** An annulus about an axis through o along unit d, from z0 to z1 along it (world mm). */
+type Hull = Annulus & { o: Vec3; d: Vec3 };
+const hullOf = (b: Body): Hull[] | undefined => (b.hull && b.hull.shape === b.shape ? b.hull.parts : undefined);
+const EPS = 1e-6;
+/** Two annuli on parallel axes that can't meet: side by side, past each other's ends, one in the other's hole. */
+function annuliApart(a: Hull, b: Hull): boolean {
+  if (Math.abs(dot(a.d, b.d)) < 1 - 1e-9) return false; // crossed axes: leave it to the boolean
+  const w = { x: b.o.x - a.o.x, y: b.o.y - a.o.y, z: b.o.z - a.o.z };
+  const along = dot(w, a.d), s = Math.sign(dot(a.d, b.d));
+  const [b0, b1] = s > 0 ? [along + b.z0, along + b.z1] : [along - b.z1, along - b.z0];
+  if (b1 <= a.z0 + EPS || b0 >= a.z1 - EPS) return true;
+  const p = Math.hypot(w.x - along * a.d.x, w.y - along * a.d.y, w.z - along * a.d.z);
+  return p >= a.rOut + b.rOut || p + b.rOut <= a.rIn || p + a.rOut <= b.rIn;
+}
+/** An annulus on a world axis and a box that can't meet (on any other axis: undecided). */
+function annulusBoxApart(c: Hull, box: Bounds3): boolean {
+  const k = (["x", "y", "z"] as const).find((ax) => Math.abs(c.d[ax]) > 1 - 1e-9);
+  if (!k) return false;
+  const [u, v] = (["x", "y", "z"] as const).filter((ax) => ax !== k);
+  const s = Math.sign(c.d[k]);
+  const lo = c.o[k] + (s > 0 ? c.z0 : -c.z1), hi = c.o[k] + (s > 0 ? c.z1 : -c.z0);
+  if (box.max[k] <= lo + EPS || box.min[k] >= hi - EPS) return true;
+  const near = Math.hypot(Math.max(box.min[u] - c.o[u], 0, c.o[u] - box.max[u]), Math.max(box.min[v] - c.o[v], 0, c.o[v] - box.max[v]));
+  const far = Math.hypot(Math.max(Math.abs(box.min[u] - c.o[u]), Math.abs(box.max[u] - c.o[u])), Math.max(Math.abs(box.min[v] - c.o[v]), Math.abs(box.max[v] - c.o[v])));
+  return near >= c.rOut || far <= c.rIn;
+}
+
 /** Build every body and measure how much any two of them interpenetrate. Used by
  *  the motion study to pass/fail a configuration: designed point/line contact has
  *  no volume, so only real overlap registers. */
@@ -1553,8 +1699,26 @@ export function collideFeatures(doc: CadDocument, scope: Scope): CollisionResult
   const overlaps: CollisionResult["overlaps"] = [];
   let maxOverlap = 0;
   try {
+    // bodies whose boxes don't meet can't overlap: skip the boolean (a gear train is mostly such pairs)
+    const boxes = bodies.map((b) => safeBounds(b.shape));
+    // (boxes that only touch — OCC pads each by its tolerance — hold no common volume either)
+    const T = 1e-5;
+    const boxApart = (a: Bounds3, b: Bounds3) => a.max.x < b.min.x + T || b.max.x < a.min.x + T || a.max.y < b.min.y + T || b.max.y < a.min.y + T || a.max.z < b.min.z + T || b.max.z < a.min.z + T;
+    // round bodies (gears, pins) by their annuli: a gear beside another, a pin in a bore
+    const hulls = bodies.map(hullOf);
+    const apart = (i: number, j: number) => {
+      const a = boxes[i], b = boxes[j];
+      if (!a || !b) return false;
+      if (boxApart(a, b)) return true;
+      const ha = hulls[i], hb = hulls[j];
+      if (ha && hb) return ha.every((x) => hb.every((y) => annuliApart(x, y)));
+      if (ha) return ha.every((x) => annulusBoxApart(x, b));
+      if (hb) return hb.every((y) => annulusBoxApart(y, a));
+      return false;
+    };
     for (let i = 0; i < bodies.length; i++) {
       for (let j = i + 1; j < bodies.length; j++) {
+        if (apart(i, j)) continue;
         let vol = 0;
         try {
           const inter = intersectShapes(bodies[i].shape, bodies[j].shape);

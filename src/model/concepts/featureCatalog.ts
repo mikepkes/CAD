@@ -67,6 +67,24 @@ const SPECS: FeatureSpec[] = [
       segs.push(T(opVerb(op.params.operation)), T("."));
       return segs;
     } },
+  { kind: "gear", op: "feature.gear", label: "Gear", pushParam: "faceWidth",
+    params: [mm("module", "Module", 0.2, 10, 0.1), count("teeth", "Teeth", 200), mm("faceWidth", "Face width", 0.5, 200),
+      { key: "helixAngle", label: "Helix", unit: "deg", min: -45, max: 45, step: 1 }, mm("backlash", "Backlash", 0, 1, 0.05),
+      mm("bore", "Bore", 0, 100), mm("hubDiameter", "Hub ⌀", 0, 200), mm("hubLength", "Hub length", 0, 100), count("spokes", "Spokes", 12)],
+    sentence: (op) => {
+      const type = String(op.params.type ?? "spur");
+      const noun = type === "ring" ? "ring gear" : type === "rack" ? "rack" : type === "worm" ? "worm" : `${type} gear`;
+      const has = (k: string) => op.params[k] != null;
+      return [
+        T("Make a "), ...(has("teeth") ? [P("teeth"), T(type === "worm" ? "-start " : "-tooth ")] : []), T(noun),
+        ...(has("module") ? [T(", module "), P("module")] : []),
+        ...(has("faceWidth") ? [T(", "), P("faceWidth"), T(type === "worm" ? " long" : " wide")] : []),
+        ...(has("helixAngle") ? [T(", helix "), P("helixAngle")] : []),
+        ...(has("bore") ? [T(", bored "), P("bore")] : []),
+        ...(op.params.mesh ? [T(", meshed with its mate")] : []),
+        T(opVerb(op.params.operation)), T("."),
+      ];
+    } },
   { kind: "hole", op: "feature.hole", label: "Hole", params: [mm("diameter", "Diameter", 0.5, 100), mm("depth", "Depth", 0.5, 500)], pushParam: "diameter",
     sentence: (op) => {
       const n = Array.isArray(op.params.at) ? op.params.at.length : 1;

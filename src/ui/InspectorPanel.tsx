@@ -96,6 +96,7 @@ function ModelInspector() {
               f.kind === "loft" ? `⤳ ${f.sketchIds.length}` :
               f.kind === "sweep" ? "⟿ path" :
               f.kind === "primitive" ? `◧ ${f.shape}` :
+              f.kind === "gear" ? `⚙ ${f.gearType} ${f.dims.teeth ?? ""}` :
               f.kind === "import" ? `⇩ ${f.format.toUpperCase()}` :
               f.kind === "member" ? `⌸ ${f.profile.kind.replace("_", " ")}` :
               f.kind === "sheet" ? `▱ t=${f.thicknessExpr}${f.folds?.length ? ` · ${f.folds.length} folds` : ""}` :
