@@ -782,6 +782,28 @@ export interface Configuration {
   warnings?: string[];
 }
 
+/** How a design intent compares its two sides. */
+export type IntentComparator = "<=" | ">=" | "<" | ">" | "==";
+
+/**
+ * A design intent: a check the design must keep passing ("mass <= 120",
+ * "wall >= t_min*2"). Both sides are expressions over the parameters and the
+ * model metrics (volume, mass, density, width, depth, height, bodies). Intents
+ * are derived state like parameters: `intent.*` timeline operations build them,
+ * so they rebuild, undo and roll back with the recipe and travel with the file.
+ */
+export interface Intent {
+  id: string;
+  /** What is checked, in words ("Total mass"). */
+  label: string;
+  /** Left side: a parameter, a metric, or an expression of them. */
+  lhs: string;
+  op: IntentComparator;
+  rhs: string;
+  /** Unit the sides are read in, for display only. */
+  unit?: string;
+}
+
 export interface CadDocument {
   schema: 1;
   id: string;
@@ -820,6 +842,8 @@ export interface CadDocument {
   features: Record<string, FeatureDef>;
   /** The configuration table (rows built by configuration.* operations). */
   configurations: Configuration[];
+  /** The design intents (built by intent.* operations). */
+  intents: Intent[];
 }
 
 /** The material that applies to `componentId`: its own, else the nearest ancestor's
@@ -876,6 +900,7 @@ export function createDocument(id = "doc1"): CadDocument {
     sketches: {},
     features: {},
     configurations: [],
+    intents: [],
   };
 }
 

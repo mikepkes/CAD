@@ -9,7 +9,7 @@
 // silently misread. Register the next migration under MIGRATIONS[CURRENT_VERSION]
 // and bump CURRENT_VERSION when the stored shape changes incompatibly.
 
-import { CadDocument, createDocument, TimelineGroup } from "./document";
+import { CadDocument, createDocument, Intent, TimelineGroup } from "./document";
 import { OperationRecord } from "./command/types";
 
 export const CURRENT_VERSION = 1;
@@ -27,6 +27,10 @@ export interface SerializedDocument {
   activeConfiguration?: string;
   /** Ids hidden in the viewport (optional). */
   hidden?: string[];
+  /** The design intents in effect when saved (optional; absent = none). Like
+   *  `parameters` they are derived from the intent.* operations, so replay
+   *  rebuilds them — the copy here lets a reader see them without replaying. */
+  intents?: Intent[];
 }
 
 /** A parsed-but-not-yet-validated document; migrations work on this loose shape. */
@@ -86,6 +90,7 @@ export function serializeDocument(doc: CadDocument): string {
     timelineGroups: doc.timelineGroups,
     ...(doc.activeConfiguration ? { activeConfiguration: doc.activeConfiguration } : {}),
     ...(doc.hidden?.length ? { hidden: doc.hidden } : {}),
+    ...(doc.intents?.length ? { intents: doc.intents } : {}),
   };
   return JSON.stringify(out, null, 2);
 }
@@ -103,6 +108,8 @@ export function deserializeDocument(json: string): CadDocument {
   doc.timelineGroups = Array.isArray(d.timelineGroups) ? d.timelineGroups : [];
   if (typeof d.activeConfiguration === "string") doc.activeConfiguration = d.activeConfiguration;
   if (Array.isArray(d.hidden)) doc.hidden = d.hidden.filter((x): x is string => typeof x === "string");
+  // Files from before intents were part of the document have none: default [].
+  doc.intents = Array.isArray(d.intents) ? d.intents.filter((i) => i && typeof i === "object" && typeof (i as Intent).id === "string") : [];
   // Derived state (parameters/sketches/features) is reconstructed by recompute.
   return doc;
 }

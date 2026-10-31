@@ -24,6 +24,7 @@ import { resolveParameters } from "../src/core/parameters";
 import { pickFace } from "../src/core/geometry/pick";
 import { resolveSketchPlane } from "../src/geometry/plane";
 import { describeFeature } from "../src/model/agent";
+import { describeIntent, evaluateIntents, intentsUseMetrics } from "../src/model/concepts/intents";
 import { InlineGeometryBackend } from "../src/core/geometry/backend";
 import { isolationList } from "../src/core/visibility";
 import { importRequests } from "../src/core/importers";
@@ -101,8 +102,17 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     sketches: diagnoseAll(r.evaluations),
   });
 
+  // The intents' pass/fail: metrics (mass, bounds) need the solids, which are only built when an intent reads one.
+  const intentsSummary = () => {
+    const intents = session.doc.intents ?? [];
+    if (!intents.length) return [];
+    const solids = intentsUseMetrics(intents) && isKernelReady() ? evaluateFeatures(session.doc, resolveParameters(session.doc.parameters).scope) : {};
+    return evaluateIntents(session.doc, solids).results.map(describeIntent);
+  };
+
   const documentSummary = () => ({
     units: session.doc.units,
+    intents: intentsSummary(),
     parameters: session.doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value, error: p.error, ...(p.configuredBy ? { configuredBy: p.configuredBy, baseExpr: p.baseExpr } : {}) })),
     configurations: session.doc.configurations.map((c) => ({ id: c.id, name: c.name, values: c.values, suppress: c.suppress, warnings: c.warnings })),
     activeConfiguration: session.doc.configurations.find((c) => c.id === session.doc.activeConfiguration)?.name ?? null,
@@ -174,7 +184,7 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
   const metaTools: ToolDef[] = [
     {
       name: "get_document",
-      description: "Return a summary of the whole document: parameters, sketches (with DoF/constraint status), and the operation timeline.",
+      description: "Return a summary of the whole document: parameters, design intents (each pass/fail), sketches (with DoF/constraint status), and the operation timeline.",
       inputSchema: { type: "object", properties: {} },
       handler: async () => documentSummary(),
     },

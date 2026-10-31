@@ -18,8 +18,9 @@ export interface Executor {
   runAction(id: string): boolean;
   setOpenFeature(id: string | null): void;
   togglePanel(panel: ConceptPanel): void;
-  /** useIntents().add(text, label) — the Ledger's store; false when the text is not a comparison. */
-  addIntent(text: string, label: string): boolean;
+  /** useIntents().add(text, label) — the shared intents store, which dispatches intent.add; false (or null)
+   *  when the text is not a comparison, else true or the command's promise, which is awaited. */
+  addIntent(text: string, label: string): boolean | null | Promise<unknown>;
 }
 
 /** Perform the action. Resolves when the store call has settled; throws what the store throws. */
@@ -37,7 +38,9 @@ export async function execute(action: IntentAction, x: Executor): Promise<void> 
     case "togglePanel": x.togglePanel(action.panel); return;
     case "addIntent": {
       const text = `${action.lhs} ${action.op} ${action.rhs}`;
-      if (!x.addIntent(text, action.label)) throw new Error(`"${text}" is not a comparison`);
+      const r = x.addIntent(text, action.label);
+      if (!r) throw new Error(`"${text}" is not a comparison`);
+      await r;
       return;
     }
     case "hotkey":

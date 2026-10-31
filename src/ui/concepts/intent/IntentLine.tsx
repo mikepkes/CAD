@@ -55,7 +55,7 @@ export function IntentLine() {
       runAction: (id) => hotkeys.runAction(id),
       setOpenFeature: useUi.getState().setOpenFeature,
       togglePanel: (p) => useUi.getState().togglePanel(p),
-      addIntent: (text, label) => useIntents.getState().add(text, label) != null,
+      addIntent: (text, label) => useIntents.getState().add(text, label),
     };
     setOpen(false);
     try {

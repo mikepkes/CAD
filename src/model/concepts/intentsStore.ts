@@ -1,26 +1,32 @@
 // The design intents of the open document, as every concept reads them: the
 // Ledger lists and edits them, the Design Space draws them, the intent line adds
-// to them. One zustand store, loaded per document id and saved on every change
-// (loadIntents / saveIntents), and one evaluation: the store follows the
-// document store (session, rev, solids) and re-checks every intent in the one
-// scope (parameters + metrics at the root material's density), so `results` is
-// fresh whether or not any panel is mounted.
+// to them. The list itself is document state (`session.doc.intents`, built by
+// the intent.add / intent.update / intent.delete timeline operations, so it
+// travels with the file and undoes, rolls back and rebuilds like a parameter);
+// this store is the one evaluation of it. It follows the document store
+// (session, rev, solids) and re-checks every intent in the one scope
+// (parameters + metrics at the root material's density), so `results` is fresh
+// whether or not any panel is mounted. Every write goes through
+// `useStore.getState().dispatch(...)` — tenet 1 — one at a time, in order.
 
 import { create } from "zustand";
-import { materialForComponent, type CadDocument } from "../../core/document";
+import type { CadDocument } from "../../core/document";
 import type { SolidEval } from "../../core/features";
 import { useStore } from "../store";
-import { Intent, IntentResult, Metrics, checkIntents, densityOf, intentScope, loadIntents, metricsOf, parseIntent, saveIntents } from "./intents";
+import { Intent, IntentResult, Metrics, checkIntents, densityOf, evaluateIntents, metricsOf, parseIntent } from "./intents";
 
 let intentSeq = 0;
-/** A fresh intent id, unique within the session (time-based so reloads don't collide). */
+/** A fresh id unique within the session (time-based so reloads don't collide).
+ *  The document allocates real intent ids itself (`intent.add` → createdIds[0]);
+ *  this is for callers that need a provisional id before the command has run. */
 export function nextIntentId(now = Date.now()): string {
   return `i${now.toString(36)}${(intentSeq++).toString(36)}`;
 }
 
 export interface IntentsState {
-  /** The document the list belongs to (intents are kept per document id). */
+  /** The document the list belongs to (`session.doc.id`). */
   docId: string | null;
+  /** The document's intents (`doc.intents`), as of the last sync or pending edit. */
   intents: Intent[];
   /** Results of the last evaluation, one per intent in the same order. */
   results: IntentResult[];
@@ -31,24 +37,42 @@ export interface IntentsState {
   /** The density the mass metric used, and where it came from. */
   density: number;
   densitySource: string;
-  /** Switch to (and load) a document's intents; a no-op for the current document. */
+  /** Read `docId`'s intents from the open document (a no-op when it is not the open one; kept for callers that switch documents). */
   load: (docId: string) => void;
   /** Re-check every intent against the open document and its solids (what the store subscription calls). */
   sync: (doc: CadDocument, solids: Record<string, SolidEval>) => IntentResult[];
   /** Re-check every intent against an arbitrary scope (tests, callers with their own metrics). */
   evaluate: (scope: Record<string, number>) => IntentResult[];
-  /** Parse "mass <= 120" (with an optional label) and add it; null when the text is not a comparison. */
-  add: (text: string, label?: string) => Intent | null;
-  remove: (id: string) => void;
-  update: (id: string, patch: Partial<Omit<Intent, "id">>) => void;
+  /** Parse "mass <= 120" (with an optional label) and dispatch intent.add. Null, synchronously, when the
+   *  text is not a comparison; else a promise of the intent as the document holds it (null if the command failed). */
+  add: (text: string, label?: string) => Promise<Intent | null> | null;
+  /** Dispatch intent.delete. */
+  remove: (id: string) => Promise<void>;
+  /** Dispatch intent.update with `patch`; the list shows the change at once and the command confirms it. */
+  update: (id: string, patch: Partial<Omit<Intent, "id">>) => Promise<void>;
+}
+
+// Writes run one after another (two concurrent dispatches would each clone the
+// same document and the second would drop the first), and while any is pending
+// the list keeps the optimistic edit rather than re-reading the document.
+let queue: Promise<unknown> = Promise.resolve();
+let pending = 0;
+function enqueue<T>(run: () => Promise<T>): Promise<T> {
+  pending++;
+  const p = queue.then(run, run);
+  queue = p.then(
+    () => { if (--pending === 0) resync(); },
+    () => { if (--pending === 0) resync(); }
+  );
+  return p;
+}
+function resync() {
+  const s = useStore.getState();
+  useIntents.getState().sync(s.session.doc, s.solids);
 }
 
 export const useIntents = create<IntentsState>((set, get) => {
-  const put = (intents: Intent[]) => {
-    const { docId, scope } = get();
-    if (docId) saveIntents(docId, intents);
-    set({ intents, results: checkIntents(intents, scope) });
-  };
+  const dispatch = (type: string, params: Record<string, unknown>) => useStore.getState().dispatch(type, params);
   return {
     docId: null,
     intents: [],
@@ -58,17 +82,16 @@ export const useIntents = create<IntentsState>((set, get) => {
     density: densityOf(undefined).density,
     densitySource: densityOf(undefined).source,
     load: (docId) => {
-      if (get().docId === docId) return;
-      const intents = loadIntents(docId);
-      set({ docId, intents, results: checkIntents(intents, get().scope) });
+      const s = useStore.getState();
+      if (s.session.doc.id === docId) get().sync(s.session.doc, s.solids);
+      else set({ docId });
     },
     sync: (doc, solids) => {
-      get().load(doc.id);
-      const { density, source } = densityOf(materialForComponent(doc, doc.rootComponentId));
-      const metrics = metricsOf(solids, density);
-      const scope = intentScope(doc, metrics);
-      const results = checkIntents(get().intents, scope);
-      set({ scope, metrics, density, densitySource: source, results });
+      const { results: fromDoc, scope, metrics, density } = evaluateIntents(doc, solids);
+      // Keep an optimistic edit on screen until its command has landed; the doc has the truth after that.
+      const intents = pending > 0 && get().docId === doc.id ? get().intents : doc.intents ?? [];
+      const results = pending > 0 && get().docId === doc.id ? checkIntents(intents, scope) : fromDoc;
+      set({ docId: doc.id, intents, scope, metrics, density: density.density, densitySource: density.source, results });
       return results;
     },
     evaluate: (scope) => {
@@ -78,13 +101,25 @@ export const useIntents = create<IntentsState>((set, get) => {
     },
     add: (text, label) => {
       const trimmed = label?.trim();
-      const intent = parseIntent(text, nextIntentId(), trimmed || undefined);
-      if (!intent) return null;
-      put([...get().intents, intent]);
-      return intent;
+      const parsed = parseIntent(text, "", trimmed || undefined);
+      if (!parsed) return null;
+      return enqueue(async () => {
+        const r = await dispatch("intent.add", { label: parsed.label, lhs: parsed.lhs, op: parsed.op, rhs: parsed.rhs });
+        if (!r.ok) return null;
+        const id = r.createdIds[0];
+        return useStore.getState().session.doc.intents.find((i) => i.id === id) ?? null;
+      });
     },
-    remove: (id) => put(get().intents.filter((i) => i.id !== id)),
-    update: (id, patch) => put(get().intents.map((i) => (i.id === id ? { ...i, ...patch } : i))),
+    remove: (id) => {
+      set({ intents: get().intents.filter((i) => i.id !== id), results: get().results.filter((r) => r.intent.id !== id) });
+      return enqueue(async () => { await dispatch("intent.delete", { id }); });
+    },
+    update: (id, patch) => {
+      const intents = get().intents.map((i) => (i.id === id ? { ...i, ...patch } : i));
+      set({ intents, results: checkIntents(intents, get().scope) });
+      const fields = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+      return enqueue(async () => { await dispatch("intent.update", { id, ...fields }); });
+    },
   };
 });
 

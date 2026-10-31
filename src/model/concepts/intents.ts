@@ -4,24 +4,18 @@
 // Pure: the Ledger lists and edits them, the Design Space draws them as
 // frontiers, and both evaluate them through `checkIntents`.
 
-import type { CadDocument, Material } from "../../core/document";
+import { materialForComponent, type CadDocument, type Intent, type IntentComparator, type Material } from "../../core/document";
 import type { SolidEval } from "../../core/features";
 import { resolveParameters } from "../../core/parameters";
 import { compileExpr } from "../../math/expr";
 
-export type Comparator = "<=" | ">=" | "<" | ">" | "==";
+// The intent record itself lives on the document (`doc.intents`, built by the
+// intent.add / intent.update / intent.delete operations); this module only
+// evaluates and formats it.
+export type { Intent } from "../../core/document";
+export type Comparator = IntentComparator;
 
-export interface Intent {
-  id: string;
-  /** What is checked, in words ("Total mass"). */
-  label: string;
-  /** Left side: a parameter, a metric, or an expression of them. */
-  lhs: string;
-  op: Comparator;
-  rhs: string;
-  /** Unit the sides are read in, for display only. */
-  unit?: string;
-}
+export const COMPARATORS: Comparator[] = ["<=", ">=", "<", ">", "=="];
 
 export interface IntentResult {
   intent: Intent;
@@ -142,18 +136,30 @@ export function headroom(r: IntentResult): number {
   return r.intent.op === ">=" || r.intent.op === ">" ? r.lhs - r.rhs : r.rhs - r.lhs;
 }
 
-// ---- persistence: intents are kept per document (not yet document commands) ----
-
-const KEY = (docId: string) => `chisel.intents.v1.${docId}`;
-
-export function loadIntents(docId: string): Intent[] {
-  try {
-    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(KEY(docId)) : null;
-    const v = raw ? JSON.parse(raw) : [];
-    return Array.isArray(v) ? v : [];
-  } catch { return []; }
+/** Whether any intent reads a model metric (so checking it needs built solids, not just parameters). */
+export function intentsUseMetrics(intents: Intent[]): boolean {
+  const re = new RegExp(`\\b(${METRIC_NAMES.join("|")})\\b`);
+  return intents.some((i) => re.test(i.lhs) || re.test(i.rhs));
 }
 
-export function saveIntents(docId: string, intents: Intent[]): void {
-  try { localStorage.setItem(KEY(docId), JSON.stringify(intents)); } catch { /* ignore */ }
+/** The one evaluation of a document's intents: every parameter plus the metrics of
+ *  `solids` at the root material's density. What the store, the agent's document
+ *  summary and the MCP servers all use, so they agree. */
+export function evaluateIntents(doc: CadDocument, solids: Record<string, SolidEval> = {}): { results: IntentResult[]; scope: Record<string, number>; metrics: Metrics; density: Density } {
+  const density = densityOf(materialForComponent(doc, doc.rootComponentId));
+  const metrics = metricsOf(solids, density.density);
+  const scope = intentScope(doc, metrics);
+  return { results: checkIntents(doc.intents ?? [], scope), scope, metrics, density };
+}
+
+/** An intent and its result as the agent reads it: pass/fail and the two sides' values. */
+export function describeIntent(r: IntentResult): Record<string, unknown> {
+  const n = (v: number) => (Number.isFinite(v) ? Math.round(v * 1000) / 1000 : null);
+  return {
+    id: r.intent.id, label: r.intent.label, check: intentText(r.intent),
+    ...(r.intent.unit ? { unit: r.intent.unit } : {}),
+    status: r.error ? "unchecked" : r.ok ? "pass" : "fail",
+    lhs: n(r.lhs), rhs: n(r.rhs),
+    ...(r.error ? { error: r.error } : {}),
+  };
 }

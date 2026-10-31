@@ -11,6 +11,7 @@ import { CadDocument, FeatureDef } from "../core/document";
 import { resolveSketchPlane } from "../geometry/plane";
 import type { SolidEval } from "../core/features";
 import { hotkeys } from "./hotkeys";
+import { describeIntent, evaluateIntents } from "./concepts/intents";
 
 export type ChatEntry =
   | { role: "user"; text: string }
@@ -148,6 +149,9 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
       configurations: doc.configurations.map((c) => ({ id: c.id, name: c.name, values: c.values, ...(c.suppress ? { suppress: c.suppress } : {}), ...(c.warnings ? { warnings: c.warnings } : {}) })),
       activeConfiguration: doc.activeConfiguration ? doc.configurations.find((c) => c.id === doc.activeConfiguration)?.name : null,
     } : {}),
+    // Intents: the checks the design must keep passing, each pass/fail against the current parameters and bodies
+    // (metrics such as mass need built solids: without them a metric intent reads as unchecked).
+    ...(doc.intents?.length ? { intents: evaluateIntents(doc, solids).results.map(describeIntent) } : {}),
     // Evaluation results per feature (when the host has them): bodies with bounds/volume, modifier status, warnings.
     ...(solids ? {
       bodies: Object.values(solids).filter((s) => s.mesh).map((s) => ({
