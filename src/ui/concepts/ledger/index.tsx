@@ -1,7 +1,9 @@
 // The Ledger: the model read back as sentences with live numbers, the design
 // intents it must keep, and the agent's suggested fixes as tracked changes.
 //
-// Prop contract: <LedgerPanel/> takes no props. It reads the open document
+// Prop contract: <LedgerPanel/> needs no props (`createBackend` is a seam for
+// tests: how the sampled fix search's geometry backend is made; by default it
+// shares the Design Space's sampler backend). It reads the open document
 // through useStore (session, rev, solids), shared hover state through useUi,
 // features only through featureRows() (the kit's useFeatureRows) and intents
 // through the shared intents store, which evaluates them once for every
@@ -11,6 +13,7 @@
 
 import { useMemo } from "react";
 import { materialForComponent } from "../../../core/document";
+import type { GeometryBackend } from "../../../core/geometry/backend";
 import { useStore } from "../../../model/store";
 import { densityOf } from "../../../model/concepts/intents";
 import { useIntents } from "../../../model/concepts/intentsStore";
@@ -24,8 +27,14 @@ export { useIntents } from "../../../model/concepts/intentsStore";
 export type { IntentsState } from "../../../model/concepts/intentsStore";
 export { useSuggestions } from "./ledger";
 export type { Suggestion } from "./ledger";
+export { clearFixCache } from "./Suggestions";
 
-export function LedgerPanel() {
+export interface LedgerPanelProps {
+  /** How the sampled fix search's backend is made (default: the Design Space's shared sampler backend). */
+  createBackend?: () => Promise<GeometryBackend>;
+}
+
+export function LedgerPanel({ createBackend }: LedgerPanelProps = {}) {
   const session = useStore((s) => s.session);
   const rev = useStore((s) => s.rev);
   const doc = session.doc;
@@ -51,7 +60,7 @@ export function LedgerPanel() {
         )}
       </section>
       <IntentsSection />
-      <Suggestions scope={scope} parameterNames={parameterNames} exprs={exprs} />
+      <Suggestions scope={scope} parameterNames={parameterNames} exprs={exprs} createBackend={createBackend} />
     </div>
   );
 }

@@ -1,17 +1,25 @@
 // The Ledger's logic, apart from React: how a feature's sentence segments are
 // prepared for rendering, the mass estimate beside each paragraph, the intents'
-// glyphs and readouts, and the search for a parameter change that would make a
-// failing intent pass. Everything here is tested in Node (test/ledger.test.ts);
-// the .tsx files only template it. The intent list itself is the shared store
-// in src/model/concepts/intentsStore.ts; the edit throttle is the kit's editQueue.
+// glyphs and readouts, and the two searches for a parameter change that would
+// make a failing intent pass: an instant one over the intent's own parameters
+// (suggestFixes) and a sampled one for intents that read a model metric
+// (findMetricFixes: candidate values of each bounded parameter are built on the
+// Design Space's sampler backend and the smallest change that makes every
+// intent pass is proposed). Everything here is tested in Node
+// (test/ledger.test.ts); the .tsx files only template it. The intent list
+// itself is the shared store in src/model/concepts/intentsStore.ts; the edit
+// throttle is the kit's editQueue.
 
 import { create } from "zustand";
+import type { Parameter } from "../../../core/document";
+import { resolveParameters } from "../../../core/parameters";
 import type { FeatureRow, Segment } from "../../../model/concepts/featureCatalog";
 import { unitLabel } from "../../../model/concepts/featureCatalog";
-import { Intent, IntentResult, METRIC_NAMES, DEFAULT_DENSITY, checkIntent, densityOf } from "../../../model/concepts/intents";
+import { Intent, IntentResult, METRIC_NAMES, DEFAULT_DENSITY, checkIntent, checkIntents, densityOf, type Metrics } from "../../../model/concepts/intents";
 import { useIntents, nextIntentId, type IntentsState } from "../../../model/concepts/intentsStore";
 import { formatMagnitude } from "../../kit/numberMath";
 import { compileExpr } from "../../../math/expr";
+import { boundedParams, quantizeTo } from "../space/space";
 
 export { unitLabel, densityOf, DEFAULT_DENSITY, useIntents, nextIntentId };
 export type { IntentsState };
@@ -116,6 +124,8 @@ export interface Suggestion {
   delta: number;
   /** The intent reads a model metric (mass, volume…), so the kernel must rebuild before the fix is certain. */
   confirm: boolean;
+  /** What the sampled variant measured ("mass 143 g"), when the fix was built rather than computed. */
+  note?: string;
 }
 
 export interface SuggestOpts {
@@ -176,9 +186,188 @@ export function formatDelta(d: number): string {
   return `${d < 0 ? "−" : "+"}${formatNow(Math.abs(d))}`;
 }
 
-/** The suggestion as a sentence: "Set wall to 4.5 (+1.5)". */
-export function suggestionText(s: Pick<Suggestion, "param" | "to" | "delta">): string {
-  return `Set ${s.param} to ${formatNow(s.to)} (${formatDelta(s.delta)})`;
+/** The suggestion as a sentence: "Set wall to 4.5 (+1.5)", or with its sampled metric, "Set wall to 5 (mass 143 g)". */
+export function suggestionText(s: Pick<Suggestion, "param" | "to" | "delta"> & { note?: string }): string {
+  return `Set ${s.param} to ${formatNow(s.to)} (${s.note ?? formatDelta(s.delta)})`;
+}
+
+// ---- sampled fixes for metric intents ----
+
+/** The metric names an intent's two sides read. */
+export function metricDeps(intent: Intent): string[] {
+  const metrics = new Set<string>(METRIC_NAMES);
+  return intentDeps(intent).filter((d) => metrics.has(d));
+}
+
+/** The failing (evaluable) intents that read a model metric: what only a rebuild can fix. */
+export function metricFailures(results: IntentResult[]): IntentResult[] {
+  return results.filter((r) => !r.ok && !r.error && metricDeps(r.intent).length > 0);
+}
+
+/** Parameters the sampled search may move: numeric bounds, not a switch, enum or value list (the Design Space's rule). */
+export function searchableParams(params: Parameter[]): Parameter[] {
+  return boundedParams(params);
+}
+
+/**
+ * Whether a sampled search is worth running: a metric intent fails, something
+ * is built (otherwise every metric is 0 and no parameter changes that), and at
+ * least one parameter has bounds to move within.
+ */
+export function needsMetricSearch(results: IntentResult[], bodies: number, params: Parameter[]): boolean {
+  return bodies > 0 && metricFailures(results).length > 0 && searchableParams(params).length > 0;
+}
+
+export interface CandidateSides {
+  /** Values above the current one, nearest first, ending at max. */
+  up: number[];
+  /** Values below the current one, nearest first, ending at min. */
+  down: number[];
+}
+
+/**
+ * Up to `count` candidate values on each side of a bounded parameter's current
+ * value, evenly spaced to the bound (on the parameter's step when it has one),
+ * nearest first, within [min, max] and never the current value itself.
+ */
+export function candidateValues(p: Pick<Parameter, "value" | "min" | "max" | "step">, count = 6): CandidateSides {
+  const min = p.min as number, max = p.max as number, from = p.value;
+  const axis = { name: "", min, max, step: p.step };
+  const side = (bound: number): number[] => {
+    const out: number[] = [];
+    for (let k = 1; k <= count; k++) {
+      const v = quantizeTo(axis, from + ((bound - from) * k) / count);
+      if (v === from || v < min || v > max || out.includes(v)) continue;
+      out.push(v);
+    }
+    return out.sort((a, b) => Math.abs(a - from) - Math.abs(b - from));
+  };
+  return { up: from < max ? side(max) : [], down: from > min ? side(min) : [] };
+}
+
+/** Builds the document with `overrides` applied and measures it; null when nothing could be built. The sampler backend in the app, a stub in tests. */
+export type EvaluateVariant = (overrides: Record<string, number>) => Promise<Metrics | null>;
+
+export interface MetricSearchOpts {
+  /** Candidates per side of each parameter (default 6). */
+  count?: number;
+  cancelled?: () => boolean;
+}
+
+/**
+ * The scope a variant's intents are checked in: every parameter re-resolved
+ * with `overrides` applied (so a derived parameter follows the moved one), then
+ * the variant's metrics over the live scope.
+ */
+export function variantScope(params: Parameter[], scope: Record<string, number>, overrides: Record<string, number>, metrics: Metrics): Record<string, number> {
+  const ps = params.map((p) => (overrides[p.name] == null ? p : { ...p, expr: String(overrides[p.name]), value: overrides[p.name], baseExpr: undefined, configuredBy: undefined }));
+  return { ...scope, ...resolveParameters(ps).scope, ...metrics };
+}
+
+/** Every evaluable intent passes in `scope` (an intent that cannot be evaluated is not held against the variant). */
+export function allPass(intents: Intent[], scope: Record<string, number>): boolean {
+  return checkIntents(intents, scope).every((r) => r.ok || r.error);
+}
+
+/** A readout of the metrics the failing intents read ("mass 143 g · height 38.0 mm"). */
+export function metricNote(metrics: Metrics, names: string[]): string {
+  const units: Record<string, string> = { mass: "g", volume: "mm³", width: "mm", depth: "mm", height: "mm", density: "g/cm³", bodies: "" };
+  return names
+    .filter((n) => n in units && Number.isFinite(metrics[n as keyof Metrics]))
+    .map((n) => `${n} ${formatMagnitude(metrics[n as keyof Metrics], units[n], n === "volume" || n === "bodies" ? { digits: 0 } : {})}`)
+    .join(" · ");
+}
+
+/**
+ * For every bounded parameter, the smallest move (nearest candidate first on
+ * either side) after which a built variant makes every intent pass; the
+ * suggestions sorted by how far they move relative to the parameter's range,
+ * so the first is the smallest change. Each side's bound is tried first: when
+ * even the bound does not help, the side is skipped (a monotonic metric is
+ * assumed), so a parameter with no effect costs two builds. Returns null when
+ * cancelled. Nothing here touches the live document: `evaluate` builds a clone.
+ */
+export async function findMetricFixes(intents: Intent[], results: IntentResult[], scope: Record<string, number>, params: Parameter[], evaluate: EvaluateVariant, opts: MetricSearchOpts = {}): Promise<Suggestion[] | null> {
+  const failing = metricFailures(results);
+  if (failing.length === 0) return [];
+  const label = failing.map((r) => r.intent.label).join(", ");
+  const names = [...new Set(failing.flatMap((r) => metricDeps(r.intent)))];
+  const out: (Suggestion & { rel: number })[] = [];
+  for (const p of searchableParams(params)) {
+    const from = scope[p.name] ?? p.value;
+    if (!Number.isFinite(from)) continue;
+    const sides = candidateValues({ ...p, value: from }, opts.count);
+    const passes = (value: number, m: Metrics | null): m is Metrics => !!m && allPass(intents, variantScope(params, scope, { [p.name]: value }, m));
+    let best: { to: number; metrics: Metrics } | null = null;
+    for (const side of [sides.up, sides.down]) {
+      if (side.length === 0) continue;
+      const bound = side[side.length - 1];
+      if (best && Math.abs(side[0] - from) >= Math.abs(best.to - from)) continue; // nothing on this side is nearer than what we have
+      const probe = await evaluate({ [p.name]: bound });
+      if (opts.cancelled?.()) return null;
+      if (!passes(bound, probe)) continue;
+      let found = { to: bound, metrics: probe };
+      for (const cand of side.slice(0, -1)) {
+        if (best && Math.abs(cand - from) >= Math.abs(best.to - from)) break;
+        const m = await evaluate({ [p.name]: cand });
+        if (opts.cancelled?.()) return null;
+        if (passes(cand, m)) { found = { to: cand, metrics: m }; break; }
+      }
+      if (!best || Math.abs(found.to - from) < Math.abs(best.to - from)) best = found;
+    }
+    if (!best) continue;
+    const to = tidy(best.to);
+    out.push({
+      id: `fix:${p.name}:${from}:${to}`, intentId: failing[0].intent.id, label, param: p.name, from, to, delta: tidy(to - from), confirm: false,
+      note: metricNote(best.metrics, names), rel: Math.abs(to - from) / ((p.max as number) - (p.min as number)),
+    });
+  }
+  out.sort((a, b) => a.rel - b.rel);
+  return out.map(({ rel: _r, ...s }) => { void _r; return s; });
+}
+
+/**
+ * Variant evaluations remembered per document revision, so a search re-run
+ * (an intent was added or its limit scrubbed) rebuilds nothing already built.
+ * A different revision empties it: the geometry has changed.
+ */
+export class VariantCache {
+  private key = "";
+  private map = new Map<string, Promise<Metrics | null>>();
+  /** The evaluation of `overrides` on the document at `docKey`, computed once per revision. */
+  get(docKey: string, overrides: Record<string, number>, evaluate: EvaluateVariant): Promise<Metrics | null> {
+    if (docKey !== this.key) { this.key = docKey; this.map.clear(); }
+    const k = Object.keys(overrides).sort().map((n) => `${n}=${overrides[n]}`).join(",");
+    let p = this.map.get(k);
+    if (!p) { p = evaluate(overrides); this.map.set(k, p); }
+    return p;
+  }
+  get size(): number { return this.map.size; }
+  clear(): void { this.map.clear(); this.key = ""; }
+}
+
+/** Where the sampled search stands, for the Suggestions section. */
+export type FixSearchStatus = "idle" | "searching" | "done" | "error";
+
+/** The line shown while the search runs, when it found nothing, or when it could not run ("" otherwise). */
+export function fixSearchText(status: FixSearchStatus, found: number, error: string | null): string {
+  switch (status) {
+    case "searching": return "Looking for a fix…";
+    case "done": return found === 0 ? "No change to a bounded parameter fixes this within its range." : "";
+    case "error": return `Could not look for a fix: ${error ?? "unknown error"}`;
+    default: return "";
+  }
+}
+
+/**
+ * The suggestions to show together: the instant ones, minus those that only a
+ * rebuild could confirm whenever the sampled search is running or has found
+ * something (its results are built, so they replace the guesses), plus the
+ * sampled ones.
+ */
+export function mergeSuggestions(instant: Suggestion[], sampled: Suggestion[], status: FixSearchStatus): Suggestion[] {
+  const hideGuesses = status === "searching" || sampled.length > 0;
+  return [...instant.filter((s) => !(hideGuesses && s.confirm)), ...sampled];
 }
 
 export interface Accepted {
