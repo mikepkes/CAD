@@ -175,6 +175,7 @@ export const CONTEXT_ACTIONS: HotkeyAction[] = [
 
   // ---- model: direct modelling ----
   { id: "model.box", label: "Add a box", context: "model", defaultPrimary: "b", when: () => st().mode === "model" && !st().kernelLoading, run: () => void addPrimitive("box") },
+  { id: "model.drawing", label: "Shop drawing", context: "model", when: () => st().mode === "model" && Object.keys(st().session.doc.features).length > 0, run: () => void st().openDrawing() },
   { id: "model.cylinder", label: "Add a cylinder", context: "model", when: () => st().mode === "model" && !st().kernelLoading, run: () => void addPrimitive("cylinder") },
 
   // ---- face (a face selected in model mode) ----

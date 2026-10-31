@@ -50,6 +50,8 @@ export interface PreviewGeom {
   markers?: string[];
 }
 
+type P3 = { x: number; y: number; z: number };
+
 export interface SolidView {
   /** Stable body id (feature id), for caching per-body materials. */
   id?: string;
@@ -693,6 +695,36 @@ export class SceneManager {
       if (ph) return { type: "plane", id: ph.object.userData.planeId, world: ph.point };
       return { type: "empty" };
     }
+  }
+
+  /** Everything along the ray under a screen point, nearest first: every solid face crossing (front and back, so a
+   *  face behind the model is reachable) and every origin/datum plane. The long-press selection picker lists these. */
+  pickAll(clientX: number, clientY: number): { faces: { bodyId: string; world: P3; normal: P3; distance: number }[]; planes: { planeId: string; world: P3; distance: number }[] } {
+    this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+    const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh && !c.userData.ghost && c.userData.bodyId);
+    const faces = this.raycaster.intersectObjects(solidMeshes, false).filter((h) => h.face).map((h) => {
+      const n = h.face!.normal.clone().transformDirection(h.object.matrixWorld).normalize();
+      return { bodyId: h.object.userData.bodyId as string, world: { x: h.point.x, y: h.point.y, z: h.point.z }, normal: { x: n.x, y: n.y, z: n.z }, distance: h.distance };
+    });
+    const planes = this.raycaster.intersectObjects([...this.planeMeshes.values(), ...this.datumMeshes.values()], false)
+      .filter((h) => h.object.visible && h.object.userData.planeId)
+      .map((h) => ({ planeId: h.object.userData.planeId as string, world: { x: h.point.x, y: h.point.y, z: h.point.z }, distance: h.distance }));
+    return { faces, planes };
+  }
+
+  private pickHighlight: THREE.Mesh | null = null;
+
+  /** Light one face (its triangles' positions, flat xyz) in the accent colour, drawn over everything so a face
+   *  behind the model shows through; null clears it. The selection picker calls this as you hover its entries. */
+  setPickHighlight(triangles: Float32Array | null) {
+    if (this.pickHighlight) { this.scene.remove(this.pickHighlight); this.pickHighlight.geometry.dispose(); (this.pickHighlight.material as THREE.Material).dispose(); this.pickHighlight = null; }
+    if (!triangles || !triangles.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(triangles, 3));
+    const mat = new THREE.MeshBasicMaterial({ color: 0xf0a44b, transparent: true, opacity: 0.55, depthTest: false, side: THREE.DoubleSide });
+    this.pickHighlight = new THREE.Mesh(geo, mat);
+    this.pickHighlight.renderOrder = 999;
+    this.scene.add(this.pickHighlight);
   }
 
   /** Public: approximate world/uv distance covered by `px` screen pixels. */

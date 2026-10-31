@@ -4,6 +4,21 @@ Running notes for the automated tutorial video, newest pass first. Each pass
 records what to keep doing, what broke and how it was fixed, and what is still
 open, so the next pass starts from here rather than from memory.
 
+## Pass 2 (in progress): review fixes and new features
+
+### Your review of pass 1, and what changed
+
+| Note | Finding | Change |
+|---|---|---|
+| "Opening spin is super fast" | Successive frames (a contact sheet at 0.1 s steps, `video/sheet.mjs --at 0.5,0.6,…`) showed about 45° per tenth of a second, around 450°/s. The spin went through 3D-mouse input, whose rate depends on the device tuning | A real turntable in the demo layer, in degrees per second (`turntable(12)`), easing in and out |
+| "The angled extrude distance should be able to go to a surface, like the extent in F360" | Extrude only had a distance (a minus sign to go into the body) or through all | `feature.extrude` extent **To face** (`toFace` face ref, re-found on every rebuild, so the extrude follows the face when the base changes). The panel has Extent: Distance / To face; the catalog says "up to a face". Parallel planar faces for now |
+| "Confused what the 1, 2, 3 are pointing at" | Pins anchored on top of the body's bounding box; once the parts are joined into one body, every pin pointed at empty air at the height of the back plate | Pins anchor on the largest face their own feature made (`faceAnchor`), so 1 sits on the base, 2 on the back plate, 3 on the lip |
+| The far face is hidden (behind the model, then behind the extrude panel) | Turning the view to reach it worked once, then the face sat under the panel | A Fusion-style **long-press selection picker**: hold still for 0.45 s to list everything under the cursor, nearest first (back faces and planes included); hovering an entry lights that face on the model, drawn through whatever is in front; choosing acts exactly as clicking that face would. Act 1 now picks the far face this way on camera |
+| "Export options don't need to be top-level buttons" | STEP, STL and 3MF were toolbar buttons | One **Export ▾** menu: STEP, STL, 3MF and the Shop drawing |
+| "Show off drawings for the woodworking bench" | `core/drawings.ts` already made a third-angle sheet and cut list, with no way to see them | **Shop drawing** view (Export ▾, or the `model.drawing` action): the sheet, the cut list, SVG and CSV downloads, made on the geometry worker |
+
+Being built in parallel (separate branches, merged before recording): gears of every common printable kind and a clockwork example driven by expressions; strain in the Lens and a force-travel panel with the bistable switch's rests and snap; organizational assist (agent-named sketches and features, an inbox for MCP agents) and MCP tools to show or hide panels and run any action.
+
 ## Pass 1 (2026-10-31): first automated cut
 
 ### Tooling decisions

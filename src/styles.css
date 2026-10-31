@@ -1432,3 +1432,34 @@ body {
 .smb-select.field-input { flex: 1 1 0; min-width: 0; width: auto; }
 .smb-now { flex: 1 0 100%; padding-left: 72px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .smb-last .smb-name { color: var(--k-accent); font-weight: 600; }
+
+/* ---------- Shop drawing (DrawingView.tsx) ---------- */
+.drawing-view { width: min(1400px, calc(100vw - 48px)); height: calc(100vh - 64px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+.drawing-actions { display: flex; gap: 8px; align-items: center; }
+.drawing-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 300px; gap: 14px; padding: 14px; }
+.drawing-sheet { min-height: 0; background: #fbfaf7; border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.drawing-sheet svg { width: 100%; height: 100%; }
+.drawing-parts { min-height: 0; overflow: auto; font-size: 12.5px; }
+.drawing-parts table { width: 100%; border-collapse: collapse; }
+.drawing-parts th { text-align: left; color: var(--text-dim); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.drawing-parts td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.drawing-loading { flex: 1; display: flex; align-items: center; justify-content: center; }
+
+/* ---------- Export menu (Toolbar.tsx) ---------- */
+.export-menu { position: relative; display: inline-block; }
+.export-scrim { position: fixed; inset: 0; z-index: 90; }
+.export-list { position: absolute; top: calc(100% + 6px); left: 0; z-index: 91; min-width: 260px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; }
+.export-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.export-item:hover:not(:disabled) { background: var(--line); }
+.export-item:disabled { opacity: 0.5; cursor: default; }
+.export-item span { font-size: 11.5px; color: var(--text-dim); }
+.export-empty { padding: 6px 10px; font-size: 12px; color: var(--text-dim); }
+
+/* ---------- Long-press selection picker (PickMenu.tsx) ---------- */
+.pick-scrim { position: fixed; inset: 0; z-index: 95; }
+.pick-menu { position: fixed; z-index: 96; min-width: 230px; max-width: 280px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; }
+.pick-head { padding: 4px 8px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+.pick-item { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.pick-item:hover, .pick-item:focus { background: rgba(240, 164, 75, 0.16); outline: none; }
+.pick-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick-detail { flex: none; font-size: 11px; color: var(--text-dim); }

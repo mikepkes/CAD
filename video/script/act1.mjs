@@ -67,8 +67,9 @@ async function drawOutline(d, pts) {
   await d.key("Escape");
   await d.settle();
 }
-/** Extrude the open sketch across the base up to its far side: Extent "To face", turn to that side, click it, Join. */
-async function extrudeToFarSide(d, S) {
+/** Extrude the open sketch across the base up to its far side: Extent "To face", then press and hold over that hidden
+ *  face to open the selection picker, point at the entries (each lights its face on the model) and choose the far one. */
+async function extrudeToFarSide(d, S, far = W(-S.width / 2, -S.depth / 2 + 8, S.base / 2)) {
   await d.key("e");
   await d.wait(400);
   const selects = d.page.locator(".extrude-panel select"); // Profile, Extent, Operation
@@ -76,16 +77,33 @@ async function extrudeToFarSide(d, S) {
   await d.move(eb.x + eb.width / 2, eb.y + eb.height / 2);
   await ext.selectOption("toFace");
   await d.wait(400);
-  await d.api("view", "left"); await d.settle(300);
-  await d.clickWorld(W(-S.width / 2, -S.depth / 2 + 8, S.base / 2)); await d.settle(300);
-  await d.wait(500);
-  await d.api("view", "iso"); await d.settle(300);
+  await pickBehind(d, far, (it) => it.kind === "face" && it.normal.x < -0.99);
+  await d.settle(300);
   const op = selects.last(), ob = await op.boundingBox();
   await d.move(ob.x + ob.width / 2, ob.y + ob.height / 2);
   await op.selectOption("join");
   await d.wait(350);
   await d.clickEl(".extrude-panel .btn.primary", "Extrude");
   await d.settle(400);
+}
+
+/** Press and hold over `world` (a point that may be hidden behind the model), then in the picker point at each entry
+ *  down to the one `want` matches, and choose it. */
+async function pickBehind(d, world, want) {
+  const s = await d.world(world);
+  await d.move(s.x, s.y, 600);
+  await d.page.mouse.down();
+  await d.wait(700); // the long press opens the picker
+  await d.page.mouse.up();
+  await d.wait(250);
+  const items = await d.run(() => window.__chiselDemo.store.getState().pickMenu?.items ?? []);
+  const k = items.findIndex(want);
+  if (k < 0) throw new Error(`picker has no matching entry (${items.map((i) => i.label).join(", ")})`);
+  const rows = d.page.locator(".pick-item");
+  for (let i = 0; i <= k; i++) { const b = await rows.nth(i).boundingBox(); await d.move(b.x + 40, b.y + b.height / 2, 380); await d.wait(i === k ? 700 : 450); }
+  const b = await rows.nth(k).boundingBox();
+  await d.click(b.x + 40, b.y + b.height / 2, { ms: 120 });
+  await d.shot("picked");
 }
 
 export async function act1(d) {
@@ -143,7 +161,7 @@ export async function act1(d) {
 
   let lipSketch = null;
   const side = W(S.width / 2, -S.depth / 2 + 8, S.base / 2); // the base's +X side, clear of the plate and the lip
-  await d.beat("raise-the-back", "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and press S to sketch on it. Draw the outline corner by corner, finish the sketch, and extrude it up to the far side of the base, so it always spans the base, whatever its width. The lip in front of the phone is a rectangle, made the same way.", async () => {
+  await d.beat("raise-the-back", "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and press S to sketch on it. Draw the outline corner by corner, finish the sketch, and extrude it up to the far side of the base, so it always spans the base, whatever its width. That side is hidden, so press and hold: Chisel lists everything under the cursor and lights each one as you point at it. The lip in front of the phone is a rectangle, made the same way.", async () => {
     await d.api("closeCards");
     await d.clickWorld(side); await d.settle();
     await d.shot("side");
@@ -168,7 +186,7 @@ export async function act1(d) {
     await d.key("Escape");
     await d.page.keyboard.press("Meta+Enter"); await d.settle(300);
     await d.api("view", "iso"); await d.wait(700);
-    await extrudeToFarSide(d, S);
+    await extrudeToFarSide(d, S, W(-S.width / 2, (back[0].y + back[2].y) / 2 + 2, S.base + S.height * 0.6)); // the plate's far side: the base's is behind the panel now
   });
 
   await d.beat("what-it-kept", "Here's the quiet part: Chisel kept a recipe of everything you did by hand. Every push and every sketch is a step in the history. Drag back through it, and forward again. Nothing has to be redone, and every step can still change.", async () => {
