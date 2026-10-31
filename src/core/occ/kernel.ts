@@ -219,9 +219,40 @@ export function fuseShapes(a: Shape3D, b: Shape3D): Shape3D {
 export function cutShapes(base: Shape3D, tool: Shape3D): Shape3D {
   return (base as unknown as { cut: (o: Shape3D, opts?: unknown) => Shape3D }).cut(tool);
 }
-/** Intersection (common volume) of two solids. Consumes neither operand. */
+/** Wrap a raw OCC shape a builder returned, and free the raw handle: replicad's
+ *  cast() wraps a downcast copy and leaves the original — which holds the whole
+ *  result geometry alive — to leak. */
+export function castOwned(raw: unknown): Shape3D {
+  try { return cast(raw as never) as unknown as Shape3D; } finally { (raw as { delete(): void }).delete(); }
+}
+
+/** Intersection (common volume) of two solids. Consumes neither operand —
+ *  nor changes them: the boolean runs non-destructively (OCC otherwise writes
+ *  p-curves and tolerances into its arguments' faces, which on a shape kept and
+ *  reused — a gear placed at every pose of a collision sweep — piled up tens of
+ *  MB per check until the kernel ran out of memory), and the builder is freed at
+ *  once rather than left to the JS garbage collector. */
 export function intersectShapes(a: Shape3D, b: Shape3D): Shape3D {
-  return (a as unknown as { intersect: (o: Shape3D) => Shape3D }).intersect(b);
+  type List = { Append(s: unknown): void; delete(): void };
+  const oc = getOC() as unknown as {
+    NCollection_List_TopoDS_Shape: new () => List;
+    BRepAlgoAPI_Common: new () => { SetArguments(l: List): void; SetTools(l: List): void; SetNonDestructive(v: boolean): void; SetUseOBB(v: boolean): void; Build(): void; HasErrors(): boolean; SimplifyResult(u: boolean, v: boolean, tol: number): void; Shape(): unknown; delete(): void };
+  };
+  const raw = (s: Shape3D) => (s as unknown as { wrapped: unknown }).wrapped;
+  const args = new oc.NCollection_List_TopoDS_Shape(), tools = new oc.NCollection_List_TopoDS_Shape();
+  const builder = new oc.BRepAlgoAPI_Common();
+  try {
+    args.Append(raw(a));
+    tools.Append(raw(b));
+    builder.SetArguments(args);
+    builder.SetTools(tools);
+    builder.SetNonDestructive(true);
+    builder.SetUseOBB(true);
+    builder.Build();
+    if (builder.HasErrors()) throw new Error("the intersection failed");
+    builder.SimplifyResult(true, true, 1e-3);
+    return castOwned(builder.Shape());
+  } finally { builder.delete(); args.delete(); tools.delete(); }
 }
 
 /** Reflect a solid across a work plane, returning a NEW shape (operand untouched). */
@@ -768,7 +799,7 @@ export function booleanWithHistory(kind: BooleanKind, a: Shape3D, b: Shape3D): {
     builder.Build();
     if (!builder.IsDone()) throw new Error(`${kind} failed in the kernel`);
     builder.SimplifyResult(true, true, 1e-3);
-    const shape = cast(builder.Shape() as never) as unknown as Shape3D;
+    const shape = castOwned(builder.Shape());
     if (!isShape3D(shape as never)) throw new Error(`${kind} did not produce a solid`);
     outFaces = facesOf(shape);
     const find = indexer(outFaces);

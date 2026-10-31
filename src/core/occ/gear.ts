@@ -1,21 +1,22 @@
 // The OCC side of 3D gears (see core/geometry/gear.ts for the tooth maths):
 // one involute outline turned into the solid a 3D-printing user expects —
 // straight, helical (a true helical sweep), herringbone (two mirrored helical
-// halves), internal ring gears (the toothed bore cut from a rim), racks
+// halves), internal ring gears (a rim around a toothed bore), racks
 // (straight / slanted / chevron), straight bevel gears (the outline tapered to
-// the pitch-cone apex: every flank is a cone through the apex) and worms (a
-// rack-section thread). Printable extras — a bore with a D-flat or keyway, a
-// hub and spoked windows — are cut and joined last, away from the teeth.
+// the pitch-cone apex: every flank is a cone through the apex) and worms (the
+// rack-section thread's transverse section, swept turning once per lead).
+// Printable extras — a bore with a D-flat or keyway and spoked windows — are
+// holes in the swept region (they don't twist); a hub is joined last.
 //
 // Built in the gear's own frame: axis +Z, the gear from z = 0 to its face
 // width (a bevel gear's heel at z = 0, its apex up the axis; a rack along X
 // with teeth toward +Y; a worm along +Z). The feature places it.
 
-import { getOC, cast, makeLine, makeCircle, makeThreePointArc, makeBezierCurve, assembleWire, makeFace, makeSolid, twistExtrude, complexExtrude, loft, makeBox, type Shape3D, type Wire, type Edge } from "replicad";
+import { getOC, makeLine, makeCircle, makeThreePointArc, makeBezierCurve, assembleWire, makeFace, makeSolid, twistExtrude, loft, makeBox, type Shape3D, type Wire, type Edge } from "replicad";
 import { gearOutline, bevelOutline, GearOutline, GearType, OutlineEdge, wormGeometry } from "../geometry/gear";
 import type { Pt } from "../geometry/spline";
 import type { Rigid } from "../../math/transform";
-import { fuseShapes, cutShapes, intersectShapes, translateShape, volumeOfShape } from "./kernel";
+import { fuseShapes, cutShapes, intersectShapes, translateShape, volumeOfShape, castOwned } from "./kernel";
 
 export type GearSolidType = "spur" | "helical" | "herringbone" | "ring" | "rack" | "bevel" | "worm";
 
@@ -66,7 +67,7 @@ function prism(shape: Shape3D | Wire, v: P3): Shape3D {
   const oc = getOC() as OcAny;
   const vec = new oc.gp_Vec(v[0], v[1], v[2]);
   const b = new oc.BRepPrimAPI_MakePrism(raw(shape), vec, false, true);
-  try { b.Build(); return cast(b.Shape()) as unknown as Shape3D; } finally { b.delete(); vec.delete(); }
+  try { b.Build(); return castOwned(b.Shape()); } finally { b.delete(); vec.delete(); }
 }
 
 /** A planar face bounded by `outer` with `holes`, its loops oriented properly whatever their winding. */
@@ -76,7 +77,7 @@ function capFace(outer: Wire, holes: Wire[] = []): Shape3D {
   const fix = new oc.ShapeFix_Face(raw(f));
   try {
     fix.FixOrientation();
-    return cast(fix.Face()) as unknown as Shape3D;
+    return castOwned(fix.Face());
   } finally { fix.delete(); free(f); }
 }
 
@@ -243,14 +244,19 @@ function loopWire(l: RegionLoop, z: number): Wire {
   return piecesWire(l.pieces, z);
 }
 
-/** One loop swept from z0 to z1 as an open shell, with its start and end wires. */
+/** One loop carried from z0 to z1 as an open shell, with its start and end wires. A loop that
+ *  doesn't turn (a rim, a bore, a window) is a prism — exact planes and cylinders; one that turns
+ *  follows an auxiliary helix (replicad's twisted extrude). */
 function sweptLoop(l: RegionLoop, z0: number, z1: number, twistPerMm: number): [Shape3D, Wire, Wire] {
+  const h = z1 - z0;
+  const turn = "circle" in l || l.fixed ? 0 : twistPerMm * h; // radians
+  if (Math.abs(turn) < 1e-9) {
+    const w = loopWire(l, z0);
+    return [prism(w, [0, 0, h]), w, translateShape(w as unknown as Shape3D, { x: 0, y: 0, z: h }) as unknown as Wire];
+  }
   const w = loopWire(l, z0);
   try {
-    const turn = "circle" in l || l.fixed ? 0 : (twistPerMm * (z1 - z0)) / DEG;
-    return (Math.abs(turn) < 1e-9
-      ? complexExtrude(w, [0, 0, z0], [0, 0, z1 - z0], undefined, true)
-      : twistExtrude(w, turn, [0, 0, z0], [0, 0, z1 - z0], undefined, true)) as unknown as [Shape3D, Wire, Wire];
+    return twistExtrude(w, turn / DEG, [0, 0, z0], [0, 0, h], undefined, true) as unknown as [Shape3D, Wire, Wire];
   } finally { free(w); }
 }
 
@@ -499,6 +505,38 @@ export function buildGearSolid(s: GearSolidSpec): Shape3D {
 // same geometry under a new location — no rebuild, no copy — which is what
 // keeps a clockwork of helical gears turning at slider speed.
 
+/** A ring of material about a gear's own axis: radii rIn..rOut, local z0..z1. */
+export interface Annulus { rIn: number; rOut: number; z0: number; z1: number }
+
+/** The annuli that hold a round gear — its toothed part (out to the tips, in to the bore or a ring
+ *  gear's tips) and its hub — so a collision check can rule a pair out before any boolean: side by
+ *  side, past each other's ends, or a pin inside a bore. Null for a rack. */
+export function gearExtent(s: GearSolidSpec): Annulus[] | null {
+  const m = s.module, margin = 1e-3;
+  const bore = s.bore ?? 0, flat = s.dFlat ?? 0;
+  const rIn = Math.max(0, (bore > 0 ? (flat > 0 && flat < bore ? Math.min(bore / 2, flat - bore / 2) : bore / 2) : 0) - margin);
+  const hubR = (s.hubDiameter ?? 0) / 2, hubL = hubR > 0 ? s.hubLength ?? 0 : 0;
+  const ring = (lo: number, hi: number, z0: number, z1: number): Annulus => ({ rIn: lo, rOut: hi + margin, z0, z1 });
+  switch (s.type) {
+    case "spur": case "helical": case "herringbone": {
+      const out = [ring(rIn, m * (s.teeth / 2 + (s.addendum ?? 1)), 0, s.faceWidth)];
+      if (hubL > 0) out.push(ring(rIn, hubR, s.faceWidth, s.faceWidth + hubL));
+      return out;
+    }
+    case "ring":
+      return [ring(Math.max(0, m * (s.teeth / 2 - (s.addendum ?? 1)) - margin), m * (s.teeth / 2 + (s.dedendum ?? 1.25)) + (s.rim ?? 3 * m), 0, s.faceWidth)];
+    case "bevel": {
+      const o = bevelOutline({ ...profileSpec(s, "external"), mateTeeth: s.mateTeeth ?? s.teeth });
+      const out = [ring(rIn, o.radii!.tip, 0, s.faceWidth * Math.cos(o.bevel.pitchAngle))];
+      if (hubL > 0) out.push(ring(rIn, hubR, -hubL, 0));
+      return out;
+    }
+    case "worm":
+      return [ring(rIn, wormGeometry(m, Math.max(1, Math.round(s.teeth)), s.wormDiameter ?? 10 * m, s).tipRadius, 0, s.faceWidth)];
+    default: return null;
+  }
+}
+
 const LOCAL = new Map<string, Shape3D>();
 const LOCAL_MAX = 48;
 
@@ -531,5 +569,5 @@ export function placeShape(shape: Shape3D, T: Rigid): Shape3D {
   const t = new oc.gp_Trsf();
   t.SetValues(T.x.x, T.y.x, T.z.x, T.origin.x, T.x.y, T.y.y, T.z.y, T.origin.y, T.x.z, T.y.z, T.z.z, T.origin.z);
   const b = new oc.BRepBuilderAPI_Transform(raw(shape), t, false, false);
-  try { return cast(b.Shape()) as unknown as Shape3D; } finally { b.delete(); t.delete(); }
+  try { return castOwned(b.Shape()); } finally { b.delete(); t.delete(); }
 }
