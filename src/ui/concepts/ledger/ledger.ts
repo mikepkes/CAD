@@ -12,6 +12,7 @@
 
 import { create } from "zustand";
 import type { Parameter } from "../../../core/document";
+import { resolveParameters } from "../../../core/parameters";
 import type { FeatureRow, Segment } from "../../../model/concepts/featureCatalog";
 import { unitLabel } from "../../../model/concepts/featureCatalog";
 import { Intent, IntentResult, METRIC_NAMES, DEFAULT_DENSITY, checkIntent, checkIntents, densityOf, type Metrics } from "../../../model/concepts/intents";
@@ -253,9 +254,19 @@ export interface MetricSearchOpts {
   cancelled?: () => boolean;
 }
 
-/** Every evaluable intent passes with the parameter at `value` and the variant's metrics. */
-export function allPass(intents: Intent[], scope: Record<string, number>, param: string, value: number, metrics: Metrics): boolean {
-  return checkIntents(intents, { ...scope, [param]: value, ...metrics }).every((r) => r.ok || r.error);
+/**
+ * The scope a variant's intents are checked in: every parameter re-resolved
+ * with `overrides` applied (so a derived parameter follows the moved one), then
+ * the variant's metrics over the live scope.
+ */
+export function variantScope(params: Parameter[], scope: Record<string, number>, overrides: Record<string, number>, metrics: Metrics): Record<string, number> {
+  const ps = params.map((p) => (overrides[p.name] == null ? p : { ...p, expr: String(overrides[p.name]), value: overrides[p.name], baseExpr: undefined, configuredBy: undefined }));
+  return { ...scope, ...resolveParameters(ps).scope, ...metrics };
+}
+
+/** Every evaluable intent passes in `scope` (an intent that cannot be evaluated is not held against the variant). */
+export function allPass(intents: Intent[], scope: Record<string, number>): boolean {
+  return checkIntents(intents, scope).every((r) => r.ok || r.error);
 }
 
 /** A readout of the metrics the failing intents read ("mass 143 g · height 38.0 mm"). */
@@ -286,6 +297,7 @@ export async function findMetricFixes(intents: Intent[], results: IntentResult[]
     const from = scope[p.name] ?? p.value;
     if (!Number.isFinite(from)) continue;
     const sides = candidateValues({ ...p, value: from }, opts.count);
+    const passes = (value: number, m: Metrics | null): m is Metrics => !!m && allPass(intents, variantScope(params, scope, { [p.name]: value }, m));
     let best: { to: number; metrics: Metrics } | null = null;
     for (const side of [sides.up, sides.down]) {
       if (side.length === 0) continue;
@@ -293,13 +305,13 @@ export async function findMetricFixes(intents: Intent[], results: IntentResult[]
       if (best && Math.abs(side[0] - from) >= Math.abs(best.to - from)) continue; // nothing on this side is nearer than what we have
       const probe = await evaluate({ [p.name]: bound });
       if (opts.cancelled?.()) return null;
-      if (!probe || !allPass(intents, scope, p.name, bound, probe)) continue;
+      if (!passes(bound, probe)) continue;
       let found = { to: bound, metrics: probe };
       for (const cand of side.slice(0, -1)) {
         if (best && Math.abs(cand - from) >= Math.abs(best.to - from)) break;
         const m = await evaluate({ [p.name]: cand });
         if (opts.cancelled?.()) return null;
-        if (m && allPass(intents, scope, p.name, cand, m)) { found = { to: cand, metrics: m }; break; }
+        if (passes(cand, m)) { found = { to: cand, metrics: m }; break; }
       }
       if (!best || Math.abs(found.to - from) < Math.abs(best.to - from)) best = found;
     }

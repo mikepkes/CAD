@@ -4,10 +4,11 @@ import { checkIntents, intentScope, metricsOf, parseIntent, type Metrics } from 
 import {
   densityOf, formatDelta, formatMass, formatNow, intentDeps, intentGlyph, massGrams, mergeSegments, paramToken, plainNumber,
   rhsStep, rowClasses, suggestFixes, suggestionText, tidy, uncheckedResult, unitLabel, useIntents, useSuggestions, visibleSuggestions,
-  candidateValues, findMetricFixes, metricDeps, metricFailures, needsMetricSearch, metricNote, allPass, VariantCache, fixSearchText, mergeSuggestions,
+  candidateValues, findMetricFixes, metricDeps, metricFailures, needsMetricSearch, metricNote, allPass, variantScope, VariantCache, fixSearchText, mergeSuggestions,
   type Suggestion,
 } from "../src/ui/concepts/ledger/ledger";
 import { evaluateVariant, overrideDoc } from "../src/ui/concepts/space/sampler";
+import type { GeometryBackend } from "../src/core/geometry/backend";
 
 const T = (text: string) => ({ text });
 
@@ -181,5 +182,160 @@ describe("ledger: suggestions", () => {
     st.forget("b");
     expect(useSuggestions.getState().accepted.b).toBeUndefined();
     expect(visibleSuggestions([a, b, c], useSuggestions.getState()).map((s) => s.id)).toEqual(["b", "c"]);
+  });
+});
+
+describe("ledger: sampled fixes for metric intents", () => {
+  // A box model: one w × h × 10 body, so mass = w·h·10 / 1000 · 2.7 g (w = 30, h = 15 → 12.15 g).
+  const box = (w: number, h: number): Metrics =>
+    metricsOf({ b: { featureId: "b", name: "b", sketchId: "", distance: 0, mesh: {}, volume: w * h * 10, bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: w, y: h, z: 10 } } } as never }, 2.7);
+  const P = (name: string, expr: string, extra: Record<string, unknown> = {}): Parameter => ({ id: name, name, expr, value: Number(expr), ...extra }) as Parameter;
+  const params = [P("w", "30", { min: 10, max: 50, step: 5 }), P("h", "15", { min: 5, max: 25 }), P("free", "2"), P("d", "w*2", { value: 60 })];
+  const doc = createDocument();
+  doc.parameters.push(...params);
+  const scope = intentScope(doc, box(30, 15));
+  const intentsOf = (...texts: string[]) => texts.map((t, i) => parseIntent(t, `i${i}`, t.split(" ")[0])!);
+  /** The stub evaluate: the box with the overrides applied, recording every call. */
+  const stub = (calls: Record<string, number>[] = [], opts: { fail?: (o: Record<string, number>) => boolean } = {}) =>
+    vi.fn(async (o: Record<string, number>) => { calls.push(o); return opts.fail?.(o) ? null : box(o.w ?? 30, o.h ?? 15); });
+
+  it("tells metric intents from parameter ones and decides when a search is worth running", () => {
+    expect(metricDeps(parseIntent("mass <= 10", "a")!)).toEqual(["mass"]);
+    expect(metricDeps(parseIntent("mass / h <= 2", "a")!)).toEqual(["mass"]);
+    expect(metricDeps(parseIntent("height + width <= 2*depth", "a")!).sort()).toEqual(["depth", "height", "width"]);
+    expect(metricDeps(parseIntent("w >= 10", "a")!)).toEqual([]);
+    const results = checkIntents(intentsOf("mass <= 10", "w >= 40", "mass <= 100", "nope < 1"), scope);
+    expect(metricFailures(results).map((r) => r.intent.id)).toEqual(["i0"]); // not the parameter one, the passing one or the unevaluable one
+    expect(needsMetricSearch(results, 1, params)).toBe(true);
+    expect(needsMetricSearch(results, 0, params)).toBe(false); // nothing built: every metric is 0
+    expect(needsMetricSearch(results, 1, [P("free", "2")])).toBe(false); // nothing bounded to move
+    expect(needsMetricSearch(checkIntents(intentsOf("mass <= 100"), scope), 1, params)).toBe(false); // nothing fails
+  });
+
+  it("spaces candidate values evenly to each bound, on the step, nearest first, never the current value", () => {
+    expect(candidateValues(params[0])).toEqual({ up: [35, 40, 45, 50], down: [25, 20, 15, 10] });
+    const h = candidateValues(params[1]);
+    expect(h.up).toEqual([16.6667, 18.3333, 20, 21.6667, 23.3333, 25]);
+    expect(h.down).toEqual([13.3333, 11.6667, 10, 8.3333, 6.6667, 5]);
+    expect(candidateValues(params[1], 2)).toEqual({ up: [20, 25], down: [10, 5] });
+    expect(candidateValues({ value: 25, min: 5, max: 25 })).toEqual({ up: [], down: [21.6667, 18.3333, 15, 11.6667, 8.3333, 5] });
+    expect(candidateValues({ value: 5, min: 5, max: 25 }).down).toEqual([]);
+  });
+
+  it("re-resolves derived parameters in a variant's scope and reads the variant's metrics", () => {
+    const sc = variantScope(params, scope, { w: 20 }, box(20, 15));
+    expect(sc).toMatchObject({ w: 20, d: 40, h: 15, free: 2, width: 20 });
+    expect(sc.mass).toBeCloseTo(8.1, 6);
+    expect(allPass(intentsOf("mass <= 10", "d >= 30", "nope < 1"), sc)).toBe(true); // an unevaluable intent is not held against it
+    expect(allPass(intentsOf("mass <= 10", "d >= 50"), sc)).toBe(false);
+  });
+
+  it("finds the smallest built change for each bounded parameter, smallest first, labelled with the sampled metric", async () => {
+    const intents = intentsOf("mass <= 10");
+    const results = checkIntents(intents, scope);
+    const calls: Record<string, number>[] = [];
+    const fixes = (await findMetricFixes(intents, results, scope, params, stub(calls)))!;
+    expect(fixes.map((f) => [f.param, f.to])).toEqual([["h", 11.6667], ["w", 20]]); // h moves 1/6 of its range, w 1/4
+    expect(fixes[0]).toMatchObject({ intentId: "i0", label: "mass", from: 15, confirm: false, note: "mass 9.45 g" });
+    expect(fixes[0].delta).toBeCloseTo(-3.3333, 4);
+    expect(suggestionText(fixes[0])).toBe("Set h to 11.7 (mass 9.45 g)");
+    expect(suggestionText(fixes[1])).toBe("Set w to 20 (mass 8.10 g)");
+    expect(fixes[0].id).not.toBe(fixes[1].id);
+    // each side's bound is probed first; a side whose bound does not help is skipped, then nearest first until one passes
+    expect(calls).toEqual([{ w: 50 }, { w: 10 }, { w: 25 }, { w: 20 }, { h: 25 }, { h: 5 }, { h: 13.3333 }, { h: 11.6667 }]);
+    expect(calls.some((c) => "free" in c || "d" in c)).toBe(false); // only bounded parameters move
+  });
+
+  it("requires every intent to pass, derived parameters included, and labels every metric the failing intents read", async () => {
+    // w >= 25 rules out w = 20 (the only w candidate under the mass limit), so only h can move
+    let intents = intentsOf("mass <= 10", "w >= 25");
+    let fixes = (await findMetricFixes(intents, checkIntents(intents, scope), scope, params, stub()))!;
+    expect(fixes.map((f) => f.param)).toEqual(["h"]);
+    // d = w*2 must stay ≥ 50: w = 20 gives d = 40, so again only h
+    intents = intentsOf("mass <= 10", "d >= 50");
+    fixes = (await findMetricFixes(intents, checkIntents(intents, scope), scope, params, stub()))!;
+    expect(fixes.map((f) => f.param)).toEqual(["h"]);
+    // two failing metric intents: one card, both labels, both metrics in the note
+    intents = intentsOf("mass <= 10", "width <= 25");
+    fixes = (await findMetricFixes(intents, checkIntents(intents, scope), scope, params, stub()))!;
+    expect(fixes.map((f) => f.param)).toEqual(["w"]); // h alone cannot narrow the width
+    expect(fixes[0]).toMatchObject({ to: 20, label: "mass, width", note: "mass 8.10 g · width 20.0 mm" });
+  });
+
+  it("skips variants that cannot be built, stops when cancelled, and has nothing to do without failures or bounds", async () => {
+    const intents = intentsOf("mass <= 10");
+    const results = checkIntents(intents, scope);
+    // h cannot be built below 10: the bound probe (5) fails to build, so the h side is skipped
+    const fixes = (await findMetricFixes(intents, results, scope, params, stub([], { fail: (o) => o.h != null && o.h < 10 })))!;
+    expect(fixes.map((f) => f.param)).toEqual(["w"]);
+    let n = 0;
+    expect(await findMetricFixes(intents, results, scope, params, stub(), { cancelled: () => ++n > 2 })).toBeNull();
+    expect(n).toBe(3);
+    const idle = stub();
+    expect(await findMetricFixes(intents, checkIntents(intents, { ...scope, mass: 1 }), scope, params, idle)).toEqual([]);
+    expect(await findMetricFixes(intents, results, scope, [P("free", "2")], idle)).toEqual([]);
+    expect(idle).not.toHaveBeenCalled();
+    expect(metricNote(box(30, 15), ["mass", "volume", "height", "bodies", "nope"])).toBe("mass 12.2 g · volume 4,500 mm³ · height 10.0 mm · bodies 1");
+  });
+
+  it("remembers built variants per document revision", async () => {
+    const cache = new VariantCache();
+    const ev = stub();
+    const a = cache.get("doc:1", { w: 20 }, ev);
+    expect(cache.get("doc:1", { w: 20 }, ev)).toBe(a);
+    await cache.get("doc:1", { h: 10 }, ev);
+    expect(ev).toHaveBeenCalledTimes(2);
+    expect(cache.size).toBe(2);
+    expect((await a)!.mass).toBeCloseTo(8.1, 6);
+    await cache.get("doc:2", { w: 20 }, ev); // a new revision: the geometry changed, so rebuild
+    expect(ev).toHaveBeenCalledTimes(3);
+    expect(cache.size).toBe(1);
+    cache.clear();
+    expect(cache.size).toBe(0);
+  });
+
+  it("words the search state and lets built fixes replace the unconfirmed guesses", () => {
+    expect(fixSearchText("idle", 0, null)).toBe("");
+    expect(fixSearchText("searching", 0, null)).toBe("Looking for a fix…");
+    expect(fixSearchText("done", 0, null)).toMatch(/No change to a bounded parameter/);
+    expect(fixSearchText("done", 2, null)).toBe("");
+    expect(fixSearchText("error", 0, "no wasm")).toBe("Could not look for a fix: no wasm");
+    const guess: Suggestion = { id: "g", intentId: "i", label: "L", param: "h", from: 15, to: 12, delta: -3, confirm: true };
+    const sure: Suggestion = { ...guess, id: "s", confirm: false };
+    const built: Suggestion = { ...guess, id: "b", confirm: false, note: "mass 9.45 g" };
+    expect(mergeSuggestions([guess, sure], [], "idle").map((s) => s.id)).toEqual(["g", "s"]);
+    expect(mergeSuggestions([guess, sure], [], "searching").map((s) => s.id)).toEqual(["s"]);
+    expect(mergeSuggestions([guess, sure], [built], "done").map((s) => s.id)).toEqual(["s", "b"]);
+    expect(mergeSuggestions([guess, sure], [], "done").map((s) => s.id)).toEqual(["g", "s"]); // nothing built: the guess is all there is
+    expect(mergeSuggestions([guess], [], "error").map((s) => s.id)).toEqual(["g"]);
+  });
+
+  it("builds a clone with the overrides as plain values and measures it, leaving the live document alone", async () => {
+    const live = createDocument();
+    live.parameters.push(P("w", "15*2", { value: 30, min: 10, max: 50, baseExpr: "15*2", configuredBy: "cfg" }), P("h", "15", { min: 5, max: 25 }));
+    const v = overrideDoc(live, { w: 20 });
+    expect(v).not.toBe(live);
+    expect(v.parameters[0]).toMatchObject({ expr: "20", value: 20 });
+    expect("baseExpr" in v.parameters[0] || "configuredBy" in v.parameters[0]).toBe(false);
+    expect(v.parameters[1]).toEqual(live.parameters[1]);
+    expect(live.parameters[0]).toMatchObject({ expr: "15*2", value: 30, baseExpr: "15*2", configuredBy: "cfg" });
+    const seen: string[] = [];
+    const backend = {
+      evaluate: async (d: typeof live) => {
+        seen.push(d.parameters.map((p) => p.expr).join("/"));
+        const w = Number(d.parameters[0].expr), h = Number(d.parameters[1].expr);
+        if (w * h > 1000) throw new Error("too big");
+        if (w * h === 0) return { solids: {}, facePlanes: {} };
+        return { solids: { b: { featureId: "b", name: "b", sketchId: "", distance: 0, mesh: {}, volume: w * h * 10 } }, facePlanes: {} };
+      },
+    } as unknown as GeometryBackend;
+    const m = await evaluateVariant(backend, live, { w: 20, h: 10 }, 1.2);
+    expect(m).toMatchObject({ bodies: 1, volume: 2000, density: 1.2 });
+    expect(m!.mass).toBeCloseTo(2.4, 6);
+    expect(seen).toEqual(["20/10"]);
+    expect((await evaluateVariant(backend, live, { w: 20 }))!.density).toBe(2.7); // the default density
+    expect(await evaluateVariant(backend, live, { w: 50, h: 25 })).toBeNull(); // the kernel threw
+    expect(await evaluateVariant(backend, live, { w: 0 })).toBeNull(); // nothing built
+    expect(live.parameters[0].expr).toBe("15*2");
   });
 });
