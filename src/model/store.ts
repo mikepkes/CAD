@@ -37,6 +37,8 @@ import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
 import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
+import type { CutPart } from "../core/drawings";
+import { pickItems, type PickItem } from "./pickMenu";
 
 /** The geometry backend: a Web Worker when available (keeps the OCC kernel off
  *  the main thread), else inline on this thread. */
@@ -331,6 +333,16 @@ export interface AppState {
   deleteJointTemplate: (templateId: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step" | "3mf") => Promise<void>;
+  /** The open shop drawing (third-angle sheet + cut list), null when closed; `loading` while it is made. */
+  drawing: { svg: string; parts: CutPart[]; title: string } | { loading: true } | null;
+  /** The long-press selection picker: everything under the cursor, nearest first; null when closed. */
+  pickMenu: { screen: { x: number; y: number }; items: PickItem[] } | null;
+  openPickMenu: (screen: { x: number; y: number }, hits: Parameters<typeof pickItems>[0]) => void;
+  closePickMenu: () => void;
+  /** Act on a picker entry exactly as clicking that face (or plane) would, in whatever session is open. */
+  choosePick: (item: PickItem) => void;
+  openDrawing: () => Promise<void>;
+  closeDrawing: () => void;
   /** The whole model as one print file, offered through the native share sheet
    *  on phones (Save to Files / AirDrop / another app) and downloaded elsewhere:
    *  an STL, or a 3MF with a part per material when it has more than one. */
@@ -1215,6 +1227,36 @@ export const useStore = create<AppState>((set, get) => {
       const op = get().session.timeline.find((o) => o.type === "joint.template" && o.createdIds.includes(templateId));
       if (op) await get().deleteOperation(op.opId);
     },
+    pickMenu: null,
+    openPickMenu: (screen, hits) => {
+      const items = pickItems(hits, get().solids, get().session.doc);
+      if (items.length) set({ pickMenu: { screen, items } });
+    },
+    closePickMenu: () => set({ pickMenu: null }),
+    choosePick: (item) => {
+      const s = get();
+      set({ pickMenu: null });
+      if (item.kind === "plane") { if (s.sketchPlacing) void s.startSketch(item.planeId); return; }
+      if (s.extrudeActive && s.extrudeExtent === "toFace" && s.extrudeTarget) s.pickExtrudeToFace(item.point, item.normal);
+      else if (s.extrudeActive) void s.startFaceExtrude(item.point, item.normal);
+      else if (s.sketchPlacing) void s.startSketchOnFace(item.point, item.normal);
+      else s.selectFace(item.point, item.normal, s.pickMenu?.screen ?? { x: 0, y: 0 }, item.bodyId);
+    },
+    drawing: null,
+    openDrawing: async () => {
+      await get().ensureKernel();
+      const doc = get().session.doc;
+      if (!Object.keys(doc.features).length) { set({ toast: { kind: "info", text: "Nothing to draw yet: make a body first." } }); return; }
+      const title = doc.components[doc.rootComponentId]?.name && doc.components[doc.rootComponentId].name !== "Root Component" ? doc.components[doc.rootComponentId].name : "Shop drawing";
+      set({ drawing: { loading: true } });
+      try {
+        const r = await geometry.drawing(doc, { title, units: "mm" });
+        if (get().drawing) set({ drawing: { ...r, title } }); // still open
+      } catch (e) {
+        set({ drawing: null, toast: { kind: "error", text: `Drawing failed: ${(e as Error).message}` } });
+      }
+    },
+    closeDrawing: () => set({ drawing: null }),
     exportSolid: async (format) => {
       await get().ensureKernel();
       const doc = get().session.doc;

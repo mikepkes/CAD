@@ -15,6 +15,7 @@ import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
 import { expandAssembly, hasAssemblyPatterns, instanceSolids } from "../assembly";
 import { Scope } from "../../math/expr";
+import { cutList, drawingSheetSVG, type CutPart, type SheetOptions } from "../drawings";
 
 /** "3mf" is the whole model as one object with a part per material, for a
  *  multi-material print. */
@@ -59,11 +60,21 @@ export interface GeometryBackend {
   distance(doc: CadDocument, a: string, b: string): Promise<number>;
   /** Curvature per display-mesh vertex, edge continuity and curvature combs (all bodies, or one). */
   analyze(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): Promise<BodyAnalysisResult[]>;
+  /** A shop drawing of the model: the third-angle sheet (SVG) and the builder's cut list. */
+  drawing(doc: CadDocument, opts?: SheetOptions): Promise<{ svg: string; parts: CutPart[] }>;
   /** Release workers / native resources. */
   dispose(): void;
 }
 
 const scopeOf = (doc: CadDocument) => resolveParameters(doc.parameters).scope;
+
+/** The drawing sheet and cut list of a document (placed as the recompute places components). */
+function drawingOf(doc: CadDocument, opts?: SheetOptions): { svg: string; parts: CutPart[] } {
+  const scope = scopeOf(doc);
+  const d = geometryDoc(structuredClone(doc), scope);
+  placeComponentSketches(d, scope);
+  return { svg: drawingSheetSVG(d, scope, opts), parts: cutList(d, scope) };
+}
 
 /** Expand component patterns into concrete instances and place every sketch in
  *  its (instance's) component frame, so geometry/collision see the articulated
@@ -152,7 +163,8 @@ export type GeometryRequest =
   | { id: number; kind: "collide"; doc: CadDocument; overrides?: Record<string, string> }
   | { id: number; kind: "topology"; doc: CadDocument; opts?: TopologyOpts }
   | { id: number; kind: "distance"; doc: CadDocument; a: string; b: string }
-  | { id: number; kind: "analyze"; doc: CadDocument; opts?: { bodyId?: string; combs?: boolean } };
+  | { id: number; kind: "analyze"; doc: CadDocument; opts?: { bodyId?: string; combs?: boolean } }
+  | { id: number; kind: "drawing"; doc: CadDocument; opts?: SheetOptions };
 
 export type GeometryResponse =
   | { id: number; kind: "evaluate"; solids: Record<string, SolidEval>; facePlanes: Record<string, WorkPlane> }
@@ -162,6 +174,7 @@ export type GeometryResponse =
   | { id: number; kind: "topology"; bodies: BodyTopology[] }
   | { id: number; kind: "distance"; distance: number }
   | { id: number; kind: "analyze"; bodies: BodyAnalysisResult[] }
+  | { id: number; kind: "drawing"; svg: string; parts: CutPart[] }
   | { id: number; kind: "error"; message: string };
 
 /** GeometryRequest without the id field, distributing over the union. */
@@ -205,6 +218,7 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       const bodies = analyzeOf(req.doc, req.opts);
       return { res: { id: req.id, kind: "analyze", bodies }, transfer: bodies.flatMap((b) => [b.curvature.buffer as ArrayBuffer, b.combs.buffer as ArrayBuffer]) };
     }
+    if (req.kind === "drawing") return { res: { id: req.id, kind: "drawing", ...drawingOf(req.doc, req.opts) }, transfer: [] };
     if (req.kind === "distance") {
       const doc = geometryDoc(req.doc, scope);
       return { res: { id: req.id, kind: "distance", distance: bodyDistance(doc, scopeOf(doc), req.a, req.b) }, transfer: [] };
@@ -259,6 +273,9 @@ export class InlineGeometryBackend implements GeometryBackend {
   }
   async analyze(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): Promise<BodyAnalysisResult[]> {
     return analyzeOf(doc, opts);
+  }
+  async drawing(doc: CadDocument, opts?: SheetOptions): Promise<{ svg: string; parts: CutPart[] }> {
+    return drawingOf(doc, opts);
   }
   async distance(doc: CadDocument, a: string, b: string): Promise<number> {
     const d = geometryDoc(doc, scopeOf(doc));

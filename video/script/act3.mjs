@@ -10,6 +10,7 @@ async function load(d, name) {
     await d.run(async (n) => {
       const D = window.__chiselDemo;
       D.closeCards();
+      D.store.getState().setSection(null);
       const text = await (await fetch(`/examples/${n}.json`)).text();
       await D.openText(text, `${n}.chisel.json`);
       if (D.store.getState().showPlanes) D.store.getState().toggleShowPlanes();
@@ -54,7 +55,20 @@ export async function act3(d) {
     await d.beat(id, narration, async () => { await d.lower(title, sub); await act(); }, { minMs: 6500 });
   };
 
-  await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a motion study sweeps every joint", "A gyroscope that prints in one piece, already assembled. The motion study turns every joint through a full circle and checks that nothing collides.", async () => {
+  await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a section view, then a motion study", "A gyroscope that prints in one piece, already assembled. Cut it open to see the pins and clearances inside, then let the motion study turn every joint through a full circle and check that nothing collides.", async () => {
+    // the section: tick Section in the toolbar, cut on the vertical XZ plane through the middle
+    await d.api("cursor", true);
+    const sec = await d.rect(".grid-controls label", "Section");
+    await d.click(sec.x + 10, sec.cy);
+    await d.settle(300);
+    const plane = d.page.locator(".grid-controls select[title='Section plane']"), pb = await plane.boundingBox();
+    await d.move(pb.x + pb.width / 2, pb.y + pb.height / 2);
+    await plane.selectOption("XZ");
+    await d.settle(300);
+    await d.api("cursor", false);
+    await d.api("turntable", 10);
+    await d.wait(2600);
+    await d.api("turntable", null);
     await d.fast("motion study", async () => {
       await d.run(async () => { await window.__chiselDemo.store.getState().runMotionStudy(); });
       await d.page.waitForFunction(() => !["running", "pending"].includes(window.__chiselDemo.store.getState().motionStatus), null, { timeout: 180000 });

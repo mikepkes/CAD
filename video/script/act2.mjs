@@ -88,7 +88,8 @@ export async function act2(d) {
   });
 
   await d.beat("ship-it", "When it's right, export it: STL for any printer, 3MF to keep parts and materials together, or STEP for other CAD tools.", async () => {
-    await d.clickEl("button", "3MF");
+    await d.clickEl("button", "Export ▾"); await d.wait(500);
+    await d.clickEl("[role=menuitem]", "3MF");
     await d.fast("exporting", () => d.settle(500));
     await d.wait(800);
   }, { lower: { title: "Export", sub: "STL · 3MF · STEP" } });

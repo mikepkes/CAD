@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Tool, TOOL_VARIANTS, useStore } from "../model/store";
 import { PLANES } from "../geometry/plane";
 import { ask } from "./kit/askDialog";
@@ -17,6 +17,7 @@ function FileMenu() {
       <button className="btn ghost" title="Open a .chisel.json file" onClick={() => inputRef.current?.click()}>Open</button>
       <button className="btn ghost" title="Save to a .chisel.json file" onClick={saveToFile}>Save</button>
       <button className="btn ghost" title="Import STEP, BREP, STL, FreeCAD (.FCStd) or Rhino (.3dm) as bodies" onClick={() => importRef.current?.click()}>Import</button>
+      <ExportMenu />
       <input
         ref={inputRef}
         type="file"
@@ -173,7 +174,6 @@ export function Toolbar() {
   const sketchPlacing = useStore((s) => s.sketchPlacing);
   const session = useStore((s) => s.session);
   useStore((s) => s.rev);
-  const exportSolid = useStore((s) => s.exportSolid);
   const kernelLoading = useStore((s) => s.kernelLoading);
   const hasSolids = useStore((s) => Object.keys(s.solids).length > 0);
 
@@ -362,9 +362,6 @@ export function Toolbar() {
                 <button className="btn" title="Mirror the model across the chosen plane (symmetry)" onClick={() => mirrorModel(mirrorPlane)}>
                   ⟷ Mirror
                 </button>
-                <button className="btn" title="Export STEP (CAD/CNC)" onClick={() => exportSolid("step")}>⬇ STEP</button>
-                <button className="btn" title="Export STL (3D print)" onClick={() => exportSolid("stl")}>⬇ STL</button>
-                <button className="btn" title="Export 3MF: the whole model as one object, a part per material (multi-material print)" onClick={() => exportSolid("3mf")}>⬇ 3MF</button>
               </>
             )}
           </div>
@@ -378,5 +375,42 @@ export function Toolbar() {
         </>
       )}
     </div>
+  );
+}
+
+/** Every output in one menu: the model's files (STEP, STL, 3MF) and the shop drawing. */
+function ExportMenu() {
+  const [open, setOpen] = useState(false);
+  const hasSolids = useStore((s) => Object.values(s.solids).some((b) => b.mesh));
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); setOpen(false); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
+  const S = useStore.getState;
+  const items: { label: string; note: string; run: () => void }[] = [
+    { label: "STEP", note: "for other CAD tools and CNC", run: () => void S().exportSolid("step") },
+    { label: "STL", note: "for any 3D printer", run: () => void S().exportSolid("stl") },
+    { label: "3MF", note: "one print, a part per material", run: () => void S().exportSolid("3mf") },
+    { label: "Shop drawing", note: "views, dimensions and the cut list", run: () => void S().openDrawing() },
+  ];
+  return (
+    <span className="export-menu">
+      <button className="btn ghost" aria-haspopup="menu" aria-expanded={open} title="Export the model or make a shop drawing" onClick={() => setOpen((o) => !o)}>Export ▾</button>
+      {open && (
+        <>
+          <div className="export-scrim" onPointerDown={() => setOpen(false)} />
+          <div className="export-list" role="menu" aria-label="Export">
+            {items.map((it) => (
+              <button key={it.label} role="menuitem" className="export-item" disabled={!hasSolids} onClick={() => { setOpen(false); it.run(); }}>
+                <b>{it.label}</b><span>{it.note}</span>
+              </button>
+            ))}
+            {!hasSolids && <div className="export-empty">Make a body first.</div>}
+          </div>
+        </>
+      )}
+    </span>
   );
 }

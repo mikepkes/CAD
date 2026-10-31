@@ -25,6 +25,9 @@ type Stage =
   | { kind: "polygon"; centerUV: { u: number; v: number } }
   | { kind: "pts"; pts: { u: number; v: number }[] }; // generic multi-click for tool variants
 
+/** How long a still press must last to open the selection picker (Fusion uses about this). */
+export const LONG_PRESS_MS = 450;
+
 export class Interactions {
   private scene: SceneManager;
   private dom: HTMLElement;
@@ -41,6 +44,9 @@ export class Interactions {
   private boxDiv: HTMLDivElement | null = null;
   /** Where the last press of any button went down: a right-click opens the ring only if it did not drag. */
   private pressAt: { x: number; y: number } | null = null;
+  /** The pending long-press timer (model mode) and whether it fired (so the release isn't also a click). */
+  private longPress: ReturnType<typeof setTimeout> | undefined;
+  private longPressed = false;
 
   constructor(scene: SceneManager, dom: HTMLElement) {
     this.scene = scene;
@@ -289,7 +295,21 @@ export class Interactions {
     this.downPt = { x: e.clientX, y: e.clientY };
     this.moved = false;
     const st = this.st();
-    if (st.mode !== "sketch") return;
+    if (st.mode !== "sketch") {
+      // Model mode: a long press without moving opens the selection picker (everything under the cursor).
+      clearTimeout(this.longPress);
+      this.longPressed = false;
+      const at = { x: e.clientX, y: e.clientY };
+      this.longPress = setTimeout(() => {
+        if (this.moved || !this.downPt) return;
+        const hits = this.scene.pickAll(at.x, at.y);
+        if (!hits.faces.length && !hits.planes.length) return;
+        this.longPressed = true;
+        this.scene.controls.enabled = false; // the press must not turn into an orbit
+        this.st().openPickMenu(at, hits);
+      }, LONG_PRESS_MS);
+      return;
+    }
 
     // While an explicit constraint tool is active, clicks pick entities for it
     // (no dragging / box-select) — handled in onUp → handleSelectClick.
@@ -375,6 +395,8 @@ export class Interactions {
       return;
     }
     if (st.mode === "model") {
+      clearTimeout(this.longPress);
+      if (this.longPressed) { this.longPressed = false; this.downPt = null; this.scene.controls.enabled = true; return; } // the picker took this press
       if (!this.moved && this.downPt && this.base) {
         const pick = this.scene.pick(e.clientX, e.clientY, this.base);
         if (st.extrudeActive) {

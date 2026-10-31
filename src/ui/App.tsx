@@ -19,6 +19,8 @@ import { LensOverlay } from "./concepts/lens";
 import { IntentLine } from "./concepts/intent";
 import { PanelToggles, RightPanel } from "./ConceptShell";
 import { Dialog } from "./kit/Dialog";
+import { DrawingView } from "./DrawingView";
+import { PickMenu } from "./PickMenu";
 
 function Toast() {
   const toast = useStore((s) => s.toast);
@@ -88,6 +90,8 @@ export function App() {
       <SettingsPanel />
       <HotkeyPanel />
       <Dialog />
+      <DrawingView />
+      <PickMenu />
     </div>
   );
 }
