@@ -50,8 +50,10 @@ describe("desktop MCP JSON-RPC handler", () => {
   it("unknown tool / method are JSON-RPC errors", async () => {
     const t = (await handleMcpRpc({ id: 6, method: "tools/call", params: { name: "nope" } }, tools)) as any;
     expect(t.error.code).toBe(-32602);
-    const m = (await handleMcpRpc({ id: 7, method: "resources/list" }, tools)) as any;
+    const m = (await handleMcpRpc({ id: 7, method: "nope/method" }, tools)) as any;
     expect(m.error.code).toBe(-32601);
+    const r = (await handleMcpRpc({ id: 9, method: "resources/list" }, tools)) as any; // the assist inbox is a resource now
+    expect(r.error).toBeUndefined();
     const p = (await handleMcpRpc({ id: 8, method: "ping" }, tools)) as any;
     expect(p.result).toEqual({});
   });
