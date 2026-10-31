@@ -12,6 +12,8 @@ export function ExtrudePanel() {
   const distance = useStore((s) => s.extrudeDistanceExpr);
   const operation = useStore((s) => s.extrudeOperation);
   const symmetric = useStore((s) => s.extrudeSymmetric);
+  const extent = useStore((s) => s.extrudeExtent);
+  const toFace = useStore((s) => s.extrudeToFace);
   const doc = useStore((s) => s.session.doc);
   useStore((s) => s.rev);
   const hasBody = Object.keys(doc.features).length > 0;
@@ -43,10 +45,24 @@ export function ExtrudePanel() {
             </span>
           </div>
           <label className="extrude-row">
-            <span>Distance</span>
-            <input value={distance} onChange={(e) => S().setExtrudeDistanceExpr(e.target.value)} spellCheck={false}
-              onKeyDown={(e) => { if (e.key === "Enter") void S().commitExtrude(); e.stopPropagation(); }} autoFocus />
+            <span>Extent</span>
+            <select value={extent} onChange={(e) => S().setExtrudeExtent(e.target.value as "distance" | "toFace")} title="A distance, or up to a face that it then follows">
+              <option value="distance">Distance</option>
+              <option value="toFace">To face</option>
+            </select>
           </label>
+          {extent === "distance" ? (
+            <label className="extrude-row">
+              <span>Distance</span>
+              <input value={distance} onChange={(e) => S().setExtrudeDistanceExpr(e.target.value)} spellCheck={false}
+                onKeyDown={(e) => { if (e.key === "Enter") void S().commitExtrude(); e.stopPropagation(); }} autoFocus />
+            </label>
+          ) : (
+            <div className="extrude-row">
+              <span>To</span>
+              <span className="extrude-region">{toFace ? `the face, ${distance} mm` : "click a face"}</span>
+            </div>
+          )}
           <label className="extrude-row">
             <span>Operation</span>
             <select value={operation} onChange={(e) => S().setExtrudeOperation(e.target.value as "new" | "join" | "cut" | "intersect")}>
@@ -56,15 +72,17 @@ export function ExtrudePanel() {
               <option value="intersect" disabled={!hasBody}>Intersect</option>
             </select>
           </label>
-          <label className="extrude-row checkbox">
-            <input type="checkbox" checked={symmetric} onChange={(e) => S().setExtrudeSymmetric(e.target.checked)} />
-            <span>Symmetric</span>
-          </label>
+          {extent === "distance" && (
+            <label className="extrude-row checkbox">
+              <input type="checkbox" checked={symmetric} onChange={(e) => S().setExtrudeSymmetric(e.target.checked)} />
+              <span>Symmetric</span>
+            </label>
+          )}
         </>
       )}
       <div className="extrude-foot">
         <button className="btn ghost" onClick={() => S().closeExtrude()}>Cancel</button>
-        <button className="btn primary" disabled={!target} onClick={() => void S().commitExtrude()}>Extrude</button>
+        <button className="btn primary" disabled={!target || (extent === "toFace" && !toFace)} onClick={() => void S().commitExtrude()}>Extrude</button>
       </div>
     </div>
   );

@@ -67,16 +67,21 @@ async function drawOutline(d, pts) {
   await d.key("Escape");
   await d.settle();
 }
-async function extrudeAcross(d, width) {
+/** Extrude the open sketch across the base up to its far side: Extent "To face", turn to that side, click it, Join. */
+async function extrudeToFarSide(d, S) {
   await d.key("e");
   await d.wait(400);
-  const input = await d.rect(".extrude-panel input");
-  await d.click(input.cx, input.cy);
-  await d.page.keyboard.press("Meta+A");
-  await d.type(`-${width}`, 9);
-  const op = d.page.locator(".extrude-panel select").last(); // Profile, then Operation
-  const box = await op.boundingBox();
-  await d.move(box.x + box.width / 2, box.y + box.height / 2);
+  const selects = d.page.locator(".extrude-panel select"); // Profile, Extent, Operation
+  const ext = selects.nth(1), eb = await ext.boundingBox();
+  await d.move(eb.x + eb.width / 2, eb.y + eb.height / 2);
+  await ext.selectOption("toFace");
+  await d.wait(400);
+  await d.api("view", "left"); await d.settle(300);
+  await d.clickWorld(W(-S.width / 2, -S.depth / 2 + 8, S.base / 2)); await d.settle(300);
+  await d.wait(500);
+  await d.api("view", "iso"); await d.settle(300);
+  const op = selects.last(), ob = await op.boundingBox();
+  await d.move(ob.x + ob.width / 2, ob.y + ob.height / 2);
   await op.selectOption("join");
   await d.wait(350);
   await d.clickEl(".extrude-panel .btn.primary", "Extrude");
@@ -88,7 +93,7 @@ export async function act1(d) {
 
   await d.beat("cold-open", "This is a phone stand made in Chisel. Drag one number, the phone's thickness, and the whole stand adapts. In the next four minutes you'll build it from a blank page.", async () => {
     await d.api("cursor", false);
-    await d.api("drift", { rz: 70 });
+    await d.api("turntable", 12); // degrees a second: a slow, readable turn (pass 1's 3D-mouse drift ran at about 450°/s)
     await d.wait(2500);
     await d.api("cursor", true);
     const r = await d.rect(".param-slider input[type=range]");
@@ -96,7 +101,7 @@ export async function act1(d) {
     await d.drag({ x: thumbX(r, 6, 16, 9), y: r.cy }, { x: thumbX(r, 6, 16, 15), y: r.cy }, 1800);
     await d.wait(600);
     await d.drag({ x: thumbX(r, 6, 16, 15), y: r.cy }, { x: thumbX(r, 6, 16, 9), y: r.cy }, 1500);
-    await d.api("drift", null);
+    await d.api("turntable", null);
   });
 
   await d.beat("get-chisel", "Chisel runs in your browser at mikepkes dot github dot io slash CAD, or as a desktop app from the project's GitHub releases. It's free, it's open source under the MIT licence, and it will stay that way.", async () => {
@@ -138,7 +143,7 @@ export async function act1(d) {
 
   let lipSketch = null;
   const side = W(S.width / 2, -S.depth / 2 + 8, S.base / 2); // the base's +X side, clear of the plate and the lip
-  await d.beat("raise-the-back", "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and press S to sketch on it. Draw the outline corner by corner, finish the sketch, and extrude it across the base, joined. The lip in front of the phone is a rectangle, made the same way.", async () => {
+  await d.beat("raise-the-back", "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and press S to sketch on it. Draw the outline corner by corner, finish the sketch, and extrude it up to the far side of the base, so it always spans the base, whatever its width. The lip in front of the phone is a rectangle, made the same way.", async () => {
     await d.api("closeCards");
     await d.clickWorld(side); await d.settle();
     await d.shot("side");
@@ -149,7 +154,7 @@ export async function act1(d) {
     await drawOutline(d, back.map((p) => W(S.width / 2, p.y, p.z)));
     await d.page.keyboard.press("Meta+Enter"); await d.settle(300);
     await d.api("view", "iso"); await d.wait(700);
-    await extrudeAcross(d, S.width);
+    await extrudeToFarSide(d, S);
     await d.api("closeCards");
     await d.clickWorld(side); await d.settle();
     await d.shot("side");
@@ -163,7 +168,7 @@ export async function act1(d) {
     await d.key("Escape");
     await d.page.keyboard.press("Meta+Enter"); await d.settle(300);
     await d.api("view", "iso"); await d.wait(700);
-    await extrudeAcross(d, S.width);
+    await extrudeToFarSide(d, S);
   });
 
   await d.beat("what-it-kept", "Here's the quiet part: Chisel kept a recipe of everything you did by hand. Every push and every sketch is a step in the history. Drag back through it, and forward again. Nothing has to be redone, and every step can still change.", async () => {

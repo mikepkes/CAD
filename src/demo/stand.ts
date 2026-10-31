@@ -99,9 +99,15 @@ export async function dimensionLip(h: StandHost, sketchId: string, phoneExpr: st
   }
 }
 
-/** Extrude a side sketch across the base, joined to it (the face's normal is +X, so across is negative). */
-export async function across(h: StandHost, sketchId: string, s: StandSize = STAND, distance = String(-s.width)) {
-  const r = await h.dispatch("feature.extrude", { sketch: sketchId, distance, operation: "join" });
+/** The base's far (−X) side face, as a "to face" extrude target. */
+export const farSide = (s: StandSize = STAND) => ({ normal: { x: -1, y: 0, z: 0 }, point: { x: -s.width / 2, y: -s.depth / 2 + 8, z: s.base / 2 } });
+
+/** Extrude a side sketch across the base, joined to it: to the far side face (`distance` "toFace"), or by a distance
+ *  (the face's normal is +X, so across is negative). */
+export async function across(h: StandHost, sketchId: string, s: StandSize = STAND, distance = "toFace") {
+  const r = await h.dispatch("feature.extrude", distance === "toFace"
+    ? { sketch: sketchId, distance: "0", operation: "join", extent: "toFace", toFace: farSide(s) }
+    : { sketch: sketchId, distance, operation: "join" });
   if (!r.ok) throw new Error(`extrude: ${r.error}`);
   return r.createdIds[0];
 }

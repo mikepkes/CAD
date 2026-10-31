@@ -291,7 +291,7 @@ export interface AppState {
   // features (3D)
   ensureKernel: () => Promise<void>;
   rebuildSolids: () => Promise<void>;
-  extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut" | "intersect"; symmetric?: boolean; region?: { x: number; y: number } }) => Promise<void>;
+  extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut" | "intersect"; symmetric?: boolean; region?: { x: number; y: number }; toFace?: { normal: Vec3; point: Vec3; name?: string } }) => Promise<void>;
   /** Extrude session (model mode): active flag, target profile sketch, chosen region, live params. */
   extrudeActive: boolean;
   extrudeTarget: string | null;
@@ -299,6 +299,13 @@ export interface AppState {
   extrudeDistanceExpr: string;
   extrudeOperation: "new" | "join" | "cut" | "intersect";
   extrudeSymmetric: boolean;
+  /** How far the extrude goes: a distance, or up to a face picked in the viewport. */
+  extrudeExtent: "distance" | "toFace";
+  /** The face a "to face" extrude stops at (picked while the session is open). */
+  extrudeToFace: { normal: Vec3; point: Vec3; name?: string } | null;
+  setExtrudeExtent: (e: "distance" | "toFace") => void;
+  /** Pick the face a "to face" extrude stops at; the distance field shows how far that is. */
+  pickExtrudeToFace: (point: Vec3, normal: Vec3) => void;
   openExtrude: (sketchId?: string) => void;
   mirrorModel: (plane: string) => Promise<void>;
   closeExtrude: () => void;
@@ -628,6 +635,8 @@ export const useStore = create<AppState>((set, get) => {
     extrudeDistanceExpr: "10",
     extrudeOperation: "new",
     extrudeSymmetric: false,
+    extrudeExtent: "distance",
+    extrudeToFace: null,
     agentOpen: false,
     apiKey: readLS(AGENT_KEY_LS),
     agentModel: readLS(AGENT_MODEL_LS, "claude-opus-5-5"),
@@ -1074,6 +1083,7 @@ export const useStore = create<AppState>((set, get) => {
         ...(opts?.operation ? { operation: opts.operation } : {}),
         ...(opts?.symmetric ? { symmetric: true } : {}),
         ...(opts?.region ? { region: opts.region } : {}),
+        ...(opts?.toFace ? { extent: "toFace", toFace: opts.toFace, distance: "0" } : {}),
       });
     },
     mirrorModel: async (plane) => {
@@ -1093,7 +1103,7 @@ export const useStore = create<AppState>((set, get) => {
       // Enter an extrude session: click a profile region or a face to pick what to extrude.
       set({
         extrudeActive: true, extrudeTarget: target, extrudeRegion: null,
-        extrudeDistanceExpr: "10", extrudeOperation: hasBody && onFace ? "join" : "new", extrudeSymmetric: false,
+        extrudeDistanceExpr: "10", extrudeOperation: hasBody && onFace ? "join" : "new", extrudeSymmetric: false, extrudeExtent: "distance", extrudeToFace: null,
         mode: "model", activeSketchId: null, selection: [],
       });
     },
@@ -1102,13 +1112,24 @@ export const useStore = create<AppState>((set, get) => {
     setExtrudeDistanceExpr: (expr) => set({ extrudeDistanceExpr: expr }),
     setExtrudeOperation: (op) => set({ extrudeOperation: op }),
     setExtrudeSymmetric: (on) => set({ extrudeSymmetric: on }),
+    setExtrudeExtent: (e) => set({ extrudeExtent: e, ...(e === "toFace" ? { extrudeSymmetric: false } : { extrudeToFace: null }) }),
+    pickExtrudeToFace: (point, normal) => {
+      const s = get();
+      const sk = s.extrudeTarget ? s.session.doc.sketches[s.extrudeTarget] : null;
+      if (!sk) return;
+      const pl = resolveSketchPlane(sk);
+      const d = (point.x - pl.origin.x) * pl.normal.x + (point.y - pl.origin.y) * pl.normal.y + (point.z - pl.origin.z) * pl.normal.z;
+      set({ extrudeToFace: faceRefOf(normal, point), extrudeDistanceExpr: String(Math.round(d * 100) / 100), lastMessage: "Extrude up to this face." });
+    },
     commitExtrude: async () => {
       const s = get();
       if (!s.extrudeTarget) return;
+      if (s.extrudeExtent === "toFace" && !s.extrudeToFace) { set({ lastMessage: "Click the face to extrude up to." }); return; }
       await s.extrudeSketch(s.extrudeTarget, s.extrudeDistanceExpr.trim() || "10", {
         operation: s.extrudeOperation,
         symmetric: s.extrudeSymmetric,
         region: s.extrudeRegion ?? undefined,
+        ...(s.extrudeExtent === "toFace" && s.extrudeToFace ? { toFace: s.extrudeToFace } : {}),
       });
       get().closeExtrude();
     },

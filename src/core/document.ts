@@ -4,7 +4,7 @@
 // here is plain JSON (float64), renderer-agnostic and transport-agnostic.
 
 import { LinearUnit } from "./units";
-import { Sketch } from "../sketch/types";
+import { FaceRef, Sketch } from "../sketch/types";
 import { WorkPlane } from "../geometry/plane";
 import { OperationRecord } from "./command/types";
 
@@ -80,8 +80,11 @@ export interface ExtrudeFeature {
   symmetric?: boolean;
   /** Extrude against the sketch normal (equivalent to a negative distance). */
   direction?: "normal" | "reverse";
-  /** "blind" (default): `distance`. "throughAll": far past every existing body in the chosen direction(s) — for cuts/joins that must go all the way through. */
-  extent?: "blind" | "throughAll";
+  /** "blind" (default): `distance`. "throughAll": far past every existing body in the chosen direction(s) — for cuts/joins that must go all the way through.
+   *  "toFace": up to the face `toFace` names, re-found on every rebuild (Fusion's "To object"), so the extrude follows that face when it moves. */
+  extent?: "blind" | "throughAll" | "toFace";
+  /** The face a "toFace" extrude stops at (a planar face parallel to the sketch). */
+  toFace?: FaceRef;
   /** How this solid combines with existing bodies (Fusion-style). Default "new". */
   operation?: BooleanOp;
   /** Interior point (sketch u,v) selecting one region; omitted = every region. */

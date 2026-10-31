@@ -7,6 +7,7 @@ import { evaluateFeatures } from "../src/core/features";
 import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
 import { STAND, box, sideSketch, backProfile, lipProfile, across, lipOutline } from "../src/demo/stand";
+import { featureRows, pinAnchor } from "../src/model/concepts/featureCatalog";
 
 const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
 beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
@@ -46,5 +47,40 @@ describe("the tutorial's phone stand", () => {
     expect(back().x).toBeCloseTo(STAND.plateFront - 16, 6);
     expect(back().y).toBeCloseTo(STAND.base, 6);
     expect(bodies(s).length).toBe(1);
+  });
+
+  it("pins each feature on its own geometry, not in the air above the joined body", async () => {
+    const { s } = await build(false);
+    const solids = evaluateFeatures(s.doc, resolveParameters(s.doc.parameters).scope);
+    const rows = featureRows(s.doc, s.timeline, s.rollbackIndex, solids);
+    const [base, back, lip] = rows.map((r) => pinAnchor(r)!);
+    expect(base.z).toBeLessThanOrEqual(STAND.base + 1e-6); // the base's own face, not the top of the plate
+    expect(back.z).toBeGreaterThan(STAND.base);
+    const l = lipOutline();
+    expect(lip.y).toBeGreaterThanOrEqual(l[0].y - 1e-6);
+    expect(lip.y).toBeLessThanOrEqual(l[1].y + 1e-6);
+    expect(lip.z).toBeLessThanOrEqual(STAND.base + STAND.lipH + 1e-6);
+  });
+
+  it("extrudes the back and lip to the base's far face, and they follow it when the base widens", async () => {
+    const s = realSession();
+    const h = { dispatch: (t: string, p: Record<string, unknown>) => s.dispatch(t, p), doc: () => s.doc };
+    await s.dispatch("parameter.add", { name: "width", expression: String(STAND.width) });
+    await s.dispatch("feature.primitive", { shape: "box", x: "width", y: String(STAND.depth), z: String(STAND.base), at: { x: 0, y: 0, z: STAND.base / 2 } });
+    const back = await sideSketch(h); await backProfile(h, back); await across(h, back);
+    const lip = await sideSketch(h); await lipProfile(h, lip); await across(h, lip);
+    const ext = Object.values(s.doc.features).filter((f) => f.kind === "extrude");
+    expect(ext.map((f) => (f as { extent?: string }).extent)).toEqual(["toFace", "toFace"]);
+    let b = bodies(s);
+    expect(b.length).toBe(1);
+    expect(b[0].bounds!.min.x).toBeCloseTo(-STAND.width / 2, 3);
+    const v0 = b[0].volume!;
+    const op = s.timeline.find((o) => o.type === "parameter.add")!;
+    await s.editOperation(op.opId, { ...op.params, expression: "120" }); // the box grows both ways about its centre
+    b = bodies(s);
+    expect(b.length).toBe(1);
+    expect(b[0].bounds!.min.x).toBeCloseTo(-60, 3);
+    expect(b[0].bounds!.max.x).toBeCloseTo(60, 3);
+    expect(b[0].volume! / v0).toBeCloseTo(120 / 90, 2); // every part is extruded across the full width
   });
 });

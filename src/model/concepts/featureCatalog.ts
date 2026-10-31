@@ -53,7 +53,9 @@ const opVerb = (o: unknown) => (o === "cut" ? " cut from the body" : o === "join
 
 const SPECS: FeatureSpec[] = [
   { kind: "extrude", op: "feature.extrude", label: "Extrude", params: [mm("distance", "Distance", 0.5, 500)], pushParam: "distance",
-    sentence: (op, names) => [T("Extrude "), { ref: String(op.params.sketch), text: names(String(op.params.sketch)) }, T(" by "), P("distance"), T(op.params.symmetric ? " each way" : ""), T(opVerb(op.params.operation)), T(".")] },
+    sentence: (op, names) => [T("Extrude "), { ref: String(op.params.sketch), text: names(String(op.params.sketch)) },
+      ...(op.params.extent === "toFace" ? [T(" up to a face")] : op.params.extent === "throughAll" ? [T(" through everything")] : [T(" by "), P("distance"), T(op.params.symmetric ? " each way" : "")]),
+      T(opVerb(op.params.operation)), T(".")] },
   { kind: "revolve", op: "feature.revolve", label: "Revolve", params: [deg("angle", "Angle")], pushParam: "angle",
     sentence: (op, names) => [T("Revolve "), { ref: String(op.params.sketch), text: names(String(op.params.sketch)) }, T(" through "), P("angle"), T(opVerb(op.params.operation)), T(".")] },
   { kind: "primitive", op: "feature.primitive", label: "Primitive", params: [mm("x", "X", 0.5, 500), mm("y", "Y", 0.5, 500), mm("z", "Z", 0.5, 500), mm("radius", "Radius", 0.5, 250), mm("height", "Height", 0.5, 500)],
@@ -165,6 +167,7 @@ export function featureRows(doc: CadDocument, timeline: OperationRecord[], rollb
     for (const p of spec.params) {
       const raw = op.params[p.key];
       if (raw == null) continue;
+      if (p.key === "distance" && (op.params.extent === "toFace" || op.params.extent === "throughAll")) continue; // the extent decides, not a number
       exprs[p.key] = String(raw);
       values[p.key] = evalParam(doc, raw);
     }
@@ -225,12 +228,46 @@ export function nameFromTimeline(timeline: OperationRecord[], id: string): strin
   return undefined;
 }
 
-/** Where a feature's pin anchors in world space: a hole's first centre, else the top of the bounds of
- *  the body it made or modified (`row.body`; a bare `solid` for callers that build rows by hand). */
+type P3 = { x: number; y: number; z: number };
+
+/** A point on the largest face `featureId` made in `mesh` (faces are named "<feature id>:<face>"): the centre of that
+ *  face's triangle nearest its area-weighted centre, so it lies on the surface even for an L-shaped face. Null when
+ *  the mesh names no face for the feature. */
+export function faceAnchor(mesh: { positions: Float32Array; indices: Uint32Array; faceRanges?: number[]; faceNames?: string[] } | undefined, featureId: string): P3 | null {
+  if (!mesh?.faceRanges || !mesh.faceNames) return null;
+  const P = mesh.positions, I = mesh.indices, prefix = `${featureId}:`;
+  let best: { area: number; tris: { c: P3; a: number }[] } | null = null;
+  mesh.faceNames.forEach((name, k) => {
+    if (!name.startsWith(prefix)) return;
+    const start = mesh.faceRanges![2 * k], count = mesh.faceRanges![2 * k + 1];
+    const tris: { c: P3; a: number }[] = [];
+    let area = 0;
+    for (let i = start; i + 2 < start + count && i + 2 < I.length; i += 3) {
+      const a = I[i] * 3, b = I[i + 1] * 3, c = I[i + 2] * 3;
+      const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+      const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+      const t = 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+      tris.push({ c: { x: (P[a] + P[b] + P[c]) / 3, y: (P[a + 1] + P[b + 1] + P[c + 1]) / 3, z: (P[a + 2] + P[b + 2] + P[c + 2]) / 3 }, a: t });
+      area += t;
+    }
+    if (tris.length && (!best || area > best.area)) best = { area, tris };
+  });
+  if (!best) return null;
+  const { area, tris } = best as { area: number; tris: { c: P3; a: number }[] };
+  const m = tris.reduce((s, t) => ({ x: s.x + t.c.x * t.a, y: s.y + t.c.y * t.a, z: s.z + t.c.z * t.a }), { x: 0, y: 0, z: 0 });
+  const g = { x: m.x / area, y: m.y / area, z: m.z / area };
+  return tris.reduce((b, t) => (Math.hypot(t.c.x - g.x, t.c.y - g.y, t.c.z - g.z) < Math.hypot(b.x - g.x, b.y - g.y, b.z - g.z) ? t.c : b), tris[0].c);
+}
+
+/** Where a feature's pin anchors in world space: a hole's first centre, else a point on the largest face the feature
+ *  made (so the leader lands on its own geometry, not in the air above a body it was joined into), else the top of
+ *  the bounds of the body it made or modified (`row.body`; a bare `solid` for callers that build rows by hand). */
 export function pinAnchor(row: FeatureRow): { x: number; y: number; z: number } | null {
   const at = row.op.params.at;
   if (Array.isArray(at) && at[0] && typeof at[0].x === "number") return { x: at[0].x, y: at[0].y, z: at[0].z };
   const geo = hasGeometry(row.solid) ? row.solid : row.body;
+  const onFace = faceAnchor(geo?.mesh, row.featureId) ?? (row.body && row.body !== geo ? faceAnchor(row.body.mesh, row.featureId) : null);
+  if (onFace) return onFace;
   const b = geo?.bounds;
   if (b) {
     // spread pins of one body apart by feature number so stacked modifiers don't land on one point

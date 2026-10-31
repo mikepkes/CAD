@@ -125,13 +125,13 @@ function ModelInspector() {
             <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "18px 1fr 1fr 60px 22px" }}>
                 {sol?.mesh ? <EyeToggle id={f.id} label={f.name} /> : <span />}
               <span className="dim-type" title={`Extrude of ${f.sketchId}`}>{f.name}</span>
-              <input
+              {f.extent === "toFace" || f.extent === "throughAll" ? <span className="dim-expr" title={f.extent === "toFace" ? "Extrudes up to a face, and follows it" : "Through everything"}>{f.extent === "toFace" ? "→ face" : "through all"}</span> : <input
                 className="dim-expr"
                 defaultValue={f.distanceExpr}
                 key={f.id + f.distanceExpr}
                 onBlur={(e) => { if (e.target.value !== f.distanceExpr) editFeatureDistance(f.id, e.target.value); }}
                 onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-              />
+              />}
               <span className="dim-val" title={sol?.error}>
                 {sol?.error ? "⚠" : sol?.mesh ? `${f.distanceValue.toFixed(2)}` : "…"}
               </span>
