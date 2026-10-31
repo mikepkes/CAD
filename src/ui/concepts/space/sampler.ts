@@ -5,8 +5,12 @@
 // cancellable, and cached per (axes, N, recipe). Pure apart from the backend:
 // tested with a fake backend in test/space.test.ts.
 
+import planegcsWasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
 import type { CadDocument } from "../../../core/document";
 import type { GeometryBackend } from "../../../core/geometry/backend";
+import { CadSession } from "../../../core/command/session";
+import { createDefaultRegistry } from "../../../core/command/builtins";
+import { PlaneGCSSolver } from "../../../core/solver/planegcs";
 import { DEFAULT_DENSITY, metricsOf, type Metrics } from "../../../model/concepts/intents";
 import { cellOrder, axisValue, type CellSample, type GridSpec } from "./space";
 
@@ -18,24 +22,36 @@ export interface SampleOpts {
   skip?: (i: number, j: number) => boolean;
 }
 
+// A variant is built the way the store edits a parameter: the clone's
+// parameter.add operation gets the new expression and the session rebuilds and
+// re-solves every sketch that reads it. (Only setting `parameters[].expr` would
+// leave the solved sketch geometry, and so the solids, exactly as they were.)
+let variantSolver: PlaneGCSSolver | null = null;
+let variantRegistry: ReturnType<typeof createDefaultRegistry> | null = null;
+const variantSession = (doc: CadDocument) => {
+  variantSolver ??= new PlaneGCSSolver(typeof window === "undefined" ? undefined : { wasmUrl: planegcsWasmUrl });
+  variantRegistry ??= createDefaultRegistry();
+  return new CadSession(structuredClone(doc), variantRegistry, variantSolver);
+};
+
 /**
- * A variant of the document: a structured clone with the named parameters'
- * expressions replaced by plain values (any base expression or configuration
- * cell on them is dropped, so the value is what gets built). The live document
- * is never touched.
+ * A variant of the document: a clone with the named parameters set to plain
+ * values and rebuilt (sketches re-solved, configuration cells on those
+ * parameters dropped) so what gets evaluated is what those values build. The
+ * live document is never touched.
  */
-export function overrideDoc(doc: CadDocument, overrides: Record<string, number>): CadDocument {
-  const d = structuredClone(doc);
-  for (const p of d.parameters) {
-    const v = overrides[p.name];
-    if (v == null) continue;
-    p.expr = String(v); p.value = v; delete p.baseExpr; delete p.configuredBy;
+export async function overrideDoc(doc: CadDocument, overrides: Record<string, number>): Promise<CadDocument> {
+  const session = variantSession(doc);
+  for (const [name, v] of Object.entries(overrides)) {
+    const op = session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
+    if (op) await session.editOperation(op.opId, { ...op.params, expression: String(v) });
+    else await session.dispatch("parameter.set", { name, expression: String(v) });
   }
-  return d;
+  return session.doc;
 }
 
 /** The variant document for one cell: the two axis parameters set to the cell's values. */
-export function variantDoc(doc: CadDocument, spec: { x: { name: string }; y: { name: string } }, x: number, y: number): CadDocument {
+export function variantDoc(doc: CadDocument, spec: { x: { name: string }; y: { name: string } }, x: number, y: number): Promise<CadDocument> {
   return overrideDoc(doc, { [spec.x.name]: x, [spec.y.name]: y });
 }
 
@@ -46,7 +62,7 @@ export function variantDoc(doc: CadDocument, spec: { x: { name: string }; y: { n
  */
 export async function evaluateVariant(backend: GeometryBackend, doc: CadDocument, overrides: Record<string, number>, density = DEFAULT_DENSITY): Promise<Metrics | null> {
   try {
-    const { solids } = await backend.evaluate(overrideDoc(doc, overrides));
+    const { solids } = await backend.evaluate(await overrideDoc(doc, overrides));
     const metrics = metricsOf(solids, density);
     return metrics.bodies === 0 ? null : metrics;
   } catch {
@@ -58,7 +74,7 @@ export async function evaluateVariant(backend: GeometryBackend, doc: CadDocument
 export async function sampleCell(backend: GeometryBackend, doc: CadDocument, spec: GridSpec, i: number, j: number): Promise<CellSample> {
   const x = axisValue(spec.x, i, spec.n), y = axisValue(spec.y, j, spec.n);
   try {
-    const { solids } = await backend.evaluate(variantDoc(doc, spec, x, y));
+    const { solids } = await backend.evaluate(await variantDoc(doc, spec, x, y));
     const failed = Object.values(solids).find((s) => s.error && !s.mesh);
     const metrics = metricsOf(solids, 1);
     if (metrics.bodies === 0) return { i, j, x, y, metrics: null, error: failed?.error ?? "no bodies" };

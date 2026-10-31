@@ -170,6 +170,191 @@ exports[`bundled examples > public/examples/fourbar.json > replays, builds on bo
 ]
 `;
 
+exports[`bundled examples > public/examples/gimbal.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext286",
+    "max": [
+      106,
+      6.9,
+      30,
+    ],
+    "min": [
+      82,
+      -6.9,
+      19.9,
+    ],
+    "name": "Yoke clamp",
+    "volume": 1723.9,
+  },
+  {
+    "body": "ext352",
+    "max": [
+      106,
+      6.9,
+      39.8,
+    ],
+    "min": [
+      81,
+      -6.9,
+      29.8,
+    ],
+    "name": "Ring arm",
+    "volume": 1793.4,
+  },
+  {
+    "body": "ext426",
+    "max": [
+      -82,
+      6.9,
+      30,
+    ],
+    "min": [
+      -106,
+      -6.9,
+      19.9,
+    ],
+    "name": "Yoke clamp",
+    "volume": 1723.9,
+  },
+  {
+    "body": "ext492",
+    "max": [
+      -81,
+      6.9,
+      39.8,
+    ],
+    "min": [
+      -106,
+      -6.9,
+      29.8,
+    ],
+    "name": "Ring arm",
+    "volume": 1793.4,
+  },
+  {
+    "body": "ext566",
+    "max": [
+      6.9,
+      69,
+      30,
+    ],
+    "min": [
+      -6.9,
+      45,
+      19.9,
+    ],
+    "name": "Ring clamp",
+    "volume": 1723.9,
+  },
+  {
+    "body": "ext632",
+    "max": [
+      6.9,
+      69,
+      39.8,
+    ],
+    "min": [
+      -6.9,
+      38,
+      29.8,
+    ],
+    "name": "Riser",
+    "volume": 2373,
+  },
+  {
+    "body": "ext69",
+    "max": [
+      110,
+      83,
+      19.9,
+    ],
+    "min": [
+      -110,
+      -83,
+      0,
+    ],
+    "name": "Base plate",
+    "volume": 228425.5,
+  },
+  {
+    "body": "ext727",
+    "max": [
+      6.9,
+      -45,
+      30,
+    ],
+    "min": [
+      -6.9,
+      -69,
+      19.9,
+    ],
+    "name": "Ring clamp",
+    "volume": 1723.9,
+  },
+  {
+    "body": "ext793",
+    "max": [
+      6.9,
+      -38,
+      39.8,
+    ],
+    "min": [
+      -6.9,
+      -69,
+      29.8,
+    ],
+    "name": "Riser",
+    "volume": 2373,
+  },
+  {
+    "body": "rev132",
+    "max": [
+      81,
+      79,
+      39.9,
+    ],
+    "min": [
+      -81,
+      -79,
+      19.9,
+    ],
+    "name": "Ring",
+    "volume": 77932.5,
+  },
+  {
+    "body": "rev237",
+    "max": [
+      44,
+      44,
+      32.9,
+    ],
+    "min": [
+      -44,
+      -44,
+      26.9,
+    ],
+    "name": "Platform",
+    "volume": 36492.7,
+  },
+  {
+    "body": "rev258",
+    "max": [
+      20,
+      20,
+      34.9,
+    ],
+    "min": [
+      -20,
+      -20,
+      32.9,
+    ],
+    "name": "Mirror",
+    "volume": 2513.3,
+  },
+]
+`;
+
 exports[`bundled examples > public/examples/gripper.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {

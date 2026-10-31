@@ -327,15 +327,19 @@ describe("ledger: sampled fixes for metric intents", () => {
     expect(mergeSuggestions([guess], [], "error").map((s) => s.id)).toEqual(["g"]);
   });
 
-  it("builds a clone with the overrides as plain values and measures it, leaving the live document alone", async () => {
-    const live = createDocument();
-    live.parameters.push(P("w", "15*2", { value: 30, min: 10, max: 50, baseExpr: "15*2", configuredBy: "cfg" }), P("h", "15", { min: 5, max: 25 }));
-    const v = overrideDoc(live, { w: 20 });
+  it("builds a rebuilt clone with the overrides as plain values and measures it, leaving the live document alone", async () => {
+    // a real recipe: the override must edit the parameter.add op and rebuild, not just the derived parameter row
+    const sess = realSession();
+    await sess.dispatch("parameter.add", { name: "w", expression: "15*2", min: 10, max: 50 });
+    await sess.dispatch("parameter.add", { name: "h", expression: "15", min: 5, max: 25 });
+    const live = sess.doc;
+    const v = await overrideDoc(live, { w: 20 });
     expect(v).not.toBe(live);
-    expect(v.parameters[0]).toMatchObject({ expr: "20", value: 20 });
-    expect("baseExpr" in v.parameters[0] || "configuredBy" in v.parameters[0]).toBe(false);
-    expect(v.parameters[1]).toEqual(live.parameters[1]);
-    expect(live.parameters[0]).toMatchObject({ expr: "15*2", value: 30, baseExpr: "15*2", configuredBy: "cfg" });
+    expect(v.parameters[0]).toMatchObject({ name: "w", expr: "20", value: 20 });
+    expect(v.operations.find((o) => o.type === "parameter.add" && o.params.name === "w")?.params.expression).toBe("20");
+    expect(v.parameters[1]).toMatchObject({ name: "h", expr: "15", value: 15 });
+    expect(live.parameters[0]).toMatchObject({ expr: "15*2", value: 30 });
+    expect(live.operations.find((o) => o.type === "parameter.add" && o.params.name === "w")?.params.expression).toBe("15*2");
     const seen: string[] = [];
     const backend = {
       evaluate: async (d: typeof live) => {
