@@ -31,10 +31,10 @@ describe("3D mouse input", () => {
     const half = navigationDelta({ ...IDLE, tx: 0.5 }, 1, DEFAULT_SETTINGS, false).panX;
     const full = navigationDelta({ ...IDLE, tx: 1 }, 1, DEFAULT_SETTINGS, false).panX;
     expect(half).toBeGreaterThan(0);
-    expect(half).toBeLessThan(full / 2); // quadratic response: fine control near rest
+    expect(half).toBeLessThan(full / 2); // eased response: fine control near rest
   });
 
-  it("maps push to zoom-in, lift to pan up, twist to spin, and scales with time and speed", () => {
+  it("maps pull to zoom-in, lift to pan up, twist to spin, and scales with time and speed", () => {
     const d = navigationDelta({ ...IDLE, ty: 1, tz: -1, rz: 1 }, 0.5, DEFAULT_SETTINGS, false);
     expect(d.zoom).toBeGreaterThan(1);
     expect(d.panY).toBeGreaterThan(0);

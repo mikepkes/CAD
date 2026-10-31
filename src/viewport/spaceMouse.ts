@@ -5,8 +5,9 @@
 // A SpaceMouse reports over HID: report 1 = translation (x, y, z as int16 LE;
 // newer devices put all six axes in report 1), report 2 = rotation (rx, ry,
 // rz), report 3 = button bitmask. Device axes, cap facing the user: +x right,
-// +y away (push), +z down (press); rx tilt toward the user, ry roll right, rz
-// twist clockwise.
+// +y toward the user (pull), +z down (press); +rx tilts the cap toward the
+// user, ry rolls it sideways, rz twists it (checked on a SpaceMouse Compact
+// through 3DxWare: push right +x, push away −y, lift −z, tilt away −rx).
 
 /** 3Dconnexion vendor ids (current, and Logitech for older 3Dconnexion devices). */
 export const SPACEMOUSE_VENDORS = [0x256f, 0x046d];
@@ -71,7 +72,7 @@ const shape = (v: number, dz: number) => {
   const a = Math.abs(v);
   if (a <= dz) return 0;
   const t = (a - dz) / (1 - dz); // rescale past the deadzone, then ease in
-  return Math.sign(v) * t * t;
+  return Math.sign(v) * t ** 1.5;
 };
 
 /**
@@ -84,12 +85,13 @@ export function navigationDelta(s: SpaceMouseState, dt: number, settings: SpaceM
   const ax = (name: keyof SpaceMouseSettings["invert"]) => (settings.invert[name] ? -1 : 1) * shape(s[name], settings.deadzone);
   const rotate = !planar && !settings.lockRotation;
   return {
-    panX: 0.9 * k * ax("tx"),
-    panY: -0.9 * k * ax("tz"),            // lift the cap → the model rises
-    zoom: Math.exp(1.6 * k * ax("ty")),   // push away → closer
-    pitch: rotate ? 1.8 * k * ax("rx") : 0,
-    yaw: rotate ? 1.8 * k * ax("rz") : 0,
-    roll: rotate ? 1.2 * k * ax("ry") : 0,
+    // at full deflection: 2.4 view heights/s of pan, ×e⁴ zoom/s, ~260°/s of turn
+    panX: 2.4 * k * ax("tx"),
+    panY: -2.4 * k * ax("tz"),            // lift the cap → the model rises
+    zoom: Math.exp(4 * k * ax("ty")),     // pull toward you → closer, push away → farther
+    pitch: rotate ? 4.5 * k * ax("rx") : 0,
+    yaw: rotate ? 4.5 * k * ax("rz") : 0,
+    roll: rotate ? 3 * k * ax("ry") : 0,
   };
 }
 

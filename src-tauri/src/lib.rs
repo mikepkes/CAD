@@ -2,6 +2,8 @@
 //! crate adds a window and, on request from the settings UI, a local MCP server
 //! that lets external agents drive the running document. See `mcp.rs`.
 
+#[cfg(target_os = "macos")]
+mod connexion;
 mod mcp;
 mod spacemouse;
 
@@ -156,12 +158,21 @@ pub fn run() {
         .manage(spacemouse::SpaceMouse::default())
         .invoke_handler(tauri::generate_handler![mcp_start, mcp_stop, mcp_status, mcp_respond, save_render, spacemouse_status])
         .setup(|app| {
-            // look for a 3D mouse for the life of the app
+            // a 3D mouse: through 3Dconnexion's driver when it's installed (it
+            // holds the device), else read directly, for the life of the app
             let shared: State<'_, spacemouse::SpaceMouse> = app.state();
+            #[cfg(target_os = "macos")]
+            if connexion::start(app.handle().clone(), shared.inner().clone()) {
+                return Ok(());
+            }
             spacemouse::start(app.handle().clone(), shared.inner().clone());
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::WindowEvent::Focused(focused) = event {
+                connexion::focus(*focused);
+            }
             // Stop serving when the main window goes away so the port is released.
             if let tauri::WindowEvent::Destroyed = event {
                 let state: State<'_, AppState> = window.app_handle().state();

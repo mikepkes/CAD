@@ -22,6 +22,10 @@ axum = "0.8"
 # macos-shared-device opens it non-exclusively, so 3Dconnexion's own driver can keep it too.
 hidapi = { version = "2.6", default-features = false, features = ["macos-shared-device"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Loads 3Dconnexion's driver framework (3DxWare) at run time, when installed.
+libc = "0.2"
+
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
