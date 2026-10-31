@@ -185,6 +185,14 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
   };
 }
 
+/** The one call the agent makes to the API. A stand-in (the video's replay client, a recorder) can replace the SDK. */
+export interface MessagesClient {
+  messages: { create(body: Anthropic.MessageCreateParamsNonStreaming, opts?: { signal?: AbortSignal }): Promise<Anthropic.Message> };
+}
+let clientFactory: ((apiKey: string) => MessagesClient) | null = null;
+/** Use `f` instead of the Anthropic SDK for every agent request (null restores the SDK). */
+export function setAgentClientFactory(f: ((apiKey: string) => MessagesClient) | null) { clientFactory = f; }
+
 export async function runAgent(opts: {
   apiKey: string;
   model: string;
@@ -195,7 +203,7 @@ export async function runAgent(opts: {
   onTool: (name: string, ok: boolean, detail: string) => void;
   signal?: AbortSignal;
 }): Promise<Anthropic.MessageParam[]> {
-  const client = new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true });
+  const client = clientFactory ? clientFactory(opts.apiKey) : new Anthropic({ apiKey: opts.apiKey, dangerouslyAllowBrowser: true });
   const tools = buildTools(opts.registry);
   const messages: Anthropic.MessageParam[] = [...opts.history];
 

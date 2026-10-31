@@ -1,0 +1,17 @@
+/* The video's presenter layer (demo.tsx): over everything, never takes input. */
+.demo-layer { position: fixed; inset: 0; z-index: 10000; pointer-events: none; font-family: var(--k-font, system-ui, sans-serif); }
+.demo-cursor { position: absolute; width: 26px; height: 26px; margin: -2px 0 0 -3px; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45)); transition: opacity 160ms; }
+.demo-ripple { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 2px solid var(--k-accent, #f0a44b); animation: demo-ripple 420ms ease-out forwards; }
+@keyframes demo-ripple { from { transform: scale(0.3); opacity: 0.9; } to { transform: scale(1.4); opacity: 0; } }
+.demo-keys { position: absolute; right: 24px; bottom: 44px; display: flex; gap: 8px; }
+.demo-key { min-width: 34px; padding: 7px 12px; border-radius: 8px; background: rgba(22, 24, 28, 0.92); border: 1px solid #4a5263; border-bottom-width: 3px; color: #f3f5f8; font: 600 17px/1 var(--k-mono, ui-monospace, monospace); text-align: center; animation: demo-fade-in 120ms ease-out; }
+.demo-lower { position: absolute; left: 32px; bottom: 96px; max-width: 520px; padding: 12px 18px 13px; border-left: 4px solid var(--k-accent, #f0a44b); background: rgba(16, 18, 22, 0.9); color: #f3f5f8; border-radius: 0 8px 8px 0; animation: demo-slide-in 220ms ease-out; }
+.demo-lower b { display: block; font-size: 19px; font-weight: 650; }
+.demo-lower span { display: block; margin-top: 3px; font-size: 14px; color: #b9c0cc; }
+.demo-title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(14, 15, 18, 0.94); color: #f3f5f8; text-align: center; animation: demo-fade-in 300ms ease-out; }
+.demo-title h1 { margin: 0; font-size: 54px; font-weight: 700; letter-spacing: -0.01em; }
+.demo-title p { margin: 0; font-size: 22px; color: #b9c0cc; }
+.demo-title .demo-chips { display: flex; gap: 12px; margin-top: 8px; }
+.demo-title .demo-chips span { padding: 8px 16px; border-radius: 999px; border: 1px solid var(--k-accent, #f0a44b); color: var(--k-accent, #f0a44b); font-size: 18px; font-weight: 600; }
+@keyframes demo-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes demo-slide-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }

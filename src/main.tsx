@@ -14,3 +14,6 @@ const q = new URLSearchParams(location.search);
 const customize = q.get("mode") === "customize" || q.has("customize");
 
 createRoot(document.getElementById("root")!).render(customize ? <CustomizeApp /> : <App />);
+
+// Demo mode for the tutorial video (?demo): a presenter layer and the director's API, loaded only when asked for.
+if (q.has("demo")) void import("./demo/demo").then((m) => m.installDemo());

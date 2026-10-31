@@ -54,6 +54,8 @@ let studyReady = false;
 let motionToken = 0; // bumped to cancel/supersede an in-flight study
 let rebuildInFlight: Promise<void> | null = null; // the running preview evaluate (its whole coalesced loop)
 let rebuildDirty = false;    // a newer rebuild was requested while one ran
+/** Resolves once no solid rebuild is running (the video director's "the model is done" signal). */
+export const whenRebuilt = (): Promise<void> => rebuildInFlight ?? Promise.resolve();
 
 const AUTOSAVE_KEY = "chisel.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
