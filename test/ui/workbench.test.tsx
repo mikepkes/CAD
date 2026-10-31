@@ -273,18 +273,50 @@ describe("HistoryStrip", () => {
     const chips = screen.getAllByRole("button", { name: /Base|Edges|Extrude/ });
     expect(chips.map((c) => c.textContent)).toEqual(["1Base", "2Edges", `3${rows[2].name}`]);
     expect(chips[2].className).toContain("at");
-    expect(screen.getByText("All 3 features built")).toBeTruthy();
+    // at the root the strip also shows the assembly steps: the component's creation, without a number
+    const step = screen.getByRole("button", { name: "Outer ring" });
+    expect(step.className).toContain("wb-step");
+    expect(step.querySelector(".k-num")).toBeNull();
+    expect(screen.getByText("All 3 features and 1 assembly step built")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /more in other/ })).toBeNull();
+    // the range runs over global timeline indices: from the first visible op to just after the last
     const range = screen.getByRole("slider", { name: "Rollback position" }) as HTMLInputElement;
-    expect(range.value).toBe("3"); expect(range.max).toBe("3");
+    expect(range.min).toBe(String(rows[0].index)); expect(range.max).toBe(String(rows[2].index + 1));
+    expect(range.value).toBe(String(rows[2].index + 1));
     expect(screen.queryByRole("button", { name: "Roll to end" })).toBeNull();
-    fireEvent.change(range, { target: { value: "1" } });
+    fireEvent.change(range, { target: { value: String(rows[0].index + 1) } });
     expect(a.moveRollback).toHaveBeenCalledWith(rows[0].index + 1);
+    // a value on an op the strip does not show (the ring's sketch) snaps to the nearest stop
+    fireEvent.change(range, { target: { value: String(rows[2].index - 1) } });
+    expect(a.moveRollback).toHaveBeenLastCalledWith(s.timeline.findIndex((op) => op.type === "component.create") + 1);
     await userEvent.click(chips[1]);
     expect(a.moveRollback).toHaveBeenCalledWith(rows[1].index + 1);
+    await userEvent.click(step);
+    expect(a.moveRollback).toHaveBeenLastCalledWith(s.timeline.findIndex((op) => op.type === "component.create") + 1);
     fireEvent.mouseEnter(chips[0]);
     expect(useUi.getState().hotFeature).toBe(extrudeId);
     fireEvent.mouseLeave(chips[0]);
     expect(useUi.getState().hotFeature).toBeNull();
+    fireEvent.mouseEnter(step);
+    expect(useUi.getState().hotFeature).toBeNull();
+  });
+
+  it("scopes to the active component: its features only, no assembly steps, and a chip for the rest that activates the root", async () => {
+    useStore.setState({ activeComponentId: rows[2].componentId });
+    render(<HistoryStrip />);
+    const chips = screen.getAllByRole("button", { name: /Base|Edges|Extrude|Outer ring/ });
+    expect(chips.map((c) => c.textContent)).toEqual([`3${rows[2].name}`]);
+    expect(chips[0].className).toContain("at");
+    const more = screen.getByRole("button", { name: "2 more in other components" });
+    expect(more.className).toContain("wb-more");
+    expect(screen.getByText("All 1 feature built")).toBeTruthy();
+    const range = screen.getByRole("slider", { name: "Rollback position" }) as HTMLInputElement;
+    expect(range.min).toBe(String(rows[2].index)); expect(range.max).toBe(String(rows[2].index + 1));
+    expect(range.value).toBe(String(rows[2].index + 1));
+    fireEvent.change(range, { target: { value: String(rows[2].index) } });
+    expect(a.moveRollback).toHaveBeenCalledWith(rows[2].index);
+    await userEvent.click(more);
+    expect(a.activateComponent).toHaveBeenCalledWith(s.doc.rootComponentId);
   });
 
   it("keeps rolled-back features as ghosts with a dashed track and offers Roll to end", async () => {

@@ -6,7 +6,10 @@ import {
   featureIdOfFace, rowForFace, faceAreaFromMesh, measurements, formatArea, formatVolume, formatBounds,
   cardParams, paramsWith, pushed, pushParamOf, cardHeight, stripState, rollbackIndexForStep,
   visiblePins, clusterKey, hasMember, chooserSize, shouldDelete, deletePrompt,
+  crumbPath, isDescendant, showCrumb, rowsInScope, moreLabel, isAssemblyStep, stepLabel, assemblySteps, stripEntries,
+  countText, stripRange, rangeValue, snapRollback, type StripEntry,
 } from "../src/ui/concepts/workbench/workbench";
+import type { OperationRecord } from "../src/core/command/types";
 import type { SolidMesh } from "../src/core/occ/kernel";
 
 const bounds = { w: 800, h: 600 };
@@ -200,5 +203,124 @@ describe("with a real session", () => {
     expect(rollbackIndexForStep(rows, 2, s.timeline.length)).toBe(rows[1].index + 1);
     expect(rollbackIndexForStep(rows, 3, s.timeline.length)).toBe(s.timeline.length);
     expect(rollbackIndexForStep([], 0, 4)).toBe(4);
+  });
+});
+
+describe("component scope: the crumb and the scoped strip", () => {
+  // root ─ Arm ─ Hand, one extrude each, in a real session (component.create ops are the assembly steps)
+  let s: ReturnType<typeof realSession>;
+  let rows: FeatureRow[];
+  let armId: string, handId: string, rootId: string;
+  beforeAll(async () => {
+    s = realSession();
+    rootId = s.doc.rootComponentId;
+    const sk = await s.dispatch("sketch.create", { plane: "XY" });
+    await s.dispatch("sketch.addRectangle", { sketch: sk.createdIds[0], corner: { x: 0, y: 0 }, opposite: { x: 40, y: 20 } });
+    await s.dispatch("feature.extrude", { sketch: sk.createdIds[0], distance: "10", name: "Base" });
+    armId = (await s.dispatch("component.create", { name: "Arm" })).createdIds[0];
+    const sk2 = await s.dispatch("sketch.create", { plane: "XY", component: armId });
+    await s.dispatch("sketch.addRectangle", { sketch: sk2.createdIds[0], corner: { x: 100, y: 0 }, opposite: { x: 140, y: 20 } });
+    await s.dispatch("feature.extrude", { sketch: sk2.createdIds[0], distance: "10", name: "Arm body" });
+    handId = (await s.dispatch("component.create", { name: "Hand", parent: armId })).createdIds[0];
+    const sk3 = await s.dispatch("sketch.create", { plane: "XY", component: handId });
+    await s.dispatch("sketch.addRectangle", { sketch: sk3.createdIds[0], corner: { x: 200, y: 0 }, opposite: { x: 240, y: 20 } });
+    await s.dispatch("feature.extrude", { sketch: sk3.createdIds[0], distance: "10", name: "Finger" });
+    rows = featureRows(s.doc, s.timeline, s.rollbackIndex, {});
+    expect(rows.map((r) => r.componentId)).toEqual([rootId, armId, handId]);
+  });
+
+  it("walks the parent chain for descendants", () => {
+    expect(isDescendant(s.doc, handId, rootId)).toBe(true);
+    expect(isDescendant(s.doc, handId, armId)).toBe(true);
+    expect(isDescendant(s.doc, armId, handId)).toBe(false);
+    expect(isDescendant(s.doc, armId, armId)).toBe(true);
+    expect(isDescendant(s.doc, "nope", rootId)).toBe(false);
+  });
+
+  it("builds the crumb path root → active, and the root alone for unknown ids", () => {
+    expect(crumbPath(s.doc, handId)).toEqual([{ id: rootId, name: "Root Component" }, { id: armId, name: "Arm" }, { id: handId, name: "Hand" }]);
+    expect(crumbPath(s.doc, armId).map((c) => c.name)).toEqual(["Root Component", "Arm"]);
+    expect(crumbPath(s.doc, rootId).map((c) => c.id)).toEqual([rootId]);
+    expect(crumbPath(s.doc, "nope").map((c) => c.id)).toEqual([rootId]);
+    // a root without a name falls back to the document id
+    const doc = { ...s.doc, components: { ...s.doc.components, [rootId]: { ...s.doc.components[rootId], name: "" } } };
+    expect(crumbPath(doc, rootId)[0].name).toBe(s.doc.id);
+    expect(showCrumb(s.doc)).toBe(true);
+    expect(showCrumb(realSession().doc)).toBe(false);
+  });
+
+  it("scopes rows to the active component and its descendants, counting the rest", () => {
+    expect(rowsInScope(rows, s.doc, rootId)).toEqual({ rows, hidden: 0 });
+    const arm = rowsInScope(rows, s.doc, armId);
+    expect(arm.rows.map((r) => r.name)).toEqual(["Arm body", "Finger"]); expect(arm.hidden).toBe(1);
+    const hand = rowsInScope(rows, s.doc, handId);
+    expect(hand.rows.map((r) => r.name)).toEqual(["Finger"]); expect(hand.hidden).toBe(2);
+    expect(moreLabel(1)).toBe("1 more in other component");
+    expect(moreLabel(2)).toBe("2 more in other components");
+  });
+
+  it("knows the assembly steps and labels them", () => {
+    expect(isAssemblyStep({ type: "component.create" })).toBe(true);
+    expect(isAssemblyStep({ type: "joint.create" })).toBe(true);
+    expect(isAssemblyStep({ type: "joint.template" })).toBe(true);
+    expect(isAssemblyStep({ type: "assembly.pattern" })).toBe(true);
+    expect(isAssemblyStep({ type: "component.connector" })).toBe(true);
+    expect(isAssemblyStep({ type: "feature.extrude" })).toBe(false);
+    expect(isAssemblyStep({ type: "sketch.create" })).toBe(false);
+    expect(isAssemblyStep({ type: "parameter.add" })).toBe(false);
+    const steps = assemblySteps(s.timeline, s.rollbackIndex, s.doc);
+    expect(steps.map((e) => e.name)).toEqual(["Arm", "Hand"]);
+    expect(steps.map((e) => e.num)).toEqual([undefined, undefined]);
+    expect(steps[0].index).toBe(s.timeline.findIndex((op) => op.type === "component.create"));
+    expect(steps.every((e) => !e.rolledBack && !e.suppressed && e.step?.type === "component.create")).toBe(true);
+    const joint = { type: "joint.create", label: "Joint", createdIds: [], opId: "j", params: {}, at: 0 } as OperationRecord;
+    expect(stepLabel(joint, s.doc)).toBe("Joint");
+    expect(stepLabel({ ...joint, label: "" }, s.doc)).toBe("joint.create");
+    expect(stepLabel({ ...joint, type: "component.create", createdIds: ["gone"] }, s.doc)).toBe("Joint");
+  });
+
+  it("merges rows and steps at the root in timeline order, rows alone below it", () => {
+    const root = stripEntries(rows, s.doc, rootId, s.timeline, s.rollbackIndex);
+    expect(root.map((e) => e.name)).toEqual(["Base", "Arm", "Arm body", "Hand", "Finger"]);
+    expect(root.map((e) => e.index)).toEqual([...root.map((e) => e.index)].sort((a, b) => a - b));
+    expect(stripEntries(rows, s.doc, armId, s.timeline, s.rollbackIndex).map((e) => e.name)).toEqual(["Arm body", "Finger"]);
+    expect(stripEntries(rows, s.doc, handId, s.timeline, s.rollbackIndex).map((e) => e.name)).toEqual(["Finger"]);
+    expect(countText(root)).toBe("3 features and 2 assembly steps");
+    expect(countText(rows)).toBe("3 features");
+    expect(countText([root[1]])).toBe("1 assembly step");
+    const st = stripState(root, s.rollbackIndex, s.timeline.length);
+    expect(st.text).toBe("All 3 features and 2 assembly steps built");
+    expect(st.chips.map((c) => c.state)).toEqual([undefined, undefined, undefined, undefined, "at"]);
+  });
+
+  it("ranges the input over the visible entries' global indices and snaps a drag to a stop", async () => {
+    const hand = stripEntries(rows, s.doc, handId, s.timeline, s.rollbackIndex);
+    expect(stripRange(hand)).toEqual({ min: rows[2].index, max: rows[2].index + 1, stops: [rows[2].index, rows[2].index + 1] });
+    const arm = stripEntries(rows, s.doc, armId, s.timeline, s.rollbackIndex);
+    const ra = stripRange(arm);
+    expect(ra.min).toBe(rows[1].index); expect(ra.max).toBe(rows[2].index + 1);
+    expect(ra.stops).toEqual([rows[1].index, rows[1].index + 1, rows[2].index + 1]);
+    // a value between two stops (a sketch op the strip does not show) snaps to the nearest, later on a tie
+    expect(snapRollback(ra, rows[1].index + 2)).toBe(rows[1].index + 1);
+    expect(snapRollback(ra, rows[2].index)).toBe(rows[2].index + 1);
+    expect(snapRollback(ra, rows[1].index)).toBe(rows[1].index);
+    // the marker at the end of the timeline clamps to the scope's max; before the scope, to its min
+    expect(rangeValue(ra, s.timeline.length)).toBe(ra.max);
+    expect(rangeValue(ra, 0)).toBe(ra.min);
+    expect(rangeValue(ra, rows[1].index + 1)).toBe(rows[1].index + 1);
+    expect(stripRange([])).toEqual({ min: 0, max: 0, stops: [] });
+    expect(snapRollback(stripRange([]), 4)).toBe(4);
+    // rolled back to before the Finger: the hand's strip has it as a ghost and reads 'at the start'
+    await s.moveRollback(rows[2].index);
+    const r2 = featureRows(s.doc, s.timeline, s.rollbackIndex, {});
+    const st = stripState(stripEntries(r2, s.doc, handId, s.timeline, s.rollbackIndex), s.rollbackIndex, s.timeline.length);
+    expect(st.chips.map((c) => c.state)).toEqual(["ghost"]);
+    expect(st.text).toMatch(/^At the start/);
+    const stRoot = stripState(stripEntries(r2, s.doc, rootId, s.timeline, s.rollbackIndex), s.rollbackIndex, s.timeline.length);
+    expect(stRoot.atRow?.name).toBe("Hand");
+    expect(stRoot.text).toBe("At Hand — new features insert here");
+    await s.moveRollback(s.timeline.length);
+    const unsorted: StripEntry[] = [{ name: "b", index: 7, opId: "b", suppressed: false, rolledBack: false }, { name: "a", index: 2, opId: "a", suppressed: false, rolledBack: false }];
+    expect(stripRange(unsorted)).toEqual({ min: 2, max: 8, stops: [2, 3, 8] });
   });
 });

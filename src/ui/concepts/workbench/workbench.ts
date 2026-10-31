@@ -9,6 +9,8 @@ import { pinOffset, clampInside, CARD_W_NARROW, type Pt, type Box } from "../../
 import { quantize, formatMagnitude, type NumberSpec } from "../../kit/numberMath";
 import type { SolidEval } from "../../../core/features";
 import type { SolidMesh, Bounds3 } from "../../../core/occ/kernel";
+import type { CadDocument } from "../../../core/document";
+import type { OperationRecord } from "../../../core/command/types";
 
 export { unionBounds, unitLabel, paramsWith };
 
@@ -228,35 +230,151 @@ export function pushParamOf(row: FeatureRow | undefined): CardParam | null {
 /** Height a feature card is assumed to have until it is measured (useCardSize): head, one row per param, foot. */
 export function cardHeight(nParams: number): number { return 58 + 34 * nParams + 52; }
 
+// ---- components: the crumb and the strip's scope ----
+
+export interface Crumb { id: string; name: string }
+
+/** Whether `id` is `ancestorId` or sits below it in the component tree (an unknown id is nobody's descendant). */
+export function isDescendant(doc: CadDocument, id: string, ancestorId: string): boolean {
+  const seen = new Set<string>();
+  for (let cur: string | null | undefined = id; cur && !seen.has(cur); cur = doc.components[cur]?.parentId) {
+    if (!doc.components[cur]) return false;
+    if (cur === ancestorId) return true;
+    seen.add(cur);
+  }
+  return false;
+}
+
+/** The path from the root component to the active one, root first. An unknown or detached active id gives the root alone.
+ *  The root crumb reads the root component's name (the document's name), falling back to the document id. */
+export function crumbPath(doc: CadDocument, activeId: string): Crumb[] {
+  const root = doc.components[doc.rootComponentId];
+  const rootCrumb: Crumb = { id: doc.rootComponentId, name: root?.name || doc.id };
+  const path: Crumb[] = [];
+  const seen = new Set<string>();
+  for (let cur: string | null | undefined = activeId; cur && !seen.has(cur) && cur !== doc.rootComponentId; cur = doc.components[cur]?.parentId) {
+    const c = doc.components[cur];
+    if (!c) return [rootCrumb];
+    seen.add(cur);
+    path.unshift({ id: c.id, name: c.name });
+    if (c.parentId == null) return [rootCrumb]; // a detached tree: not under the root
+  }
+  return [rootCrumb, ...path];
+}
+
+/** The crumb earns its space once the document has more than one component. */
+export function showCrumb(doc: CadDocument): boolean {
+  return Object.keys(doc.components).length > 1;
+}
+
+export interface ScopedRows { rows: FeatureRow[]; hidden: number }
+
+/** The rows in the active component's scope (its own and its descendants'), and how many the scope hides.
+ *  With the root active every row is in scope. */
+export function rowsInScope(rows: FeatureRow[], doc: CadDocument, activeId: string): ScopedRows {
+  const out: FeatureRow[] = [];
+  let hidden = 0;
+  for (const r of rows) {
+    if (activeId === doc.rootComponentId || isDescendant(doc, r.componentId, activeId)) out.push(r);
+    else hidden++;
+  }
+  return { rows: out, hidden };
+}
+
+/** "3 more in other components" — the chip at the end of a scoped strip. */
+export function moreLabel(hidden: number): string {
+  return `${hidden} more in other component${hidden === 1 ? "" : "s"}`;
+}
+
+/** An assembly-level step: a joint, a component or a component pattern, which belongs to no one component.
+ *  Features, sketch ops and parameter ops are not steps (the catalog's rows carry the features). */
+export function isAssemblyStep(op: Pick<OperationRecord, "type">): boolean {
+  return op.type.startsWith("joint.") || op.type.startsWith("component.") || op.type.startsWith("assembly.");
+}
+
+/** What a step chip reads: a new component by its name, anything else by the op's own label. */
+export function stepLabel(op: OperationRecord, doc: CadDocument): string {
+  if (op.type === "component.create") {
+    const c = doc.components[op.createdIds[0] ?? ""];
+    if (c) return c.name;
+  }
+  return op.label || op.type;
+}
+
+/** One stop on the strip: a feature row, or an assembly step. A FeatureRow is itself a StripEntry. */
+export interface StripEntry {
+  /** The pin / chip number of a feature; a step has none. */
+  num?: number;
+  name: string;
+  /** Global timeline index of the op. */
+  index: number;
+  opId: string;
+  /** A feature's id; a step has none. */
+  featureId?: string;
+  suppressed: boolean;
+  rolledBack: boolean;
+  error?: string;
+  /** The assembly op, for steps. */
+  step?: OperationRecord;
+}
+
+/** The assembly steps of the timeline as strip entries (shown only while the root is active). */
+export function assemblySteps(timeline: OperationRecord[], rollbackIndex: number, doc: CadDocument): StripEntry[] {
+  const out: StripEntry[] = [];
+  timeline.forEach((op, index) => {
+    if (!isAssemblyStep(op)) return;
+    out.push({ name: stepLabel(op, doc), index, opId: op.opId, suppressed: !!op.suppressed, rolledBack: index >= rollbackIndex, error: op.error, step: op });
+  });
+  return out;
+}
+
+/** The strip's entries for an active component: its rows in scope and, at the root, the assembly steps, in timeline order. */
+export function stripEntries(rows: FeatureRow[], doc: CadDocument, activeId: string, timeline: OperationRecord[], rollbackIndex: number): StripEntry[] {
+  const scoped: StripEntry[] = rowsInScope(rows, doc, activeId).rows;
+  const steps = activeId === doc.rootComponentId ? assemblySteps(timeline, rollbackIndex, doc) : [];
+  return [...scoped, ...steps].sort((a, b) => a.index - b.index);
+}
+
 // ---- history strip ----
 
-export interface StripChip { row: FeatureRow; state: "at" | "ghost" | undefined; off: boolean; err: boolean }
-export interface StripState {
-  chips: StripChip[];
-  /** Feature rows built (the range input's value). */
+export interface StripChip<T extends StripEntry = FeatureRow> { row: T; state: "at" | "ghost" | undefined; off: boolean; err: boolean }
+export interface StripState<T extends StripEntry = FeatureRow> {
+  chips: StripChip<T>[];
+  /** Entries built (before the marker). */
   built: number;
   /** Something after the marker is rolled back. */
   rolledBack: boolean;
   text: string;
-  atRow: FeatureRow | null;
+  atRow: T | null;
 }
 
-export function stripState(rows: FeatureRow[], rollbackIndex: number, timelineLength: number): StripState {
-  let atRow: FeatureRow | null = null;
+/** "3 features", "2 assembly steps", "3 features and 2 assembly steps". */
+export function countText(entries: StripEntry[]): string {
+  const features = entries.filter((e) => e.num != null).length;
+  const steps = entries.length - features;
+  const parts: string[] = [];
+  if (features) parts.push(`${features} feature${features === 1 ? "" : "s"}`);
+  if (steps) parts.push(`${steps} assembly step${steps === 1 ? "" : "s"}`);
+  return parts.join(" and ");
+}
+
+export function stripState<T extends StripEntry>(rows: T[], rollbackIndex: number, timelineLength: number): StripState<T> {
+  let atRow: T | null = null;
   for (const r of rows) if (r.index < rollbackIndex) atRow = r;
   const rolledBack = rollbackIndex < timelineLength;
-  const chips: StripChip[] = rows.map((row) => ({
+  const chips: StripChip<T>[] = rows.map((row) => ({
     row,
     state: row.rolledBack ? "ghost" : row === atRow ? "at" : undefined,
     off: row.suppressed,
     err: !!row.error,
   }));
   const built = rows.filter((r) => !r.rolledBack).length;
+  const at = (r: T) => (r.num != null ? `${r.num} · ${r.name}` : r.name);
   const text = !rows.length
     ? "No features yet"
     : rolledBack
-      ? atRow ? `At ${atRow.num} · ${atRow.name} — new features insert here` : "At the start — new features insert here"
-      : `All ${rows.length} feature${rows.length === 1 ? "" : "s"} built`;
+      ? atRow ? `At ${at(atRow)} — new features insert here` : "At the start — new features insert here"
+      : `All ${countText(rows)} built`;
   return { chips, built, rolledBack, text, atRow };
 }
 
@@ -265,4 +383,30 @@ export function rollbackIndexForStep(rows: FeatureRow[], k: number, timelineLeng
   if (!rows.length || k >= rows.length) return timelineLength;
   if (k <= 0) return rows[0].index;
   return rows[k - 1].index + 1;
+}
+
+export interface StripRange { min: number; max: number; stops: number[] }
+
+/** The range input over the visible entries, in global timeline indices: `min` builds none of them, `max` all of them,
+ *  and `stops` are `min` and the index just after each entry (where the marker sits meaningfully). No entries give 0..0. */
+export function stripRange(visible: StripEntry[]): StripRange {
+  if (!visible.length) return { min: 0, max: 0, stops: [] };
+  const sorted = [...visible].sort((a, b) => a.index - b.index);
+  const min = sorted[0].index;
+  const stops = [min, ...sorted.map((e) => e.index + 1)];
+  return { min, max: stops[stops.length - 1], stops };
+}
+
+/** The range's value for a rollback index: clamped to the visible range. */
+export function rangeValue(range: StripRange, rollbackIndex: number): number {
+  return Math.min(range.max, Math.max(range.min, rollbackIndex));
+}
+
+/** The rollback index a dragged range value means: the nearest stop (ties go to the later one), so the marker
+ *  never lands between two visible entries, on an op the strip does not show. */
+export function snapRollback(range: StripRange, value: number): number {
+  if (!range.stops.length) return value;
+  let best = range.stops[0];
+  for (const s of range.stops) if (Math.abs(s - value) <= Math.abs(best - value)) best = s;
+  return best;
 }
