@@ -358,7 +358,7 @@ describe("design space: sampler", () => {
   it("builds a variant with the two expressions replaced and nothing else shared", async () => {
     const s = await twoParamSession();
     const spec: GridSpec = { x: axisOf(s.doc.parameters[0]), y: axisOf(s.doc.parameters[1]), n: 5 };
-    const v = variantDoc(s.doc, spec, 40, 20);
+    const v = await variantDoc(s.doc, spec, 40, 20);
     expect(v).not.toBe(s.doc);
     expect(v.parameters.map((p) => p.expr)).toEqual(["40", "20", "2"]);
     expect(s.doc.parameters.map((p) => p.expr)).toEqual(["30", "15", "2"]);
@@ -416,7 +416,7 @@ describe("design space: the compared pin as a ghost", () => {
 
   it("builds the pin's variant from the pin's own parameters, whatever the map shows, and knows when they are gone", async () => {
     const s = await twoParamSession();
-    const v = variantDocForPin(s.doc, pinAt(20, 40, "h", "w"));
+    const v = await variantDocForPin(s.doc, pinAt(20, 40, "h", "w"));
     expect(v).not.toBe(s.doc);
     expect(resolveParameters(v.parameters).scope).toMatchObject({ w: 40, h: 20, free: 2 });
     expect(s.doc.parameters.map((p) => p.expr)).toEqual(["30", "15", "2"]); // the document itself is untouched

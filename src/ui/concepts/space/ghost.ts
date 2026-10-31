@@ -11,7 +11,7 @@ import { variantDoc } from "./sampler";
 import { docSignature, formatAxisValue, type Axis, type Pin } from "./space";
 
 /** The pin's design: the document with the pin's two parameters set to its values. */
-export function variantDocForPin(doc: CadDocument, pin: Pick<Pin, "x" | "y" | "xName" | "yName">): CadDocument {
+export function variantDocForPin(doc: CadDocument, pin: Pick<Pin, "x" | "y" | "xName" | "yName">): Promise<CadDocument> {
   return variantDoc(doc, { x: { name: pin.xName }, y: { name: pin.yName } }, pin.x, pin.y);
 }
 
@@ -49,7 +49,7 @@ export interface GhostResult {
 /** Evaluate the pin's variant: every body that built (surface bodies included), in feature order. */
 export async function evaluateVariant(backend: GeometryBackend, doc: CadDocument, pin: Pick<Pin, "x" | "y" | "xName" | "yName">): Promise<GhostResult> {
   try {
-    const { solids } = await backend.evaluate(variantDocForPin(doc, pin));
+    const { solids } = await backend.evaluate(await variantDocForPin(doc, pin));
     const built = Object.values(solids).filter((s) => s.mesh);
     const failed = Object.values(solids).find((s) => s.error && !s.mesh);
     if (!built.length) return failed ? { solids: [], status: "error", error: failed.error } : { solids: [], status: "empty" };
