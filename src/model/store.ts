@@ -76,6 +76,17 @@ export type InlineEdit =
   | { mode: "new"; params: Record<string, unknown>; value: string; screen: { x: number; y: number } }
   | { mode: "edit"; cid: string; value: string; screen: { x: number; y: number } };
 
+export interface FaceSelection {
+  /** Body (feature id) the face belongs to; "" when the mesh carried no id. */
+  bodyId: string;
+  /** Topological face name (e.g. "extrude3:end"), when the mesh carries names. */
+  faceName?: string;
+  point: Vec3;
+  normal: Vec3;
+  /** Client coordinates of the click, where face verbs anchor. */
+  screen: { x: number; y: number };
+}
+
 export interface Toast {
   kind: "error" | "info";
   text: string;
@@ -101,12 +112,16 @@ export interface AppState {
   constructionMode: boolean;
   selection: string[];
   hover: string | null;
+  /** The body face picked by a click in model mode (the "verbs on a face" anchor). */
+  faceSelection: FaceSelection | null;
   showPlanes: boolean;
   showGrid: boolean;
   /** Draw hidden bodies as faint, unpickable ghosts. */
   showHiddenGhosts: boolean;
   /** Surface-quality display: zebra / draft / curvature map, and curvature combs. */
   analysis: AnalysisView;
+  /** Another display (the lens) needs curvature data while the analysis mode itself is off. */
+  curvatureRequested: boolean;
   /** Per-body curvature and comb data for the current solids (when the display needs it). */
   analysisData: Record<string, { curvature: Float32Array; combs: Float32Array; vertices: number }>;
   showConstraints: boolean;
@@ -168,12 +183,16 @@ export interface AppState {
   select: (ids: string[], additive?: boolean) => void;
   toggleSelect: (id: string) => void;
   clearSelection: () => void;
+  /** Select the body face under a world point (null clears); `screen` is where it was clicked. */
+  selectFace: (point: Vec3 | null, normal?: Vec3, screen?: { x: number; y: number }, bodyId?: string) => void;
   setHover: (id: string | null) => void;
   toggleShowPlanes: () => void;
   toggleShowGrid: () => void;
   toggleShowHiddenGhosts: () => void;
   /** Change the surface-quality display; curvature/combs are computed in the geometry backend. */
   setAnalysis: (patch: Partial<AnalysisView>) => Promise<void>;
+  /** Ask for curvature data regardless of the analysis mode (the lens's curvature view); off releases it. */
+  requestCurvature: (on: boolean) => Promise<void>;
   /** Show or hide bodies (feature ids) / sketches / components / datum planes. Undoable. */
   setVisibility: (ids: string[], visible: boolean) => Promise<void>;
   /** Show only these (hide every other body and sketch); null shows everything. */
@@ -184,6 +203,8 @@ export interface AppState {
   setGridSnap: (on: boolean) => void;
   toggleShowConstraints: () => void;
   dismissToast: () => void;
+  /** Write the status-bar line (the intent line reports what it ran). */
+  setMessage: (text: string) => void;
 
   // sketch lifecycle
   /** "Create Sketch" tool armed: a viewport click on a plane/face starts a sketch. */
@@ -365,7 +386,7 @@ export const useStore = create<AppState>((set, get) => {
   // geometry backend — only while a display that shows them is on.
   const refreshAnalysis = async () => {
     const a = get().analysis;
-    if (a.mode !== "curvature" && !a.combs) { if (Object.keys(get().analysisData).length) bump({ analysisData: {} }); return; }
+    if (a.mode !== "curvature" && !a.combs && !get().curvatureRequested) { if (Object.keys(get().analysisData).length) bump({ analysisData: {} }); return; }
     if (!get().kernelReady || !Object.keys(get().session.doc.features).length) return;
     try {
       const res = await geometry.analyze(get().session.doc, { combs: a.combs });
@@ -574,6 +595,7 @@ export const useStore = create<AppState>((set, get) => {
     showGrid: true,
     showHiddenGhosts: false,
     analysis: { mode: "none", stripes: 12, draftDeg: 1, pull: { x: 0, y: 0, z: 1 }, quantity: "mean", combs: false },
+    curvatureRequested: false,
     analysisData: {},
     section: null,
     gridSize: 10,
@@ -585,6 +607,7 @@ export const useStore = create<AppState>((set, get) => {
     transientDimLabel: null,
     inlineEdit: null,
     contextMenu: null,
+    faceSelection: null,
     solids: {},
     kernelReady: false,
     motionStatus: "idle",
@@ -650,12 +673,23 @@ export const useStore = create<AppState>((set, get) => {
     toggleSelect: (id) =>
       set((s) => ({ selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id] })),
     clearSelection: () => set({ selection: [] }),
+    selectFace: (point, normal, screen, bodyId) => {
+      if (!point || !normal) { if (get().faceSelection) set({ faceSelection: null }); return; }
+      const meshes = Object.values(get().solids).filter((s) => s.mesh).map((s) => ({ featureId: s.featureId, mesh: s.mesh! }));
+      const hit = pickFace(meshes, point);
+      set({ faceSelection: { bodyId: bodyId ?? hit?.featureId ?? "", faceName: hit?.faceName, point, normal, screen: screen ?? { x: 0, y: 0 } } });
+    },
     setHover: (id) => set({ hover: id }),
     toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
     toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
     toggleShowHiddenGhosts: () => set((s) => ({ showHiddenGhosts: !s.showHiddenGhosts })),
     setAnalysis: async (patch) => {
       set((s) => ({ analysis: { ...s.analysis, ...patch } }));
+      await refreshAnalysis();
+    },
+    requestCurvature: async (on) => {
+      if (get().curvatureRequested === on) return;
+      set({ curvatureRequested: on });
       await refreshAnalysis();
     },
     setVisibility: async (ids, visible) => {
@@ -675,6 +709,7 @@ export const useStore = create<AppState>((set, get) => {
     setGridSnap: (on) => set({ gridSnap: on }),
     toggleShowConstraints: () => set((s) => ({ showConstraints: !s.showConstraints })),
     dismissToast: () => set({ toast: null }),
+    setMessage: (text) => set({ lastMessage: text }),
 
     setSketchPlacing: (on) => set({ sketchPlacing: on }),
     startSketch: async (plane, offset) => {

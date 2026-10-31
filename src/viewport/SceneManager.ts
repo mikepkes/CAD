@@ -23,6 +23,8 @@ function rigidMat(R: Rigid): THREE.Matrix4 {
 import { createMaterial, MaterialSpec, WoodFrame } from "./material";
 import type { ThreadDecal } from "../core/document";
 import { fitDistance, orbitDirection } from "./orbitCamera";
+import { LensPass, type LensSpec } from "./lensPass";
+import { WORLD_VERT, curvatureColors, draftFrag, zebraFrag } from "./analysisShaders";
 
 /** Options for an offscreen still (render_view). A free camera — `azimuthDeg` /
  *  `elevationDeg`, see orbitDirection — overrides the named `view`. */
@@ -217,6 +219,9 @@ export class SceneManager {
   /** Procedural thread normal maps, cached by their parameters (they are costly
    *  to build and re-used across re-renders). */
   private threadTexCache = new Map<string, THREE.DataTexture>();
+  /** The Lens (concept UI): a masked analysis pass drawn after each frame. All
+   *  of its logic lives in lensPass.ts; this only holds the spec. */
+  private lensPass = new LensPass();
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -489,7 +494,40 @@ export class SceneManager {
     }
     this.lastPixelScale = scale;
     this.renderer.render(this.scene, this.camera);
+    // Lens: redraw the solids under the lens with the analysis material (no-op when unset).
+    this.lensPass.render(this.renderer, this.scene, this.camera, this.solidsGroup, this.lastData?.solids);
+    this.noticeCameraChange();
   };
+
+  /** Show analysis under a lens / wipe (null clears it). See lensPass.ts. */
+  setLens(spec: LensSpec | null) { this.lensPass.setSpec(spec); }
+
+  // Screen-anchored HTML (pins, cards, dimensions) follows the camera through
+  // this: listeners run once per frame in which the view actually moved.
+  private cameraListeners = new Set<() => void>();
+  private cameraStamp = "";
+  private noticeCameraChange() {
+    if (!this.cameraListeners.size) return;
+    const c = this.camera as THREE.PerspectiveCamera & THREE.OrthographicCamera;
+    const m = c.matrixWorld.elements;
+    const el = this.renderer.domElement;
+    const stamp = `${m[12].toFixed(3)},${m[13].toFixed(3)},${m[14].toFixed(3)},${m[0].toFixed(4)},${m[5].toFixed(4)},${m[10].toFixed(4)},${m[1].toFixed(4)},${(c.zoom ?? 1).toFixed(4)},${c.fov ?? 0},${el.clientWidth}x${el.clientHeight}`;
+    if (stamp === this.cameraStamp) return;
+    this.cameraStamp = stamp;
+    for (const fn of this.cameraListeners) fn();
+  }
+
+  /** Run `fn` after every frame in which the camera (or the canvas size) changed. Returns the unsubscribe. */
+  onCameraChange(fn: () => void): () => void {
+    this.cameraListeners.add(fn);
+    return () => { this.cameraListeners.delete(fn); };
+  }
+
+  /** The camera's position and view direction in world space. */
+  cameraPose(): { position: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number } } {
+    const p = this.camera.position, d = this.camera.getWorldDirection(new THREE.Vector3());
+    return { position: { x: p.x, y: p.y, z: p.z }, direction: { x: d.x, y: d.y, z: d.z } };
+  }
 
   /** The 3D mouse's current deflection (from WebHID or the desktop's HID reader). */
   setNavigationInput(state: SpaceMouseState) { this.navInput = state; }
@@ -571,6 +609,7 @@ export class SceneManager {
     this.disposed = true;
     for (const t of this.threadTexCache.values()) t.dispose();
     this.threadTexCache.clear();
+    this.lensPass.dispose();
     this.resizeObs?.disconnect();
     this.renderer.domElement.removeEventListener("wheel", this.onWheel, { capture: true } as EventListenerOptions);
     window.removeEventListener("resize", this.onResize);
@@ -646,7 +685,7 @@ export class SceneManager {
       const fh = faceHits[0], ph = planeHits[0];
       if (fh && fh.face && (!ph || fh.distance <= ph.distance)) {
         const n = fh.face.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
-        return { type: "face", world: fh.point, normal: { x: n.x, y: n.y, z: n.z } };
+        return { type: "face", id: fh.object.userData.bodyId as string | undefined, world: fh.point, normal: { x: n.x, y: n.y, z: n.z } };
       }
       if (ph) return { type: "plane", id: ph.object.userData.planeId, world: ph.point };
       return { type: "empty" };
@@ -849,6 +888,24 @@ export class SceneManager {
     this.frameWorld(pts.map((p) => this.worldPt(plane, p.x, p.y)));
   }
 
+  /** Turn (animated) to look straight at a face: the camera moves onto the face's
+   *  normal through `point`, keeping its distance; the up vector is kept unless it
+   *  is (nearly) parallel to the normal. Model mode only. */
+  lookAtFace(point: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) {
+    if (this.lastData?.mode === "sketch") return;
+    const n = new THREE.Vector3(normal.x, normal.y, normal.z);
+    if (n.lengthSq() < 1e-12) return;
+    n.normalize();
+    const target = new THREE.Vector3(point.x, point.y, point.z);
+    const dist = Math.max(this.camOff().length(), 1);
+    let up = this.camera.up.clone();
+    if (Math.abs(up.dot(n)) > 0.95) up = Math.abs(n.z) > 0.95 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+    this.beginTween({
+      from: { off: this.camOff(), target: this.controls.target.clone(), up: this.camera.up.clone(), zoom: (this.camera as THREE.OrthographicCamera).zoom ?? 1 },
+      to: { off: n.multiplyScalar(dist), target, up, zoom: (this.camera as THREE.OrthographicCamera).zoom ?? 1 },
+    });
+  }
+
   /** Turn (animated) to a standard view of the model, framed: iso, front,
    *  back, top, bottom, right, left. Model mode only (a sketch keeps its plane). */
   viewFrom(view: string) {
@@ -954,73 +1011,26 @@ export class SceneManager {
 
   /** The material for a surface-quality display mode, or null to draw normally. */
   private analysisMaterial(a: AnalysisView, s: SolidView, geo: THREE.BufferGeometry): THREE.Material | null {
-    const worldVert = `
-      varying vec3 vN; varying vec3 vW;
-      #include <clipping_planes_pars_vertex>
-      void main() {
-        vec4 w = modelMatrix * vec4(position, 1.0);
-        vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
-        vec4 mvPosition = viewMatrix * w;
-        gl_Position = projectionMatrix * mvPosition;
-        #include <clipping_planes_vertex>
-      }`;
+    // The GLSL is shared with the lens's masked pass (viewport/analysisShaders.ts).
     if (a.mode === "zebra") {
-      // Reflected environment stripes: the stripes break at a crease (G0),
-      // kink at a tangent-only seam (G1) and flow through a G2 one.
       return new THREE.ShaderMaterial({
         uniforms: { stripes: { value: Math.max(2, a.stripes) } },
-        vertexShader: worldVert,
-        fragmentShader: `
-          uniform float stripes; varying vec3 vN; varying vec3 vW;
-          void main() {
-            vec3 N = normalize(vN); if (!gl_FrontFacing) N = -N;
-            vec3 V = normalize(cameraPosition - vW);
-            vec3 R = reflect(-V, N);
-            float t = fract(atan(R.y, R.x) / 6.2831853 * stripes + R.z * stripes * 0.5);
-            float band = smoothstep(0.47, 0.5, t) - smoothstep(0.97, 1.0, t);
-            float shade = 0.35 + 0.65 * abs(dot(N, V));
-            gl_FragColor = vec4(vec3(mix(0.05, 1.0, band)) * shade, 1.0);
-          }`,
+        vertexShader: WORLD_VERT,
+        fragmentShader: zebraFrag(),
         side: THREE.DoubleSide,
       });
     }
     if (a.mode === "draft") {
-      // Faces that draft out of the mould along the pull direction are green,
-      // undercuts red, and walls steeper than the draft angle yellow.
       const p = new THREE.Vector3(a.pull.x, a.pull.y, a.pull.z).normalize();
       return new THREE.ShaderMaterial({
         uniforms: { pull: { value: p }, draft: { value: Math.sin((a.draftDeg * Math.PI) / 180) } },
-        vertexShader: worldVert,
-        fragmentShader: `
-          uniform vec3 pull; uniform float draft; varying vec3 vN; varying vec3 vW;
-          void main() {
-            vec3 N = normalize(vN); if (!gl_FrontFacing) N = -N;
-            float d = dot(N, pull);
-            vec3 c = d >= draft ? vec3(0.27, 0.78, 0.38) : d <= -draft ? vec3(0.86, 0.27, 0.25) : vec3(0.93, 0.78, 0.25);
-            float shade = 0.45 + 0.55 * abs(dot(N, normalize(cameraPosition - vW)));
-            gl_FragColor = vec4(c * shade, 1.0);
-          }`,
+        vertexShader: WORLD_VERT,
+        fragmentShader: draftFrag(),
         side: THREE.DoubleSide,
       });
     }
     if (a.mode === "curvature" && s.curvature && s.curvature.length === (s.positions.length / 3) * 2) {
-      // Diverging map: blue concave, white flat, red convex, scaled to the
-      // 98th percentile so one sharp fillet doesn't wash out the rest.
-      const n = s.positions.length / 3;
-      const q = new Float32Array(n);
-      for (let i = 0; i < n; i++) {
-        const k1 = s.curvature[i * 2], k2 = s.curvature[i * 2 + 1];
-        q[i] = a.quantity === "gaussian" ? k1 * k2 : a.quantity === "max" ? k1 : a.quantity === "min" ? k2 : (k1 + k2) / 2;
-      }
-      const sorted = Array.from(q, Math.abs).sort((x, y) => x - y);
-      const range = Math.max(1e-9, sorted[Math.floor(0.98 * (sorted.length - 1))] ?? 0);
-      const colors = new Float32Array(n * 3);
-      for (let i = 0; i < n; i++) {
-        const t = Math.max(-1, Math.min(1, q[i] / range));
-        const [r, g, b] = t >= 0 ? [1, 1 - t, 1 - t] : [1 + t, 1 + t, 1];
-        colors.set([r, g, b], i * 3);
-      }
-      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(curvatureColors(s.curvature, a.quantity), 3));
       return new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0, roughness: 0.6, side: THREE.DoubleSide });
     }
     return null;
@@ -1053,6 +1063,7 @@ export class SceneManager {
     }
     const mesh = new THREE.Mesh(geo, mat);
     if (s.ghost) mesh.userData.ghost = true; // drawn, but never picked
+    if (s.id) mesh.userData.bodyId = s.id; // so a face pick names its body
     this.solidsGroup.add(mesh);
     if (analysis?.combs && s.combs?.length && !faded) {
       const cg = new THREE.BufferGeometry();
@@ -1085,6 +1096,7 @@ export class SceneManager {
         egeo,
         new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1, clippingPlanes: clip ?? undefined })
       );
+      eseg.userData.edges = true; // the body's B-rep edges (the lens redraws these)
       this.solidsGroup.add(eseg);
     }
 

@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ViewportOverlay } from "./kit/ViewportOverlay";
 import { SceneManager, ViewData } from "../viewport/SceneManager";
 import { Interactions } from "../viewport/interactions";
 import { setActiveScene } from "../viewport/sceneRef";
@@ -154,7 +155,7 @@ function buildExtrudeRegions(s: AppState): ViewData["extrudeRegions"] {
   return { plane: resolveSketchPlane(sk), regions };
 }
 
-export function Viewport() {
+function ViewportInner({ overlays }: { overlays?: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -210,8 +211,14 @@ export function Viewport() {
     <div className="viewport" ref={containerRef}>
       <InlineDimensionEditor />
       <ContextMenu />
+      <ViewportOverlay>{overlays}</ViewportOverlay>
     </div>
   );
+}
+
+/** Screen-anchored concept pieces (pins, cards, lens) drawn over the 3D view. */
+export function Viewport(p: { overlays?: ReactNode } = {}) {
+  return <ViewportInner overlays={p.overlays} />;
 }
 
 /** Small floating input for placing a new dimension or editing one in place. */

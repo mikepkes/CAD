@@ -271,6 +271,22 @@ body {
   flex: 1;
   position: relative;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* the 3D view and everything floating over it; the history strip docks under it */
+.center-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.center-view > .k-panel-toggle {
+  right: 36px; /* clear of the side-panel collapse button */
+}
+.center-dock {
+  flex: none;
+  max-height: 40%;
+  overflow: auto;
 }
 .viewport {
   position: absolute;
@@ -417,6 +433,11 @@ body {
 .side.right {
   border-right: none;
   border-left: 1px solid var(--line);
+}
+.side.right .k-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 .side.left.collapsed {
   margin-left: -272px;

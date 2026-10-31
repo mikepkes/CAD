@@ -1,0 +1,48 @@
+/* Layout for the Ledger's own elements only. Colours, radii and control sizes
+   come from kit.css (--k-*) and the app tokens (--bg, --panel, --line, --text,
+   --text-dim); nothing new is defined here. */
+
+.ledger { display: flex; flex-direction: column; gap: 18px; padding: 12px 14px; font-size: 13.5px; line-height: 1.7; color: var(--text); }
+.ledger-head { display: flex; flex-direction: column; gap: 2px; }
+.ledger-title { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.3; }
+.ledger-section { display: flex; flex-direction: column; gap: 6px; }
+.ledger-section > h3 { margin: 0 0 2px; }
+.ledger-empty { margin: 0; font-size: 12.5px; }
+
+/* ---- the prose ---- */
+.ledger-prose { gap: 2px; }
+.ledger-row {
+  position: relative;
+  margin: 0;
+  padding: 4px 8px 4px 34px;
+  border-radius: var(--k-radius-sm);
+  border: 1px solid transparent;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.ledger-row .ledger-text { flex: 1; min-width: 0; }
+.ledger-row .ledger-num { position: absolute; left: 10px; top: 5px; color: var(--k-accent); }
+.ledger-row.ghost { opacity: 0.6; border-style: dashed; border-color: var(--k-accent-dim); }
+.ledger-row.ghost .ledger-num { color: var(--k-accent-dim); }
+.ledger-row.off .ledger-text { text-decoration: line-through; }
+.ledger-row.err { border-color: var(--k-bad); }
+.ledger-row.err .ledger-num { color: var(--k-bad); }
+.ledger-ref { border-bottom: 1px dotted var(--text-dim); }
+.ledger-mass { flex: none; white-space: nowrap; }
+
+/* ---- intents ---- */
+.ledger-intents { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ledger-intent { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: var(--k-radius-sm); }
+.ledger-intent-text { flex: 1; min-width: 0; }
+.ledger-glyph { flex: none; width: 18px; text-align: center; font-family: var(--k-mono); }
+.ledger-glyph.ok { color: var(--k-ok); }
+.ledger-glyph.bad { color: var(--k-bad); }
+.ledger-now { flex: none; white-space: nowrap; }
+.ledger-add { display: grid; grid-template-columns: 1fr 96px auto; gap: 6px; align-items: center; margin-top: 4px; }
+.ledger-add .ledger-reject { grid-column: 1 / -1; font-size: 12px; color: var(--k-bad); }
+
+/* ---- suggestions (tracked changes from the agent): kit Cards, variant "agent" / "inline" ---- */
+.ledger-suggestion-text { line-height: 1.5; }
+.ledger-suggestion-actions { display: flex; gap: 6px; }
+.ledger-confirm { font-size: 12px; }
