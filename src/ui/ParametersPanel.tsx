@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useStore } from "../model/store";
 import { isValidParamName } from "../core/parameters";
 import type { Parameter } from "../core/document";
+import { askText } from "./kit/askDialog";
 
 /** The control shown for a parameter's value: a checkbox for a yes/no switch, a dropdown when it has named
  *  choices or a list of acceptable values, a slider when it has both extents, else the raw
@@ -241,8 +242,7 @@ function ConfigurationsTable() {
         <span className="param-row-btns">
           <button className="icon-btn" title="Paste a table (CSV / tab-separated): header “name, param…”, one row per configuration" onClick={() => setPasting(!pasting)}>⎘</button>
           <button className="icon-btn" title="Save the current parameter values as a new configuration" onClick={() => {
-            const name = prompt("Name for this configuration", `Config ${configs.length + 1}`);
-            if (name?.trim()) void create(name.trim());
+            void askText({ title: "New configuration", label: "Name", initial: `Config ${configs.length + 1}`, confirmLabel: "Create" }).then((name) => { if (name) void create(name); });
           }}>＋</button>
         </span>
       </div>

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useDialog } from "../../src/ui/kit/askDialog";
 import { realSession } from "../helpers";
 import type { CadSession } from "../../src/core/command/session";
 
@@ -181,19 +182,20 @@ describe("FeatureCard", () => {
 
   it("has the history verbs in its foot and closes", async () => {
     useUi.setState({ openFeature: rows[1].featureId });
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const ask = vi.spyOn(useDialog.getState(), "ask").mockResolvedValue(false);
     render(<FeatureCard />);
     await userEvent.click(screen.getByRole("button", { name: "Roll back to here" }));
     expect(a.moveRollback).toHaveBeenCalledWith(rows[1].index);
     await userEvent.click(screen.getByRole("button", { name: "Suppress" }));
     expect(a.suppressOperation).toHaveBeenCalledWith(rows[1].opId, true);
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(ask).toHaveBeenCalledWith(expect.objectContaining({ title: "Delete feature", danger: true }));
     expect(a.deleteOperation).not.toHaveBeenCalled();
-    confirm.mockReturnValue(true);
+    ask.mockResolvedValue(true);
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(a.deleteOperation).toHaveBeenCalledWith(rows[1].opId);
     expect(useUi.getState().openFeature).toBeNull();
-    confirm.mockRestore();
+    ask.mockRestore();
     act(() => useUi.setState({ openFeature: rows[1].featureId }));
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(useUi.getState().openFeature).toBeNull();

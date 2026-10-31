@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
-import { render, fireEvent } from "@testing-library/react";
+import { render, fireEvent, waitFor, act } from "@testing-library/react";
+import { useDialog } from "../../src/ui/kit/askDialog";
 import { realSession } from "../helpers";
 import type { CadSession } from "../../src/core/command/session";
 import { useStore } from "../../src/model/store";
@@ -152,21 +153,22 @@ describe("feature card", () => {
     expect(useUi.getState().openFeature).toBe(rows[2].featureId);
   });
 
-  it("rolls back to, suppresses and deletes the open feature (asking first)", () => {
+  it("rolls back to, suppresses and deletes the open feature (asking first)", async () => {
     useUi.setState({ openFeature: rows[1].featureId });
     key("r");
     expect(a.moveRollback).toHaveBeenCalledWith(rows[1].index);
     key("h");
     expect(a.suppressOperation).toHaveBeenCalledWith(rows[1].opId, true);
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     key("Delete");
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(useDialog.getState().current).toMatchObject({ kind: "confirm", title: "Delete feature", danger: true });
+    act(() => useDialog.getState().cancel());
+    await Promise.resolve();
     expect(a.deleteOperation).not.toHaveBeenCalled();
-    confirm.mockReturnValue(true);
     key("Backspace");
-    expect(a.deleteOperation).toHaveBeenCalledWith(rows[1].opId);
+    const req = useDialog.getState().current;
+    act(() => { if (req?.kind === "confirm") req.settle(true); });
+    await waitFor(() => expect(a.deleteOperation).toHaveBeenCalledWith(rows[1].opId));
     expect(useUi.getState().openFeature).toBeNull();
-    confirm.mockRestore();
   });
 
   it("needs the workbench panel (the card shows only with it)", () => {

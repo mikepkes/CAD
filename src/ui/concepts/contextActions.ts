@@ -15,6 +15,7 @@ import { createEditQueue } from "../kit/editQueue";
 import { pushEdit, rowForFace, shouldDelete } from "./workbench/workbench";
 import { useLens, MODES, type LensMode } from "./lens/lens";
 import { cycleFeature, cycleRows, historyRange, nextLensSize, otherShape, parentComponent, stepRollback } from "./contextActions.logic";
+import { ask } from "../kit/askDialog";
 
 const st = () => useStore.getState();
 const ui = () => useUi.getState();
@@ -64,9 +65,9 @@ export function lookAtFace(sel: Pick<FaceSelection, "point" | "normal">): void {
   window.dispatchEvent(new CustomEvent("chisel:lookAt", { detail: { point: sel.point, normal: sel.normal } }));
 }
 
-/** Delete a feature after asking (the feature card's Delete): closes its card first. Returns whether it was deleted. */
-export function deleteFeature(row: Pick<FeatureRow, "name" | "opId">): boolean {
-  if (!shouldDelete(row, typeof confirm === "function" ? confirm : undefined)) return false;
+/** Delete a feature after asking in the app (the feature card's Delete): closes its card first. Resolves to whether it was deleted. */
+export async function deleteFeature(row: Pick<FeatureRow, "name" | "opId">): Promise<boolean> {
+  if (!(await shouldDelete(row, (text) => ask({ title: "Delete feature", text, confirmLabel: "Delete", danger: true })))) return false;
   ui().setOpenFeature(null);
   void st().deleteOperation(row.opId);
   return true;
@@ -170,7 +171,7 @@ export const CONTEXT_ACTIONS: HotkeyAction[] = [
   {
     id: "feature.delete", label: "Delete feature", context: "feature", defaultPrimary: "delete", defaultSecondary: "backspace",
     when: () => !!openRow(),
-    run: () => { const row = openRow(); if (row) deleteFeature(row); },
+    run: () => { const row = openRow(); if (row) void deleteFeature(row); },
   },
 
   // ---- lens (the lens panel on) ----

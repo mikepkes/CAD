@@ -157,11 +157,11 @@ describe("with a real session", () => {
     expect(hasMember(members, null)).toBe(false);
     expect(chooserSize(3).h).toBeGreaterThan(chooserSize(1).h);
   });
-  it("deletes only when the asker agrees (and without an asker)", () => {
+  it("deletes only when the asker agrees (and without an asker)", async () => {
     expect(deletePrompt(rows[0])).toContain(rows[0].name);
-    expect(shouldDelete(rows[0], () => false)).toBe(false);
-    expect(shouldDelete(rows[0], () => true)).toBe(true);
-    expect(shouldDelete(rows[0], undefined)).toBe(true);
+    expect(await shouldDelete(rows[0], () => false)).toBe(false);
+    expect(await shouldDelete(rows[0], async () => true)).toBe(true);
+    expect(await shouldDelete(rows[0], undefined)).toBe(true);
   });
   it("builds editOperation params with one value changed as text", () => {
     const params = paramsWith(rows[0], "distance", 25.5);
