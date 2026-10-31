@@ -5,9 +5,9 @@
 
 import { create } from "zustand";
 
-export type ConceptPanel = "workbench" | "ledger" | "space" | "lens" | "intent";
-/** Which tab the right side panel shows. Ledger and Space exist only while their panel is on. */
-export type RightTab = "inspector" | "ledger" | "space";
+export type ConceptPanel = "workbench" | "ledger" | "space" | "lens" | "intent" | "mechanism";
+/** Which tab the right side panel shows. Ledger, Space and Mechanism exist only while their panel is on. */
+export type RightTab = "inspector" | "ledger" | "space" | "mechanism";
 
 export interface UiState {
   /** Feature whose card is open on the part (the pin / chip / sentence in focus). */
@@ -30,7 +30,7 @@ export interface UiState {
 
 const KEY = "chisel.ui.panels.v1";
 const TAB_KEY = "chisel.ui.rightTab.v1";
-const DEFAULT_PANELS: Record<ConceptPanel, boolean> = { workbench: true, ledger: false, space: false, lens: false, intent: true };
+const DEFAULT_PANELS: Record<ConceptPanel, boolean> = { workbench: true, ledger: false, space: false, lens: false, intent: true, mechanism: false };
 
 function loadPanels(): Record<ConceptPanel, boolean> {
   try {
@@ -42,7 +42,7 @@ function loadPanels(): Record<ConceptPanel, boolean> {
 function loadTab(panels: Record<ConceptPanel, boolean>): RightTab {
   try {
     const raw = typeof localStorage !== "undefined" ? localStorage.getItem(TAB_KEY) : null;
-    return rightTabFor(raw === "ledger" || raw === "space" ? raw : "inspector", panels);
+    return rightTabFor(raw === "ledger" || raw === "space" || raw === "mechanism" ? raw : "inspector", panels);
   } catch { return "inspector"; }
 }
 
@@ -51,9 +51,9 @@ export function rightTabFor(tab: RightTab, panels: Record<ConceptPanel, boolean>
   return tab === "inspector" || panels[tab] ? tab : "inspector";
 }
 
-/** The right tab after a panel toggle: turning Ledger/Space on shows it; turning the shown one off returns to the inspector. */
+/** The right tab after a panel toggle: turning Ledger/Space/Mechanism on shows it; turning the shown one off returns to the inspector. */
 export function rightTabAfterToggle(tab: RightTab, p: ConceptPanel, on: boolean, panels: Record<ConceptPanel, boolean>): RightTab {
-  if ((p === "ledger" || p === "space") && on) return p;
+  if ((p === "ledger" || p === "space" || p === "mechanism") && on) return p;
   return rightTabFor(tab, panels);
 }
 

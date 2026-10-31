@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   lensRadius, initialPosition, clampLens, frameOf, inLens, countInside, handlePos, dragTo, orientUp, overhangClass,
-  hudPlacement, toLensSpec, legendFor, readoutsFor, arrowDelta, boundsCentre, bodyCentres, hasCurvature, MODES, useLens, DEFAULT_LENS,
+  hudPlacement, toLensSpec, legendFor, readoutsFor, arrowDelta, boundsCentre, bodyCentres, hasCurvature, MODES, useLens, DEFAULT_LENS, strainSummary,
 } from "../src/ui/concepts/lens/lens";
-import { curvatureColors, OVERHANG_RED_SIN } from "../src/viewport/lensPass";
+import { curvatureColors, OVERHANG_RED_SIN, STRAIN_COLORS, packStrain } from "../src/viewport/lensPass";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const B = { w: 800, h: 600 };
 const A = { stripes: 12, draftDeg: 1, pull: { x: 0, y: 0, z: 1 }, quantity: "mean" as const };
@@ -109,9 +111,44 @@ describe("spec, legend and readouts", () => {
     const spec = toLensSpec({ mode: "overhang", orient: "back" }, f, A);
     expect(spec).toEqual({ mode: "overhang", shape: "wipe", x: 1, y: 2, r: 3, wipeX: 4, up: { x: 0, y: -1, z: 0 }, stripes: 12, draftDeg: 1, pull: { x: 0, y: 0, z: 1 }, quantity: "mean" });
   });
-  it("offers the five modes and no stress", () => {
-    expect(MODES.map((m) => m.key)).toEqual(["zebra", "draft", "curvature", "xray", "overhang"]);
+  it("offers six modes: strain (read off the flexure model) but no stress", () => {
+    // Strain is honest where a stress mode would not be: it paints only compliant
+    // mechanisms' flexures, with the strain the flexure solver already computes.
+    expect(MODES.map((m) => m.key)).toEqual(["zebra", "draft", "curvature", "xray", "overhang", "strain"]);
     expect(MODES.some((m) => /stress/i.test(m.label))).toBe(false);
+  });
+  it("puts the strain field in the spec only in strain mode", () => {
+    const f = { shape: "lens" as const, x: 1, y: 2, r: 3, wipeX: 4 };
+    const seg = [{ joint: "j", a: { x: 0, y: 0, z: 0 }, b: { x: 1, y: 0, z: 0 }, n: { x: 0, y: 0, z: 1 }, radius: 2, axial: 7, ua: 0.2, ub: 0.4 }];
+    expect(toLensSpec({ mode: "strain", orient: "standing" }, f, A, seg).strain).toBe(seg);
+    expect(toLensSpec({ mode: "strain", orient: "standing" }, f, A).strain).toEqual([]);
+    expect("strain" in toLensSpec({ mode: "zebra", orient: "standing" }, f, A, seg)).toBe(false);
+  });
+  it("packs strain segments three texels each, a missing limit as -1", () => {
+    const seg = { joint: "j", a: { x: 1, y: 2, z: 3 }, b: { x: 4, y: 5, z: 6 }, n: { x: 0, y: 0, z: 1 }, radius: 2, axial: 7, ua: 0.5, ub: NaN };
+    expect(Array.from(packStrain([seg]))).toEqual([1, 2, 3, 0.5, 4, 5, 6, -1, 0, 0, 7, 2]);
+    expect(packStrain([]).length).toBe(12); // never an empty texture
+  });
+  it("reads out the worst flexure for the strain lens", () => {
+    const o = { bodiesInside: 0, orient: "standing" as const, hasCurvature: false };
+    expect(readoutsFor("strain", A, o)[0]).toMatchObject({ label: "Flexures", value: "none in this model" });
+    expect(readoutsFor("strain", A, { ...o, strain: strainSummary(4, undefined) }).map((r) => r.value)).toEqual(["4", "reading…"]);
+    const st = { flexures: [
+      { joint: "a", name: "Hinge A", angle: 10, strain: 0.012, allowable: 0.04, moment: 0 },
+      { joint: "b", name: "Hinge B", angle: 20, strain: 0.05, allowable: 0.04, moment: 0 },
+    ] };
+    const r = readoutsFor("strain", A, { ...o, strain: strainSummary(2, st) });
+    expect(r.map((x) => [x.label, x.value])).toEqual([["Worst flexure", "Hinge B"], ["Peak strain", "5.00%"], ["Of its limit", "125%"]]);
+    expect(r[2].state).toBe("bad");
+    expect(readoutsFor("strain", A, { ...o, strain: strainSummary(1, { flexures: [st.flexures[0]] }) })[2]).toMatchObject({ value: "30%", state: "ok" });
+  });
+  it("mirrors the strain shader's colours in the kit's legend tokens", () => {
+    const css = readFileSync(fileURLToPath(new URL("../src/ui/kit/kit.css", import.meta.url)), "utf8");
+    const hex = (n: number) => "#" + n.toString(16).padStart(6, "0");
+    const ramp = css.match(/--k-an-strain:\s*linear-gradient\(90deg,([^)]*)\)/)![1].split(",").map((x) => x.trim());
+    expect(ramp).toEqual(STRAIN_COLORS.ramp.map(hex));
+    expect(css).toMatch(new RegExp(`--k-an-strain-over:[^;]*${hex(STRAIN_COLORS.over)}`));
+    expect(css).toMatch(new RegExp(`--k-an-strain-rigid:\\s*${hex(STRAIN_COLORS.rigid)}`));
   });
   it("has a legend for every mode", () => {
     for (const m of MODES) {

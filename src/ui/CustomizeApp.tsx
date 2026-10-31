@@ -8,8 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flexureEquilibria, flexureState, flexureSweep, hasFlexures, isAngularDrive, type EquilibriumStudy } from "../sim/flexure";
-import { compileExpr } from "../math/expr";
-import type { Parameter } from "../core/document";
+import { drivesOf } from "../model/concepts/mechanism";
 import { Viewport } from "./Viewport";
 import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
@@ -106,21 +105,6 @@ function MotionBadge() {
  *  working (strain against its material's limit), what it takes to hold this
  *  pose, and the energy stored. Pure math on the solved pose — no rebuild — so it
  *  follows the slider. */
-/** The parameters that drive a compliant mechanism: bounded parameters that a
- *  placing joint's motion follows (a planar joint can have one per axis). */
-function drivesOf(doc: ReturnType<typeof useStore.getState>["session"]["doc"]) {
-  const out: Parameter[] = [];
-  for (const j of Object.values(doc.joints)) {
-    if (j.solve || j.closes || j.kind === "beam" || j.kind === "rigid") continue;
-    for (const e of j.kind === "planar" ? Object.values(j.planar ?? {}) : [j.valueExpr]) {
-      let deps: string[] = [];
-      try { deps = compileExpr(String(e)).deps; } catch { continue; }
-      for (const p of doc.parameters) if (deps.includes(p.name) && p.min != null && p.max != null && !out.includes(p)) out.push(p);
-    }
-  }
-  return out;
-}
-
 function FlexureReadout() {
   const doc = useStore((s) => s.session.doc);
   const rev = useStore((s) => s.rev);

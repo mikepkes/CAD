@@ -14,7 +14,7 @@ import { materialForComponent } from "../core/document";
 import { resolveComponentWorld, setEnergySettler } from "../core/recompute";
 import { compileExpr, type Scope } from "../math/expr";
 import { resolveParameters } from "../core/parameters";
-import { applyPoint, compose, IDENTITY, invert, type Rigid } from "../math/transform";
+import { applyPoint, applyVec, compose, IDENTITY, invert, type Rigid } from "../math/transform";
 import { rectSection, solveBeam, type BeamResult } from "./beam2d";
 
 const RAD = Math.PI / 180;
@@ -105,7 +105,13 @@ function beamEnd(j: Joint, world: Map<string, Rigid>): { dx: number; dy: number;
   return { dx: tip.x - j.movedOrigin.x, dy: tip.y - j.movedOrigin.y, dth: Math.atan2(M.x.y, M.x.x) };
 }
 
-type BeamSolution = { energy: number; strain: number; reaction: { fx: number; fy: number; m: number } };
+type BeamSolution = {
+  energy: number; strain: number; reaction: { fx: number; fy: number; m: number };
+  /** The deformed strip's nodes, relative to its base end in the base part's frame. */
+  nodes: { x: number; y: number }[];
+  /** Each element's peak strain, base end to moved end (one fewer than the nodes). */
+  elementStrain: number[];
+};
 // The same pose is solved many times over (a study's probes, the equilibrium
 // refinement, a mechanism's identical or mirror-image beams), so solutions are
 // remembered by the beam's shape relative to its base end, mirrored to point +X.
@@ -173,11 +179,13 @@ export function solveBeamElement(j: Joint, E: number, end: { dx: number; dy: num
       energy: r.converged ? r.energy : NaN,
       strain: Math.max(...r.elements.map((el) => el.maxStrain)),
       reaction: { fx: r.reactions[`${n}:0`] ?? 0, fy: r.reactions[`${n}:1`] ?? 0, m: r.reactions[`${n}:2`] ?? 0 },
+      nodes: r.nodes.map((q) => ({ x: q.x, y: q.y })),
+      elementStrain: r.elements.map((el) => el.maxStrain),
     };
     if (beamCache.size > 4000) { beamCache.clear(); beamStates.clear(); }
     beamCache.set(key, sol);
   }
-  return flip > 0 ? sol : { ...sol, reaction: { fx: -sol.reaction.fx, fy: sol.reaction.fy, m: -sol.reaction.m } };
+  return flip > 0 ? sol : { ...sol, reaction: { fx: -sol.reaction.fx, fy: sol.reaction.fy, m: -sol.reaction.m }, nodes: sol.nodes.map((q) => ({ x: -q.x, y: q.y })) };
 }
 
 function propsOf(doc: CadDocument, j: Joint, scope: Record<string, number>): MechanicalProps | undefined {
@@ -472,4 +480,62 @@ export function flexureEquilibria(doc: CadDocument, param: string, min: number, 
     if (peak) snap = { value: peak.value, effort: peak.effort, barrier: (top?.energy ?? Math.max(...between.map((q) => q.energy))) - s0.energy };
   }
   return { states, poses, multistable: stable.length >= 2, ...(snap ? { snap } : {}) };
+}
+
+// ---- the strain field: where each flexure is, in world space, and how hard it works
+
+/** One piece of a flexure in world space (mm): a segment from `a` to `b` (a
+ *  hinge is a point, a = b), the strip's plane normal `n`, how far out from the
+ *  segment it reaches (`radius`, in the plane) and along `n` (`axial`, either
+ *  side), and its strain as a fraction of the material's limit at each end. */
+export interface StrainSegment {
+  joint: string;
+  a: { x: number; y: number; z: number };
+  b: { x: number; y: number; z: number };
+  n: { x: number; y: number; z: number };
+  radius: number;
+  axial: number;
+  ua: number;
+  ub: number;
+}
+
+/** The flexures of a mechanism as it stands (call after `flexureState`, which
+ *  poses it, with the same overrides): each hinge as a disc around its pivot the size of its strip, each
+ *  beam element by element along its deformed shape, with the strain the beam
+ *  solve found there. Utilisation is strain / allowable (NaN with no allowable). */
+export function strainField(doc: CadDocument, state: FlexureState, overrides: Record<string, string> = {}): StrainSegment[] {
+  const scope = resolveParameters(doc.parameters.map((p) => (overrides[p.name] != null ? { ...p, expr: overrides[p.name] } : p))).scope;
+  const world = resolveComponentWorld(doc, scope, { settle: false });
+  const out: StrainSegment[] = [];
+  const read = new Map(state.flexures.map((f) => [f.joint, f]));
+  for (const j of flexureJoints(doc)) {
+    const f = read.get(j.id);
+    if (!f) continue;
+    const W = world.get(j.base) ?? IDENTITY;
+    const p = applyPoint(W, j.baseOrigin), n = unit(applyVec(W, j.axis));
+    const u = f.allowable ? f.strain / f.allowable : NaN;
+    const s = j.flexure!;
+    out.push({ joint: j.id, a: p, b: p, n, radius: s.length / 2 + s.thickness + 0.5, axial: s.width + 1, ua: u, ub: u });
+  }
+  for (const j of activeBeams(doc, scope)) {
+    const f = read.get(j.id);
+    const props = propsOf(doc, j, scope);
+    if (!f || !props || !f.allowable) continue;
+    const W = world.get(j.base) ?? IDENTITY;
+    const sol = solveBeamElement(j, props.E, beamEnd(j, world));
+    const el = sol.elementStrain, k = sol.nodes.length;
+    if (k < 2 || el.length !== k - 1) continue;
+    // a node's strain: the larger of the elements either side
+    const at = (i: number) => Math.max(el[i - 1] ?? 0, el[i] ?? 0) / f.allowable!;
+    const pt = (i: number) => applyPoint(W, { x: j.baseOrigin.x + sol.nodes[i].x, y: j.baseOrigin.y + sol.nodes[i].y, z: j.baseOrigin.z });
+    const n = unit(applyVec(W, { x: 0, y: 0, z: 1 }));
+    const radius = j.beam!.thickness / 2 + Math.max(1.5, j.beam!.thickness);
+    for (let i = 0; i + 1 < k; i++) out.push({ joint: j.id, a: pt(i), b: pt(i + 1), n, radius, axial: j.beam!.width + 1, ua: at(i), ub: at(i + 1) });
+  }
+  return out;
+}
+
+function unit(v: { x: number; y: number; z: number }) {
+  const l = Math.hypot(v.x, v.y, v.z) || 1;
+  return { x: v.x / l, y: v.y / l, z: v.z / l };
 }

@@ -10,12 +10,16 @@ import { LedgerPanel } from "./concepts/ledger";
 import { DesignSpacePanel } from "./concepts/space";
 import { IntentButton } from "./concepts/intent";
 import { RingOverlay } from "./concepts/ring";
+import { MechanismPanel } from "./concepts/mechanism";
+import { useStore } from "../model/store";
+import { hasFlexures } from "../sim/flexure";
 
 /** Switches for the concept surfaces, at the top-right of the viewport; also
  *  mounts the action ring once (it renders into document.body while open). */
 export function PanelToggles() {
   const panels = useUi((s) => s.panels);
   const toggle = useUi((s) => s.togglePanel);
+  const compliant = useStore((s) => hasFlexures(s.session.doc));
   return (
     <>
       <div className="k-panel-toggle" role="toolbar" aria-label="Concept panels">
@@ -23,6 +27,7 @@ export function PanelToggles() {
         <Button size="sm" on={panels.lens} title="Analysis under a draggable lens" onClick={() => toggle("lens")}>Lens</Button>
         <Button size="sm" on={panels.ledger} title="The model read back as sentences, with design intents" onClick={() => toggle("ledger")}>Ledger</Button>
         <Button size="sm" on={panels.space} title="Two parameters on a map, intents as frontiers" onClick={() => toggle("space")}>Space</Button>
+        {(compliant || panels.mechanism) && <Button size="sm" on={!!panels.mechanism} title="The compliant mechanism: force against travel, its rest positions, the strain in each flexure" onClick={() => toggle("mechanism")}>Mechanism</Button>}
         <IntentButton size="sm" />
       </div>
       <RingOverlay />
@@ -30,7 +35,7 @@ export function PanelToggles() {
   );
 }
 
-/** The right side panel: the inspector, with Ledger and Design Space as tabs while their panels are on. */
+/** The right side panel: the inspector, with Ledger, Design Space and Mechanism as tabs while their panels are on. */
 export function RightPanel() {
   const panels = useUi((s) => s.panels);
   const tab = useUi((s) => s.rightTab);
@@ -39,6 +44,7 @@ export function RightPanel() {
     { key: "inspector", label: "Inspector" },
     ...(panels.ledger ? [{ key: "ledger" as const, label: "Ledger" }] : []),
     ...(panels.space ? [{ key: "space" as const, label: "Space" }] : []),
+    ...(panels.mechanism ? [{ key: "mechanism" as const, label: "Mechanism" }] : []),
   ];
   return (
     <>
@@ -47,7 +53,7 @@ export function RightPanel() {
           <Pills ariaLabel="Right panel" value={tab} options={options} onChange={setTab} />
         </div>
       )}
-      {tab === "ledger" && panels.ledger ? <LedgerPanel /> : tab === "space" && panels.space ? <DesignSpacePanel /> : <InspectorPanel />}
+      {tab === "ledger" && panels.ledger ? <LedgerPanel /> : tab === "space" && panels.space ? <DesignSpacePanel /> : tab === "mechanism" && panels.mechanism ? <MechanismPanel /> : <InspectorPanel />}
     </>
   );
 }

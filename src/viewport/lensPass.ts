@@ -12,10 +12,11 @@
 
 import * as THREE from "three";
 import { COLOR_VERT, WORLD_VERT, curvatureColors, curvatureFrag, draftFrag, zebraFrag, type ShaderMask } from "./analysisShaders";
+import type { StrainSegment } from "../sim/flexure";
 
 export { curvatureColors };
 
-export type LensMode = "zebra" | "draft" | "curvature" | "xray" | "overhang";
+export type LensMode = "zebra" | "draft" | "curvature" | "xray" | "overhang" | "strain";
 export type LensShape = "lens" | "wipe";
 
 export interface LensSpec {
@@ -34,6 +35,8 @@ export interface LensSpec {
   draftDeg: number;
   pull: { x: number; y: number; z: number };
   quantity: "mean" | "gaussian" | "max" | "min";
+  /** Strain: each flexure's reach in world space and its strain / limit (src/sim/flexure.ts strainField). */
+  strain?: StrainSegment[];
 }
 
 /** What the pass needs to know about a body beyond its mesh (curvature per vertex). */
@@ -48,6 +51,24 @@ export const OVERHANG_RED_SIN = Math.sin((45 * Math.PI) / 180);
 export const OVERHANG_AMBER_SIN = Math.sin((2 * Math.PI) / 180);
 /** Colours the overhang shader uses; kit.css --k-an-overhang-{bed,steep,mild,neutral} mirror them for the legend. */
 export const OVERHANG_COLORS = { bed: 0x56c2e6, steep: 0xf08a7a, mild: 0xf0a44b, neutral: 0x9aa3ad };
+/** Strain colours: a ramp from no strain to the material's limit (four even stops), over the
+ *  limit (striped), and material no flexure reaches. kit.css --k-an-strain{,-over,-rigid} mirror them. */
+export const STRAIN_COLORS = { ramp: [0x3355cc, 0x1fa392, 0x8fd14f, 0xf7d43a], over: 0xe8366f, rigid: 0x8a929c };
+/** The most flexure segments the strain shader reads. */
+export const STRAIN_MAX_SEGMENTS = 1024;
+const NO_SEGMENTS: StrainSegment[] = [];
+
+/** The strain segments packed for the shader: three RGBA texels per segment —
+ *  (a, ua), (b, ub), (n·axial, radius); a utilisation with no limit is −1 (painted as rigid). */
+export function packStrain(segs: StrainSegment[]): Float32Array<ArrayBuffer> {
+  const n = Math.min(segs.length, STRAIN_MAX_SEGMENTS), out = new Float32Array(Math.max(1, n) * 12);
+  const u = (v: number) => (Number.isFinite(v) ? Math.max(0, v) : -1);
+  for (let i = 0; i < n; i++) {
+    const s = segs[i], o = i * 12;
+    out.set([s.a.x, s.a.y, s.a.z, u(s.ua), s.b.x, s.b.y, s.b.z, u(s.ub), s.n.x * s.axial, s.n.y * s.axial, s.n.z * s.axial, s.radius], o);
+  }
+  return out;
+}
 
 // ---- GLSL ----
 // Shared mask: every fragment outside the lens is dropped.
@@ -80,6 +101,46 @@ const OVERHANG_FRAG = `
     if (d < -0.95 && h < uBedTol) c = cBed;
     else if (d < -uRedSin) c = cSteep;
     else if (d < -uAmberSin) c = cMild;
+    float shade = 0.45 + 0.55 * abs(dot(N, normalize(cameraPosition - vW)));
+    gl_FragColor = vec4(c * shade, 1.0);
+  }`;
+
+const STRAIN_FRAG = `
+  uniform sampler2D uSeg; uniform int uCount;
+  uniform vec3 cR0; uniform vec3 cR1; uniform vec3 cR2; uniform vec3 cR3; uniform vec3 cOver; uniform vec3 cRigid;
+  varying vec3 vN; varying vec3 vW;
+  #include <clipping_planes_pars_fragment>
+  ${MASK_PARS}
+  vec3 ramp(float u) {
+    u = clamp(u, 0.0, 1.0) * 3.0;
+    if (u < 1.0) return mix(cR0, cR1, u);
+    if (u < 2.0) return mix(cR1, cR2, u - 1.0);
+    return mix(cR2, cR3, u - 2.0);
+  }
+  void main() {
+    #include <clipping_planes_fragment>
+    lensMask();
+    vec3 N = normalize(vN); if (!gl_FrontFacing) N = -N;
+    // the nearest flexure segment that reaches this point (in its plane, and across it)
+    float best = 2.0; float bu = -1.0;
+    for (int i = 0; i < ${STRAIN_MAX_SEGMENTS}; i++) {
+      if (i >= uCount) break;
+      vec4 A = texelFetch(uSeg, ivec2(0, i), 0);
+      vec4 B = texelFetch(uSeg, ivec2(1, i), 0);
+      vec4 C = texelFetch(uSeg, ivec2(2, i), 0);
+      vec3 ab = B.xyz - A.xyz; float L2 = dot(ab, ab);
+      float t = L2 > 1e-12 ? clamp(dot(vW - A.xyz, ab) / L2, 0.0, 1.0) : 0.0;
+      vec3 d = vW - (A.xyz + ab * t);
+      float axl = length(C.xyz); vec3 n = C.xyz / max(axl, 1e-6);
+      float ax = dot(d, n);
+      float rad = length(d - ax * n);
+      if (abs(ax) > axl || rad > C.w) continue;
+      float s = rad / C.w;
+      if (s < best) { best = s; bu = mix(A.w, B.w, t); }
+    }
+    vec3 c = cRigid;
+    if (bu > 1.0) { c = cOver; if (fract((gl_FragCoord.x + gl_FragCoord.y) / 16.0) < 0.5) c *= 0.62; }
+    else if (bu >= 0.0) c = ramp(bu);
     float shade = 0.45 + 0.55 * abs(dot(N, normalize(cameraPosition - vW)));
     gl_FragColor = vec4(c * shade, 1.0);
   }`;
@@ -157,6 +218,9 @@ export class LensPass {
   /** Curvature colour attributes, keyed by the base geometry (rebuilt when SceneManager rebuilds). */
   private colors = new WeakMap<THREE.BufferGeometry, { quantity: string; attr: THREE.BufferAttribute }>();
   private bgColor = new THREE.Color();
+  /** The strain segments as a float texture, rebuilt when the spec's list changes. */
+  private strainTex: THREE.DataTexture | null = null;
+  private strainSrc: StrainSegment[] | undefined;
   private rgb = { r: 0, g: 0, b: 0 };
 
   setSpec(spec: LensSpec | null) { this.spec = spec; }
@@ -212,6 +276,18 @@ export class LensPass {
       mat.uniforms.uUp.value.copy(up);
       mat.uniforms.uBed.value = bed;
       mat.uniforms.uBedTol.value = Math.max(0.01, extent * 1e-4);
+    }
+    if (spec.mode === "strain") {
+      const segs = spec.strain ?? NO_SEGMENTS;
+      if (segs !== this.strainSrc || !this.strainTex) {
+        this.strainTex?.dispose();
+        const data = packStrain(segs);
+        this.strainTex = new THREE.DataTexture(data, 3, data.length / 12, THREE.RGBAFormat, THREE.FloatType);
+        this.strainTex.needsUpdate = true;
+        this.strainSrc = segs;
+      }
+      mat.uniforms.uSeg.value = this.strainTex;
+      mat.uniforms.uCount.value = Math.min(segs.length, STRAIN_MAX_SEGMENTS);
     }
     const byId = new Map<string, LensSolidInfo>();
     for (const s of solids ?? []) if (s.id) byId.set(s.id, s);
@@ -271,7 +347,7 @@ export class LensPass {
   }
 
   private surfaceMaterial(spec: LensSpec): THREE.ShaderMaterial {
-    const key = spec.mode === "zebra" ? `zebra` : spec.mode === "draft" ? `draft` : spec.mode === "curvature" ? "curvature" : "overhang";
+    const key = spec.mode === "zebra" ? `zebra` : spec.mode === "draft" ? `draft` : spec.mode === "curvature" ? "curvature" : spec.mode === "strain" ? "strain" : "overhang";
     if (this.surface && this.surfaceKey === key) {
       const u = this.surface.uniforms;
       if (spec.mode === "zebra") u.stripes.value = Math.max(2, spec.stripes);
@@ -287,6 +363,17 @@ export class LensPass {
       this.surface = new THREE.ShaderMaterial({ ...SURFACE_OPTS, uniforms: { ...mask, pull: { value: new THREE.Vector3(spec.pull.x, spec.pull.y, spec.pull.z).normalize() }, draft: { value: Math.sin((spec.draftDeg * Math.PI) / 180) } }, vertexShader: WORLD_VERT, fragmentShader: DRAFT_FRAG });
     } else if (spec.mode === "curvature") {
       this.surface = new THREE.ShaderMaterial({ ...SURFACE_OPTS, uniforms: { ...mask }, vertexShader: COLOR_VERT, fragmentShader: CURVATURE_FRAG, vertexColors: true });
+    } else if (spec.mode === "strain") {
+      const c = STRAIN_COLORS;
+      this.surface = new THREE.ShaderMaterial({
+        ...SURFACE_OPTS,
+        uniforms: {
+          ...mask, uSeg: { value: null }, uCount: { value: 0 },
+          cR0: { value: srgb(c.ramp[0]) }, cR1: { value: srgb(c.ramp[1]) }, cR2: { value: srgb(c.ramp[2]) }, cR3: { value: srgb(c.ramp[3]) },
+          cOver: { value: srgb(c.over) }, cRigid: { value: srgb(c.rigid) },
+        },
+        vertexShader: WORLD_VERT, fragmentShader: STRAIN_FRAG,
+      });
     } else {
       const c = OVERHANG_COLORS;
       this.surface = new THREE.ShaderMaterial({
@@ -337,7 +424,8 @@ export class LensPass {
   }
 
   dispose() {
-    this.surface?.dispose(); this.glass?.dispose(); this.line?.dispose();
+    this.surface?.dispose(); this.glass?.dispose(); this.line?.dispose(); this.strainTex?.dispose();
+    this.strainTex = null; this.strainSrc = undefined;
     if (this.erase) { this.erase.geometry.dispose(); (this.erase.material as THREE.Material).dispose(); }
     this.surface = this.glass = this.line = null; this.erase = null;
   }
