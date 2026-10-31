@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
-import { render, screen, fireEvent, act, within } from "@testing-library/react";
+import { render, screen, fireEvent, act, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { realSession } from "../helpers";
 import { useStore } from "../../src/model/store";
 import { useUi } from "../../src/model/concepts/uiState";
 import { featureRows } from "../../src/model/concepts/featureCatalog";
-import { LedgerPanel, useIntents, useSuggestions } from "../../src/ui/concepts/ledger";
+import { resolveParameters } from "../../src/core/parameters";
+import type { CadDocument } from "../../src/core/document";
+import type { GeometryBackend } from "../../src/core/geometry/backend";
+import { disposeSamplerBackend } from "../../src/ui/concepts/space/sampler";
+import { LedgerPanel, clearFixCache, useIntents, useSuggestions } from "../../src/ui/concepts/ledger";
 import type { CadSession } from "../../src/core/command/session";
 
 /** A session with a parameter, a sketch, an extrude driven by it and a fillet. */
@@ -195,5 +199,126 @@ describe("LedgerPanel", () => {
     const sugg = screen.getByRole("group", { name: "Suggestion for Mass per height" });
     expect(sugg.textContent).toContain("re-evaluate to confirm");
     expect(sugg.textContent).toMatch(/Set h to 1[3-8]/);
+  });
+});
+
+// ---- the sampled search for metric intents ----
+
+/** Two bounded parameters and a free one; nothing sketched (the live solids are mocked). */
+async function boxSession(): Promise<CadSession> {
+  const s = realSession();
+  await s.dispatch("parameter.add", { name: "w", expression: "30", min: 10, max: 50, step: 5 });
+  await s.dispatch("parameter.add", { name: "h", expression: "15", min: 5, max: 25 });
+  await s.dispatch("parameter.add", { name: "free", expression: "2" });
+  return s;
+}
+
+/** The live model: one 30 × 15 × 10 box, 4,500 mm³, 12.15 g at aluminium's density. */
+const boxSolids = { b: { featureId: "b", name: "b", sketchId: "", distance: 0, mesh: {}, volume: 4500, bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 30, y: 15, z: 10 } } } };
+
+/** The sampling backend: a w × h × 10 box, so every variant's mass is w·h·0.027 g. `gate` holds each build until it resolves. */
+function boxBackend(gate?: () => Promise<void>) {
+  const evaluate = vi.fn(async (doc: CadDocument) => {
+    await gate?.();
+    const { scope } = resolveParameters(doc.parameters);
+    return { solids: { b: { ...boxSolids.b, volume: scope.w * scope.h * 10, bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: scope.w, y: scope.h, z: 10 } } } }, facePlanes: {} };
+  });
+  const backend = {
+    init: async () => {}, ready: () => true, dispose: () => {}, evaluate,
+    edges: async () => [], exportBytes: async () => null, collide: async () => ({ overlaps: [], maxOverlap: 0 }), topology: async () => [], distance: async () => 0, analyze: async () => [],
+  } as unknown as GeometryBackend;
+  return { backend, evaluate };
+}
+
+function mountBox(s: CadSession, backend: GeometryBackend) {
+  const setParameterExpr = vi.fn(async () => {});
+  useStore.setState({ session: s, rev: useStore.getState().rev + 1, solids: boxSolids as never, setParameterExpr });
+  const createBackend = vi.fn(async () => backend);
+  const r = render(<LedgerPanel createBackend={createBackend} />);
+  return { ...r, setParameterExpr, createBackend };
+}
+
+describe("LedgerPanel: built fixes for metric intents", () => {
+  let s: CadSession;
+  beforeAll(async () => { s = await boxSession(); });
+  beforeEach(() => {
+    localStorage.clear();
+    clearFixCache();
+    disposeSamplerBackend();
+    useIntents.setState({ docId: null, intents: [], results: [], scope: {} });
+    useSuggestions.setState({ dismissed: {}, accepted: {} });
+  });
+
+  it("looks for a fix off the render path: pending, then the smallest built change with its sampled metric; Accept applies it", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const { backend, evaluate } = boxBackend(() => gate);
+    const { setParameterExpr, createBackend } = mountBox(s, backend);
+    expect(screen.queryByRole("region", { name: "Suggestions" })).toBeNull();
+    act(() => { useIntents.getState().add("mass <= 10", "Mass"); });
+    // pending: the kernel is building, nothing is proposed yet
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toBe("Looking for a fix…");
+    expect(status.getAttribute("data-status")).toBe("searching");
+    expect(createBackend).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("group", { name: /Suggestion for/ })).toBeNull();
+    // ready: h moves least relative to its range (15 → 11.67 of 5…25), then w (30 → 20 of 10…50)
+    await act(async () => { release(); });
+    const cards = await screen.findAllByRole("group", { name: "Suggestion for Mass" });
+    expect(cards.map((c) => c.textContent)).toEqual([expect.stringContaining("Set h to 11.7 (mass 9.45 g)"), expect.stringContaining("Set w to 20 (mass 8.10 g)")]);
+    expect(cards[0].textContent).toContain("built");
+    expect(cards[0].textContent).not.toContain("re-evaluate");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(evaluate).toHaveBeenCalledTimes(8);
+    expect(s.doc.parameters.map((p) => p.expr)).toEqual(["30", "15", "2"]); // the live document was never touched
+    await userEvent.click(within(cards[0]).getByRole("button", { name: "Accept" }));
+    expect(setParameterExpr).toHaveBeenCalledWith("h", "11.6667");
+    const done = screen.getByRole("group", { name: "Accepted suggestion for Mass" });
+    expect(done.textContent).toContain("Set h to 11.7 (mass 9.45 g)");
+    await userEvent.click(within(done).getByRole("button", { name: "Undo" }));
+    expect(setParameterExpr).toHaveBeenLastCalledWith("h", "15");
+  });
+
+  it("starts no sampler while no metric intent fails, and says so when nothing within the bounds fixes one", async () => {
+    const { backend, evaluate } = boxBackend();
+    const { createBackend } = mountBox(s, backend);
+    act(() => { useIntents.getState().add("h >= 20", "Tall"); }); // a parameter intent: the instant fix, no build
+    expect(screen.getByRole("group", { name: "Suggestion for Tall" }).textContent).toMatch(/Set h to 20/);
+    expect(createBackend).not.toHaveBeenCalled();
+    expect(screen.queryByRole("status")).toBeNull();
+    act(() => { useIntents.getState().add("mass <= 1", "Mass"); }); // the smallest box, 10 × 5 × 10, is still 1.35 g
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/No change to a bounded parameter fixes this/));
+    expect(screen.getByRole("status").getAttribute("data-status")).toBe("done");
+    expect(evaluate).toHaveBeenCalledTimes(4); // each side's bound only: w 50, w 10, h 25, h 5
+    expect(screen.getByRole("group", { name: "Suggestion for Tall" })).toBeTruthy(); // the instant one stays
+    expect(screen.queryByRole("group", { name: "Suggestion for Mass" })).toBeNull();
+  });
+
+  it("drops a search when the document changes and starts over on the new revision", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let gated = true;
+    const { backend, evaluate } = boxBackend(() => (gated ? gate : Promise.resolve()));
+    mountBox(s, backend);
+    act(() => { useIntents.getState().add("mass <= 10", "Mass"); });
+    await screen.findByRole("status");
+    expect(evaluate).toHaveBeenCalledTimes(1); // the first probe, held by the gate
+    gated = false;
+    act(() => { useStore.setState({ rev: useStore.getState().rev + 1 }); }); // the document changed
+    expect(screen.getByRole("status").textContent).toBe("Looking for a fix…");
+    const cards = await screen.findAllByRole("group", { name: "Suggestion for Mass" });
+    expect(cards.length).toBe(2);
+    expect(evaluate).toHaveBeenCalledTimes(1 + 8); // the new revision rebuilt everything: nothing of the old one is reused
+    await act(async () => { release(); await new Promise((r) => setTimeout(r, 0)); });
+    expect(evaluate).toHaveBeenCalledTimes(9); // the old search stopped at its probe instead of carrying on
+    expect(screen.getAllByRole("group", { name: "Suggestion for Mass" }).length).toBe(2);
+  });
+
+  it("reports a sampler that could not start, and keeps the instant guess", async () => {
+    useStore.setState({ session: s, rev: useStore.getState().rev + 1, solids: boxSolids as never, setParameterExpr: vi.fn(async () => {}) });
+    render(<LedgerPanel createBackend={vi.fn(async () => { throw new Error("no wasm"); })} />);
+    act(() => { useIntents.getState().add("mass / h <= 0.7", "Mass per height"); }); // 12.15 / 15 = 0.81: fails, and h is a parameter it reads
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Could not look for a fix: no wasm"));
+    expect(screen.getByRole("group", { name: "Suggestion for Mass per height" }).textContent).toContain("re-evaluate to confirm");
   });
 });
