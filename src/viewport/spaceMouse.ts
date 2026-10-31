@@ -50,8 +50,10 @@ export interface SpaceMouseSettings {
   lockRotation: boolean;
   /** Flip an axis. */
   invert: Partial<Record<"tx" | "ty" | "tz" | "rx" | "ry" | "rz", boolean>>;
-  /** Button index → hotkey action id. */
+  /** Button index → hotkey action id, everywhere (the "global" context). */
   buttons: Record<number, string>;
+  /** Per-context overrides, context id → button index → action id ("" = nothing in that context). See model/buttonMap.ts. */
+  contextButtons?: Record<string, Record<number, string>>;
 }
 
 export const DEFAULT_SETTINGS: SpaceMouseSettings = {
@@ -60,6 +62,7 @@ export const DEFAULT_SETTINGS: SpaceMouseSettings = {
   lockRotation: false,
   invert: {},
   buttons: { 0: "view.frame", 1: "view.iso" },
+  contextButtons: {},
 };
 
 /** Camera motion for one frame, in view terms: pan is a fraction of the visible

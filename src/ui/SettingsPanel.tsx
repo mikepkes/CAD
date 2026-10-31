@@ -3,6 +3,7 @@ import { useStore } from "../model/store";
 import { isTauri } from "../model/desktopMcp";
 import { connectWebHid, onSpaceMouseStatus, setSpaceMouseSettings, spaceMouseSettings, spaceMouseStatus, webHidAvailable, SpaceMouseStatus } from "../model/spaceMouseInput";
 import type { SpaceMouseSettings } from "../viewport/spaceMouse";
+import { SpaceMouseButtons } from "./SpaceMouseButtons";
 
 const MODELS = [
   { id: "claude-opus-5-5", label: "Claude Opus 5.5 (most capable)" },
@@ -17,7 +18,6 @@ function SpaceMouseSettingsSection() {
   useEffect(() => onSpaceMouseStatus(setSt), []);
   const update = (patch: Partial<SpaceMouseSettings>) => { setSpaceMouseSettings(patch); setCfg(spaceMouseSettings()); };
   const axes = [["tx", "Pan left/right"], ["tz", "Pan up/down"], ["ty", "Zoom"], ["rx", "Tilt"], ["rz", "Spin"]] as const;
-  const viewActions = ["view.frame", "view.iso", "view.front", "view.top", "view.right", "edit.undo", "edit.redo"];
   return (
     <>
       <label className="field-label">3D mouse</label>
@@ -35,14 +35,8 @@ function SpaceMouseSettingsSection() {
           <label key={k} className="toggle" style={{ marginRight: 8 }}><input type="checkbox" checked={!!cfg.invert[k]} onChange={(e) => update({ invert: { [k]: e.target.checked } })} /> {label}</label>
         ))}
       </div>
-      {[0, 1].map((b) => (
-        <div key={b} className="field-note">Button {b + 1}:{" "}
-          <select className="field-input" style={{ width: "auto" }} value={cfg.buttons[b] ?? ""} onChange={(e) => update({ buttons: { ...cfg.buttons, [b]: e.target.value } })}>
-            <option value="">(nothing)</option>
-            {viewActions.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-        </div>
-      ))}
+      <label className="field-label">Buttons</label>
+      <SpaceMouseButtons />
     </>
   );
 }

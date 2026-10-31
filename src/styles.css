@@ -1424,3 +1424,11 @@ body {
 .eye-btn:hover { color: var(--text); }
 .eye-btn.off { color: var(--text-dim); opacity: 0.45; }
 .dim-row .eye-btn { margin-left: 0; }
+
+/* 3D-mouse buttons per context (SpaceMouseButtons.tsx) */
+.smb .k-pills { flex-wrap: wrap; margin-bottom: 6px; }
+.smb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.smb-name { flex: 0 0 64px; }
+.smb-select.field-input { flex: 1 1 0; min-width: 0; width: auto; }
+.smb-now { flex: 1 0 100%; padding-left: 72px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smb-last .smb-name { color: var(--k-accent); font-weight: 600; }

@@ -58,7 +58,7 @@ The focus contexts (`component`, `lens`, `feature`, `face`) exist only in model 
 - a key, bound or bindable in the Hotkeys panel, with per-context conflict checks;
 - a choice for that context's ring slots (and any ring that sits on it) in the ring editor and `set_ring_slot` — add its id to `DEFAULT_RING` to ship it in a slot;
 - a phrase on the intent line, which matches the labels of the actions on the active stack;
-- runnable from a 3D-mouse button (button → action id, run through `hotkeys.runAction` in `spaceMouseInput.ts`; the Settings picker offers only the view actions so far), and listed for the agent and MCP in `get_hotkeys`.
+- runnable from a 3D-mouse button. Buttons bind per context like the ring (`model/buttonMap.ts`): the global row is the base, any context may override a button or set it to nothing, the rest inherit, and a press resolves top-down through the active stack, falling through an action that can't run (`hotkeys.can`). Settings → 3D mouse → Buttons offers every action from the chosen context and those it sits on, `ring.open` included. And it is listed for the agent and MCP in `get_hotkeys`.
 
 Don't wire a feature into the ring, the palette or a button map separately; register the action and let the surfaces find it. Its `when` keeps every surface honest at once: the key falls through, the ring greys the slot, the intent line says it isn't available.
 
