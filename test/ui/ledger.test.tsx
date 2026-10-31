@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
-import { render, screen, fireEvent, act, within } from "@testing-library/react";
+import { render, screen, fireEvent, act, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { realSession } from "../helpers";
 import { useStore } from "../../src/model/store";
@@ -139,26 +139,33 @@ describe("LedgerPanel", () => {
     expect(paras[1].className).not.toContain("ghost");
   });
 
-  it("checks intents, scrubs a numeric limit, and removes one", async () => {
-    mount(b.s);
+  it("checks intents, scrubs a numeric limit, and removes one — each through intent.* operations on the document", async () => {
+    const { s } = await bracket(); // its own session: intents are document state now
+    mount(s);
     const section = screen.getByRole("region", { name: "Design intents" });
     expect(within(section).getByText(/No intents yet/)).toBeTruthy();
     await userEvent.type(within(section).getByRole("textbox", { name: "Intent" }), "h >= 15");
     await userEvent.type(within(section).getByRole("textbox", { name: "Label" }), "Height");
     await userEvent.click(within(section).getByRole("button", { name: "Add" }));
-    expect(within(section).getByRole("img", { name: "fails" })).toBeTruthy();
+    await waitFor(() => expect(within(section).getByRole("img", { name: "fails" })).toBeTruthy());
     expect(within(section).getByText("now 12")).toBeTruthy();
     expect(within(section).getByText("Height:")).toBeTruthy();
-    expect(localStorage.getItem("chisel.intents.v1.doc1")).toContain("\"h\"");
+    expect(s.doc.intents).toMatchObject([{ label: "Height", lhs: "h", op: ">=", rhs: "15" }]);
+    expect(s.doc.operations.at(-1)?.type).toBe("intent.add");
+    expect(localStorage.getItem("chisel.intents.v1.doc1")).toBeNull();
     const limit = within(section).getByRole("button", { name: /Height limit, 15/ });
     limit.focus();
     await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
     expect(useIntents.getState().intents[0].rhs).toBe("12");
     expect(within(section).getByRole("img", { name: "passes" })).toBeTruthy();
+    await waitFor(() => expect(s.doc.intents[0].rhs).toBe("12"));
+    expect(s.doc.operations.filter((o) => o.type === "intent.update").length).toBe(3);
     await userEvent.type(within(section).getByRole("textbox", { name: "Intent" }), "h*2 <= width{Enter}");
-    expect(within(section).getAllByRole("listitem").length).toBe(2);
+    await waitFor(() => expect(within(section).getAllByRole("listitem").length).toBe(2));
     await userEvent.click(within(section).getByRole("button", { name: "Remove h*2" }));
+    await waitFor(() => expect(s.doc.intents.length).toBe(1));
     expect(useIntents.getState().intents.length).toBe(1);
+    expect(s.doc.operations.at(-1)?.type).toBe("intent.delete");
   });
 
   it("rejects text that is not a comparison", async () => {
@@ -167,11 +174,13 @@ describe("LedgerPanel", () => {
     await userEvent.type(within(section).getByRole("textbox", { name: "Intent" }), "keep it light{Enter}");
     expect(within(section).getByRole("alert").textContent).toMatch(/comparison/);
     expect(useIntents.getState().intents.length).toBe(0);
+    expect(b.s.doc.intents.length).toBe(0);
   });
 
   it("suggests the smallest parameter change that fixes a failing intent; Accept, Undo and Not now", async () => {
-    const { setParameterExpr } = mount(b.s);
-    act(() => { useIntents.getState().add("h >= 15", "Height"); });
+    const { s } = await bracket();
+    const { setParameterExpr } = mount(s);
+    await act(async () => { await useIntents.getState().add("h >= 15", "Height"); });
     const sugg = screen.getByRole("group", { name: "Suggestion for Height" });
     expect(sugg.textContent).toContain("Set h to 15 (+3)");
     expect(sugg.textContent).not.toContain("re-evaluate");
@@ -188,10 +197,11 @@ describe("LedgerPanel", () => {
     expect(screen.queryByRole("region", { name: "Suggestions" })).toBeNull();
   });
 
-  it("marks a metric-based suggestion as needing a rebuild", () => {
-    const solids = { [b.extrudeId]: { featureId: b.extrudeId, name: "x", sketchId: "", distance: 24, mesh: {}, volume: 19200 } };
-    mount(b.s, solids);
-    act(() => { useIntents.getState().add("mass / h <= 4", "Mass per height"); });
+  it("marks a metric-based suggestion as needing a rebuild", async () => {
+    const { s, extrudeId } = await bracket();
+    const solids = { [extrudeId]: { featureId: extrudeId, name: "x", sketchId: "", distance: 24, mesh: {}, volume: 19200 } };
+    mount(s, solids);
+    await act(async () => { await useIntents.getState().add("mass / h <= 4", "Mass per height"); });
     const sugg = screen.getByRole("group", { name: "Suggestion for Mass per height" });
     expect(sugg.textContent).toContain("re-evaluate to confirm");
     expect(sugg.textContent).toMatch(/Set h to 1[3-8]/);

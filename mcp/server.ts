@@ -102,11 +102,12 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     sketches: diagnoseAll(r.evaluations),
   });
 
-  // The intents' pass/fail: metrics (mass, bounds) need the solids, which are only built when an intent reads one.
+  // The intents' pass/fail: metrics (mass, bounds) need the solids, which are only built when an intent reads one
+  // (and are unknown, so that intent is "unchecked", while the kernel is not ready).
   const intentsSummary = () => {
     const intents = session.doc.intents ?? [];
     if (!intents.length) return [];
-    const solids = intentsUseMetrics(intents) && isKernelReady() ? evaluateFeatures(session.doc, resolveParameters(session.doc.parameters).scope) : {};
+    const solids = !intentsUseMetrics(intents) ? {} : isKernelReady() ? evaluateFeatures(session.doc, resolveParameters(session.doc.parameters).scope) : undefined;
     return evaluateIntents(session.doc, solids).results.map(describeIntent);
   };
 

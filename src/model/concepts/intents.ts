@@ -144,12 +144,18 @@ export function intentsUseMetrics(intents: Intent[]): boolean {
 
 /** The one evaluation of a document's intents: every parameter plus the metrics of
  *  `solids` at the root material's density. What the store, the agent's document
- *  summary and the MCP servers all use, so they agree. */
-export function evaluateIntents(doc: CadDocument, solids: Record<string, SolidEval> = {}): { results: IntentResult[]; scope: Record<string, number>; metrics: Metrics; density: Density } {
+ *  summary and the MCP servers all use, so they agree. `solids` undefined means the
+ *  caller has no built bodies to read (the metrics are unknown, so an intent that
+ *  uses one is unchecked); `{}` means nothing is built (the metrics are 0). */
+export function evaluateIntents(doc: CadDocument, solids?: Record<string, SolidEval>): { results: IntentResult[]; scope: Record<string, number>; metrics: Metrics; density: Density } {
   const density = densityOf(materialForComponent(doc, doc.rootComponentId));
-  const metrics = metricsOf(solids, density.density);
+  const metrics = metricsOf(solids ?? {}, density.density);
   const scope = intentScope(doc, metrics);
-  return { results: checkIntents(doc.intents ?? [], scope), scope, metrics, density };
+  const intents = doc.intents ?? [];
+  const results = checkIntents(intents, scope).map((r) =>
+    solids === undefined && intentsUseMetrics([r.intent]) ? { intent: r.intent, ok: false, lhs: NaN, rhs: NaN, error: "no built bodies to read the metrics from" } : r
+  );
+  return { results, scope, metrics, density };
 }
 
 /** An intent and its result as the agent reads it: pass/fail and the two sides' values. */

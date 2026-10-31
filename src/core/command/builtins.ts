@@ -40,6 +40,7 @@ type PointRef = { x: number | string; y: number | string } | { ref: string };
 type EdgeSelectorParams = import("../document").EdgeSelector;
 type FaceSelectorParams = import("../document").FaceSelector;
 type ThreadSpecParams = import("../document").ThreadSpec;
+type IntentComparatorParam = import("../document").IntentComparator;
 
 const V3_SCHEMA: JSONSchema = { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } };
 const ROLE_REF_SCHEMA: JSONSchema = {
@@ -449,7 +450,7 @@ export const BUILTINS: CommandDef<any>[] = [
       const lhs = checkIntentSide(p.lhs, "lhs"), rhs = checkIntentSide(p.rhs, "rhs");
       const label = p.label?.trim() || lhs;
       const id = ctx.alloc("intent");
-      draft.intents.push({ id, label, lhs, op: p.op as import("../document").IntentComparator, rhs, ...(p.unit?.trim() ? { unit: p.unit.trim() } : {}) });
+      draft.intents.push({ id, label, lhs, op: p.op as IntentComparatorParam, rhs, ...(p.unit?.trim() ? { unit: p.unit.trim() } : {}) });
       return { createdIds: [id], message: `Added intent: ${lhs} ${p.op} ${rhs}` };
     },
   },
@@ -477,7 +478,7 @@ export const BUILTINS: CommandDef<any>[] = [
       if (!intent) throw new Error(`No intent "${p.id}"`);
       if (p.lhs !== undefined) intent.lhs = checkIntentSide(p.lhs, "lhs");
       if (p.rhs !== undefined) intent.rhs = checkIntentSide(p.rhs, "rhs");
-      if (p.op !== undefined) intent.op = p.op as import("../document").IntentComparator;
+      if (p.op !== undefined) intent.op = p.op as IntentComparatorParam;
       if (p.label !== undefined) intent.label = p.label.trim() || intent.lhs;
       if (p.unit !== undefined) { if (p.unit.trim()) intent.unit = p.unit.trim(); else delete intent.unit; }
       return { message: `Intent ${intent.label}: ${intent.lhs} ${intent.op} ${intent.rhs}` };

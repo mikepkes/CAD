@@ -150,7 +150,7 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
       activeConfiguration: doc.activeConfiguration ? doc.configurations.find((c) => c.id === doc.activeConfiguration)?.name : null,
     } : {}),
     // Intents: the checks the design must keep passing, each pass/fail against the current parameters and bodies
-    // (metrics such as mass need built solids: without them a metric intent reads as unchecked).
+    // (metrics such as mass need built solids: when the host passes none, a metric intent is "unchecked", not a pass at 0).
     ...(doc.intents?.length ? { intents: evaluateIntents(doc, solids).results.map(describeIntent) } : {}),
     // Evaluation results per feature (when the host has them): bodies with bounds/volume, modifier status, warnings.
     ...(solids ? {

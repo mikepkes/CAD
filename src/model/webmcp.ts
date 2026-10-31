@@ -119,7 +119,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
   }));
   tools.push({
     name: "get_state",
-    description: "Inspect the current document: mode, active sketch id, every sketch (entities with ids/kinds/coordinates, constraints), features and parameters. Call before referencing any id.",
+    description: "Inspect the current document: mode, active sketch id, every sketch (entities with ids/kinds/coordinates, constraints), features, parameters and design intents (each pass/fail). Call before referencing any id.",
     inputSchema: { type: "object", properties: {} },
     annotations: READ_ONLY,
     execute: async () => ok(host.describe()),

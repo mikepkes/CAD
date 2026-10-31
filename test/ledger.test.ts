@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createDocument } from "../src/core/document";
+import { realSession } from "./helpers";
+import { useStore } from "../src/model/store";
 import { checkIntents, intentScope, metricsOf, parseIntent } from "../src/model/concepts/intents";
 import {
   densityOf, formatDelta, formatMass, formatNow, intentDeps, intentGlyph, massGrams, mergeSegments, paramToken, plainNumber,
@@ -83,32 +85,47 @@ describe("ledger: intents store", () => {
     useIntents.setState({ docId: null, intents: [], results: [], scope: {} });
   });
 
-  it("loads per document, adds parsed intents, evaluates, updates and removes", () => {
+  it("reads the open document's intents, adds parsed ones through intent.add, evaluates, updates and removes", async () => {
+    const session = realSession();
+    await session.dispatch("parameter.add", { name: "wall", expression: "3" });
+    useStore.setState({ session, rev: useStore.getState().rev + 1, solids: {} });
     const s = useIntents.getState();
-    s.load("docA");
+    expect(useIntents.getState().docId).toBe(session.doc.id);
     expect(useIntents.getState().intents).toEqual([]);
-    expect(s.add("just words")).toBeNull();
-    const i = s.add("wall >= 4", "Wall")!;
+    expect(s.add("just words")).toBeNull(); // not a comparison: nothing dispatched
+    expect(session.doc.operations.length).toBe(1);
+    const i = (await s.add("wall >= 4", "Wall"))!;
     expect(i).toMatchObject({ label: "Wall", lhs: "wall", op: ">=", rhs: "4" });
-    expect(s.add("mass <= 120", "  ")!.label).toBe("mass");
+    expect(session.doc.intents).toEqual([i]); // the document holds it, via the intent.add operation
+    expect(session.doc.operations.at(-1)).toMatchObject({ type: "intent.add", params: { label: "Wall", lhs: "wall", op: ">=", rhs: "4" }, createdIds: [i.id] });
+    expect((await s.add("mass <= 120", "  "))!.label).toBe("mass");
+    expect(useIntents.getState().intents.map((x) => x.lhs)).toEqual(["wall", "mass"]);
+    expect(useIntents.getState().results.map((r) => r.ok)).toEqual([false, true]); // wall 3 < 4; mass 0 with nothing built
     const results = s.evaluate({ wall: 3, mass: 100 });
     expect(results.map((r) => r.ok)).toEqual([false, true]);
     expect(useIntents.getState().results).toBe(results);
-    s.update(i.id, { rhs: "3" });
-    expect(useIntents.getState().results[0].ok).toBe(true); // re-checked in the last scope
-    s.remove(i.id);
+    const upd = s.update(i.id, { rhs: "3" });
+    expect(useIntents.getState().results[0].ok).toBe(true); // shown at once, re-checked in the last scope
+    await upd;
+    expect(session.doc.intents[0].rhs).toBe("3");
+    expect(session.doc.operations.at(-1)).toMatchObject({ type: "intent.update", params: { id: i.id, rhs: "3" } });
+    await s.remove(i.id);
+    expect(session.doc.intents.map((x) => x.lhs)).toEqual(["mass"]);
     expect(useIntents.getState().intents.map((x) => x.lhs)).toEqual(["mass"]);
-    s.load("docA"); // same doc: nothing changes
+    s.load(session.doc.id); // the open doc: re-read, nothing changes
     expect(useIntents.getState().intents.length).toBe(1);
-    s.load("docB");
+    s.load("docB"); // another document: its intents are unknown until it opens
     expect(useIntents.getState().intents).toEqual([]);
   });
 
-  it("gives each intent a distinct id", () => {
+  it("gives each intent a distinct id and runs queued writes in order", async () => {
+    const session = realSession();
+    useStore.setState({ session, rev: useStore.getState().rev + 1, solids: {} });
     const s = useIntents.getState();
-    s.load("docC");
-    const a = s.add("a < 1")!, b = s.add("b < 1")!;
-    expect(a.id).not.toBe(b.id);
+    const [a, b] = await Promise.all([s.add("a < 1"), s.add("b < 1")]); // concurrent: neither drops the other
+    expect(a!.id).not.toBe(b!.id);
+    expect(session.doc.intents.map((x) => x.lhs)).toEqual(["a", "b"]);
+    expect(useIntents.getState().intents.length).toBe(2);
   });
 });
 

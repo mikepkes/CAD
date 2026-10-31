@@ -37,7 +37,7 @@ export interface IntentsState {
   /** The density the mass metric used, and where it came from. */
   density: number;
   densitySource: string;
-  /** Read `docId`'s intents from the open document (a no-op when it is not the open one; kept for callers that switch documents). */
+  /** Point the store at `docId`: re-read the open document's intents when it is that one, else show none until it opens. */
   load: (docId: string) => void;
   /** Re-check every intent against the open document and its solids (what the store subscription calls). */
   sync: (doc: CadDocument, solids: Record<string, SolidEval>) => IntentResult[];
@@ -84,7 +84,8 @@ export const useIntents = create<IntentsState>((set, get) => {
     load: (docId) => {
       const s = useStore.getState();
       if (s.session.doc.id === docId) get().sync(s.session.doc, s.solids);
-      else set({ docId });
+      // Another document's intents are only known once it is open: show none until then.
+      else set({ docId, intents: [], results: [] });
     },
     sync: (doc, solids) => {
       const { results: fromDoc, scope, metrics, density } = evaluateIntents(doc, solids);
