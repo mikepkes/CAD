@@ -37,11 +37,22 @@ export function scrubValue(start: number, dx: number, spec: NumberSpec, opts: { 
   return quantize(start + steps * spec.step * mult, { ...spec, step: opts.fine ? spec.step / 10 : spec.step });
 }
 
+/** The direction an arrow key names (null for any other key): right/up positive, left/down negative, screen y not flipped. */
+export function arrowDir(key: string): { dx: number; dy: number } | null {
+  switch (key) {
+    case "ArrowRight": return { dx: 1, dy: 0 };
+    case "ArrowLeft": return { dx: -1, dy: 0 };
+    case "ArrowUp": return { dx: 0, dy: 1 };
+    case "ArrowDown": return { dx: 0, dy: -1 };
+    default: return null;
+  }
+}
+
 /** The value after an arrow key (null when the key is not one): up/right step up, down/left step down, shift ×10. */
 export function keyStep(v: number, key: string, shift: boolean, spec: NumberSpec): number | null {
-  const d = key === "ArrowRight" || key === "ArrowUp" ? 1 : key === "ArrowLeft" || key === "ArrowDown" ? -1 : 0;
-  if (!d) return null;
-  return quantize(v + d * spec.step * (shift ? 10 : 1), spec);
+  const a = arrowDir(key);
+  if (!a) return null;
+  return quantize(v + (a.dx + a.dy) * spec.step * (shift ? 10 : 1), spec);
 }
 
 /** A number as the prose shows it: the step's precision, thousands separated, with its unit. */
@@ -57,4 +68,22 @@ export function parseTyped(text: string, spec: NumberSpec): number | null {
   if (!/\d/.test(core)) return null;
   const n = Number(core);
   return Number.isFinite(n) ? quantize(n, spec) : null;
+}
+
+/** Decimal places that suit a magnitude: hundreds and up 0, tens 1, below 2. */
+export function magnitudeDigits(v: number): number {
+  const a = Math.abs(v);
+  return a >= 100 ? 0 : a >= 10 ? 1 : 2;
+}
+
+/**
+ * A measured value as every readout prints it: precision by magnitude (12,345 ·
+ * 51.8 · 0.12), thousands separated, with its unit. `digits` fixes the precision
+ * instead (a volume in mm³ is always whole); `trim` drops trailing zeros (3 not 3.00).
+ */
+export function formatMagnitude(v: number, unit = "", opts: { digits?: number; trim?: boolean } = {}): string {
+  if (!Number.isFinite(v)) return "—";
+  const digits = opts.digits ?? magnitudeDigits(v);
+  const text = v.toLocaleString("en-US", { minimumFractionDigits: opts.trim ? 0 : digits, maximumFractionDigits: digits });
+  return unit ? `${text} ${unit}` : text;
 }

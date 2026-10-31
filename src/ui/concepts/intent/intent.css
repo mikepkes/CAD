@@ -1,0 +1,41 @@
+/* Intent line: layout only. Colours, radii and type come from kit.css / styles.css tokens. */
+
+.intent-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.intent-card.k-card {
+  position: relative;
+  width: min(600px, calc(100vw - 32px));
+  gap: 8px;
+}
+.intent-input { width: 100%; }
+.intent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.intent-option {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  column-gap: 10px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border-radius: var(--k-radius-sm);
+  cursor: pointer;
+}
+.intent-option.on { background: var(--k-select-tint); }
+.intent-kind { align-self: center; }
+.intent-detail { grid-column: 2; font-size: 12px; }
+.intent-empty { padding: 6px 8px; font-size: 12px; }
+.intent-hint { display: flex; justify-content: flex-end; font-size: 11px; }

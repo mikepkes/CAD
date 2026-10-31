@@ -5,6 +5,7 @@
 
 import { hotkeys, HotkeyAction } from "./hotkeys";
 import { useStore, Tool } from "./store";
+import { useUi } from "./concepts/uiState";
 
 const st = () => useStore.getState();
 const fire = (name: string) => window.dispatchEvent(new CustomEvent(name));
@@ -23,6 +24,11 @@ const ACTIONS: HotkeyAction[] = [
   ...(["iso", "front", "top", "right", "back", "left", "bottom"] as const).map((v) => ({
     id: `view.${v}`, label: `View: ${v[0].toUpperCase()}${v.slice(1)}`, context: "global", run: () => window.dispatchEvent(new CustomEvent("chisel:view", { detail: v })),
   })),
+  // concept panels (toggle; unbound by default, bindable in the Hotkeys panel)
+  { id: "view.workbench", label: "Toggle feature pins (Workbench)", context: "global", run: () => useUi.getState().togglePanel("workbench") },
+  { id: "view.lens", label: "Toggle the lens", context: "global", run: () => useUi.getState().togglePanel("lens") },
+  { id: "view.ledger", label: "Toggle the Ledger tab", context: "global", run: () => useUi.getState().togglePanel("ledger") },
+  { id: "view.space", label: "Toggle the Design Space tab", context: "global", run: () => useUi.getState().togglePanel("space") },
   { id: "edit.undo", label: "Undo", context: "global", defaultPrimary: "mod+z", run: () => st().undo() },
   { id: "edit.redo", label: "Redo", context: "global", defaultPrimary: "mod+shift+z", defaultSecondary: "mod+y", run: () => st().redo() },
   {

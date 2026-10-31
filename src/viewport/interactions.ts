@@ -11,6 +11,8 @@ import { resolveSketchPlane } from "../geometry/plane";
 import { availableOps } from "../model/selectionOps";
 import { infer, InferResult } from "./snapping";
 
+type Vec3 = { x: number; y: number; z: number };
+
 type Snap = InferResult;
 
 type Stage =
@@ -69,12 +71,17 @@ export class Interactions {
     window.removeEventListener("chisel:cancel", this.onCancel as EventListener);
   }
 
-  private onLookAt = () => {
+  /** Look at: the active sketch plane in sketch mode; in model mode, the face in
+   *  `detail` ({ point, normal }, as the face verbs send) when there is one. */
+  private onLookAt = (e: CustomEvent<{ point: Vec3; normal: Vec3 } | undefined>) => {
     const st = this.st();
     if (st.mode === "sketch" && st.activeSketchId) {
       const sk = st.session.doc.sketches[st.activeSketchId];
       if (sk) this.scene.transitionToSketchView(resolveSketchPlane(sk));
+      return;
     }
+    const d = e.detail;
+    if (st.mode === "model" && d?.point && d.normal) this.scene.lookAtFace(d.point, d.normal);
   };
 
   /** Frame (zoom-to-fit): the selection if any, else everything in view. */

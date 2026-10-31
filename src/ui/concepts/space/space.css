@@ -1,0 +1,32 @@
+/* Design Space: layout for its own elements only. Colours are kit / app tokens. */
+
+.space-panel { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; min-width: 0; }
+.space-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.space-row .k-label { display: inline-flex; align-items: center; gap: 4px; }
+.space-progress { margin-left: auto; }
+
+.space-select { max-width: 140px; }
+
+.space-map-wrap { display: flex; flex-direction: column; gap: 8px; }
+.space-map { width: 100%; height: auto; display: block; border-radius: var(--k-radius-sm); outline: none; touch-action: none; user-select: none; cursor: crosshair; }
+.space-map:focus-visible { outline: 2px solid var(--k-select); outline-offset: 2px; }
+.space-map text { fill: var(--text-dim); font-family: var(--k-mono); font-size: 11px; }
+.space-map .space-axis-name { fill: var(--text); font-size: 12px; }
+.space-map .space-plot { fill: var(--panel); stroke: var(--line); }
+.space-map .space-axis line { stroke: var(--line); stroke-width: 1; }
+.space-map .space-cell.pass { fill: var(--k-ok); stroke: var(--bg); stroke-width: 0.5; }
+.space-map .space-cell.fail { fill: var(--k-bad); fill-opacity: 0.08; stroke: var(--bg); stroke-width: 0.5; }
+.space-map .space-hatch { stroke: var(--k-bad); stroke-width: 1; stroke-opacity: 0.7; }
+.space-map .space-frontier line { stroke-width: 2; stroke-linecap: round; fill: none; }
+.space-map .space-frontier.all line { stroke-width: 3; stroke-dasharray: 6 4; }
+.space-map .space-cross { stroke: var(--k-accent); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.8; }
+.space-map .space-point { fill: var(--k-accent); stroke: var(--k-accent-ink); stroke-width: 1.5; }
+.space-map .space-point.fail { fill: var(--k-bad); }
+.space-map .space-point.pass { fill: var(--k-ok); }
+.space-map .space-lightest { fill: none; stroke: var(--k-select); stroke-width: 2.5; }
+.space-map .space-pin-mark circle { fill: var(--k-float); stroke: var(--text); stroke-width: 1.5; }
+.space-map .space-pin-mark text { fill: var(--text); font-size: 11px; font-weight: 600; }
+
+.space-pins { display: flex; flex-direction: column; gap: 8px; }
+.space-pin .k-title { font-family: var(--k-mono); font-weight: 500; }
+.space-readouts { display: flex; gap: 8px; flex-wrap: wrap; }

@@ -4,7 +4,7 @@
 // Pure: the Ledger lists and edits them, the Design Space draws them as
 // frontiers, and both evaluate them through `checkIntents`.
 
-import type { CadDocument } from "../../core/document";
+import type { CadDocument, Material } from "../../core/document";
 import type { SolidEval } from "../../core/features";
 import { resolveParameters } from "../../core/parameters";
 import { compileExpr } from "../../math/expr";
@@ -52,7 +52,35 @@ export interface Metrics {
 
 export const METRIC_NAMES: (keyof Metrics)[] = ["volume", "mass", "density", "width", "depth", "height", "bodies"];
 
-export function metricsOf(solids: Record<string, SolidEval>, density = 2.7): Metrics {
+/** Default density (g/cm³) when nothing says otherwise: aluminium. */
+export const DEFAULT_DENSITY = 2.7;
+
+export interface Density {
+  /** g/cm³ */
+  density: number;
+  /** Where the number came from, for the estimate's label (tenet 8). */
+  source: string;
+}
+
+/**
+ * The one density every mass estimate uses: a density field on the material when
+ * it has one (`density`, or `mechanical.density`), else a guess from its kind
+ * (wood 0.7, plastic 1.2, metal 2.7), else aluminium. The source says which.
+ */
+export function densityOf(m: Material | undefined): Density {
+  const direct = (m as { density?: unknown } | undefined)?.density;
+  if (typeof direct === "number" && direct > 0) return { density: direct, source: `${m!.name} (${direct} g/cm³)` };
+  const mech = (m?.mechanical as { density?: unknown } | undefined)?.density;
+  if (typeof mech === "number" && mech > 0) return { density: mech, source: `${m!.name} (${mech} g/cm³)` };
+  switch (m?.kind) {
+    case "wood": return { density: 0.7, source: `${m.name} (wood, 0.7 g/cm³ assumed)` };
+    case "plastic": return { density: 1.2, source: `${m.name} (plastic, 1.2 g/cm³ assumed)` };
+    case "metal": case "painted": return { density: DEFAULT_DENSITY, source: `${m.name} (metal, ${DEFAULT_DENSITY} g/cm³ assumed)` };
+    default: return { density: DEFAULT_DENSITY, source: `no material: aluminium ${DEFAULT_DENSITY} g/cm³ assumed` };
+  }
+}
+
+export function metricsOf(solids: Record<string, SolidEval>, density = DEFAULT_DENSITY): Metrics {
   let volume = 0, bodies = 0;
   const min = { x: Infinity, y: Infinity, z: Infinity }, max = { x: -Infinity, y: -Infinity, z: -Infinity };
   for (const s of Object.values(solids)) {

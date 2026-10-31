@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { realSession } from "./helpers";
-import { featureRows, featureSpec, featureSpecForOp, allFeatureSpecs, sentenceText, pinAnchor, evalParam } from "../src/model/concepts/featureCatalog";
+import { featureRows, featureSpec, featureSpecForOp, allFeatureSpecs, sentenceText, pinAnchor, evalParam, nameOf, unitLabel, paramsWith, unionBounds, boundsCentre } from "../src/model/concepts/featureCatalog";
 import { createDefaultRegistry } from "../src/core/command/builtins";
 
 describe("feature catalog", () => {
@@ -72,11 +72,57 @@ describe("feature catalog", () => {
       expect(pinAnchor({ ...rows[0], solid: undefined })).toBeNull();
     });
 
+    it("resolves the body a modifier changed (the latest earlier body) and anchors its pin on it", () => {
+      const extrudeId = s.timeline.find((o) => o.type === "feature.extrude")!.createdIds[0];
+      const filletId = s.timeline.find((o) => o.type === "feature.fillet")!.createdIds[0];
+      const bounds = { min: { x: 0, y: 0, z: 0 }, max: { x: 40, y: 20, z: 24 } };
+      const rows = featureRows(s.doc, s.timeline, s.rollbackIndex, {
+        [extrudeId]: { featureId: extrudeId, name: "x", sketchId: "", distance: 24, bounds, volume: 19200 } as never,
+        [filletId]: { featureId: filletId, name: "f", sketchId: "", distance: 0 } as never, // the kernel's modifier row: no geometry
+      });
+      expect(rows[0].body).toBeUndefined(); // its own solid has the geometry
+      expect(rows[1].solid?.featureId).toBe(filletId); // its own row stays its own (no mass of its own)
+      expect(rows[1].body?.featureId).toBe(extrudeId);
+      expect(pinAnchor(rows[1])?.z).toBe(24);
+      expect(rows[1].componentId).toBe(s.doc.rootComponentId);
+      // nothing built yet: no body to borrow
+      expect(featureRows(s.doc, s.timeline, s.rollbackIndex, {})[1].body).toBeUndefined();
+    });
+
+    it("names sketches and features for sentences", () => {
+      const sketchId = Object.keys(s.doc.sketches)[0];
+      const extrudeId = s.timeline.find((o) => o.type === "feature.extrude")!.createdIds[0];
+      expect(nameOf(s.doc, sketchId)).toBe(s.doc.sketches[sketchId].name || "the sketch");
+      expect(nameOf(s.doc, extrudeId)).toBe((s.doc.features[extrudeId] as { name?: string }).name || extrudeId);
+      expect(nameOf(s.doc, "nothing-here")).toBe("nothing-here");
+    });
+
+    it("builds editOperation params with one value changed as text", () => {
+      const rows = featureRows(s.doc, s.timeline, s.rollbackIndex, {});
+      const params = paramsWith(rows[0], "distance", 25.5);
+      expect(params.distance).toBe("25.5");
+      expect(params.sketch).toBe(rows[0].op.params.sketch);
+      expect(rows[0].op.params.distance).toBe("h*2");
+    });
+
     it("evaluates expressions against the parameters", () => {
       expect(evalParam(s.doc, "h/4")).toBe(3);
       expect(evalParam(s.doc, 7)).toBe(7);
       expect(Number.isNaN(evalParam(s.doc, "nope*2"))).toBe(true);
     });
+  });
+
+  it("labels units once for every surface", () => {
+    expect(unitLabel("mm")).toBe("mm");
+    expect(unitLabel("deg")).toBe("°");
+    expect(unitLabel("")).toBe("");
+  });
+
+  it("unions and centres bounds", () => {
+    const a = { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 20, z: 30 } }, b = { min: { x: -5, y: 5, z: 10 }, max: { x: 5, y: 25, z: 20 } };
+    expect(unionBounds([a, b])).toEqual({ min: { x: -5, y: 0, z: 0 }, max: { x: 10, y: 25, z: 30 } });
+    expect(unionBounds([])).toBeNull();
+    expect(boundsCentre(a)).toEqual({ x: 5, y: 10, z: 15 });
   });
 
   it("knows which param a push on a face drives", () => {

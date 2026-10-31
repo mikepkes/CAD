@@ -4,7 +4,6 @@ import { Toolbar } from "./Toolbar";
 import { ConstraintBar } from "./ConstraintBar";
 import { BrowserPanel } from "./BrowserPanel";
 import { ParametersPanel } from "./ParametersPanel";
-import { InspectorPanel } from "./InspectorPanel";
 import { TimelinePanel } from "./TimelinePanel";
 import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
@@ -13,6 +12,11 @@ import { ExtrudePanel } from "./ExtrudePanel";
 import { HotkeyPanel } from "./HotkeyPanel";
 import { useStore } from "../model/store";
 import { installHotkeys } from "../model/hotkeyActions";
+import { useUi } from "../model/concepts/uiState";
+import { WorkbenchOverlay, HistoryStrip } from "./concepts/workbench";
+import { LensOverlay } from "./concepts/lens";
+import { IntentLine } from "./concepts/intent";
+import { PanelToggles, RightPanel } from "./ConceptShell";
 
 function Toast() {
   const toast = useStore((s) => s.toast);
@@ -34,6 +38,7 @@ function Toast() {
 export function App() {
   const mode = useStore((s) => s.mode);
   const initApp = useStore((s) => s.initApp);
+  const workbench = useUi((s) => s.panels.workbench);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
 
@@ -58,20 +63,25 @@ export function App() {
         </button>
 
         <main className="center">
-          <Viewport />
-          <Toast />
-          <ExtrudePanel />
-          <AgentPanel />
+          <div className="center-view">
+            <Viewport overlays={<>{workbench && <WorkbenchOverlay />}<LensOverlay /></>} />
+            <PanelToggles />
+            <Toast />
+            <ExtrudePanel />
+            <AgentPanel />
+          </div>
+          {workbench && mode === "model" && <div className="center-dock"><HistoryStrip /></div>}
         </main>
 
         <button className="side-toggle right" onClick={() => setRightOpen((v) => !v)}>
           {rightOpen ? "›" : "‹"}
         </button>
         <aside className={`side right ${rightOpen ? "" : "collapsed"}`}>
-          <InspectorPanel />
+          <RightPanel />
         </aside>
       </div>
       <StatusBar />
+      <IntentLine />
       <SettingsPanel />
       <HotkeyPanel />
     </div>

@@ -5,6 +5,13 @@
 export interface Box { w: number; h: number }
 export interface Pt { x: number; y: number }
 
+/** Card widths (px): a feature card, a wide card (verbs, HUD), a narrow chooser. Concepts never restate these. */
+export const CARD_W = 280;
+export const CARD_W_WIDE = 320;
+export const CARD_W_NARROW = 180;
+/** Height a placed card is assumed to have until it is measured (useCardSize). */
+export const CARD_FALLBACK_H = 160;
+
 export interface PlaceOpts {
   /** The point the card hangs off (viewport-local pixels). */
   anchor: Pt;

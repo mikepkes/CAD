@@ -20,8 +20,30 @@
   --k-bad: #f08a7a;
   --k-ghost: rgba(240, 164, 75, 0.6);
   /* surfaces over the viewport */
+  /* analysis legend swatches: these mirror the colours the shaders paint
+     (SceneManager.analysisMaterial, lensPass.ts); change both together */
+  --k-an-zebra: repeating-linear-gradient(90deg, #0d0d0d 0 8px, #fff 8px 16px);
+  --k-an-curvature: linear-gradient(90deg, #0000ff, #ffffff, #ff0000);
+  --k-an-draft-ok: rgb(69, 199, 97);
+  --k-an-draft-steep: rgb(237, 199, 64);
+  --k-an-undercut: rgb(219, 69, 64);
+  --k-an-glass: rgba(140, 173, 230, 0.5);
+  --k-an-edge: #eceae6;
+  /* the overhang shader's four classes (lensPass.ts OVERHANG_COLORS mirrors these as numbers) */
+  --k-an-overhang-bed: #56c2e6;
+  --k-an-overhang-steep: #f08a7a;
+  --k-an-overhang-mild: #f0a44b;
+  --k-an-overhang-neutral: #9aa3ad;
+  /* surfaces over the viewport */
   --k-float: rgba(26, 29, 33, 0.94);
   --k-float-line: #343a42;
+  /* history strip: the chip at the marker, rolled-back ghosts, the track */
+  --k-chip-at: #2a2218;
+  --k-ghost-line: #6e5634;
+  --k-ghost-ink: #b9a27f;
+  --k-track: #4a5058;
+  /* leader lines from a pin to its geometry */
+  --k-leader: rgba(236, 234, 230, 0.55);
   --k-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   --k-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --k-control: 30px;
@@ -55,6 +77,25 @@
 .k-btn.lg { height: var(--k-control-lg); border-radius: 7px; }
 .k-btn.sm { height: 26px; font-size: 12px; padding: 0 10px; }
 
+/* ---- text controls ---- */
+.k-input, .k-select {
+  height: var(--k-control);
+  box-sizing: border-box;
+  padding: 0 8px;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--k-float-line);
+  border-radius: var(--k-radius-sm);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.k-input:focus-visible, .k-select:focus-visible { outline: 2px solid var(--k-select); outline-offset: 1px; }
+.k-input[aria-invalid="true"] { border-color: var(--k-bad); }
+.k-input.lg { height: var(--k-control-lg); font-size: 14px; padding: 0 10px; }
+
 /* a row of mutually exclusive pills */
 .k-pills { display: inline-flex; gap: 4px; padding: 3px; border-radius: var(--k-radius-sm); background: var(--bg); border: 1px solid var(--line); }
 .k-pills .k-btn { border: none; background: transparent; color: var(--text-dim); height: 26px; }
@@ -76,6 +117,10 @@
   font-size: 13px;
   z-index: 20;
 }
+/* a card in a panel's flow (a pinned design, an accepted suggestion) */
+.k-card.inline { position: static; background: var(--panel); border-color: var(--line); box-shadow: none; border-radius: var(--k-radius-sm); padding: 10px 12px; gap: 8px; z-index: auto; }
+/* a proposal from the agent, as a tracked change */
+.k-card.agent { position: static; background: var(--k-agent-tint); border: 1px dashed var(--k-agent-line); box-shadow: none; padding: 10px 12px; gap: 8px; z-index: auto; }
 .k-card-head { display: flex; align-items: center; gap: 8px; }
 .k-card-head .k-num { color: var(--k-accent); }
 .k-card-head .k-title { font-weight: 600; flex: 1; }
@@ -125,12 +170,17 @@
 .k-pin.open { background: var(--k-accent); border-color: var(--k-accent); }
 .k-pin.ghost { background: var(--bg); color: var(--k-accent-dim); border-color: var(--k-accent-dim); border-style: dashed; }
 .k-pin.off { text-decoration: line-through; opacity: 0.7; }
+.k-pin.err { border-color: var(--k-bad); }
 .k-pin.cluster { width: auto; min-width: 28px; padding: 0 9px; border-radius: 14px; }
 .k-leader { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9; }
-.k-leader line { stroke: rgba(236, 234, 230, 0.55); stroke-width: 1.2; }
+.k-leader line { stroke: var(--k-leader); stroke-width: 1.2; }
 .k-leader line.open { stroke: var(--k-accent); }
 .k-leader line.ghost { stroke: var(--k-ghost); }
-.k-leader circle { fill: rgba(236, 234, 230, 0.55); }
+.k-leader circle { fill: var(--k-leader); }
+
+/* ---- hover sync: the hot feature, wherever it shows (pin, chip, sentence) ---- */
+.k-hot { outline: 2px solid var(--k-select); outline-offset: 2px; }
+.k-chip.k-hot { outline-offset: 1px; }
 
 /* ---- history strip ---- */
 .k-strip { display: flex; align-items: center; gap: 0; min-width: 0; }
@@ -140,13 +190,13 @@
   font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;
 }
 .k-chip .k-num { color: var(--k-accent); }
-.k-chip.at { background: #2a2218; border-color: var(--k-accent); }
-.k-chip.ghost { background: transparent; border-style: dashed; border-color: #6e5634; color: #b9a27f; }
+.k-chip.at { background: var(--k-chip-at); border-color: var(--k-accent); }
+.k-chip.ghost { background: transparent; border-style: dashed; border-color: var(--k-ghost-line); color: var(--k-ghost-ink); }
 .k-chip.ghost .k-num { color: var(--k-accent-dim); }
 .k-chip.off { text-decoration: line-through; }
 .k-chip.err { border-color: var(--k-bad); }
-.k-track { flex: 1; height: 2px; margin: 0 6px; min-width: 12px; background: #4a5058; }
-.k-track.ghost { background: repeating-linear-gradient(90deg, #6e5634 0 4px, transparent 4px 8px); }
+.k-track { flex: 1; height: 2px; margin: 0 6px; min-width: 12px; background: var(--k-track); }
+.k-track.ghost { background: repeating-linear-gradient(90deg, var(--k-ghost-line) 0 4px, transparent 4px 8px); }
 
 /* ---- legend ---- */
 .k-legend { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text); }
@@ -157,8 +207,14 @@
 /* ---- overlay layer over the viewport ---- */
 .k-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .k-overlay > * { pointer-events: auto; }
-.k-overlay > svg.k-leader { pointer-events: none; }
+/* a full-size SVG layer (leader lines, the lens frame) must not swallow orbit / pick events:
+   its own children opt back in with their own pointer-events */
+.k-overlay > svg { pointer-events: none; }
 
 /* ---- panels that join the app shell ---- */
 .k-panel-toggle { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; z-index: 15; }
 .k-dock { border-top: 1px solid var(--line); background: var(--panel); }
+/* tab strip at the top of a side panel (Inspector | Ledger | Space) */
+.k-tabs { display: flex; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.k-tabs .k-pills { flex: 1; }
+.k-tabs .k-pills .k-btn { flex: 1; justify-content: center; }

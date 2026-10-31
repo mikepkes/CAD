@@ -12,6 +12,11 @@ import type { NumberSpec } from "../../ui/kit/numberMath";
 
 export type Unit = "mm" | "deg" | "";
 
+/** The unit as a live number shows it after a value: "mm", "°" for degrees, nothing for a count. */
+export function unitLabel(unit: Unit | string): string {
+  return unit === "deg" ? "°" : unit;
+}
+
 export interface ParamSpec extends NumberSpec {
   /** Key in the operation's params (what editOperation receives). */
   key: string;
@@ -124,8 +129,12 @@ export interface FeatureRow {
   /** Past the rollback marker: exists but isn't built. */
   rolledBack: boolean;
   error?: string;
-  /** The body row this feature made or modified, when known. */
+  /** This feature's own solid row (a modifier's row carries no geometry). */
   solid?: SolidEval;
+  /** For a modifier whose own row has no geometry (fillet, shell, pattern…): the body it changed —
+   *  `op.params.body`, else, as the kernel resolves "the most recent body", the latest earlier body.
+   *  Undefined when `solid` itself has geometry. Pins anchor on `solid`, else here. */
+  body?: SolidEval;
   /** The component the feature's body belongs to (root when unknown). */
   componentId: string;
 }
@@ -160,15 +169,31 @@ export function featureRows(doc: CadDocument, timeline: OperationRecord[], rollb
     }
     const bodyId = typeof op.params.body === "string" ? op.params.body : featureId;
     const solid = solids[featureId] ?? solids[bodyId];
-    const sketchId = typeof op.params.sketch === "string" ? op.params.sketch : solid?.sketchId;
+    const body = resolveBody(solid, typeof op.params.body === "string" ? solids[op.params.body] : undefined, rows);
+    const sketchId = typeof op.params.sketch === "string" ? op.params.sketch : solid?.sketchId || body?.sketchId;
     const componentId = (sketchId && doc.sketches[sketchId]?.componentId) || doc.rootComponentId;
     rows.push({
       featureId, opId: op.opId, op, spec, num, index,
       name: f?.name || (typeof op.params.name === "string" && op.params.name) || `${spec.label} ${num}`,
-      values, exprs, suppressed: !!op.suppressed, rolledBack: index >= rollbackIndex, error: op.error, solid, componentId,
+      values, exprs, suppressed: !!op.suppressed, rolledBack: index >= rollbackIndex, error: op.error, solid, body, componentId,
     });
   });
   return rows;
+}
+
+const hasGeometry = (s: SolidEval | undefined): s is SolidEval => !!s && (!!s.bounds || !!s.centroid);
+
+/** The body a modifier changed: the named target, else the latest earlier body with geometry
+ *  (the kernel's "most recent body" rule). Undefined when the row's own solid has geometry. */
+function resolveBody(own: SolidEval | undefined, named: SolidEval | undefined, earlier: FeatureRow[]): SolidEval | undefined {
+  if (hasGeometry(own)) return undefined;
+  if (hasGeometry(named)) return named;
+  for (let i = earlier.length - 1; i >= 0; i--) {
+    const r = earlier[i];
+    if (hasGeometry(r.solid)) return r.solid;
+    if (hasGeometry(r.body)) return r.body;
+  }
+  return undefined;
 }
 
 /** Display name for a sketch / feature id, for sentences. */
@@ -179,17 +204,19 @@ export function nameOf(doc: CadDocument, id: string): string {
   return f?.name || id;
 }
 
-/** Where a feature's pin anchors in world space: a hole's first centre, else the top of its body's bounds. */
+/** Where a feature's pin anchors in world space: a hole's first centre, else the top of the bounds of
+ *  the body it made or modified (`row.body`; a bare `solid` for callers that build rows by hand). */
 export function pinAnchor(row: FeatureRow): { x: number; y: number; z: number } | null {
   const at = row.op.params.at;
   if (Array.isArray(at) && at[0] && typeof at[0].x === "number") return { x: at[0].x, y: at[0].y, z: at[0].z };
-  const b = row.solid?.bounds;
+  const geo = hasGeometry(row.solid) ? row.solid : row.body;
+  const b = geo?.bounds;
   if (b) {
     // spread pins of one body apart by feature number so stacked modifiers don't land on one point
     const k = (row.num % 4) / 4;
     return { x: b.min.x + (b.max.x - b.min.x) * (0.3 + 0.4 * k), y: b.min.y + (b.max.y - b.min.y) * (0.7 - 0.4 * k), z: b.max.z };
   }
-  const c = row.solid?.centroid;
+  const c = geo?.centroid;
   return c ? { x: c.x, y: c.y, z: c.z } : null;
 }
 
@@ -199,8 +226,32 @@ export function sentenceText(row: FeatureRow, doc: CadDocument): string {
     if ("text" in s && !("ref" in s)) return s.text;
     if ("ref" in s) return s.text;
     const p = row.spec.params.find((q) => q.key === s.param);
+    const u = p ? unitLabel(p.unit) : "";
+    const unit = u === "°" ? u : u ? ` ${u}` : "";
     const v = row.values[s.param];
-    const unit = p?.unit === "deg" ? "°" : p?.unit ? ` ${p.unit}` : "";
     return Number.isFinite(v) ? `${v}${unit}` : `${row.exprs[s.param] ?? "?"}${unit}`;
   }).join("");
+}
+
+/** The params editOperation receives for a row with one value changed (values travel as expression text). */
+export function paramsWith(row: Pick<FeatureRow, "op">, key: string, value: number): Record<string, unknown> {
+  return { ...row.op.params, [key]: String(value) };
+}
+
+export type Bounds3Like = { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+
+/** The box around every box in the list (null for none). */
+export function unionBounds<B extends Bounds3Like>(list: B[]): Bounds3Like | null {
+  if (!list.length) return null;
+  const u: Bounds3Like = { min: { ...list[0].min }, max: { ...list[0].max } };
+  for (const b of list) {
+    u.min = { x: Math.min(u.min.x, b.min.x), y: Math.min(u.min.y, b.min.y), z: Math.min(u.min.z, b.min.z) };
+    u.max = { x: Math.max(u.max.x, b.max.x), y: Math.max(u.max.y, b.max.y), z: Math.max(u.max.z, b.max.z) };
+  }
+  return u;
+}
+
+/** The centre of a bounding box. */
+export function boundsCentre(b: Bounds3Like): { x: number; y: number; z: number } {
+  return { x: (b.min.x + b.max.x) / 2, y: (b.min.y + b.max.y) / 2, z: (b.min.z + b.max.z) / 2 };
 }

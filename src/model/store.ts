@@ -120,6 +120,8 @@ export interface AppState {
   showHiddenGhosts: boolean;
   /** Surface-quality display: zebra / draft / curvature map, and curvature combs. */
   analysis: AnalysisView;
+  /** Another display (the lens) needs curvature data while the analysis mode itself is off. */
+  curvatureRequested: boolean;
   /** Per-body curvature and comb data for the current solids (when the display needs it). */
   analysisData: Record<string, { curvature: Float32Array; combs: Float32Array; vertices: number }>;
   showConstraints: boolean;
@@ -189,6 +191,8 @@ export interface AppState {
   toggleShowHiddenGhosts: () => void;
   /** Change the surface-quality display; curvature/combs are computed in the geometry backend. */
   setAnalysis: (patch: Partial<AnalysisView>) => Promise<void>;
+  /** Ask for curvature data regardless of the analysis mode (the lens's curvature view); off releases it. */
+  requestCurvature: (on: boolean) => Promise<void>;
   /** Show or hide bodies (feature ids) / sketches / components / datum planes. Undoable. */
   setVisibility: (ids: string[], visible: boolean) => Promise<void>;
   /** Show only these (hide every other body and sketch); null shows everything. */
@@ -199,6 +203,8 @@ export interface AppState {
   setGridSnap: (on: boolean) => void;
   toggleShowConstraints: () => void;
   dismissToast: () => void;
+  /** Write the status-bar line (the intent line reports what it ran). */
+  setMessage: (text: string) => void;
 
   // sketch lifecycle
   /** "Create Sketch" tool armed: a viewport click on a plane/face starts a sketch. */
@@ -380,7 +386,7 @@ export const useStore = create<AppState>((set, get) => {
   // geometry backend — only while a display that shows them is on.
   const refreshAnalysis = async () => {
     const a = get().analysis;
-    if (a.mode !== "curvature" && !a.combs) { if (Object.keys(get().analysisData).length) bump({ analysisData: {} }); return; }
+    if (a.mode !== "curvature" && !a.combs && !get().curvatureRequested) { if (Object.keys(get().analysisData).length) bump({ analysisData: {} }); return; }
     if (!get().kernelReady || !Object.keys(get().session.doc.features).length) return;
     try {
       const res = await geometry.analyze(get().session.doc, { combs: a.combs });
@@ -589,6 +595,7 @@ export const useStore = create<AppState>((set, get) => {
     showGrid: true,
     showHiddenGhosts: false,
     analysis: { mode: "none", stripes: 12, draftDeg: 1, pull: { x: 0, y: 0, z: 1 }, quantity: "mean", combs: false },
+    curvatureRequested: false,
     analysisData: {},
     section: null,
     gridSize: 10,
@@ -680,6 +687,11 @@ export const useStore = create<AppState>((set, get) => {
       set((s) => ({ analysis: { ...s.analysis, ...patch } }));
       await refreshAnalysis();
     },
+    requestCurvature: async (on) => {
+      if (get().curvatureRequested === on) return;
+      set({ curvatureRequested: on });
+      await refreshAnalysis();
+    },
     setVisibility: async (ids, visible) => {
       const r = await get().session.setVisibility(ids, visible);
       bump(r.ok ? {} : { toast: toastFor(r) });
@@ -697,6 +709,7 @@ export const useStore = create<AppState>((set, get) => {
     setGridSnap: (on) => set({ gridSnap: on }),
     toggleShowConstraints: () => set((s) => ({ showConstraints: !s.showConstraints })),
     dismissToast: () => set({ toast: null }),
+    setMessage: (text) => set({ lastMessage: text }),
 
     setSketchPlacing: (on) => set({ sketchPlacing: on }),
     startSketch: async (plane, offset) => {

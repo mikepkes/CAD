@@ -23,14 +23,15 @@ export interface LiveNumberProps {
 
 export function LiveNumber(p: LiveNumberProps) {
   const [typing, setTyping] = useState<string | null>(null);
-  const drag = useRef<{ x: number; v: number; moved: boolean } | null>(null);
+  // the spec is frozen for the drag: a caller whose step depends on the live value must not change the scale mid-scrub
+  const drag = useRef<{ x: number; v: number; spec: NumberSpec; moved: boolean; last?: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isTyping = typing != null;
   useEffect(() => { if (isTyping) { inputRef.current?.focus(); inputRef.current?.select(); } }, [isTyping]);
 
   const onDown = (e: PointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return;
-    drag.current = { x: e.clientX, v: p.value, moved: false };
+    drag.current = { x: e.clientX, v: p.value, spec: p.spec, moved: false };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* older browsers */ }
   };
   const onMove = (e: PointerEvent<HTMLButtonElement>) => {
@@ -39,13 +40,15 @@ export function LiveNumber(p: LiveNumberProps) {
     const dx = e.clientX - d.x;
     if (!d.moved && Math.abs(dx) < 3) return;
     d.moved = true;
-    const v = scrubValue(d.v, dx, p.spec, { coarse: e.shiftKey, fine: e.altKey });
+    const v = scrubValue(d.v, dx, d.spec, { coarse: e.shiftKey, fine: e.altKey });
+    d.last = v;
     if (v !== p.value) p.onChange(v);
   };
   const onUp = () => {
     const d = drag.current;
     drag.current = null;
-    if (d?.moved) p.onCommit?.(p.value);
+    // commit the last scrubbed value, not the displayed prop: a live edit may still be in flight
+    if (d?.moved) p.onCommit?.(d.last ?? p.value);
   };
   const onKey = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === "Enter") { e.preventDefault(); setTyping(formatValue(p.value, p.spec)); return; }

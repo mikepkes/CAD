@@ -1,0 +1,20 @@
+/* Workbench layout only: positions and spacing for its own elements. Colours,
+   radii and control heights come from kit.css tokens. */
+
+.k-pin.wb-component { font-family: inherit; font-size: 12px; white-space: nowrap; }
+
+.wb-chooser { gap: 4px; padding: 8px; }
+.wb-chooser .k-btn { justify-content: flex-start; }
+
+.wb-card .wb-param { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
+.wb-card .wb-error { white-space: pre-wrap; }
+
+.wb-verbs .wb-verb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wb-verbs .wb-push { display: inline-flex; align-items: center; gap: 4px; }
+.wb-verbs .wb-measure { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.wb-strip { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; min-width: 0; }
+.wb-strip-row { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+.wb-strip .k-strip { min-width: max-content; }
+.wb-range { width: 100%; margin: 0; accent-color: var(--k-accent); }
+.wb-strip-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; min-height: 26px; }
