@@ -7,7 +7,7 @@ Five ways of working, prototyped on the design canvas, now built into Chisel:
 | 1 | **Workbench** | Numbered pins on the geometry each feature made; a feature card beside the pin; verbs on a clicked face (Push/Pull, Look at, Measure; the card closes when the history, component or mode changes); a history strip whose rolled-back features stay as ghosts | `src/ui/concepts/workbench/` |
 | 2 | **Ledger** | The history read back as sentences with live numbers; hover a sentence ↔ hover the part; design intent checks; the agent's suggestions as tracked changes | `src/ui/concepts/ledger/` |
 | 3 | **Design Space** | Two parameters on a map, intents drawn as frontiers, mass shaded, pinned variants compared as ghosts | `src/ui/concepts/space/` |
-| 4 | **Lens** | Analysis (zebra, draft, curvature, x-ray, overhang) only under a draggable lens or wipe | `src/ui/concepts/lens/` |
+| 4 | **Lens** | Analysis (zebra, draft, curvature, x-ray, overhang, strain) only under a draggable lens or wipe | `src/ui/concepts/lens/` |
 | 5 | **Intent line** | Type what you want (`wall 5`, `front`, `measure`) — every route ends in the same command | `src/ui/concepts/intent/` |
 
 ## Tenets
@@ -42,7 +42,7 @@ Five ways of working, prototyped on the design canvas, now built into Chisel:
 | `model` | Model | model mode | new sketch, extrude, new component |
 | `sketch` | Sketch | a sketch is open (replaces `model`) | the drawing tools (`l` `r` `c` `a` `g` `o` `i` `p` `d` `t` `e` `s`), construction (`x`), look at the plane (`f`), delete |
 | `component` | Inside a component | the active component is not the root | up a level, back to the root |
-| `lens` | Lens on | the lens panel is on | the lens modes (zebra, draft, curvature, x-ray, overhang), lens shape |
+| `lens` | Lens on | the lens panel is on | the lens modes (zebra, draft, curvature, x-ray, overhang, strain: keys `1`–`6`), lens shape |
 | `feature` | Feature card open | a feature card is open with Pins on | roll to, next / previous, suppress, delete |
 | `face` | Face selected | a face is selected in model mode | sketch on face, extrude, push / pull, its feature, look at (`f` — wins over the model's frame) |
 
@@ -61,6 +61,10 @@ The focus contexts (`component`, `lens`, `feature`, `face`) exist only in model 
 - runnable from a 3D-mouse button. Buttons bind per context like the ring (`model/buttonMap.ts`): the global row is the base, any context may override a button or set it to nothing, the rest inherit, and a press resolves top-down through the active stack, falling through an action that can't run (`hotkeys.can`). Settings → 3D mouse → Buttons offers every action from the chosen context and those it sits on, `ring.open` included. And it is listed for the agent and MCP in `get_hotkeys`.
 
 Don't wire a feature into the ring, the palette or a button map separately; register the action and let the surfaces find it. Its `when` keeps every surface honest at once: the key falls through, the ring greys the slot, the intent line says it isn't available.
+
+## Compliant mechanisms: the Mechanism tab and the Strain lens
+
+On a model with flexure hinges or beam elements a **Mechanism** switch joins the panel toggles (hotkey action `view.mechanism`); it adds a Mechanism tab to the right panel (`src/ui/concepts/mechanism/`). For the drive (a bounded parameter a placing joint follows; pills choose between several) it charts the drive's effort (dU/d(drive): force in N, or torque in N·mm for an angle) across the drive's range, with the rest positions (effort zero and rising: filled), the tipping point between them (hollow), the snap force (the peak between the first two rests) and a marker at the current value; under it the rests in a sentence, the live effort, a **Sweep** button (`Sweep <drive>` / `Stop sweep`; also the `mechanism.sweep` action) that steps the drive up to its max, down to its min and back through `setParameterExpr` (a step every 150 ms; the model rebuilds latest-wins behind it), and a strain bar per flexure as a share of its material's limit. The **Strain** lens mode paints each flexure inside the lens by its peak strain against its limit (per element along a beam, per hinge around its pivot), over-limit striped, everything no flexure reaches grey, and reads out the worst flexure. Both read `useMechanism` (`src/model/concepts/mechanismStore.ts`), which follows the document while one of them is mounted: the pose is re-read just after each rebuild, the curve (`flexureEquilibria`, the slow part) in a Web Worker (`mechanism.worker.ts`; inline where there is none) only once the other parameters have been still for a moment, never while just the drive moves. The logic is `src/model/concepts/mechanism.ts` and `strainField` in `src/sim/flexure.ts`. The numbers are the flexure model's estimates (pseudo-rigid-body hinges, large-deflection beams), and the tooltips say so.
 
 ## Layout
 

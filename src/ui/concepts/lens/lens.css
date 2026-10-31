@@ -8,3 +8,4 @@
 .lens-handle:focus-visible { outline: none; stroke: var(--text); stroke-width: 3; }
 .lens-hud .lens-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .lens-hud .lens-readouts { display: flex; gap: 8px; flex-wrap: wrap; }
+.lens-hud .k-pills { flex-wrap: wrap; }

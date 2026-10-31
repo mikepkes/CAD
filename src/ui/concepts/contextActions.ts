@@ -249,6 +249,7 @@ export const CONTEXT_ACTIONS: HotkeyAction[] = [
   lensMode("curvature", "3"),
   lensMode("xray", "4"),
   lensMode("overhang", "5"),
+  lensMode("strain", "6"),
   {
     id: "lens.shape", label: "Lens / wipe", context: "lens", defaultPrimary: "w",
     when: lensOn,

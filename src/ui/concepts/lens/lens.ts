@@ -9,6 +9,8 @@ import { arrowDir } from "../../kit/numberMath";
 import { boundsCentre } from "../../../model/concepts/featureCatalog";
 import type { SolidEval } from "../../../core/features";
 import { OVERHANG_AMBER_SIN, OVERHANG_RED_SIN, type LensMode, type LensShape, type LensSpec } from "../../../viewport/lensPass";
+import type { FlexureState, StrainSegment } from "../../../sim/flexure";
+import { worstFlexure } from "../../../model/concepts/mechanism";
 
 export { boundsCentre };
 
@@ -44,6 +46,7 @@ export const MODES: { key: LensMode; label: string; title: string }[] = [
   { key: "curvature", label: "Curvature", title: "Blue concave, white flat, red convex" },
   { key: "xray", label: "X-ray", title: "Bodies as glass with every edge, so holes read through" },
   { key: "overhang", label: "Overhang", title: "Faces that need support when printed" },
+  { key: "strain", label: "Strain", title: "Each flexure coloured by its peak bending strain against its material's limit" },
 ];
 export const SHAPES: { key: LensShape; label: string }[] = [{ key: "lens", label: "Lens" }, { key: "wipe", label: "Wipe" }];
 export const SIZES: { key: LensSize; label: string }[] = [{ key: "S", label: "S" }, { key: "M", label: "M" }, { key: "L", label: "L" }];
@@ -141,9 +144,12 @@ export interface AnalysisParams {
   quantity: "mean" | "gaussian" | "max" | "min";
 }
 
-/** The spec the 3D pass renders from. */
-export function toLensSpec(s: Pick<LensState, "mode" | "orient">, f: LensFrame, a: AnalysisParams): LensSpec {
-  return { mode: s.mode, shape: f.shape, x: f.x, y: f.y, r: f.r, wipeX: f.wipeX, up: orientUp(s.orient), stripes: a.stripes, draftDeg: a.draftDeg, pull: a.pull, quantity: a.quantity };
+/** The spec the 3D pass renders from (with the strain field, in strain mode). */
+export function toLensSpec(s: Pick<LensState, "mode" | "orient">, f: LensFrame, a: AnalysisParams, strain?: StrainSegment[]): LensSpec {
+  return {
+    mode: s.mode, shape: f.shape, x: f.x, y: f.y, r: f.r, wipeX: f.wipeX, up: orientUp(s.orient), stripes: a.stripes, draftDeg: a.draftDeg, pull: a.pull, quantity: a.quantity,
+    ...(s.mode === "strain" ? { strain: strain ?? [] } : {}),
+  };
 }
 
 export interface LegendSpec { rows?: { color: string; label: string }[]; ramp?: { css: string; min: string; mid?: string; max: string } }
@@ -162,19 +168,53 @@ export function legendFor(mode: LensMode): LegendSpec {
       { color: "var(--k-an-overhang-mild)", label: "Overhang 0–45°" },
       { color: "var(--k-an-overhang-neutral)", label: "Vertical or facing up" },
     ] };
+    case "strain": return {
+      ramp: { css: "var(--k-an-strain)", min: "0", mid: "half", max: "the limit" },
+      rows: [{ color: "var(--k-an-strain-over)", label: "Over the material's limit" }, { color: "var(--k-an-strain-rigid)", label: "Rigid: no flexure here" }],
+    };
   }
 }
 
-export interface ReadoutSpec { label: string; value: string; title?: string }
+export interface ReadoutSpec { label: string; value: string; title?: string; state?: "ok" | "bad" }
+
+/** What the Strain lens reads out: the flexure working hardest, or that there are none. */
+export interface StrainSummary {
+  /** Flexures and beams in the model (0: not a compliant mechanism). */
+  count: number;
+  /** The pose has not been read yet. */
+  pending?: boolean;
+  worst?: { name: string; strain: number; pct: number };
+}
+
+/** The strain readouts' input: how many flexures the model has, and the pose as read (undefined while it is being read). */
+export function strainSummary(count: number, state: Pick<FlexureState, "flexures"> | undefined): StrainSummary {
+  if (!count) return { count: 0 };
+  if (!state) return { count, pending: true };
+  const w = worstFlexure(state);
+  return { count: state.flexures.length || count, ...(w ? { worst: { name: w.name, strain: w.strain, pct: w.pct } } : {}) };
+}
+
+const STRAIN_SOURCE = "From the flexure model: each hinge as a small-length flexural pivot, each beam by a large-deflection beam solve; an estimate, not a finite-element result";
 
 /** The readouts the HUD shows for a mode. */
-export function readoutsFor(mode: LensMode, a: AnalysisParams, o: { bodiesInside: number; orient: Orient; hasCurvature: boolean }): ReadoutSpec[] {
+export function readoutsFor(mode: LensMode, a: AnalysisParams, o: { bodiesInside: number; orient: Orient; hasCurvature: boolean; strain?: StrainSummary }): ReadoutSpec[] {
   switch (mode) {
     case "xray": return [{ label: "Bodies under the lens", value: String(o.bodiesInside), title: "Counted by each body's bounds centre" }];
     case "overhang": return [{ label: "Orientation", value: ORIENTS.find((x) => x.key === o.orient)?.label ?? o.orient, title: "Faces are coloured by their angle to the build direction; a face count would need the B-rep, so none is shown" }];
     case "draft": return [{ label: "Draft angle", value: `${a.draftDeg}°` }, { label: "Pull", value: `${a.pull.x}, ${a.pull.y}, ${a.pull.z}` }];
     case "zebra": return [{ label: "Stripes", value: String(a.stripes) }];
     case "curvature": return [{ label: "Quantity", value: a.quantity }, ...(o.hasCurvature ? [] : [{ label: "Data", value: "none yet", title: "Curvature is being computed for the lens (or turn on Analysis ▸ Curvature / Combs); it appears when the backend answers" }])];
+    case "strain": {
+      const s = o.strain;
+      if (!s || s.count === 0) return [{ label: "Flexures", value: "none in this model", title: "Strain shows on compliant mechanisms: flexure hinges and beam elements" }];
+      if (s.pending || !s.worst) return [{ label: "Flexures", value: String(s.count) }, { label: "Strain", value: "reading…" }];
+      const w = s.worst, bad = w.pct > 100;
+      return [
+        { label: "Worst flexure", value: w.name, title: STRAIN_SOURCE },
+        { label: "Peak strain", value: `${(w.strain * 100).toFixed(2)}%`, title: STRAIN_SOURCE },
+        { label: "Of its limit", value: Number.isFinite(w.pct) ? `${Math.round(w.pct)}%` : "no limit", state: bad ? "bad" : "ok", title: "Peak strain as a share of the material's allowable strain" },
+      ];
+    }
   }
 }
 

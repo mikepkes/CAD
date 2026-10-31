@@ -5,7 +5,7 @@
 import { forwardRef } from "react";
 import { Card, Legend, Pills, Readout } from "../../kit/primitives";
 import { CARD_W_WIDE } from "../../kit/anchor";
-import { MODES, MODE_LABEL, ORIENTS, SHAPES, SIZES, legendFor, readoutsFor, type AnalysisParams, type LensMode, type LensShape, type LensSize, type Orient } from "./lens";
+import { MODES, MODE_LABEL, ORIENTS, SHAPES, SIZES, legendFor, readoutsFor, type AnalysisParams, type StrainSummary, type LensMode, type LensShape, type LensSize, type Orient } from "./lens";
 
 export interface LensHudProps {
   at: { x: number; y: number };
@@ -19,6 +19,8 @@ export interface LensHudProps {
   bodiesInside: number;
   /** Whether any body carries curvature data right now. */
   hasCurvature: boolean;
+  /** The flexure working hardest (strain readouts). */
+  strain?: StrainSummary;
   onMode: (m: LensMode) => void;
   onShape: (s: LensShape) => void;
   onSize: (s: LensSize) => void;
@@ -28,7 +30,7 @@ export interface LensHudProps {
 
 export const LensHud = forwardRef<HTMLDivElement, LensHudProps>(function LensHud(p, ref) {
   const legend = legendFor(p.mode);
-  const readouts = readoutsFor(p.mode, p.analysis, { bodiesInside: p.bodiesInside, orient: p.orient, hasCurvature: p.hasCurvature });
+  const readouts = readoutsFor(p.mode, p.analysis, { bodiesInside: p.bodiesInside, orient: p.orient, hasCurvature: p.hasCurvature, strain: p.strain });
   return (
     <Card ref={ref} at={p.at} width={p.width ?? CARD_W_WIDE} title={`${MODE_LABEL[p.mode]} lens`} ariaLabel="Lens" onClose={p.onClose} className="lens-hud">
       <Pills value={p.mode} options={MODES} onChange={p.onMode} ariaLabel="Lens mode" />
@@ -38,7 +40,7 @@ export const LensHud = forwardRef<HTMLDivElement, LensHudProps>(function LensHud
       </div>
       {p.mode === "overhang" && <Pills value={p.orient} options={ORIENTS} onChange={p.onOrient} ariaLabel="Print orientation" />}
       <div className="lens-readouts">
-        {readouts.map((r) => <Readout key={r.label} label={r.label} value={r.value} title={r.title} />)}
+        {readouts.map((r) => <Readout key={r.label} label={r.label} value={r.value} title={r.title} state={r.state} />)}
       </div>
       <Legend rows={legend.rows} ramp={legend.ramp} />
     </Card>

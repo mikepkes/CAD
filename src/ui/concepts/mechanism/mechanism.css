@@ -1,0 +1,45 @@
+/* Mechanism tab: layout for its own elements only. Colours are kit / app tokens. */
+
+.mech { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; min-width: 0; }
+.mech-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.mech-empty { margin: 0; line-height: 1.45; font-size: 12.5px; }
+
+.mech-chart { width: 100%; height: auto; display: block; border-radius: var(--k-radius-sm); background: var(--bg); user-select: none; }
+.mech-chart text { font-family: var(--k-mono); }
+.mech-chart .mech-tick { fill: var(--text-dim); font-size: 10px; }
+.mech-chart .mech-axis { fill: var(--text-dim); font-size: 10.5px; }
+.mech-chart .mech-label { fill: var(--text); font-size: 10.5px; font-weight: 600; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.mech-chart .mech-grid { stroke: var(--line); stroke-width: 1; }
+.mech-chart .mech-zero { stroke: var(--text-dim); stroke-width: 1; }
+.mech-chart .mech-curve { fill: none; stroke: var(--k-select); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.mech-chart .mech-stable { fill: var(--k-ok); stroke: var(--bg); stroke-width: 2; }
+.mech-chart .mech-unstable { fill: var(--bg); stroke: var(--k-bad); stroke-width: 2; }
+.mech-chart .mech-snap { fill: var(--k-accent); stroke: var(--bg); stroke-width: 1.5; }
+.mech-chart .mech-now-line { stroke: var(--k-accent); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.mech-chart .mech-now { fill: var(--k-accent); stroke: var(--k-accent-ink); stroke-width: 1.5; }
+.mech-chart .mech-hover-line { stroke: var(--text-dim); stroke-width: 1; }
+.mech-chart .mech-hit { fill: transparent; cursor: crosshair; }
+.mech-chart-wait { height: 120px; display: flex; align-items: center; justify-content: center; border-radius: var(--k-radius-sm); background: var(--bg); font-size: 12px; }
+
+.mech-key { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; }
+.mech-key span { display: inline-flex; align-items: center; gap: 5px; }
+.mech-key i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.mech-key .mech-key-stable { background: var(--k-ok); }
+.mech-key .mech-key-unstable { border: 2px solid var(--k-bad); width: 5px; height: 5px; }
+.mech-key .mech-key-snap { background: var(--k-accent); border-radius: 1px; transform: rotate(45deg); width: 8px; height: 8px; }
+.mech-key .mech-key-now { background: var(--k-accent); width: 2px; height: 11px; border-radius: 0; }
+
+.mech-sentence { margin: 0; font-size: 12.5px; line-height: 1.45; }
+.mech-readouts { display: flex; gap: 8px; }
+.mech-readouts .k-readout { flex: 1; min-width: 0; }
+.mech > .k-btn { justify-content: center; }
+
+.mech-strain { display: flex; flex-direction: column; gap: 6px; }
+.mech-strain-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 11.5px; }
+.mech-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
+.mech-bars li { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 4ch; align-items: center; gap: 8px; }
+.mech-bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mech-bar-track { height: 8px; border-radius: 4px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.mech-bar-fill { display: block; height: 100%; }
+.mech-bar-val { text-align: right; }
+.mech-bars li.over .mech-bar-val { color: var(--k-bad); }

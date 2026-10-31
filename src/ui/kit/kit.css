@@ -34,6 +34,10 @@
   --k-an-overhang-steep: #f08a7a;
   --k-an-overhang-mild: #f0a44b;
   --k-an-overhang-neutral: #9aa3ad;
+  /* the strain shader: no strain → the material's limit, over the limit (striped), rigid (lensPass.ts STRAIN_COLORS) */
+  --k-an-strain: linear-gradient(90deg, #3355cc, #1fa392, #8fd14f, #f7d43a);
+  --k-an-strain-over: repeating-linear-gradient(135deg, #e8366f 0 4px, #902245 4px 8px);
+  --k-an-strain-rigid: #8a929c;
   /* surfaces over the viewport */
   --k-float: rgba(26, 29, 33, 0.94);
   --k-float-line: #343a42;

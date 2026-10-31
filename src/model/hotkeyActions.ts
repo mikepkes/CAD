@@ -11,6 +11,9 @@ import { useStore, Tool } from "./store";
 import { useUi } from "./concepts/uiState";
 import { contextStack, ContextInput } from "./contexts";
 import { useRing, RING_ACTION_ID } from "./ring";
+import { hasFlexures } from "../sim/flexure";
+import { drivesOf } from "./concepts/mechanism";
+import { useMechanism } from "./concepts/mechanismStore";
 
 const st = () => useStore.getState();
 const fire = (name: string) => window.dispatchEvent(new CustomEvent(name));
@@ -42,6 +45,12 @@ const ACTIONS: HotkeyAction[] = [
   { id: "view.lens", label: "Toggle the lens", context: "global", defaultPrimary: "shift+l", run: () => useUi.getState().togglePanel("lens") },
   { id: "view.ledger", label: "Toggle the Ledger tab", context: "global", run: () => useUi.getState().togglePanel("ledger") },
   { id: "view.space", label: "Toggle the Design Space tab", context: "global", run: () => useUi.getState().togglePanel("space") },
+  { id: "view.mechanism", label: "Toggle the Mechanism tab", context: "global", run: () => useUi.getState().togglePanel("mechanism") },
+  {
+    id: "mechanism.sweep", label: "Sweep the mechanism's drive", context: "model",
+    when: () => hasFlexures(st().session.doc) && drivesOf(st().session.doc).length > 0,
+    run: () => { const m = useMechanism.getState(); if (m.sweeping) m.stopSweep(); else void m.sweep(); },
+  },
   { id: RING_ACTION_ID, label: "Action ring (hold, point, release)", context: "global", defaultPrimary: "space", run: () => useRing.getState().openRing() },
   { id: "edit.undo", label: "Undo", context: "global", defaultPrimary: "mod+z", run: () => st().undo() },
   { id: "edit.redo", label: "Redo", context: "global", defaultPrimary: "mod+shift+z", defaultSecondary: "mod+y", run: () => st().redo() },

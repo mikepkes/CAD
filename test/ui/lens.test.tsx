@@ -7,6 +7,7 @@ import { LensOverlay } from "../../src/ui/concepts/lens";
 import { useLens, DEFAULT_LENS } from "../../src/ui/concepts/lens/lens";
 import { useStore } from "../../src/model/store";
 import { useUi } from "../../src/model/concepts/uiState";
+import { useMechanism } from "../../src/model/concepts/mechanismStore";
 
 const RECT = { left: 100, top: 50, w: 800, h: 600 };
 const A = { stripes: 12, draftDeg: 1.5, pull: { x: 0, y: 0, z: 1 }, quantity: "mean" as const };
@@ -64,12 +65,12 @@ describe("LensHud", () => {
   const props = { at: { x: 10, y: 20 }, mode: "xray" as const, shape: "lens" as const, size: "M" as const, orient: "standing" as const, analysis: A, bodiesInside: 2, hasCurvature: false,
     onMode: vi.fn(), onShape: vi.fn(), onSize: vi.fn(), onOrient: vi.fn(), onClose: vi.fn() };
 
-  it("shows the mode pills (no Stress), the x-ray body count and the legend", async () => {
+  it("shows the mode pills (Strain, no Stress), the x-ray body count and the legend", async () => {
     render(<LensHud {...props} />);
     const dialog = screen.getByRole("dialog", { name: "Lens" });
     expect(dialog.style.left).toBe("10px");
     const modes = screen.getByRole("group", { name: "Lens mode" });
-    expect(Array.from(modes.querySelectorAll("button")).map((b) => b.textContent)).toEqual(["Zebra", "Draft", "Curvature", "X-ray", "Overhang"]);
+    expect(Array.from(modes.querySelectorAll("button")).map((b) => b.textContent)).toEqual(["Zebra", "Draft", "Curvature", "X-ray", "Overhang", "Strain"]);
     expect(screen.queryByText(/stress/i)).toBeNull();
     expect(screen.getByText("Bodies under the lens").nextSibling?.textContent).toBe("2");
     expect(screen.getByText("Every edge, hidden ones too")).toBeTruthy();
@@ -91,6 +92,24 @@ describe("LensHud", () => {
     await userEvent.click(screen.getByRole("button", { name: "On back" }));
     expect(props.onOrient).toHaveBeenCalledWith("back");
     expect(screen.getByText("Overhang over 45°: needs support")).toBeTruthy();
+  });
+
+  it("reads out the worst flexure and shows the strain legend in strain mode", async () => {
+    const strain = { count: 8, worst: { name: "Beam lower left", strain: 0.0166, pct: 41.4 } };
+    render(<LensHud {...props} mode="strain" strain={strain} />);
+    expect(screen.getByRole("dialog", { name: "Lens" }).textContent).toContain("Strain lens");
+    expect(screen.getByText("Worst flexure").nextSibling?.textContent).toBe("Beam lower left");
+    expect(screen.getByText("Peak strain").nextSibling?.textContent).toBe("1.66%");
+    expect(screen.getByText("Of its limit").nextSibling?.textContent).toBe("41%");
+    expect(screen.getByText("Over the material's limit")).toBeTruthy();
+    expect(screen.getByText("the limit")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Strain" }));
+    expect(props.onMode).toHaveBeenCalledWith("strain");
+  });
+
+  it("says a model without flexures has nothing to show in strain mode", () => {
+    render(<LensHud {...props} mode="strain" />);
+    expect(screen.getByText("none in this model")).toBeTruthy();
   });
 
   it("says when curvature data is missing", () => {
@@ -135,6 +154,34 @@ describe("LensOverlay", () => {
     useStore.setState({ mode: "model" });
     rerender(<LensOverlay />); // no live scene → zero rect → nothing to draw, no crash
     expect(container.querySelector(".lens-frame")).toBeNull();
+  });
+
+  it("follows the mechanism in strain mode and reads its worst flexure", async () => {
+    show();
+    const follow = vi.spyOn(useMechanism.getState(), "follow");
+    const release = vi.fn();
+    follow.mockReturnValue(release);
+    useStore.setState({ session: { ...useStore.getState().session, doc: { ...useStore.getState().session.doc, joints: {
+      j1: { id: "j1", kind: "flexure", flexure: { length: 4, width: 6, thickness: 1 } },
+      j2: { id: "j2", kind: "flexure", flexure: { length: 4, width: 6, thickness: 1 } },
+    } } } as never });
+    useMechanism.setState({ pose: null });
+    render(<LensOverlay rect={RECT} />);
+    expect(follow).not.toHaveBeenCalled(); // zebra: nothing to follow
+    await userEvent.click(screen.getByRole("button", { name: "Strain" }));
+    expect(useLens.getState().mode).toBe("strain");
+    expect(follow).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("reading…")).toBeTruthy();
+    act(() => useMechanism.setState({ pose: { rev: 1, drive: "theta", value: 10, effort: 3, segments: [], state: { flexures: [
+      { joint: "j1", name: "Hinge O2", angle: 10, strain: 0.01, allowable: 0.04, moment: 0 },
+      { joint: "j2", name: "Hinge A", angle: 20, strain: 0.03, allowable: 0.04, moment: 0 },
+    ], energy: 1, utilisation: 0.75, beams: [] } } }));
+    expect(screen.getByText("Worst flexure").nextSibling?.textContent).toBe("Hinge A");
+    expect(screen.getByText("Of its limit").nextSibling?.textContent).toBe("75%");
+    await userEvent.click(screen.getByRole("button", { name: "Zebra" }));
+    expect(release).toHaveBeenCalled();
+    follow.mockRestore();
+    useMechanism.setState({ pose: null });
   });
 
   it("switches mode from the HUD and reads the orientation back", async () => {
