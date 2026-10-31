@@ -472,3 +472,16 @@ single frame (single-component bodies — the common case — are exact). See
 `test/assembly.test.ts`, `test/backend_assembly.test.ts` and
 `test/scissor_jointed.build.test.ts` (which checks the fast path matches a full
 rebuild).
+
+## License
+
+Chisel CAD is free and open source under the [MIT License](LICENSE).
+
+It is built on third-party software under its own licenses, nearly all
+permissive. The two exceptions are LGPL libraries used unmodified as separate,
+replaceable WebAssembly modules: the OpenCASCADE kernel (via
+`replicad-opencascadejs`) and the PlaneGCS sketch solver. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for their source and how to
+replace them. Every build also ships `THIRD_PARTY_LICENSES.txt`, the full list
+of bundled packages with their license texts (`npm run licenses` regenerates
+it).
