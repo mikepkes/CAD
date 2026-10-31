@@ -344,6 +344,25 @@ snap; μ per material):
     straightens a little.
   - **Strain:** blades reach 0.74% at the corners of travel, within every
     material's limit.
+- **Example: `public/examples/gimbal.json`** (`test/gimbal.build.test.ts`).
+  - **Mechanism:** a two-axis flexure gimbal for a fine-steering mirror. A ring
+    rides on two yoke posts through cross-blade pivots (axis X), the mirror
+    platform inside it on a second pair (axis Y, carried by the ring); ±8° on
+    each axis. Each pivot is two Ti-6Al-4V blades (14 × 10 × 0.4 mm) crossing
+    at 90° at their midpoints, their halves clamped to either part.
+  - **As flexures, not beams:** blades crossing at their midpoints bend in a
+    constant-moment arc when the clamps turn (the end shear vanishes at λ = ½),
+    which is exactly the small-length flexural pivot: k = EI/L and ε = tφ/2L
+    per blade. So each blade is one `flexure` joint about the pivot axis (the
+    first on each axis driven, the other three `closes`), and an axis meets
+    4·EI/L = 1.74 N·m/rad, which the sweep reproduces to 0.1%. A `beam` joint
+    bends in its parts' XY plane and cannot hold a blade standing in a
+    vertical plane.
+  - **Strain:** 0.2% at 8° on either axis, 0.4 of the allowable.
+  - **Not modelled:** a cross-blade pivot's centre shift (a fraction of L·φ²,
+    i.e. of 0.27 mm at 8°: the model's pin stays put), the blades' change of
+    stiffness under the hung load, and inertia (no mass in the solver, so no
+    first mode; the test logs a hand estimate of ~20 Hz for the inner axis).
 
 ## Built since: frame compliance
 
