@@ -1,0 +1,6698 @@
+{
+  "format": "chisel-cad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 861,
+  "rollbackIndex": 418,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "alpha",
+        "expression": "0",
+        "min": -8,
+        "max": 8,
+        "step": 0.5
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557183
+    },
+    {
+      "opId": "op3",
+      "type": "parameter.add",
+      "params": {
+        "name": "beta",
+        "expression": "0",
+        "min": -8,
+        "max": 8,
+        "step": 0.5
+      },
+      "createdIds": [
+        "param4"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557189
+    },
+    {
+      "opId": "op5",
+      "type": "parameter.add",
+      "params": {
+        "name": "L",
+        "expression": "14",
+        "min": 10,
+        "max": 16,
+        "step": 0.5
+      },
+      "createdIds": [
+        "param6"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557189
+    },
+    {
+      "opId": "op7",
+      "type": "parameter.add",
+      "params": {
+        "name": "t",
+        "expression": "0.4",
+        "min": 0.25,
+        "max": 0.6,
+        "step": 0.05
+      },
+      "createdIds": [
+        "param8"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557189
+    },
+    {
+      "opId": "op9",
+      "type": "parameter.add",
+      "params": {
+        "name": "w",
+        "expression": "10",
+        "min": 6,
+        "max": 14,
+        "step": 1
+      },
+      "createdIds": [
+        "param10"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557195
+    },
+    {
+      "opId": "op11",
+      "type": "parameter.add",
+      "params": {
+        "name": "range",
+        "expression": "8",
+        "min": 8,
+        "max": 15,
+        "step": 1
+      },
+      "createdIds": [
+        "param12"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557196
+    },
+    {
+      "opId": "op13",
+      "type": "parameter.add",
+      "params": {
+        "name": "platR",
+        "expression": "44",
+        "min": 36,
+        "max": 50,
+        "step": 1
+      },
+      "createdIds": [
+        "param14"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557196
+    },
+    {
+      "opId": "op15",
+      "type": "parameter.add",
+      "params": {
+        "name": "cL",
+        "expression": "L/(2*sqrt(2))"
+      },
+      "createdIds": [
+        "param16"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557196
+    },
+    {
+      "opId": "op17",
+      "type": "parameter.add",
+      "params": {
+        "name": "hw",
+        "expression": "w + 1"
+      },
+      "createdIds": [
+        "param18"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557197
+    },
+    {
+      "opId": "op19",
+      "type": "parameter.add",
+      "params": {
+        "name": "pY",
+        "expression": "platR + 2 + hw"
+      },
+      "createdIds": [
+        "param20"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557199
+    },
+    {
+      "opId": "op21",
+      "type": "parameter.add",
+      "params": {
+        "name": "Rin",
+        "expression": "pY + hw + 3"
+      },
+      "createdIds": [
+        "param22"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557200
+    },
+    {
+      "opId": "op23",
+      "type": "parameter.add",
+      "params": {
+        "name": "Rout",
+        "expression": "Rin + 8"
+      },
+      "createdIds": [
+        "param24"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557200
+    },
+    {
+      "opId": "op25",
+      "type": "parameter.add",
+      "params": {
+        "name": "pX",
+        "expression": "Rout + hw + 4"
+      },
+      "createdIds": [
+        "param26"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557202
+    },
+    {
+      "opId": "op27",
+      "type": "parameter.add",
+      "params": {
+        "name": "H",
+        "expression": "9 + 10*cos(rad(range)) + Rout*sin(rad(range))"
+      },
+      "createdIds": [
+        "param28"
+      ],
+      "label": "Add parameter",
+      "at": 1793425557203
+    },
+    {
+      "opId": "op29",
+      "type": "material.create",
+      "params": {
+        "name": "Ti-6Al-4V",
+        "kind": "metal",
+        "finish": "brushed",
+        "color": "#9aa0a6",
+        "youngsModulus": 114000,
+        "allowableStrain": 0.005
+      },
+      "createdIds": [
+        "mat30"
+      ],
+      "label": "Create material",
+      "at": 1793425557205
+    },
+    {
+      "opId": "op31",
+      "type": "material.create",
+      "params": {
+        "name": "Aluminium 6061",
+        "kind": "metal",
+        "finish": "satin",
+        "color": "#b9bdc3"
+      },
+      "createdIds": [
+        "mat32"
+      ],
+      "label": "Create material",
+      "at": 1793425557207
+    },
+    {
+      "opId": "op33",
+      "type": "material.create",
+      "params": {
+        "name": "Aluminium, black anodised",
+        "kind": "painted",
+        "color": "#3a3d44",
+        "roughness": 0.6
+      },
+      "createdIds": [
+        "mat34"
+      ],
+      "label": "Create material",
+      "at": 1793425557207
+    },
+    {
+      "opId": "op35",
+      "type": "material.create",
+      "params": {
+        "name": "Mirror",
+        "kind": "metal",
+        "finish": "polished",
+        "color": "#e8ecf0"
+      },
+      "createdIds": [
+        "mat36"
+      ],
+      "label": "Create material",
+      "at": 1793425557211
+    },
+    {
+      "opId": "op37",
+      "type": "component.create",
+      "params": {
+        "name": "Base"
+      },
+      "createdIds": [
+        "cmp38"
+      ],
+      "label": "New component",
+      "at": 1793425557212
+    },
+    {
+      "opId": "op39",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp38",
+        "material": "mat32"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425557212
+    },
+    {
+      "opId": "op40",
+      "type": "component.create",
+      "params": {
+        "name": "Ring"
+      },
+      "createdIds": [
+        "cmp41"
+      ],
+      "label": "New component",
+      "at": 1793425557213
+    },
+    {
+      "opId": "op42",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp41",
+        "material": "mat34"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425557213
+    },
+    {
+      "opId": "op43",
+      "type": "component.create",
+      "params": {
+        "name": "Platform"
+      },
+      "createdIds": [
+        "cmp44"
+      ],
+      "label": "New component",
+      "at": 1793425557214
+    },
+    {
+      "opId": "op45",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp44",
+        "material": "mat32"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425557214
+    },
+    {
+      "opId": "op46",
+      "type": "component.create",
+      "params": {
+        "name": "Mirror",
+        "parent": "cmp44"
+      },
+      "createdIds": [
+        "cmp47"
+      ],
+      "label": "New component",
+      "at": 1793425557215
+    },
+    {
+      "opId": "op48",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp47",
+        "material": "mat36"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425557216
+    },
+    {
+      "opId": "op49",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp38",
+        "name": "Base plate"
+      },
+      "createdIds": [
+        "sketch50",
+        "pt51"
+      ],
+      "label": "Create sketch",
+      "at": 1793425557217
+    },
+    {
+      "opId": "op52",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch50",
+        "x": "-(pX + hw + 5)",
+        "y": "-(Rout + 4)"
+      },
+      "createdIds": [
+        "pt53"
+      ],
+      "label": "Add point",
+      "at": 1793425557350
+    },
+    {
+      "opId": "op54",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch50",
+        "x": "pX + hw + 5",
+        "y": "-(Rout + 4)"
+      },
+      "createdIds": [
+        "pt55"
+      ],
+      "label": "Add point",
+      "at": 1793425557355
+    },
+    {
+      "opId": "op56",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch50",
+        "x": "pX + hw + 5",
+        "y": "Rout + 4"
+      },
+      "createdIds": [
+        "pt57"
+      ],
+      "label": "Add point",
+      "at": 1793425557358
+    },
+    {
+      "opId": "op58",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch50",
+        "x": "-(pX + hw + 5)",
+        "y": "Rout + 4"
+      },
+      "createdIds": [
+        "pt59"
+      ],
+      "label": "Add point",
+      "at": 1793425557360
+    },
+    {
+      "opId": "op60",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch50",
+        "start": {
+          "ref": "pt53"
+        },
+        "end": {
+          "ref": "pt55"
+        }
+      },
+      "createdIds": [
+        "ln61"
+      ],
+      "label": "Add line",
+      "at": 1793425557363
+    },
+    {
+      "opId": "op62",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch50",
+        "start": {
+          "ref": "pt55"
+        },
+        "end": {
+          "ref": "pt57"
+        }
+      },
+      "createdIds": [
+        "ln63"
+      ],
+      "label": "Add line",
+      "at": 1793425557366
+    },
+    {
+      "opId": "op64",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch50",
+        "start": {
+          "ref": "pt57"
+        },
+        "end": {
+          "ref": "pt59"
+        }
+      },
+      "createdIds": [
+        "ln65"
+      ],
+      "label": "Add line",
+      "at": 1793425557369
+    },
+    {
+      "opId": "op66",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch50",
+        "start": {
+          "ref": "pt59"
+        },
+        "end": {
+          "ref": "pt53"
+        }
+      },
+      "createdIds": [
+        "ln67"
+      ],
+      "label": "Add line",
+      "at": 1793425557371
+    },
+    {
+      "opId": "op68",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch50",
+        "distance": "6",
+        "operation": "new",
+        "name": "Base plate"
+      },
+      "createdIds": [
+        "ext69"
+      ],
+      "label": "Extrude",
+      "at": 1793425557375
+    },
+    {
+      "opId": "op70",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp38",
+        "name": "Yoke post +X"
+      },
+      "createdIds": [
+        "sketch71",
+        "pt72"
+      ],
+      "label": "Create sketch",
+      "at": 1793425557391
+    },
+    {
+      "opId": "op73",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch71",
+        "x": "pX - hw - 1",
+        "y": "-(cL + 2)"
+      },
+      "createdIds": [
+        "pt74"
+      ],
+      "label": "Add point",
+      "at": 1793425557392
+    },
+    {
+      "opId": "op75",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch71",
+        "x": "pX + hw + 1",
+        "y": "-(cL + 2)"
+      },
+      "createdIds": [
+        "pt76"
+      ],
+      "label": "Add point",
+      "at": 1793425557392
+    },
+    {
+      "opId": "op77",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch71",
+        "x": "pX + hw + 1",
+        "y": "cL + 2"
+      },
+      "createdIds": [
+        "pt78"
+      ],
+      "label": "Add point",
+      "at": 1793425557454
+    },
+    {
+      "opId": "op79",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch71",
+        "x": "pX - hw - 1",
+        "y": "cL + 2"
+      },
+      "createdIds": [
+        "pt80"
+      ],
+      "label": "Add point",
+      "at": 1793425557480
+    },
+    {
+      "opId": "op81",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch71",
+        "start": {
+          "ref": "pt74"
+        },
+        "end": {
+          "ref": "pt76"
+        }
+      },
+      "createdIds": [
+        "ln82"
+      ],
+      "label": "Add line",
+      "at": 1793425557481
+    },
+    {
+      "opId": "op83",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch71",
+        "start": {
+          "ref": "pt76"
+        },
+        "end": {
+          "ref": "pt78"
+        }
+      },
+      "createdIds": [
+        "ln84"
+      ],
+      "label": "Add line",
+      "at": 1793425557482
+    },
+    {
+      "opId": "op85",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch71",
+        "start": {
+          "ref": "pt78"
+        },
+        "end": {
+          "ref": "pt80"
+        }
+      },
+      "createdIds": [
+        "ln86"
+      ],
+      "label": "Add line",
+      "at": 1793425557484
+    },
+    {
+      "opId": "op87",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch71",
+        "start": {
+          "ref": "pt80"
+        },
+        "end": {
+          "ref": "pt74"
+        }
+      },
+      "createdIds": [
+        "ln88"
+      ],
+      "label": "Add line",
+      "at": 1793425557485
+    },
+    {
+      "opId": "op89",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch71",
+        "distance": "H - cL - 5",
+        "operation": "join",
+        "name": "Yoke post +X"
+      },
+      "createdIds": [
+        "ext90"
+      ],
+      "label": "Extrude",
+      "at": 1793425557486
+    },
+    {
+      "opId": "op91",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp38",
+        "name": "Yoke post -X"
+      },
+      "createdIds": [
+        "sketch92",
+        "pt93"
+      ],
+      "label": "Create sketch",
+      "at": 1793425557488
+    },
+    {
+      "opId": "op94",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch92",
+        "x": "-pX - hw - 1",
+        "y": "-(cL + 2)"
+      },
+      "createdIds": [
+        "pt95"
+      ],
+      "label": "Add point",
+      "at": 1793425557490
+    },
+    {
+      "opId": "op96",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch92",
+        "x": "-pX + hw + 1",
+        "y": "-(cL + 2)"
+      },
+      "createdIds": [
+        "pt97"
+      ],
+      "label": "Add point",
+      "at": 1793425557507
+    },
+    {
+      "opId": "op98",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch92",
+        "x": "-pX + hw + 1",
+        "y": "cL + 2"
+      },
+      "createdIds": [
+        "pt99"
+      ],
+      "label": "Add point",
+      "at": 1793425557552
+    },
+    {
+      "opId": "op100",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch92",
+        "x": "-pX - hw - 1",
+        "y": "cL + 2"
+      },
+      "createdIds": [
+        "pt101"
+      ],
+      "label": "Add point",
+      "at": 1793425557553
+    },
+    {
+      "opId": "op102",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch92",
+        "start": {
+          "ref": "pt95"
+        },
+        "end": {
+          "ref": "pt97"
+        }
+      },
+      "createdIds": [
+        "ln103"
+      ],
+      "label": "Add line",
+      "at": 1793425557557
+    },
+    {
+      "opId": "op104",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch92",
+        "start": {
+          "ref": "pt97"
+        },
+        "end": {
+          "ref": "pt99"
+        }
+      },
+      "createdIds": [
+        "ln105"
+      ],
+      "label": "Add line",
+      "at": 1793425557561
+    },
+    {
+      "opId": "op106",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch92",
+        "start": {
+          "ref": "pt99"
+        },
+        "end": {
+          "ref": "pt101"
+        }
+      },
+      "createdIds": [
+        "ln107"
+      ],
+      "label": "Add line",
+      "at": 1793425557562
+    },
+    {
+      "opId": "op108",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch92",
+        "start": {
+          "ref": "pt101"
+        },
+        "end": {
+          "ref": "pt95"
+        }
+      },
+      "createdIds": [
+        "ln109"
+      ],
+      "label": "Add line",
+      "at": 1793425557564
+    },
+    {
+      "opId": "op110",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch92",
+        "distance": "H - cL - 5",
+        "operation": "join",
+        "name": "Yoke post -X"
+      },
+      "createdIds": [
+        "ext111"
+      ],
+      "label": "Extrude",
+      "at": 1793425557566
+    },
+    {
+      "opId": "op112",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp41",
+        "name": "Ring"
+      },
+      "createdIds": [
+        "sketch113",
+        "pt114"
+      ],
+      "label": "Create sketch",
+      "at": 1793425557569
+    },
+    {
+      "opId": "op115",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch113",
+        "x": "Rin",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt116"
+      ],
+      "label": "Add point",
+      "at": 1793425557591
+    },
+    {
+      "opId": "op117",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch113",
+        "x": "Rout",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt118"
+      ],
+      "label": "Add point",
+      "at": 1793425557592
+    },
+    {
+      "opId": "op119",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch113",
+        "x": "Rout",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt120"
+      ],
+      "label": "Add point",
+      "at": 1793425557593
+    },
+    {
+      "opId": "op121",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch113",
+        "x": "Rin",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt122"
+      ],
+      "label": "Add point",
+      "at": 1793425557621
+    },
+    {
+      "opId": "op123",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch113",
+        "start": {
+          "ref": "pt116"
+        },
+        "end": {
+          "ref": "pt118"
+        }
+      },
+      "createdIds": [
+        "ln124"
+      ],
+      "label": "Add line",
+      "at": 1793425557637
+    },
+    {
+      "opId": "op125",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch113",
+        "start": {
+          "ref": "pt118"
+        },
+        "end": {
+          "ref": "pt120"
+        }
+      },
+      "createdIds": [
+        "ln126"
+      ],
+      "label": "Add line",
+      "at": 1793425557643
+    },
+    {
+      "opId": "op127",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch113",
+        "start": {
+          "ref": "pt120"
+        },
+        "end": {
+          "ref": "pt122"
+        }
+      },
+      "createdIds": [
+        "ln128"
+      ],
+      "label": "Add line",
+      "at": 1793425557693
+    },
+    {
+      "opId": "op129",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch113",
+        "start": {
+          "ref": "pt122"
+        },
+        "end": {
+          "ref": "pt116"
+        }
+      },
+      "createdIds": [
+        "ln130"
+      ],
+      "label": "Add line",
+      "at": 1793425557736
+    },
+    {
+      "opId": "op131",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch113",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "operation": "new",
+        "name": "Ring"
+      },
+      "createdIds": [
+        "rev132"
+      ],
+      "label": "Revolve",
+      "at": 1793425557756
+    },
+    {
+      "opId": "op133",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp41",
+        "name": "Outer pad +X"
+      },
+      "createdIds": [
+        "sketch134",
+        "pt135"
+      ],
+      "label": "Create sketch",
+      "at": 1793425557772
+    },
+    {
+      "opId": "op136",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch134",
+        "x": "Rout - 2",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt137"
+      ],
+      "label": "Add point",
+      "at": 1793425557789
+    },
+    {
+      "opId": "op138",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch134",
+        "x": "Rout + 2",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt139"
+      ],
+      "label": "Add point",
+      "at": 1793425557792
+    },
+    {
+      "opId": "op140",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch134",
+        "x": "Rout + 2",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt141"
+      ],
+      "label": "Add point",
+      "at": 1793425557794
+    },
+    {
+      "opId": "op142",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch134",
+        "x": "Rout - 2",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt143"
+      ],
+      "label": "Add point",
+      "at": 1793425557796
+    },
+    {
+      "opId": "op144",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch134",
+        "start": {
+          "ref": "pt137"
+        },
+        "end": {
+          "ref": "pt139"
+        }
+      },
+      "createdIds": [
+        "ln145"
+      ],
+      "label": "Add line",
+      "at": 1793425557797
+    },
+    {
+      "opId": "op146",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch134",
+        "start": {
+          "ref": "pt139"
+        },
+        "end": {
+          "ref": "pt141"
+        }
+      },
+      "createdIds": [
+        "ln147"
+      ],
+      "label": "Add line",
+      "at": 1793425557798
+    },
+    {
+      "opId": "op148",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch134",
+        "start": {
+          "ref": "pt141"
+        },
+        "end": {
+          "ref": "pt143"
+        }
+      },
+      "createdIds": [
+        "ln149"
+      ],
+      "label": "Add line",
+      "at": 1793425557800
+    },
+    {
+      "opId": "op150",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch134",
+        "start": {
+          "ref": "pt143"
+        },
+        "end": {
+          "ref": "pt137"
+        }
+      },
+      "createdIds": [
+        "ln151"
+      ],
+      "label": "Add line",
+      "at": 1793425557802
+    },
+    {
+      "opId": "op152",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch134",
+        "distance": "2*(cL + 3)",
+        "operation": "join",
+        "name": "Outer pad +X",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext153"
+      ],
+      "label": "Extrude",
+      "at": 1793425557809
+    },
+    {
+      "opId": "op154",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp41",
+        "name": "Outer pad -X"
+      },
+      "createdIds": [
+        "sketch155",
+        "pt156"
+      ],
+      "label": "Create sketch",
+      "at": 1793425557815
+    },
+    {
+      "opId": "op157",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch155",
+        "x": "-(Rout + 2)",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt158"
+      ],
+      "label": "Add point",
+      "at": 1793425557816
+    },
+    {
+      "opId": "op159",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch155",
+        "x": "-(Rout - 2)",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt160"
+      ],
+      "label": "Add point",
+      "at": 1793425557818
+    },
+    {
+      "opId": "op161",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch155",
+        "x": "-(Rout - 2)",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt162"
+      ],
+      "label": "Add point",
+      "at": 1793425557826
+    },
+    {
+      "opId": "op163",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch155",
+        "x": "-(Rout + 2)",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt164"
+      ],
+      "label": "Add point",
+      "at": 1793425557830
+    },
+    {
+      "opId": "op165",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch155",
+        "start": {
+          "ref": "pt158"
+        },
+        "end": {
+          "ref": "pt160"
+        }
+      },
+      "createdIds": [
+        "ln166"
+      ],
+      "label": "Add line",
+      "at": 1793425557832
+    },
+    {
+      "opId": "op167",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch155",
+        "start": {
+          "ref": "pt160"
+        },
+        "end": {
+          "ref": "pt162"
+        }
+      },
+      "createdIds": [
+        "ln168"
+      ],
+      "label": "Add line",
+      "at": 1793425557835
+    },
+    {
+      "opId": "op169",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch155",
+        "start": {
+          "ref": "pt162"
+        },
+        "end": {
+          "ref": "pt164"
+        }
+      },
+      "createdIds": [
+        "ln170"
+      ],
+      "label": "Add line",
+      "at": 1793425557837
+    },
+    {
+      "opId": "op171",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch155",
+        "start": {
+          "ref": "pt164"
+        },
+        "end": {
+          "ref": "pt158"
+        }
+      },
+      "createdIds": [
+        "ln172"
+      ],
+      "label": "Add line",
+      "at": 1793425557840
+    },
+    {
+      "opId": "op173",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch155",
+        "distance": "2*(cL + 3)",
+        "operation": "join",
+        "name": "Outer pad -X",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext174"
+      ],
+      "label": "Extrude",
+      "at": 1793425557843
+    },
+    {
+      "opId": "op175",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp41",
+        "name": "Inner pad +Y"
+      },
+      "createdIds": [
+        "sketch176",
+        "pt177"
+      ],
+      "label": "Create sketch",
+      "at": 1793425557846
+    },
+    {
+      "opId": "op178",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch176",
+        "x": "Rin - 2",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt179"
+      ],
+      "label": "Add point",
+      "at": 1793425557847
+    },
+    {
+      "opId": "op180",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch176",
+        "x": "Rin + 2",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt181"
+      ],
+      "label": "Add point",
+      "at": 1793425557849
+    },
+    {
+      "opId": "op182",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch176",
+        "x": "Rin + 2",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt183"
+      ],
+      "label": "Add point",
+      "at": 1793425557850
+    },
+    {
+      "opId": "op184",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch176",
+        "x": "Rin - 2",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt185"
+      ],
+      "label": "Add point",
+      "at": 1793425557988
+    },
+    {
+      "opId": "op186",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch176",
+        "start": {
+          "ref": "pt179"
+        },
+        "end": {
+          "ref": "pt181"
+        }
+      },
+      "createdIds": [
+        "ln187"
+      ],
+      "label": "Add line",
+      "at": 1793425557997
+    },
+    {
+      "opId": "op188",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch176",
+        "start": {
+          "ref": "pt181"
+        },
+        "end": {
+          "ref": "pt183"
+        }
+      },
+      "createdIds": [
+        "ln189"
+      ],
+      "label": "Add line",
+      "at": 1793425558022
+    },
+    {
+      "opId": "op190",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch176",
+        "start": {
+          "ref": "pt183"
+        },
+        "end": {
+          "ref": "pt185"
+        }
+      },
+      "createdIds": [
+        "ln191"
+      ],
+      "label": "Add line",
+      "at": 1793425558032
+    },
+    {
+      "opId": "op192",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch176",
+        "start": {
+          "ref": "pt185"
+        },
+        "end": {
+          "ref": "pt179"
+        }
+      },
+      "createdIds": [
+        "ln193"
+      ],
+      "label": "Add line",
+      "at": 1793425558041
+    },
+    {
+      "opId": "op194",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch176",
+        "distance": "2*(cL + 3)",
+        "operation": "join",
+        "name": "Inner pad +Y",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext195"
+      ],
+      "label": "Extrude",
+      "at": 1793425558048
+    },
+    {
+      "opId": "op196",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp41",
+        "name": "Inner pad -Y"
+      },
+      "createdIds": [
+        "sketch197",
+        "pt198"
+      ],
+      "label": "Create sketch",
+      "at": 1793425558052
+    },
+    {
+      "opId": "op199",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch197",
+        "x": "-(Rin + 2)",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt200"
+      ],
+      "label": "Add point",
+      "at": 1793425558056
+    },
+    {
+      "opId": "op201",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch197",
+        "x": "-(Rin - 2)",
+        "y": "H - 10"
+      },
+      "createdIds": [
+        "pt202"
+      ],
+      "label": "Add point",
+      "at": 1793425558065
+    },
+    {
+      "opId": "op203",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch197",
+        "x": "-(Rin - 2)",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt204"
+      ],
+      "label": "Add point",
+      "at": 1793425558069
+    },
+    {
+      "opId": "op205",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch197",
+        "x": "-(Rin + 2)",
+        "y": "H + 10"
+      },
+      "createdIds": [
+        "pt206"
+      ],
+      "label": "Add point",
+      "at": 1793425558070
+    },
+    {
+      "opId": "op207",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch197",
+        "start": {
+          "ref": "pt200"
+        },
+        "end": {
+          "ref": "pt202"
+        }
+      },
+      "createdIds": [
+        "ln208"
+      ],
+      "label": "Add line",
+      "at": 1793425558075
+    },
+    {
+      "opId": "op209",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch197",
+        "start": {
+          "ref": "pt202"
+        },
+        "end": {
+          "ref": "pt204"
+        }
+      },
+      "createdIds": [
+        "ln210"
+      ],
+      "label": "Add line",
+      "at": 1793425558079
+    },
+    {
+      "opId": "op211",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch197",
+        "start": {
+          "ref": "pt204"
+        },
+        "end": {
+          "ref": "pt206"
+        }
+      },
+      "createdIds": [
+        "ln212"
+      ],
+      "label": "Add line",
+      "at": 1793425558086
+    },
+    {
+      "opId": "op213",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch197",
+        "start": {
+          "ref": "pt206"
+        },
+        "end": {
+          "ref": "pt200"
+        }
+      },
+      "createdIds": [
+        "ln214"
+      ],
+      "label": "Add line",
+      "at": 1793425558089
+    },
+    {
+      "opId": "op215",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch197",
+        "distance": "2*(cL + 3)",
+        "operation": "join",
+        "name": "Inner pad -Y",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext216"
+      ],
+      "label": "Extrude",
+      "at": 1793425558097
+    },
+    {
+      "opId": "op217",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp44",
+        "name": "Platform"
+      },
+      "createdIds": [
+        "sketch218",
+        "pt219"
+      ],
+      "label": "Create sketch",
+      "at": 1793425558168
+    },
+    {
+      "opId": "op220",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch218",
+        "x": "0",
+        "y": "H - 3"
+      },
+      "createdIds": [
+        "pt221"
+      ],
+      "label": "Add point",
+      "at": 1793425558220
+    },
+    {
+      "opId": "op222",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch218",
+        "x": "platR",
+        "y": "H - 3"
+      },
+      "createdIds": [
+        "pt223"
+      ],
+      "label": "Add point",
+      "at": 1793425558247
+    },
+    {
+      "opId": "op224",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch218",
+        "x": "platR",
+        "y": "H + 3"
+      },
+      "createdIds": [
+        "pt225"
+      ],
+      "label": "Add point",
+      "at": 1793425558285
+    },
+    {
+      "opId": "op226",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch218",
+        "x": "0",
+        "y": "H + 3"
+      },
+      "createdIds": [
+        "pt227"
+      ],
+      "label": "Add point",
+      "at": 1793425558313
+    },
+    {
+      "opId": "op228",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch218",
+        "start": {
+          "ref": "pt221"
+        },
+        "end": {
+          "ref": "pt223"
+        }
+      },
+      "createdIds": [
+        "ln229"
+      ],
+      "label": "Add line",
+      "at": 1793425558315
+    },
+    {
+      "opId": "op230",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch218",
+        "start": {
+          "ref": "pt223"
+        },
+        "end": {
+          "ref": "pt225"
+        }
+      },
+      "createdIds": [
+        "ln231"
+      ],
+      "label": "Add line",
+      "at": 1793425558319
+    },
+    {
+      "opId": "op232",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch218",
+        "start": {
+          "ref": "pt225"
+        },
+        "end": {
+          "ref": "pt227"
+        }
+      },
+      "createdIds": [
+        "ln233"
+      ],
+      "label": "Add line",
+      "at": 1793425558330
+    },
+    {
+      "opId": "op234",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch218",
+        "start": {
+          "ref": "pt227"
+        },
+        "end": {
+          "ref": "pt221"
+        }
+      },
+      "createdIds": [
+        "ln235"
+      ],
+      "label": "Add line",
+      "at": 1793425558343
+    },
+    {
+      "opId": "op236",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch218",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "operation": "new",
+        "name": "Platform"
+      },
+      "createdIds": [
+        "rev237"
+      ],
+      "label": "Revolve",
+      "at": 1793425558347
+    },
+    {
+      "opId": "op238",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp47",
+        "name": "Mirror"
+      },
+      "createdIds": [
+        "sketch239",
+        "pt240"
+      ],
+      "label": "Create sketch",
+      "at": 1793425558350
+    },
+    {
+      "opId": "op241",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch239",
+        "x": "0",
+        "y": "H + 3"
+      },
+      "createdIds": [
+        "pt242"
+      ],
+      "label": "Add point",
+      "at": 1793425558357
+    },
+    {
+      "opId": "op243",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch239",
+        "x": "20",
+        "y": "H + 3"
+      },
+      "createdIds": [
+        "pt244"
+      ],
+      "label": "Add point",
+      "at": 1793425558361
+    },
+    {
+      "opId": "op245",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch239",
+        "x": "20",
+        "y": "H + 5"
+      },
+      "createdIds": [
+        "pt246"
+      ],
+      "label": "Add point",
+      "at": 1793425558363
+    },
+    {
+      "opId": "op247",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch239",
+        "x": "0",
+        "y": "H + 5"
+      },
+      "createdIds": [
+        "pt248"
+      ],
+      "label": "Add point",
+      "at": 1793425558365
+    },
+    {
+      "opId": "op249",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch239",
+        "start": {
+          "ref": "pt242"
+        },
+        "end": {
+          "ref": "pt244"
+        }
+      },
+      "createdIds": [
+        "ln250"
+      ],
+      "label": "Add line",
+      "at": 1793425558371
+    },
+    {
+      "opId": "op251",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch239",
+        "start": {
+          "ref": "pt244"
+        },
+        "end": {
+          "ref": "pt246"
+        }
+      },
+      "createdIds": [
+        "ln252"
+      ],
+      "label": "Add line",
+      "at": 1793425558375
+    },
+    {
+      "opId": "op253",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch239",
+        "start": {
+          "ref": "pt246"
+        },
+        "end": {
+          "ref": "pt248"
+        }
+      },
+      "createdIds": [
+        "ln254"
+      ],
+      "label": "Add line",
+      "at": 1793425558400
+    },
+    {
+      "opId": "op255",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch239",
+        "start": {
+          "ref": "pt248"
+        },
+        "end": {
+          "ref": "pt242"
+        }
+      },
+      "createdIds": [
+        "ln256"
+      ],
+      "label": "Add line",
+      "at": 1793425558408
+    },
+    {
+      "opId": "op257",
+      "type": "feature.revolve",
+      "params": {
+        "sketch": "sketch239",
+        "axis": {
+          "p1": {
+            "x": 0,
+            "y": 0
+          },
+          "p2": {
+            "x": 0,
+            "y": 1
+          }
+        },
+        "operation": "new",
+        "name": "Mirror"
+      },
+      "createdIds": [
+        "rev258"
+      ],
+      "label": "Revolve",
+      "at": 1793425558421
+    },
+    {
+      "opId": "op259",
+      "type": "plane.create",
+      "params": {
+        "base": "YZ",
+        "offset": "pX - w - 1",
+        "name": "Blade A plane (pX)"
+      },
+      "createdIds": [
+        "pl260"
+      ],
+      "label": "Offset plane",
+      "at": 1793425558428
+    },
+    {
+      "opId": "op261",
+      "type": "plane.create",
+      "params": {
+        "base": "YZ",
+        "offset": "pX + 1",
+        "name": "Blade B plane (pX)"
+      },
+      "createdIds": [
+        "pl262"
+      ],
+      "label": "Offset plane",
+      "at": 1793425558434
+    },
+    {
+      "opId": "op263",
+      "type": "component.create",
+      "params": {
+        "name": "Yoke clamp +X",
+        "parent": "cmp38"
+      },
+      "createdIds": [
+        "cmp264"
+      ],
+      "label": "New component",
+      "at": 1793425558443
+    },
+    {
+      "opId": "op265",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp264",
+        "material": "mat30"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425558464
+    },
+    {
+      "opId": "op266",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp264",
+        "name": "Yoke clamp"
+      },
+      "createdIds": [
+        "sketch267",
+        "pt268"
+      ],
+      "label": "Create sketch",
+      "at": 1793425558466
+    },
+    {
+      "opId": "op269",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch267",
+        "x": "pX - hw - 1",
+        "y": "H - cL - 5"
+      },
+      "createdIds": [
+        "pt270"
+      ],
+      "label": "Add point",
+      "at": 1793425558496
+    },
+    {
+      "opId": "op271",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch267",
+        "x": "pX + hw + 1",
+        "y": "H - cL - 5"
+      },
+      "createdIds": [
+        "pt272"
+      ],
+      "label": "Add point",
+      "at": 1793425558572
+    },
+    {
+      "opId": "op273",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch267",
+        "x": "pX + hw + 1",
+        "y": "H - cL"
+      },
+      "createdIds": [
+        "pt274"
+      ],
+      "label": "Add point",
+      "at": 1793425558577
+    },
+    {
+      "opId": "op275",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch267",
+        "x": "pX - hw - 1",
+        "y": "H - cL"
+      },
+      "createdIds": [
+        "pt276"
+      ],
+      "label": "Add point",
+      "at": 1793425558583
+    },
+    {
+      "opId": "op277",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch267",
+        "start": {
+          "ref": "pt270"
+        },
+        "end": {
+          "ref": "pt272"
+        }
+      },
+      "createdIds": [
+        "ln278"
+      ],
+      "label": "Add line",
+      "at": 1793425558587
+    },
+    {
+      "opId": "op279",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch267",
+        "start": {
+          "ref": "pt272"
+        },
+        "end": {
+          "ref": "pt274"
+        }
+      },
+      "createdIds": [
+        "ln280"
+      ],
+      "label": "Add line",
+      "at": 1793425558596
+    },
+    {
+      "opId": "op281",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch267",
+        "start": {
+          "ref": "pt274"
+        },
+        "end": {
+          "ref": "pt276"
+        }
+      },
+      "createdIds": [
+        "ln282"
+      ],
+      "label": "Add line",
+      "at": 1793425558598
+    },
+    {
+      "opId": "op283",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch267",
+        "start": {
+          "ref": "pt276"
+        },
+        "end": {
+          "ref": "pt270"
+        }
+      },
+      "createdIds": [
+        "ln284"
+      ],
+      "label": "Add line",
+      "at": 1793425558605
+    },
+    {
+      "opId": "op285",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch267",
+        "distance": "2*(cL + 2)",
+        "operation": "new",
+        "name": "Yoke clamp",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext286"
+      ],
+      "label": "Extrude",
+      "at": 1793425558609
+    },
+    {
+      "opId": "op287",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl260",
+        "component": "cmp264",
+        "name": "Blade A (yoke half)"
+      },
+      "createdIds": [
+        "sketch288",
+        "pt289"
+      ],
+      "label": "Create sketch",
+      "at": 1793425558623
+    },
+    {
+      "opId": "op290",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch288",
+        "x": "(-(L/2 + 1) - -t/2)/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt291"
+      ],
+      "label": "Add point",
+      "at": 1793425558638
+    },
+    {
+      "opId": "op292",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch288",
+        "x": "(0 - -t/2)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt293"
+      ],
+      "label": "Add point",
+      "at": 1793425558643
+    },
+    {
+      "opId": "op294",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch288",
+        "x": "(0 - t/2)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt295"
+      ],
+      "label": "Add point",
+      "at": 1793425558729
+    },
+    {
+      "opId": "op296",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch288",
+        "x": "(-(L/2 + 1) - t/2)/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt297"
+      ],
+      "label": "Add point",
+      "at": 1793425558731
+    },
+    {
+      "opId": "op298",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch288",
+        "start": {
+          "ref": "pt291"
+        },
+        "end": {
+          "ref": "pt293"
+        }
+      },
+      "createdIds": [
+        "ln299"
+      ],
+      "label": "Add line",
+      "at": 1793425558770
+    },
+    {
+      "opId": "op300",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch288",
+        "start": {
+          "ref": "pt293"
+        },
+        "end": {
+          "ref": "pt295"
+        }
+      },
+      "createdIds": [
+        "ln301"
+      ],
+      "label": "Add line",
+      "at": 1793425558783
+    },
+    {
+      "opId": "op302",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch288",
+        "start": {
+          "ref": "pt295"
+        },
+        "end": {
+          "ref": "pt297"
+        }
+      },
+      "createdIds": [
+        "ln303"
+      ],
+      "label": "Add line",
+      "at": 1793425558786
+    },
+    {
+      "opId": "op304",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch288",
+        "start": {
+          "ref": "pt297"
+        },
+        "end": {
+          "ref": "pt291"
+        }
+      },
+      "createdIds": [
+        "ln305"
+      ],
+      "label": "Add line",
+      "at": 1793425558813
+    },
+    {
+      "opId": "op306",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch288",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade A (yoke half)"
+      },
+      "createdIds": [
+        "ext307"
+      ],
+      "label": "Extrude",
+      "at": 1793425558815
+    },
+    {
+      "opId": "op308",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl262",
+        "component": "cmp264",
+        "name": "Blade B (yoke half)"
+      },
+      "createdIds": [
+        "sketch309",
+        "pt310"
+      ],
+      "label": "Create sketch",
+      "at": 1793425558820
+    },
+    {
+      "opId": "op311",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch309",
+        "x": "(-t/2 - -(L/2 + 1))/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt312"
+      ],
+      "label": "Add point",
+      "at": 1793425558847
+    },
+    {
+      "opId": "op313",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch309",
+        "x": "(-t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt314"
+      ],
+      "label": "Add point",
+      "at": 1793425558874
+    },
+    {
+      "opId": "op315",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch309",
+        "x": "(t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt316"
+      ],
+      "label": "Add point",
+      "at": 1793425558909
+    },
+    {
+      "opId": "op317",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch309",
+        "x": "(t/2 - -(L/2 + 1))/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt318"
+      ],
+      "label": "Add point",
+      "at": 1793425558916
+    },
+    {
+      "opId": "op319",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch309",
+        "start": {
+          "ref": "pt312"
+        },
+        "end": {
+          "ref": "pt314"
+        }
+      },
+      "createdIds": [
+        "ln320"
+      ],
+      "label": "Add line",
+      "at": 1793425558964
+    },
+    {
+      "opId": "op321",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch309",
+        "start": {
+          "ref": "pt314"
+        },
+        "end": {
+          "ref": "pt316"
+        }
+      },
+      "createdIds": [
+        "ln322"
+      ],
+      "label": "Add line",
+      "at": 1793425558976
+    },
+    {
+      "opId": "op323",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch309",
+        "start": {
+          "ref": "pt316"
+        },
+        "end": {
+          "ref": "pt318"
+        }
+      },
+      "createdIds": [
+        "ln324"
+      ],
+      "label": "Add line",
+      "at": 1793425558982
+    },
+    {
+      "opId": "op325",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch309",
+        "start": {
+          "ref": "pt318"
+        },
+        "end": {
+          "ref": "pt312"
+        }
+      },
+      "createdIds": [
+        "ln326"
+      ],
+      "label": "Add line",
+      "at": 1793425558988
+    },
+    {
+      "opId": "op327",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch309",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade B (yoke half)"
+      },
+      "createdIds": [
+        "ext328"
+      ],
+      "label": "Extrude",
+      "at": 1793425558998
+    },
+    {
+      "opId": "op329",
+      "type": "component.create",
+      "params": {
+        "name": "Ring clamp +X",
+        "parent": "cmp41"
+      },
+      "createdIds": [
+        "cmp330"
+      ],
+      "label": "New component",
+      "at": 1793425559003
+    },
+    {
+      "opId": "op331",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp330",
+        "material": "mat30"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425559014
+    },
+    {
+      "opId": "op332",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp330",
+        "name": "Ring arm"
+      },
+      "createdIds": [
+        "sketch333",
+        "pt334"
+      ],
+      "label": "Create sketch",
+      "at": 1793425559034
+    },
+    {
+      "opId": "op335",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch333",
+        "x": "Rout + 2",
+        "y": "H + cL"
+      },
+      "createdIds": [
+        "pt336"
+      ],
+      "label": "Add point",
+      "at": 1793425559050
+    },
+    {
+      "opId": "op337",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch333",
+        "x": "pX + hw + 1",
+        "y": "H + cL"
+      },
+      "createdIds": [
+        "pt338"
+      ],
+      "label": "Add point",
+      "at": 1793425559138
+    },
+    {
+      "opId": "op339",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch333",
+        "x": "pX + hw + 1",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt340"
+      ],
+      "label": "Add point",
+      "at": 1793425559142
+    },
+    {
+      "opId": "op341",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch333",
+        "x": "Rout + 2",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt342"
+      ],
+      "label": "Add point",
+      "at": 1793425559165
+    },
+    {
+      "opId": "op343",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch333",
+        "start": {
+          "ref": "pt336"
+        },
+        "end": {
+          "ref": "pt338"
+        }
+      },
+      "createdIds": [
+        "ln344"
+      ],
+      "label": "Add line",
+      "at": 1793425559176
+    },
+    {
+      "opId": "op345",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch333",
+        "start": {
+          "ref": "pt338"
+        },
+        "end": {
+          "ref": "pt340"
+        }
+      },
+      "createdIds": [
+        "ln346"
+      ],
+      "label": "Add line",
+      "at": 1793425559184
+    },
+    {
+      "opId": "op347",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch333",
+        "start": {
+          "ref": "pt340"
+        },
+        "end": {
+          "ref": "pt342"
+        }
+      },
+      "createdIds": [
+        "ln348"
+      ],
+      "label": "Add line",
+      "at": 1793425559189
+    },
+    {
+      "opId": "op349",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch333",
+        "start": {
+          "ref": "pt342"
+        },
+        "end": {
+          "ref": "pt336"
+        }
+      },
+      "createdIds": [
+        "ln350"
+      ],
+      "label": "Add line",
+      "at": 1793425559194
+    },
+    {
+      "opId": "op351",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch333",
+        "distance": "2*(cL + 2)",
+        "operation": "new",
+        "name": "Ring arm",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext352"
+      ],
+      "label": "Extrude",
+      "at": 1793425559199
+    },
+    {
+      "opId": "op353",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl260",
+        "component": "cmp330",
+        "name": "Blade A (ring half)"
+      },
+      "createdIds": [
+        "sketch354",
+        "pt355"
+      ],
+      "label": "Create sketch",
+      "at": 1793425559206
+    },
+    {
+      "opId": "op356",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch354",
+        "x": "(0 - -t/2)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt357"
+      ],
+      "label": "Add point",
+      "at": 1793425559216
+    },
+    {
+      "opId": "op358",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch354",
+        "x": "((L/2 + 1) - -t/2)/sqrt(2)",
+        "y": "H + ((L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt359"
+      ],
+      "label": "Add point",
+      "at": 1793425559223
+    },
+    {
+      "opId": "op360",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch354",
+        "x": "((L/2 + 1) - t/2)/sqrt(2)",
+        "y": "H + ((L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt361"
+      ],
+      "label": "Add point",
+      "at": 1793425559228
+    },
+    {
+      "opId": "op362",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch354",
+        "x": "(0 - t/2)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt363"
+      ],
+      "label": "Add point",
+      "at": 1793425559308
+    },
+    {
+      "opId": "op364",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch354",
+        "start": {
+          "ref": "pt357"
+        },
+        "end": {
+          "ref": "pt359"
+        }
+      },
+      "createdIds": [
+        "ln365"
+      ],
+      "label": "Add line",
+      "at": 1793425559319
+    },
+    {
+      "opId": "op366",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch354",
+        "start": {
+          "ref": "pt359"
+        },
+        "end": {
+          "ref": "pt361"
+        }
+      },
+      "createdIds": [
+        "ln367"
+      ],
+      "label": "Add line",
+      "at": 1793425559341
+    },
+    {
+      "opId": "op368",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch354",
+        "start": {
+          "ref": "pt361"
+        },
+        "end": {
+          "ref": "pt363"
+        }
+      },
+      "createdIds": [
+        "ln369"
+      ],
+      "label": "Add line",
+      "at": 1793425559345
+    },
+    {
+      "opId": "op370",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch354",
+        "start": {
+          "ref": "pt363"
+        },
+        "end": {
+          "ref": "pt357"
+        }
+      },
+      "createdIds": [
+        "ln371"
+      ],
+      "label": "Add line",
+      "at": 1793425559380
+    },
+    {
+      "opId": "op372",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch354",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade A (ring half)"
+      },
+      "createdIds": [
+        "ext373"
+      ],
+      "label": "Extrude",
+      "at": 1793425559390
+    },
+    {
+      "opId": "op374",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl262",
+        "component": "cmp330",
+        "name": "Blade B (ring half)"
+      },
+      "createdIds": [
+        "sketch375",
+        "pt376"
+      ],
+      "label": "Create sketch",
+      "at": 1793425559412
+    },
+    {
+      "opId": "op377",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch375",
+        "x": "(-t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt378"
+      ],
+      "label": "Add point",
+      "at": 1793425559459
+    },
+    {
+      "opId": "op379",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch375",
+        "x": "(-t/2 - (L/2 + 1))/sqrt(2)",
+        "y": "H + ((L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt380"
+      ],
+      "label": "Add point",
+      "at": 1793425559462
+    },
+    {
+      "opId": "op381",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch375",
+        "x": "(t/2 - (L/2 + 1))/sqrt(2)",
+        "y": "H + ((L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt382"
+      ],
+      "label": "Add point",
+      "at": 1793425559473
+    },
+    {
+      "opId": "op383",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch375",
+        "x": "(t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt384"
+      ],
+      "label": "Add point",
+      "at": 1793425559479
+    },
+    {
+      "opId": "op385",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch375",
+        "start": {
+          "ref": "pt378"
+        },
+        "end": {
+          "ref": "pt380"
+        }
+      },
+      "createdIds": [
+        "ln386"
+      ],
+      "label": "Add line",
+      "at": 1793425559506
+    },
+    {
+      "opId": "op387",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch375",
+        "start": {
+          "ref": "pt380"
+        },
+        "end": {
+          "ref": "pt382"
+        }
+      },
+      "createdIds": [
+        "ln388"
+      ],
+      "label": "Add line",
+      "at": 1793425559545
+    },
+    {
+      "opId": "op389",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch375",
+        "start": {
+          "ref": "pt382"
+        },
+        "end": {
+          "ref": "pt384"
+        }
+      },
+      "createdIds": [
+        "ln390"
+      ],
+      "label": "Add line",
+      "at": 1793425559554
+    },
+    {
+      "opId": "op391",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch375",
+        "start": {
+          "ref": "pt384"
+        },
+        "end": {
+          "ref": "pt378"
+        }
+      },
+      "createdIds": [
+        "ln392"
+      ],
+      "label": "Add line",
+      "at": 1793425559557
+    },
+    {
+      "opId": "op393",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch375",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade B (ring half)"
+      },
+      "createdIds": [
+        "ext394"
+      ],
+      "label": "Extrude",
+      "at": 1793425559560
+    },
+    {
+      "opId": "op395",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "flexure": {
+          "length": "L",
+          "width": "w",
+          "thickness": "t",
+          "material": "mat30"
+        },
+        "base": "cmp38",
+        "moved": "cmp41",
+        "axis": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "baseOrigin": {
+          "x": "pX",
+          "y": 0,
+          "z": "H"
+        },
+        "movedOrigin": {
+          "x": "pX",
+          "y": 0,
+          "z": "H"
+        },
+        "value": "alpha",
+        "name": "Outer +X blade A"
+      },
+      "createdIds": [
+        "jnt396"
+      ],
+      "label": "Joint",
+      "at": 1793425559628
+    },
+    {
+      "opId": "op397",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "flexure": {
+          "length": "L",
+          "width": "w",
+          "thickness": "t",
+          "material": "mat30"
+        },
+        "base": "cmp38",
+        "moved": "cmp41",
+        "axis": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "baseOrigin": {
+          "x": "pX",
+          "y": 0,
+          "z": "H"
+        },
+        "movedOrigin": {
+          "x": "pX",
+          "y": 0,
+          "z": "H"
+        },
+        "closes": true,
+        "name": "Outer +X blade B"
+      },
+      "createdIds": [
+        "jnt398"
+      ],
+      "label": "Joint",
+      "at": 1793425559636
+    },
+    {
+      "opId": "op399",
+      "type": "plane.create",
+      "params": {
+        "base": "YZ",
+        "offset": "-pX - w - 1",
+        "name": "Blade A plane (-pX)"
+      },
+      "createdIds": [
+        "pl400"
+      ],
+      "label": "Offset plane",
+      "at": 1793425559641
+    },
+    {
+      "opId": "op401",
+      "type": "plane.create",
+      "params": {
+        "base": "YZ",
+        "offset": "-pX + 1",
+        "name": "Blade B plane (-pX)"
+      },
+      "createdIds": [
+        "pl402"
+      ],
+      "label": "Offset plane",
+      "at": 1793425559644
+    },
+    {
+      "opId": "op403",
+      "type": "component.create",
+      "params": {
+        "name": "Yoke clamp -X",
+        "parent": "cmp38"
+      },
+      "createdIds": [
+        "cmp404"
+      ],
+      "label": "New component",
+      "at": 1793425559678
+    },
+    {
+      "opId": "op405",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp404",
+        "material": "mat30"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425559681
+    },
+    {
+      "opId": "op406",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp404",
+        "name": "Yoke clamp"
+      },
+      "createdIds": [
+        "sketch407",
+        "pt408"
+      ],
+      "label": "Create sketch",
+      "at": 1793425559700
+    },
+    {
+      "opId": "op409",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch407",
+        "x": "-pX - hw - 1",
+        "y": "H - cL - 5"
+      },
+      "createdIds": [
+        "pt410"
+      ],
+      "label": "Add point",
+      "at": 1793425559725
+    },
+    {
+      "opId": "op411",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch407",
+        "x": "-pX + hw + 1",
+        "y": "H - cL - 5"
+      },
+      "createdIds": [
+        "pt412"
+      ],
+      "label": "Add point",
+      "at": 1793425559730
+    },
+    {
+      "opId": "op413",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch407",
+        "x": "-pX + hw + 1",
+        "y": "H - cL"
+      },
+      "createdIds": [
+        "pt414"
+      ],
+      "label": "Add point",
+      "at": 1793425559741
+    },
+    {
+      "opId": "op415",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch407",
+        "x": "-pX - hw - 1",
+        "y": "H - cL"
+      },
+      "createdIds": [
+        "pt416"
+      ],
+      "label": "Add point",
+      "at": 1793425559754
+    },
+    {
+      "opId": "op417",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch407",
+        "start": {
+          "ref": "pt410"
+        },
+        "end": {
+          "ref": "pt412"
+        }
+      },
+      "createdIds": [
+        "ln418"
+      ],
+      "label": "Add line",
+      "at": 1793425559779
+    },
+    {
+      "opId": "op419",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch407",
+        "start": {
+          "ref": "pt412"
+        },
+        "end": {
+          "ref": "pt414"
+        }
+      },
+      "createdIds": [
+        "ln420"
+      ],
+      "label": "Add line",
+      "at": 1793425559786
+    },
+    {
+      "opId": "op421",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch407",
+        "start": {
+          "ref": "pt414"
+        },
+        "end": {
+          "ref": "pt416"
+        }
+      },
+      "createdIds": [
+        "ln422"
+      ],
+      "label": "Add line",
+      "at": 1793425559848
+    },
+    {
+      "opId": "op423",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch407",
+        "start": {
+          "ref": "pt416"
+        },
+        "end": {
+          "ref": "pt410"
+        }
+      },
+      "createdIds": [
+        "ln424"
+      ],
+      "label": "Add line",
+      "at": 1793425559868
+    },
+    {
+      "opId": "op425",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch407",
+        "distance": "2*(cL + 2)",
+        "operation": "new",
+        "name": "Yoke clamp",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext426"
+      ],
+      "label": "Extrude",
+      "at": 1793425559886
+    },
+    {
+      "opId": "op427",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl400",
+        "component": "cmp404",
+        "name": "Blade A (yoke half)"
+      },
+      "createdIds": [
+        "sketch428",
+        "pt429"
+      ],
+      "label": "Create sketch",
+      "at": 1793425559896
+    },
+    {
+      "opId": "op430",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch428",
+        "x": "(-(L/2 + 1) - -t/2)/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt431"
+      ],
+      "label": "Add point",
+      "at": 1793425559907
+    },
+    {
+      "opId": "op432",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch428",
+        "x": "(0 - -t/2)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt433"
+      ],
+      "label": "Add point",
+      "at": 1793425559912
+    },
+    {
+      "opId": "op434",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch428",
+        "x": "(0 - t/2)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt435"
+      ],
+      "label": "Add point",
+      "at": 1793425559916
+    },
+    {
+      "opId": "op436",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch428",
+        "x": "(-(L/2 + 1) - t/2)/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt437"
+      ],
+      "label": "Add point",
+      "at": 1793425559927
+    },
+    {
+      "opId": "op438",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch428",
+        "start": {
+          "ref": "pt431"
+        },
+        "end": {
+          "ref": "pt433"
+        }
+      },
+      "createdIds": [
+        "ln439"
+      ],
+      "label": "Add line",
+      "at": 1793425559934
+    },
+    {
+      "opId": "op440",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch428",
+        "start": {
+          "ref": "pt433"
+        },
+        "end": {
+          "ref": "pt435"
+        }
+      },
+      "createdIds": [
+        "ln441"
+      ],
+      "label": "Add line",
+      "at": 1793425559940
+    },
+    {
+      "opId": "op442",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch428",
+        "start": {
+          "ref": "pt435"
+        },
+        "end": {
+          "ref": "pt437"
+        }
+      },
+      "createdIds": [
+        "ln443"
+      ],
+      "label": "Add line",
+      "at": 1793425559950
+    },
+    {
+      "opId": "op444",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch428",
+        "start": {
+          "ref": "pt437"
+        },
+        "end": {
+          "ref": "pt431"
+        }
+      },
+      "createdIds": [
+        "ln445"
+      ],
+      "label": "Add line",
+      "at": 1793425559957
+    },
+    {
+      "opId": "op446",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch428",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade A (yoke half)"
+      },
+      "createdIds": [
+        "ext447"
+      ],
+      "label": "Extrude",
+      "at": 1793425559963
+    },
+    {
+      "opId": "op448",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl402",
+        "component": "cmp404",
+        "name": "Blade B (yoke half)"
+      },
+      "createdIds": [
+        "sketch449",
+        "pt450"
+      ],
+      "label": "Create sketch",
+      "at": 1793425559967
+    },
+    {
+      "opId": "op451",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch449",
+        "x": "(-t/2 - -(L/2 + 1))/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt452"
+      ],
+      "label": "Add point",
+      "at": 1793425559972
+    },
+    {
+      "opId": "op453",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch449",
+        "x": "(-t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt454"
+      ],
+      "label": "Add point",
+      "at": 1793425559975
+    },
+    {
+      "opId": "op455",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch449",
+        "x": "(t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt456"
+      ],
+      "label": "Add point",
+      "at": 1793425560122
+    },
+    {
+      "opId": "op457",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch449",
+        "x": "(t/2 - -(L/2 + 1))/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt458"
+      ],
+      "label": "Add point",
+      "at": 1793425560145
+    },
+    {
+      "opId": "op459",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch449",
+        "start": {
+          "ref": "pt452"
+        },
+        "end": {
+          "ref": "pt454"
+        }
+      },
+      "createdIds": [
+        "ln460"
+      ],
+      "label": "Add line",
+      "at": 1793425560165
+    },
+    {
+      "opId": "op461",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch449",
+        "start": {
+          "ref": "pt454"
+        },
+        "end": {
+          "ref": "pt456"
+        }
+      },
+      "createdIds": [
+        "ln462"
+      ],
+      "label": "Add line",
+      "at": 1793425560175
+    },
+    {
+      "opId": "op463",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch449",
+        "start": {
+          "ref": "pt456"
+        },
+        "end": {
+          "ref": "pt458"
+        }
+      },
+      "createdIds": [
+        "ln464"
+      ],
+      "label": "Add line",
+      "at": 1793425560179
+    },
+    {
+      "opId": "op465",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch449",
+        "start": {
+          "ref": "pt458"
+        },
+        "end": {
+          "ref": "pt452"
+        }
+      },
+      "createdIds": [
+        "ln466"
+      ],
+      "label": "Add line",
+      "at": 1793425560183
+    },
+    {
+      "opId": "op467",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch449",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade B (yoke half)"
+      },
+      "createdIds": [
+        "ext468"
+      ],
+      "label": "Extrude",
+      "at": 1793425560194
+    },
+    {
+      "opId": "op469",
+      "type": "component.create",
+      "params": {
+        "name": "Ring clamp -X",
+        "parent": "cmp41"
+      },
+      "createdIds": [
+        "cmp470"
+      ],
+      "label": "New component",
+      "at": 1793425560198
+    },
+    {
+      "opId": "op471",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp470",
+        "material": "mat30"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425560203
+    },
+    {
+      "opId": "op472",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp470",
+        "name": "Ring arm"
+      },
+      "createdIds": [
+        "sketch473",
+        "pt474"
+      ],
+      "label": "Create sketch",
+      "at": 1793425560268
+    },
+    {
+      "opId": "op475",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch473",
+        "x": "-(pX + hw + 1)",
+        "y": "H + cL"
+      },
+      "createdIds": [
+        "pt476"
+      ],
+      "label": "Add point",
+      "at": 1793425560307
+    },
+    {
+      "opId": "op477",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch473",
+        "x": "-(Rout + 2)",
+        "y": "H + cL"
+      },
+      "createdIds": [
+        "pt478"
+      ],
+      "label": "Add point",
+      "at": 1793425560314
+    },
+    {
+      "opId": "op479",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch473",
+        "x": "-(Rout + 2)",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt480"
+      ],
+      "label": "Add point",
+      "at": 1793425560324
+    },
+    {
+      "opId": "op481",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch473",
+        "x": "-(pX + hw + 1)",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt482"
+      ],
+      "label": "Add point",
+      "at": 1793425560357
+    },
+    {
+      "opId": "op483",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch473",
+        "start": {
+          "ref": "pt476"
+        },
+        "end": {
+          "ref": "pt478"
+        }
+      },
+      "createdIds": [
+        "ln484"
+      ],
+      "label": "Add line",
+      "at": 1793425560368
+    },
+    {
+      "opId": "op485",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch473",
+        "start": {
+          "ref": "pt478"
+        },
+        "end": {
+          "ref": "pt480"
+        }
+      },
+      "createdIds": [
+        "ln486"
+      ],
+      "label": "Add line",
+      "at": 1793425560425
+    },
+    {
+      "opId": "op487",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch473",
+        "start": {
+          "ref": "pt480"
+        },
+        "end": {
+          "ref": "pt482"
+        }
+      },
+      "createdIds": [
+        "ln488"
+      ],
+      "label": "Add line",
+      "at": 1793425560439
+    },
+    {
+      "opId": "op489",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch473",
+        "start": {
+          "ref": "pt482"
+        },
+        "end": {
+          "ref": "pt476"
+        }
+      },
+      "createdIds": [
+        "ln490"
+      ],
+      "label": "Add line",
+      "at": 1793425560478
+    },
+    {
+      "opId": "op491",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch473",
+        "distance": "2*(cL + 2)",
+        "operation": "new",
+        "name": "Ring arm",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext492"
+      ],
+      "label": "Extrude",
+      "at": 1793425560517
+    },
+    {
+      "opId": "op493",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl400",
+        "component": "cmp470",
+        "name": "Blade A (ring half)"
+      },
+      "createdIds": [
+        "sketch494",
+        "pt495"
+      ],
+      "label": "Create sketch",
+      "at": 1793425560553
+    },
+    {
+      "opId": "op496",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch494",
+        "x": "(0 - -t/2)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt497"
+      ],
+      "label": "Add point",
+      "at": 1793425560560
+    },
+    {
+      "opId": "op498",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch494",
+        "x": "((L/2 + 1) - -t/2)/sqrt(2)",
+        "y": "H + ((L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt499"
+      ],
+      "label": "Add point",
+      "at": 1793425560589
+    },
+    {
+      "opId": "op500",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch494",
+        "x": "((L/2 + 1) - t/2)/sqrt(2)",
+        "y": "H + ((L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt501"
+      ],
+      "label": "Add point",
+      "at": 1793425560593
+    },
+    {
+      "opId": "op502",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch494",
+        "x": "(0 - t/2)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt503"
+      ],
+      "label": "Add point",
+      "at": 1793425560601
+    },
+    {
+      "opId": "op504",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch494",
+        "start": {
+          "ref": "pt497"
+        },
+        "end": {
+          "ref": "pt499"
+        }
+      },
+      "createdIds": [
+        "ln505"
+      ],
+      "label": "Add line",
+      "at": 1793425560612
+    },
+    {
+      "opId": "op506",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch494",
+        "start": {
+          "ref": "pt499"
+        },
+        "end": {
+          "ref": "pt501"
+        }
+      },
+      "createdIds": [
+        "ln507"
+      ],
+      "label": "Add line",
+      "at": 1793425560658
+    },
+    {
+      "opId": "op508",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch494",
+        "start": {
+          "ref": "pt501"
+        },
+        "end": {
+          "ref": "pt503"
+        }
+      },
+      "createdIds": [
+        "ln509"
+      ],
+      "label": "Add line",
+      "at": 1793425560694
+    },
+    {
+      "opId": "op510",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch494",
+        "start": {
+          "ref": "pt503"
+        },
+        "end": {
+          "ref": "pt497"
+        }
+      },
+      "createdIds": [
+        "ln511"
+      ],
+      "label": "Add line",
+      "at": 1793425560722
+    },
+    {
+      "opId": "op512",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch494",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade A (ring half)"
+      },
+      "createdIds": [
+        "ext513"
+      ],
+      "label": "Extrude",
+      "at": 1793425560748
+    },
+    {
+      "opId": "op514",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl402",
+        "component": "cmp470",
+        "name": "Blade B (ring half)"
+      },
+      "createdIds": [
+        "sketch515",
+        "pt516"
+      ],
+      "label": "Create sketch",
+      "at": 1793425560770
+    },
+    {
+      "opId": "op517",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch515",
+        "x": "(-t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt518"
+      ],
+      "label": "Add point",
+      "at": 1793425560778
+    },
+    {
+      "opId": "op519",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch515",
+        "x": "(-t/2 - (L/2 + 1))/sqrt(2)",
+        "y": "H + ((L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt520"
+      ],
+      "label": "Add point",
+      "at": 1793425560802
+    },
+    {
+      "opId": "op521",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch515",
+        "x": "(t/2 - (L/2 + 1))/sqrt(2)",
+        "y": "H + ((L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt522"
+      ],
+      "label": "Add point",
+      "at": 1793425560812
+    },
+    {
+      "opId": "op523",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch515",
+        "x": "(t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt524"
+      ],
+      "label": "Add point",
+      "at": 1793425560887
+    },
+    {
+      "opId": "op525",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch515",
+        "start": {
+          "ref": "pt518"
+        },
+        "end": {
+          "ref": "pt520"
+        }
+      },
+      "createdIds": [
+        "ln526"
+      ],
+      "label": "Add line",
+      "at": 1793425560919
+    },
+    {
+      "opId": "op527",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch515",
+        "start": {
+          "ref": "pt520"
+        },
+        "end": {
+          "ref": "pt522"
+        }
+      },
+      "createdIds": [
+        "ln528"
+      ],
+      "label": "Add line",
+      "at": 1793425560928
+    },
+    {
+      "opId": "op529",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch515",
+        "start": {
+          "ref": "pt522"
+        },
+        "end": {
+          "ref": "pt524"
+        }
+      },
+      "createdIds": [
+        "ln530"
+      ],
+      "label": "Add line",
+      "at": 1793425561002
+    },
+    {
+      "opId": "op531",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch515",
+        "start": {
+          "ref": "pt524"
+        },
+        "end": {
+          "ref": "pt518"
+        }
+      },
+      "createdIds": [
+        "ln532"
+      ],
+      "label": "Add line",
+      "at": 1793425561026
+    },
+    {
+      "opId": "op533",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch515",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade B (ring half)"
+      },
+      "createdIds": [
+        "ext534"
+      ],
+      "label": "Extrude",
+      "at": 1793425561036
+    },
+    {
+      "opId": "op535",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "flexure": {
+          "length": "L",
+          "width": "w",
+          "thickness": "t",
+          "material": "mat30"
+        },
+        "base": "cmp38",
+        "moved": "cmp41",
+        "axis": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "baseOrigin": {
+          "x": "-pX",
+          "y": 0,
+          "z": "H"
+        },
+        "movedOrigin": {
+          "x": "-pX",
+          "y": 0,
+          "z": "H"
+        },
+        "closes": true,
+        "name": "Outer -X blade A"
+      },
+      "createdIds": [
+        "jnt536"
+      ],
+      "label": "Joint",
+      "at": 1793425561049
+    },
+    {
+      "opId": "op537",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "flexure": {
+          "length": "L",
+          "width": "w",
+          "thickness": "t",
+          "material": "mat30"
+        },
+        "base": "cmp38",
+        "moved": "cmp41",
+        "axis": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "baseOrigin": {
+          "x": "-pX",
+          "y": 0,
+          "z": "H"
+        },
+        "movedOrigin": {
+          "x": "-pX",
+          "y": 0,
+          "z": "H"
+        },
+        "closes": true,
+        "name": "Outer -X blade B"
+      },
+      "createdIds": [
+        "jnt538"
+      ],
+      "label": "Joint",
+      "at": 1793425561131
+    },
+    {
+      "opId": "op539",
+      "type": "plane.create",
+      "params": {
+        "base": "XZ",
+        "offset": "-((pY - w - 1) + w)",
+        "name": "Blade A plane (pY)"
+      },
+      "createdIds": [
+        "pl540"
+      ],
+      "label": "Offset plane",
+      "at": 1793425561159
+    },
+    {
+      "opId": "op541",
+      "type": "plane.create",
+      "params": {
+        "base": "XZ",
+        "offset": "-((pY + 1) + w)",
+        "name": "Blade B plane (pY)"
+      },
+      "createdIds": [
+        "pl542"
+      ],
+      "label": "Offset plane",
+      "at": 1793425561298
+    },
+    {
+      "opId": "op543",
+      "type": "component.create",
+      "params": {
+        "name": "Ring clamp +Y",
+        "parent": "cmp41"
+      },
+      "createdIds": [
+        "cmp544"
+      ],
+      "label": "New component",
+      "at": 1793425561320
+    },
+    {
+      "opId": "op545",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp544",
+        "material": "mat30"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425561335
+    },
+    {
+      "opId": "op546",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp544",
+        "name": "Ring clamp"
+      },
+      "createdIds": [
+        "sketch547",
+        "pt548"
+      ],
+      "label": "Create sketch",
+      "at": 1793425561384
+    },
+    {
+      "opId": "op549",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch547",
+        "x": "pY - hw - 1",
+        "y": "H - cL - 5"
+      },
+      "createdIds": [
+        "pt550"
+      ],
+      "label": "Add point",
+      "at": 1793425561408
+    },
+    {
+      "opId": "op551",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch547",
+        "x": "Rin - 2",
+        "y": "H - cL - 5"
+      },
+      "createdIds": [
+        "pt552"
+      ],
+      "label": "Add point",
+      "at": 1793425561549
+    },
+    {
+      "opId": "op553",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch547",
+        "x": "Rin - 2",
+        "y": "H - cL"
+      },
+      "createdIds": [
+        "pt554"
+      ],
+      "label": "Add point",
+      "at": 1793425561577
+    },
+    {
+      "opId": "op555",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch547",
+        "x": "pY - hw - 1",
+        "y": "H - cL"
+      },
+      "createdIds": [
+        "pt556"
+      ],
+      "label": "Add point",
+      "at": 1793425561587
+    },
+    {
+      "opId": "op557",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch547",
+        "start": {
+          "ref": "pt550"
+        },
+        "end": {
+          "ref": "pt552"
+        }
+      },
+      "createdIds": [
+        "ln558"
+      ],
+      "label": "Add line",
+      "at": 1793425561598
+    },
+    {
+      "opId": "op559",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch547",
+        "start": {
+          "ref": "pt552"
+        },
+        "end": {
+          "ref": "pt554"
+        }
+      },
+      "createdIds": [
+        "ln560"
+      ],
+      "label": "Add line",
+      "at": 1793425561673
+    },
+    {
+      "opId": "op561",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch547",
+        "start": {
+          "ref": "pt554"
+        },
+        "end": {
+          "ref": "pt556"
+        }
+      },
+      "createdIds": [
+        "ln562"
+      ],
+      "label": "Add line",
+      "at": 1793425561689
+    },
+    {
+      "opId": "op563",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch547",
+        "start": {
+          "ref": "pt556"
+        },
+        "end": {
+          "ref": "pt550"
+        }
+      },
+      "createdIds": [
+        "ln564"
+      ],
+      "label": "Add line",
+      "at": 1793425561713
+    },
+    {
+      "opId": "op565",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch547",
+        "distance": "2*(cL + 2)",
+        "operation": "new",
+        "name": "Ring clamp",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext566"
+      ],
+      "label": "Extrude",
+      "at": 1793425561724
+    },
+    {
+      "opId": "op567",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl540",
+        "component": "cmp544",
+        "name": "Blade A (ring half)"
+      },
+      "createdIds": [
+        "sketch568",
+        "pt569"
+      ],
+      "label": "Create sketch",
+      "at": 1793425561844
+    },
+    {
+      "opId": "op570",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch568",
+        "x": "(-(L/2 + 1) - -t/2)/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt571"
+      ],
+      "label": "Add point",
+      "at": 1793425561864
+    },
+    {
+      "opId": "op572",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch568",
+        "x": "(0 - -t/2)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt573"
+      ],
+      "label": "Add point",
+      "at": 1793425561879
+    },
+    {
+      "opId": "op574",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch568",
+        "x": "(0 - t/2)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt575"
+      ],
+      "label": "Add point",
+      "at": 1793425561996
+    },
+    {
+      "opId": "op576",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch568",
+        "x": "(-(L/2 + 1) - t/2)/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt577"
+      ],
+      "label": "Add point",
+      "at": 1793425562097
+    },
+    {
+      "opId": "op578",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch568",
+        "start": {
+          "ref": "pt571"
+        },
+        "end": {
+          "ref": "pt573"
+        }
+      },
+      "createdIds": [
+        "ln579"
+      ],
+      "label": "Add line",
+      "at": 1793425562150
+    },
+    {
+      "opId": "op580",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch568",
+        "start": {
+          "ref": "pt573"
+        },
+        "end": {
+          "ref": "pt575"
+        }
+      },
+      "createdIds": [
+        "ln581"
+      ],
+      "label": "Add line",
+      "at": 1793425562174
+    },
+    {
+      "opId": "op582",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch568",
+        "start": {
+          "ref": "pt575"
+        },
+        "end": {
+          "ref": "pt577"
+        }
+      },
+      "createdIds": [
+        "ln583"
+      ],
+      "label": "Add line",
+      "at": 1793425562187
+    },
+    {
+      "opId": "op584",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch568",
+        "start": {
+          "ref": "pt577"
+        },
+        "end": {
+          "ref": "pt571"
+        }
+      },
+      "createdIds": [
+        "ln585"
+      ],
+      "label": "Add line",
+      "at": 1793425562210
+    },
+    {
+      "opId": "op586",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch568",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade A (ring half)"
+      },
+      "createdIds": [
+        "ext587"
+      ],
+      "label": "Extrude",
+      "at": 1793425562226
+    },
+    {
+      "opId": "op588",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl542",
+        "component": "cmp544",
+        "name": "Blade B (ring half)"
+      },
+      "createdIds": [
+        "sketch589",
+        "pt590"
+      ],
+      "label": "Create sketch",
+      "at": 1793425562231
+    },
+    {
+      "opId": "op591",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch589",
+        "x": "(-t/2 - -(L/2 + 1))/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt592"
+      ],
+      "label": "Add point",
+      "at": 1793425562377
+    },
+    {
+      "opId": "op593",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch589",
+        "x": "(-t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt594"
+      ],
+      "label": "Add point",
+      "at": 1793425562421
+    },
+    {
+      "opId": "op595",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch589",
+        "x": "(t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt596"
+      ],
+      "label": "Add point",
+      "at": 1793425562435
+    },
+    {
+      "opId": "op597",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch589",
+        "x": "(t/2 - -(L/2 + 1))/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt598"
+      ],
+      "label": "Add point",
+      "at": 1793425562455
+    },
+    {
+      "opId": "op599",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch589",
+        "start": {
+          "ref": "pt592"
+        },
+        "end": {
+          "ref": "pt594"
+        }
+      },
+      "createdIds": [
+        "ln600"
+      ],
+      "label": "Add line",
+      "at": 1793425562470
+    },
+    {
+      "opId": "op601",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch589",
+        "start": {
+          "ref": "pt594"
+        },
+        "end": {
+          "ref": "pt596"
+        }
+      },
+      "createdIds": [
+        "ln602"
+      ],
+      "label": "Add line",
+      "at": 1793425562490
+    },
+    {
+      "opId": "op603",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch589",
+        "start": {
+          "ref": "pt596"
+        },
+        "end": {
+          "ref": "pt598"
+        }
+      },
+      "createdIds": [
+        "ln604"
+      ],
+      "label": "Add line",
+      "at": 1793425562641
+    },
+    {
+      "opId": "op605",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch589",
+        "start": {
+          "ref": "pt598"
+        },
+        "end": {
+          "ref": "pt592"
+        }
+      },
+      "createdIds": [
+        "ln606"
+      ],
+      "label": "Add line",
+      "at": 1793425562660
+    },
+    {
+      "opId": "op607",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch589",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade B (ring half)"
+      },
+      "createdIds": [
+        "ext608"
+      ],
+      "label": "Extrude",
+      "at": 1793425562670
+    },
+    {
+      "opId": "op609",
+      "type": "component.create",
+      "params": {
+        "name": "Platform clamp +Y",
+        "parent": "cmp44"
+      },
+      "createdIds": [
+        "cmp610"
+      ],
+      "label": "New component",
+      "at": 1793425562692
+    },
+    {
+      "opId": "op611",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp610",
+        "material": "mat30"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425562707
+    },
+    {
+      "opId": "op612",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp610",
+        "name": "Riser"
+      },
+      "createdIds": [
+        "sketch613",
+        "pt614"
+      ],
+      "label": "Create sketch",
+      "at": 1793425562719
+    },
+    {
+      "opId": "op615",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch613",
+        "x": "platR - 6",
+        "y": "H + 3"
+      },
+      "createdIds": [
+        "pt616"
+      ],
+      "label": "Add point",
+      "at": 1793425562733
+    },
+    {
+      "opId": "op617",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch613",
+        "x": "platR",
+        "y": "H + 3"
+      },
+      "createdIds": [
+        "pt618"
+      ],
+      "label": "Add point",
+      "at": 1793425562745
+    },
+    {
+      "opId": "op619",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch613",
+        "x": "platR",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt620"
+      ],
+      "label": "Add point",
+      "at": 1793425562970
+    },
+    {
+      "opId": "op621",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch613",
+        "x": "platR - 6",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt622"
+      ],
+      "label": "Add point",
+      "at": 1793425563039
+    },
+    {
+      "opId": "op623",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch613",
+        "start": {
+          "ref": "pt616"
+        },
+        "end": {
+          "ref": "pt618"
+        }
+      },
+      "createdIds": [
+        "ln624"
+      ],
+      "label": "Add line",
+      "at": 1793425563090
+    },
+    {
+      "opId": "op625",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch613",
+        "start": {
+          "ref": "pt618"
+        },
+        "end": {
+          "ref": "pt620"
+        }
+      },
+      "createdIds": [
+        "ln626"
+      ],
+      "label": "Add line",
+      "at": 1793425563109
+    },
+    {
+      "opId": "op627",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch613",
+        "start": {
+          "ref": "pt620"
+        },
+        "end": {
+          "ref": "pt622"
+        }
+      },
+      "createdIds": [
+        "ln628"
+      ],
+      "label": "Add line",
+      "at": 1793425563131
+    },
+    {
+      "opId": "op629",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch613",
+        "start": {
+          "ref": "pt622"
+        },
+        "end": {
+          "ref": "pt616"
+        }
+      },
+      "createdIds": [
+        "ln630"
+      ],
+      "label": "Add line",
+      "at": 1793425563181
+    },
+    {
+      "opId": "op631",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch613",
+        "distance": "2*(cL + 2)",
+        "operation": "new",
+        "name": "Riser",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext632"
+      ],
+      "label": "Extrude",
+      "at": 1793425563249
+    },
+    {
+      "opId": "op633",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp610",
+        "name": "Platform arm"
+      },
+      "createdIds": [
+        "sketch634",
+        "pt635"
+      ],
+      "label": "Create sketch",
+      "at": 1793425563332
+    },
+    {
+      "opId": "op636",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch634",
+        "x": "platR - 6",
+        "y": "H + cL"
+      },
+      "createdIds": [
+        "pt637"
+      ],
+      "label": "Add point",
+      "at": 1793425563367
+    },
+    {
+      "opId": "op638",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch634",
+        "x": "pY + hw + 1",
+        "y": "H + cL"
+      },
+      "createdIds": [
+        "pt639"
+      ],
+      "label": "Add point",
+      "at": 1793425563417
+    },
+    {
+      "opId": "op640",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch634",
+        "x": "pY + hw + 1",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt641"
+      ],
+      "label": "Add point",
+      "at": 1793425563446
+    },
+    {
+      "opId": "op642",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch634",
+        "x": "platR - 6",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt643"
+      ],
+      "label": "Add point",
+      "at": 1793425563457
+    },
+    {
+      "opId": "op644",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch634",
+        "start": {
+          "ref": "pt637"
+        },
+        "end": {
+          "ref": "pt639"
+        }
+      },
+      "createdIds": [
+        "ln645"
+      ],
+      "label": "Add line",
+      "at": 1793425563471
+    },
+    {
+      "opId": "op646",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch634",
+        "start": {
+          "ref": "pt639"
+        },
+        "end": {
+          "ref": "pt641"
+        }
+      },
+      "createdIds": [
+        "ln647"
+      ],
+      "label": "Add line",
+      "at": 1793425563479
+    },
+    {
+      "opId": "op648",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch634",
+        "start": {
+          "ref": "pt641"
+        },
+        "end": {
+          "ref": "pt643"
+        }
+      },
+      "createdIds": [
+        "ln649"
+      ],
+      "label": "Add line",
+      "at": 1793425563491
+    },
+    {
+      "opId": "op650",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch634",
+        "start": {
+          "ref": "pt643"
+        },
+        "end": {
+          "ref": "pt637"
+        }
+      },
+      "createdIds": [
+        "ln651"
+      ],
+      "label": "Add line",
+      "at": 1793425563498
+    },
+    {
+      "opId": "op652",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch634",
+        "distance": "2*(cL + 2)",
+        "operation": "join",
+        "name": "Platform arm",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext653"
+      ],
+      "label": "Extrude",
+      "at": 1793425563529
+    },
+    {
+      "opId": "op654",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl540",
+        "component": "cmp610",
+        "name": "Blade A (platform half)"
+      },
+      "createdIds": [
+        "sketch655",
+        "pt656"
+      ],
+      "label": "Create sketch",
+      "at": 1793425563534
+    },
+    {
+      "opId": "op657",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch655",
+        "x": "(0 - -t/2)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt658"
+      ],
+      "label": "Add point",
+      "at": 1793425563648
+    },
+    {
+      "opId": "op659",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch655",
+        "x": "((L/2 + 1) - -t/2)/sqrt(2)",
+        "y": "H + ((L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt660"
+      ],
+      "label": "Add point",
+      "at": 1793425563661
+    },
+    {
+      "opId": "op661",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch655",
+        "x": "((L/2 + 1) - t/2)/sqrt(2)",
+        "y": "H + ((L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt662"
+      ],
+      "label": "Add point",
+      "at": 1793425563674
+    },
+    {
+      "opId": "op663",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch655",
+        "x": "(0 - t/2)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt664"
+      ],
+      "label": "Add point",
+      "at": 1793425563716
+    },
+    {
+      "opId": "op665",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch655",
+        "start": {
+          "ref": "pt658"
+        },
+        "end": {
+          "ref": "pt660"
+        }
+      },
+      "createdIds": [
+        "ln666"
+      ],
+      "label": "Add line",
+      "at": 1793425563800
+    },
+    {
+      "opId": "op667",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch655",
+        "start": {
+          "ref": "pt660"
+        },
+        "end": {
+          "ref": "pt662"
+        }
+      },
+      "createdIds": [
+        "ln668"
+      ],
+      "label": "Add line",
+      "at": 1793425563815
+    },
+    {
+      "opId": "op669",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch655",
+        "start": {
+          "ref": "pt662"
+        },
+        "end": {
+          "ref": "pt664"
+        }
+      },
+      "createdIds": [
+        "ln670"
+      ],
+      "label": "Add line",
+      "at": 1793425563829
+    },
+    {
+      "opId": "op671",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch655",
+        "start": {
+          "ref": "pt664"
+        },
+        "end": {
+          "ref": "pt658"
+        }
+      },
+      "createdIds": [
+        "ln672"
+      ],
+      "label": "Add line",
+      "at": 1793425563840
+    },
+    {
+      "opId": "op673",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch655",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade A (platform half)"
+      },
+      "createdIds": [
+        "ext674"
+      ],
+      "label": "Extrude",
+      "at": 1793425563848
+    },
+    {
+      "opId": "op675",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl542",
+        "component": "cmp610",
+        "name": "Blade B (platform half)"
+      },
+      "createdIds": [
+        "sketch676",
+        "pt677"
+      ],
+      "label": "Create sketch",
+      "at": 1793425563915
+    },
+    {
+      "opId": "op678",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch676",
+        "x": "(-t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt679"
+      ],
+      "label": "Add point",
+      "at": 1793425563953
+    },
+    {
+      "opId": "op680",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch676",
+        "x": "(-t/2 - (L/2 + 1))/sqrt(2)",
+        "y": "H + ((L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt681"
+      ],
+      "label": "Add point",
+      "at": 1793425563965
+    },
+    {
+      "opId": "op682",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch676",
+        "x": "(t/2 - (L/2 + 1))/sqrt(2)",
+        "y": "H + ((L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt683"
+      ],
+      "label": "Add point",
+      "at": 1793425563983
+    },
+    {
+      "opId": "op684",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch676",
+        "x": "(t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt685"
+      ],
+      "label": "Add point",
+      "at": 1793425564061
+    },
+    {
+      "opId": "op686",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch676",
+        "start": {
+          "ref": "pt679"
+        },
+        "end": {
+          "ref": "pt681"
+        }
+      },
+      "createdIds": [
+        "ln687"
+      ],
+      "label": "Add line",
+      "at": 1793425564070
+    },
+    {
+      "opId": "op688",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch676",
+        "start": {
+          "ref": "pt681"
+        },
+        "end": {
+          "ref": "pt683"
+        }
+      },
+      "createdIds": [
+        "ln689"
+      ],
+      "label": "Add line",
+      "at": 1793425564104
+    },
+    {
+      "opId": "op690",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch676",
+        "start": {
+          "ref": "pt683"
+        },
+        "end": {
+          "ref": "pt685"
+        }
+      },
+      "createdIds": [
+        "ln691"
+      ],
+      "label": "Add line",
+      "at": 1793425564122
+    },
+    {
+      "opId": "op692",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch676",
+        "start": {
+          "ref": "pt685"
+        },
+        "end": {
+          "ref": "pt679"
+        }
+      },
+      "createdIds": [
+        "ln693"
+      ],
+      "label": "Add line",
+      "at": 1793425564132
+    },
+    {
+      "opId": "op694",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch676",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade B (platform half)"
+      },
+      "createdIds": [
+        "ext695"
+      ],
+      "label": "Extrude",
+      "at": 1793425564209
+    },
+    {
+      "opId": "op696",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "flexure": {
+          "length": "L",
+          "width": "w",
+          "thickness": "t",
+          "material": "mat30"
+        },
+        "base": "cmp41",
+        "moved": "cmp44",
+        "axis": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "baseOrigin": {
+          "x": 0,
+          "y": "pY",
+          "z": "H"
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": "pY",
+          "z": "H"
+        },
+        "value": "beta",
+        "name": "Inner +Y blade A"
+      },
+      "createdIds": [
+        "jnt697"
+      ],
+      "label": "Joint",
+      "at": 1793425564219
+    },
+    {
+      "opId": "op698",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "flexure": {
+          "length": "L",
+          "width": "w",
+          "thickness": "t",
+          "material": "mat30"
+        },
+        "base": "cmp41",
+        "moved": "cmp44",
+        "axis": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "baseOrigin": {
+          "x": 0,
+          "y": "pY",
+          "z": "H"
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": "pY",
+          "z": "H"
+        },
+        "closes": true,
+        "name": "Inner +Y blade B"
+      },
+      "createdIds": [
+        "jnt699"
+      ],
+      "label": "Joint",
+      "at": 1793425564240
+    },
+    {
+      "opId": "op700",
+      "type": "plane.create",
+      "params": {
+        "base": "XZ",
+        "offset": "-((-pY - w - 1) + w)",
+        "name": "Blade A plane (-pY)"
+      },
+      "createdIds": [
+        "pl701"
+      ],
+      "label": "Offset plane",
+      "at": 1793425564253
+    },
+    {
+      "opId": "op702",
+      "type": "plane.create",
+      "params": {
+        "base": "XZ",
+        "offset": "-((-pY + 1) + w)",
+        "name": "Blade B plane (-pY)"
+      },
+      "createdIds": [
+        "pl703"
+      ],
+      "label": "Offset plane",
+      "at": 1793425564295
+    },
+    {
+      "opId": "op704",
+      "type": "component.create",
+      "params": {
+        "name": "Ring clamp -Y",
+        "parent": "cmp41"
+      },
+      "createdIds": [
+        "cmp705"
+      ],
+      "label": "New component",
+      "at": 1793425564307
+    },
+    {
+      "opId": "op706",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp705",
+        "material": "mat30"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425564381
+    },
+    {
+      "opId": "op707",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp705",
+        "name": "Ring clamp"
+      },
+      "createdIds": [
+        "sketch708",
+        "pt709"
+      ],
+      "label": "Create sketch",
+      "at": 1793425564395
+    },
+    {
+      "opId": "op710",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch708",
+        "x": "-(Rin - 2)",
+        "y": "H - cL - 5"
+      },
+      "createdIds": [
+        "pt711"
+      ],
+      "label": "Add point",
+      "at": 1793425564416
+    },
+    {
+      "opId": "op712",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch708",
+        "x": "-(pY - hw - 1)",
+        "y": "H - cL - 5"
+      },
+      "createdIds": [
+        "pt713"
+      ],
+      "label": "Add point",
+      "at": 1793425564423
+    },
+    {
+      "opId": "op714",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch708",
+        "x": "-(pY - hw - 1)",
+        "y": "H - cL"
+      },
+      "createdIds": [
+        "pt715"
+      ],
+      "label": "Add point",
+      "at": 1793425564459
+    },
+    {
+      "opId": "op716",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch708",
+        "x": "-(Rin - 2)",
+        "y": "H - cL"
+      },
+      "createdIds": [
+        "pt717"
+      ],
+      "label": "Add point",
+      "at": 1793425564465
+    },
+    {
+      "opId": "op718",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch708",
+        "start": {
+          "ref": "pt711"
+        },
+        "end": {
+          "ref": "pt713"
+        }
+      },
+      "createdIds": [
+        "ln719"
+      ],
+      "label": "Add line",
+      "at": 1793425564509
+    },
+    {
+      "opId": "op720",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch708",
+        "start": {
+          "ref": "pt713"
+        },
+        "end": {
+          "ref": "pt715"
+        }
+      },
+      "createdIds": [
+        "ln721"
+      ],
+      "label": "Add line",
+      "at": 1793425564549
+    },
+    {
+      "opId": "op722",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch708",
+        "start": {
+          "ref": "pt715"
+        },
+        "end": {
+          "ref": "pt717"
+        }
+      },
+      "createdIds": [
+        "ln723"
+      ],
+      "label": "Add line",
+      "at": 1793425564568
+    },
+    {
+      "opId": "op724",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch708",
+        "start": {
+          "ref": "pt717"
+        },
+        "end": {
+          "ref": "pt711"
+        }
+      },
+      "createdIds": [
+        "ln725"
+      ],
+      "label": "Add line",
+      "at": 1793425564582
+    },
+    {
+      "opId": "op726",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch708",
+        "distance": "2*(cL + 2)",
+        "operation": "new",
+        "name": "Ring clamp",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext727"
+      ],
+      "label": "Extrude",
+      "at": 1793425564592
+    },
+    {
+      "opId": "op728",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl701",
+        "component": "cmp705",
+        "name": "Blade A (ring half)"
+      },
+      "createdIds": [
+        "sketch729",
+        "pt730"
+      ],
+      "label": "Create sketch",
+      "at": 1793425564602
+    },
+    {
+      "opId": "op731",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch729",
+        "x": "(-(L/2 + 1) - -t/2)/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt732"
+      ],
+      "label": "Add point",
+      "at": 1793425564678
+    },
+    {
+      "opId": "op733",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch729",
+        "x": "(0 - -t/2)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt734"
+      ],
+      "label": "Add point",
+      "at": 1793425564737
+    },
+    {
+      "opId": "op735",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch729",
+        "x": "(0 - t/2)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt736"
+      ],
+      "label": "Add point",
+      "at": 1793425564750
+    },
+    {
+      "opId": "op737",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch729",
+        "x": "(-(L/2 + 1) - t/2)/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt738"
+      ],
+      "label": "Add point",
+      "at": 1793425564775
+    },
+    {
+      "opId": "op739",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch729",
+        "start": {
+          "ref": "pt732"
+        },
+        "end": {
+          "ref": "pt734"
+        }
+      },
+      "createdIds": [
+        "ln740"
+      ],
+      "label": "Add line",
+      "at": 1793425564790
+    },
+    {
+      "opId": "op741",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch729",
+        "start": {
+          "ref": "pt734"
+        },
+        "end": {
+          "ref": "pt736"
+        }
+      },
+      "createdIds": [
+        "ln742"
+      ],
+      "label": "Add line",
+      "at": 1793425564796
+    },
+    {
+      "opId": "op743",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch729",
+        "start": {
+          "ref": "pt736"
+        },
+        "end": {
+          "ref": "pt738"
+        }
+      },
+      "createdIds": [
+        "ln744"
+      ],
+      "label": "Add line",
+      "at": 1793425564832
+    },
+    {
+      "opId": "op745",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch729",
+        "start": {
+          "ref": "pt738"
+        },
+        "end": {
+          "ref": "pt732"
+        }
+      },
+      "createdIds": [
+        "ln746"
+      ],
+      "label": "Add line",
+      "at": 1793425564842
+    },
+    {
+      "opId": "op747",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch729",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade A (ring half)"
+      },
+      "createdIds": [
+        "ext748"
+      ],
+      "label": "Extrude",
+      "at": 1793425564900
+    },
+    {
+      "opId": "op749",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl703",
+        "component": "cmp705",
+        "name": "Blade B (ring half)"
+      },
+      "createdIds": [
+        "sketch750",
+        "pt751"
+      ],
+      "label": "Create sketch",
+      "at": 1793425564913
+    },
+    {
+      "opId": "op752",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch750",
+        "x": "(-t/2 - -(L/2 + 1))/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt753"
+      ],
+      "label": "Add point",
+      "at": 1793425564971
+    },
+    {
+      "opId": "op754",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch750",
+        "x": "(-t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt755"
+      ],
+      "label": "Add point",
+      "at": 1793425565017
+    },
+    {
+      "opId": "op756",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch750",
+        "x": "(t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt757"
+      ],
+      "label": "Add point",
+      "at": 1793425565056
+    },
+    {
+      "opId": "op758",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch750",
+        "x": "(t/2 - -(L/2 + 1))/sqrt(2)",
+        "y": "H + (-(L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt759"
+      ],
+      "label": "Add point",
+      "at": 1793425565071
+    },
+    {
+      "opId": "op760",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch750",
+        "start": {
+          "ref": "pt753"
+        },
+        "end": {
+          "ref": "pt755"
+        }
+      },
+      "createdIds": [
+        "ln761"
+      ],
+      "label": "Add line",
+      "at": 1793425565106
+    },
+    {
+      "opId": "op762",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch750",
+        "start": {
+          "ref": "pt755"
+        },
+        "end": {
+          "ref": "pt757"
+        }
+      },
+      "createdIds": [
+        "ln763"
+      ],
+      "label": "Add line",
+      "at": 1793425565128
+    },
+    {
+      "opId": "op764",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch750",
+        "start": {
+          "ref": "pt757"
+        },
+        "end": {
+          "ref": "pt759"
+        }
+      },
+      "createdIds": [
+        "ln765"
+      ],
+      "label": "Add line",
+      "at": 1793425565164
+    },
+    {
+      "opId": "op766",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch750",
+        "start": {
+          "ref": "pt759"
+        },
+        "end": {
+          "ref": "pt753"
+        }
+      },
+      "createdIds": [
+        "ln767"
+      ],
+      "label": "Add line",
+      "at": 1793425565211
+    },
+    {
+      "opId": "op768",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch750",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade B (ring half)"
+      },
+      "createdIds": [
+        "ext769"
+      ],
+      "label": "Extrude",
+      "at": 1793425565225
+    },
+    {
+      "opId": "op770",
+      "type": "component.create",
+      "params": {
+        "name": "Platform clamp -Y",
+        "parent": "cmp44"
+      },
+      "createdIds": [
+        "cmp771"
+      ],
+      "label": "New component",
+      "at": 1793425565257
+    },
+    {
+      "opId": "op772",
+      "type": "material.assign",
+      "params": {
+        "component": "cmp771",
+        "material": "mat30"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793425565287
+    },
+    {
+      "opId": "op773",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp771",
+        "name": "Riser"
+      },
+      "createdIds": [
+        "sketch774",
+        "pt775"
+      ],
+      "label": "Create sketch",
+      "at": 1793425565301
+    },
+    {
+      "opId": "op776",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch774",
+        "x": "-platR",
+        "y": "H + 3"
+      },
+      "createdIds": [
+        "pt777"
+      ],
+      "label": "Add point",
+      "at": 1793425565314
+    },
+    {
+      "opId": "op778",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch774",
+        "x": "-(platR - 6)",
+        "y": "H + 3"
+      },
+      "createdIds": [
+        "pt779"
+      ],
+      "label": "Add point",
+      "at": 1793425565407
+    },
+    {
+      "opId": "op780",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch774",
+        "x": "-(platR - 6)",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt781"
+      ],
+      "label": "Add point",
+      "at": 1793425565489
+    },
+    {
+      "opId": "op782",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch774",
+        "x": "-platR",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt783"
+      ],
+      "label": "Add point",
+      "at": 1793425565497
+    },
+    {
+      "opId": "op784",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch774",
+        "start": {
+          "ref": "pt777"
+        },
+        "end": {
+          "ref": "pt779"
+        }
+      },
+      "createdIds": [
+        "ln785"
+      ],
+      "label": "Add line",
+      "at": 1793425565514
+    },
+    {
+      "opId": "op786",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch774",
+        "start": {
+          "ref": "pt779"
+        },
+        "end": {
+          "ref": "pt781"
+        }
+      },
+      "createdIds": [
+        "ln787"
+      ],
+      "label": "Add line",
+      "at": 1793425565550
+    },
+    {
+      "opId": "op788",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch774",
+        "start": {
+          "ref": "pt781"
+        },
+        "end": {
+          "ref": "pt783"
+        }
+      },
+      "createdIds": [
+        "ln789"
+      ],
+      "label": "Add line",
+      "at": 1793425565589
+    },
+    {
+      "opId": "op790",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch774",
+        "start": {
+          "ref": "pt783"
+        },
+        "end": {
+          "ref": "pt777"
+        }
+      },
+      "createdIds": [
+        "ln791"
+      ],
+      "label": "Add line",
+      "at": 1793425565615
+    },
+    {
+      "opId": "op792",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch774",
+        "distance": "2*(cL + 2)",
+        "operation": "new",
+        "name": "Riser",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext793"
+      ],
+      "label": "Extrude",
+      "at": 1793425565682
+    },
+    {
+      "opId": "op794",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp771",
+        "name": "Platform arm"
+      },
+      "createdIds": [
+        "sketch795",
+        "pt796"
+      ],
+      "label": "Create sketch",
+      "at": 1793425565693
+    },
+    {
+      "opId": "op797",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch795",
+        "x": "-(pY + hw + 1)",
+        "y": "H + cL"
+      },
+      "createdIds": [
+        "pt798"
+      ],
+      "label": "Add point",
+      "at": 1793425565749
+    },
+    {
+      "opId": "op799",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch795",
+        "x": "-(platR - 6)",
+        "y": "H + cL"
+      },
+      "createdIds": [
+        "pt800"
+      ],
+      "label": "Add point",
+      "at": 1793425565759
+    },
+    {
+      "opId": "op801",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch795",
+        "x": "-(platR - 6)",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt802"
+      ],
+      "label": "Add point",
+      "at": 1793425565797
+    },
+    {
+      "opId": "op803",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch795",
+        "x": "-(pY + hw + 1)",
+        "y": "H + cL + 5"
+      },
+      "createdIds": [
+        "pt804"
+      ],
+      "label": "Add point",
+      "at": 1793425565847
+    },
+    {
+      "opId": "op805",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch795",
+        "start": {
+          "ref": "pt798"
+        },
+        "end": {
+          "ref": "pt800"
+        }
+      },
+      "createdIds": [
+        "ln806"
+      ],
+      "label": "Add line",
+      "at": 1793425565859
+    },
+    {
+      "opId": "op807",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch795",
+        "start": {
+          "ref": "pt800"
+        },
+        "end": {
+          "ref": "pt802"
+        }
+      },
+      "createdIds": [
+        "ln808"
+      ],
+      "label": "Add line",
+      "at": 1793425565874
+    },
+    {
+      "opId": "op809",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch795",
+        "start": {
+          "ref": "pt802"
+        },
+        "end": {
+          "ref": "pt804"
+        }
+      },
+      "createdIds": [
+        "ln810"
+      ],
+      "label": "Add line",
+      "at": 1793425565933
+    },
+    {
+      "opId": "op811",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch795",
+        "start": {
+          "ref": "pt804"
+        },
+        "end": {
+          "ref": "pt798"
+        }
+      },
+      "createdIds": [
+        "ln812"
+      ],
+      "label": "Add line",
+      "at": 1793425565960
+    },
+    {
+      "opId": "op813",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch795",
+        "distance": "2*(cL + 2)",
+        "operation": "join",
+        "name": "Platform arm",
+        "symmetric": true
+      },
+      "createdIds": [
+        "ext814"
+      ],
+      "label": "Extrude",
+      "at": 1793425565970
+    },
+    {
+      "opId": "op815",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl701",
+        "component": "cmp771",
+        "name": "Blade A (platform half)"
+      },
+      "createdIds": [
+        "sketch816",
+        "pt817"
+      ],
+      "label": "Create sketch",
+      "at": 1793425566035
+    },
+    {
+      "opId": "op818",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch816",
+        "x": "(0 - -t/2)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt819"
+      ],
+      "label": "Add point",
+      "at": 1793425566060
+    },
+    {
+      "opId": "op820",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch816",
+        "x": "((L/2 + 1) - -t/2)/sqrt(2)",
+        "y": "H + ((L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt821"
+      ],
+      "label": "Add point",
+      "at": 1793425566072
+    },
+    {
+      "opId": "op822",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch816",
+        "x": "((L/2 + 1) - t/2)/sqrt(2)",
+        "y": "H + ((L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt823"
+      ],
+      "label": "Add point",
+      "at": 1793425566172
+    },
+    {
+      "opId": "op824",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch816",
+        "x": "(0 - t/2)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt825"
+      ],
+      "label": "Add point",
+      "at": 1793425566196
+    },
+    {
+      "opId": "op826",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch816",
+        "start": {
+          "ref": "pt819"
+        },
+        "end": {
+          "ref": "pt821"
+        }
+      },
+      "createdIds": [
+        "ln827"
+      ],
+      "label": "Add line",
+      "at": 1793425566222
+    },
+    {
+      "opId": "op828",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch816",
+        "start": {
+          "ref": "pt821"
+        },
+        "end": {
+          "ref": "pt823"
+        }
+      },
+      "createdIds": [
+        "ln829"
+      ],
+      "label": "Add line",
+      "at": 1793425566247
+    },
+    {
+      "opId": "op830",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch816",
+        "start": {
+          "ref": "pt823"
+        },
+        "end": {
+          "ref": "pt825"
+        }
+      },
+      "createdIds": [
+        "ln831"
+      ],
+      "label": "Add line",
+      "at": 1793425566274
+    },
+    {
+      "opId": "op832",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch816",
+        "start": {
+          "ref": "pt825"
+        },
+        "end": {
+          "ref": "pt819"
+        }
+      },
+      "createdIds": [
+        "ln833"
+      ],
+      "label": "Add line",
+      "at": 1793425566319
+    },
+    {
+      "opId": "op834",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch816",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade A (platform half)"
+      },
+      "createdIds": [
+        "ext835"
+      ],
+      "label": "Extrude",
+      "at": 1793425566328
+    },
+    {
+      "opId": "op836",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl703",
+        "component": "cmp771",
+        "name": "Blade B (platform half)"
+      },
+      "createdIds": [
+        "sketch837",
+        "pt838"
+      ],
+      "label": "Create sketch",
+      "at": 1793425566364
+    },
+    {
+      "opId": "op839",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch837",
+        "x": "(-t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt840"
+      ],
+      "label": "Add point",
+      "at": 1793425566383
+    },
+    {
+      "opId": "op841",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch837",
+        "x": "(-t/2 - (L/2 + 1))/sqrt(2)",
+        "y": "H + ((L/2 + 1) + -t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt842"
+      ],
+      "label": "Add point",
+      "at": 1793425566394
+    },
+    {
+      "opId": "op843",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch837",
+        "x": "(t/2 - (L/2 + 1))/sqrt(2)",
+        "y": "H + ((L/2 + 1) + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt844"
+      ],
+      "label": "Add point",
+      "at": 1793425566462
+    },
+    {
+      "opId": "op845",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch837",
+        "x": "(t/2 - 0)/sqrt(2)",
+        "y": "H + (0 + t/2)/sqrt(2)"
+      },
+      "createdIds": [
+        "pt846"
+      ],
+      "label": "Add point",
+      "at": 1793425566497
+    },
+    {
+      "opId": "op847",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch837",
+        "start": {
+          "ref": "pt840"
+        },
+        "end": {
+          "ref": "pt842"
+        }
+      },
+      "createdIds": [
+        "ln848"
+      ],
+      "label": "Add line",
+      "at": 1793425566548
+    },
+    {
+      "opId": "op849",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch837",
+        "start": {
+          "ref": "pt842"
+        },
+        "end": {
+          "ref": "pt844"
+        }
+      },
+      "createdIds": [
+        "ln850"
+      ],
+      "label": "Add line",
+      "at": 1793425566605
+    },
+    {
+      "opId": "op851",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch837",
+        "start": {
+          "ref": "pt844"
+        },
+        "end": {
+          "ref": "pt846"
+        }
+      },
+      "createdIds": [
+        "ln852"
+      ],
+      "label": "Add line",
+      "at": 1793425566672
+    },
+    {
+      "opId": "op853",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch837",
+        "start": {
+          "ref": "pt846"
+        },
+        "end": {
+          "ref": "pt840"
+        }
+      },
+      "createdIds": [
+        "ln854"
+      ],
+      "label": "Add line",
+      "at": 1793425566702
+    },
+    {
+      "opId": "op855",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch837",
+        "distance": "w",
+        "operation": "join",
+        "name": "Blade B (platform half)"
+      },
+      "createdIds": [
+        "ext856"
+      ],
+      "label": "Extrude",
+      "at": 1793425566722
+    },
+    {
+      "opId": "op857",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "flexure": {
+          "length": "L",
+          "width": "w",
+          "thickness": "t",
+          "material": "mat30"
+        },
+        "base": "cmp41",
+        "moved": "cmp44",
+        "axis": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "baseOrigin": {
+          "x": 0,
+          "y": "-pY",
+          "z": "H"
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": "-pY",
+          "z": "H"
+        },
+        "closes": true,
+        "name": "Inner -Y blade A"
+      },
+      "createdIds": [
+        "jnt858"
+      ],
+      "label": "Joint",
+      "at": 1793425566747
+    },
+    {
+      "opId": "op859",
+      "type": "joint.create",
+      "params": {
+        "kind": "flexure",
+        "flexure": {
+          "length": "L",
+          "width": "w",
+          "thickness": "t",
+          "material": "mat30"
+        },
+        "base": "cmp41",
+        "moved": "cmp44",
+        "axis": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "baseOrigin": {
+          "x": 0,
+          "y": "-pY",
+          "z": "H"
+        },
+        "movedOrigin": {
+          "x": 0,
+          "y": "-pY",
+          "z": "H"
+        },
+        "closes": true,
+        "name": "Inner -Y blade B"
+      },
+      "createdIds": [
+        "jnt860"
+      ],
+      "label": "Joint",
+      "at": 1793425566783
+    }
+  ],
+  "timelineGroups": []
+}
