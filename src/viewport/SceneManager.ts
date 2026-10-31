@@ -489,7 +489,35 @@ export class SceneManager {
     }
     this.lastPixelScale = scale;
     this.renderer.render(this.scene, this.camera);
+    this.noticeCameraChange();
   };
+
+  // Screen-anchored HTML (pins, cards, dimensions) follows the camera through
+  // this: listeners run once per frame in which the view actually moved.
+  private cameraListeners = new Set<() => void>();
+  private cameraStamp = "";
+  private noticeCameraChange() {
+    if (!this.cameraListeners.size) return;
+    const c = this.camera as THREE.PerspectiveCamera & THREE.OrthographicCamera;
+    const m = c.matrixWorld.elements;
+    const el = this.renderer.domElement;
+    const stamp = `${m[12].toFixed(3)},${m[13].toFixed(3)},${m[14].toFixed(3)},${m[0].toFixed(4)},${m[5].toFixed(4)},${m[10].toFixed(4)},${m[1].toFixed(4)},${(c.zoom ?? 1).toFixed(4)},${c.fov ?? 0},${el.clientWidth}x${el.clientHeight}`;
+    if (stamp === this.cameraStamp) return;
+    this.cameraStamp = stamp;
+    for (const fn of this.cameraListeners) fn();
+  }
+
+  /** Run `fn` after every frame in which the camera (or the canvas size) changed. Returns the unsubscribe. */
+  onCameraChange(fn: () => void): () => void {
+    this.cameraListeners.add(fn);
+    return () => { this.cameraListeners.delete(fn); };
+  }
+
+  /** The camera's position and view direction in world space. */
+  cameraPose(): { position: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number } } {
+    const p = this.camera.position, d = this.camera.getWorldDirection(new THREE.Vector3());
+    return { position: { x: p.x, y: p.y, z: p.z }, direction: { x: d.x, y: d.y, z: d.z } };
+  }
 
   /** The 3D mouse's current deflection (from WebHID or the desktop's HID reader). */
   setNavigationInput(state: SpaceMouseState) { this.navInput = state; }
@@ -646,7 +674,7 @@ export class SceneManager {
       const fh = faceHits[0], ph = planeHits[0];
       if (fh && fh.face && (!ph || fh.distance <= ph.distance)) {
         const n = fh.face.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
-        return { type: "face", world: fh.point, normal: { x: n.x, y: n.y, z: n.z } };
+        return { type: "face", id: fh.object.userData.bodyId as string | undefined, world: fh.point, normal: { x: n.x, y: n.y, z: n.z } };
       }
       if (ph) return { type: "plane", id: ph.object.userData.planeId, world: ph.point };
       return { type: "empty" };
@@ -1053,6 +1081,7 @@ export class SceneManager {
     }
     const mesh = new THREE.Mesh(geo, mat);
     if (s.ghost) mesh.userData.ghost = true; // drawn, but never picked
+    if (s.id) mesh.userData.bodyId = s.id; // so a face pick names its body
     this.solidsGroup.add(mesh);
     if (analysis?.combs && s.combs?.length && !faded) {
       const cg = new THREE.BufferGeometry();

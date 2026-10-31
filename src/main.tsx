@@ -3,6 +3,7 @@ import { App } from "./ui/App";
 import { CustomizeApp } from "./ui/CustomizeApp";
 import { useStore } from "./model/store";
 import "./styles.css";
+import "./ui/kit/kit.css";
 
 // DEV-only: expose the store for debugging/automation (like __scene in Viewport).
 if (import.meta.env?.DEV) (window as unknown as { __chisel?: unknown }).__chisel = useStore;

@@ -378,8 +378,12 @@ export class Interactions {
           else if (pick.type === "face" && pick.world && pick.normal) {
             st.startSketchOnFace({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);
           }
+        } else if (pick.type === "face" && pick.world && pick.normal && e.button === 0) {
+          // A plain click picks the face: the verbs that fit it appear beside it.
+          st.selectFace({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal, { x: e.clientX, y: e.clientY }, pick.id);
+        } else if (pick.type === "empty" && e.button === 0) {
+          st.selectFace(null);
         }
-        // Otherwise a viewport click just orbits/selects — no implicit sketch.
       }
       this.downPt = null;
       return;

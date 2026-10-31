@@ -76,6 +76,17 @@ export type InlineEdit =
   | { mode: "new"; params: Record<string, unknown>; value: string; screen: { x: number; y: number } }
   | { mode: "edit"; cid: string; value: string; screen: { x: number; y: number } };
 
+export interface FaceSelection {
+  /** Body (feature id) the face belongs to; "" when the mesh carried no id. */
+  bodyId: string;
+  /** Topological face name (e.g. "extrude3:end"), when the mesh carries names. */
+  faceName?: string;
+  point: Vec3;
+  normal: Vec3;
+  /** Client coordinates of the click, where face verbs anchor. */
+  screen: { x: number; y: number };
+}
+
 export interface Toast {
   kind: "error" | "info";
   text: string;
@@ -101,6 +112,8 @@ export interface AppState {
   constructionMode: boolean;
   selection: string[];
   hover: string | null;
+  /** The body face picked by a click in model mode (the "verbs on a face" anchor). */
+  faceSelection: FaceSelection | null;
   showPlanes: boolean;
   showGrid: boolean;
   /** Draw hidden bodies as faint, unpickable ghosts. */
@@ -168,6 +181,8 @@ export interface AppState {
   select: (ids: string[], additive?: boolean) => void;
   toggleSelect: (id: string) => void;
   clearSelection: () => void;
+  /** Select the body face under a world point (null clears); `screen` is where it was clicked. */
+  selectFace: (point: Vec3 | null, normal?: Vec3, screen?: { x: number; y: number }, bodyId?: string) => void;
   setHover: (id: string | null) => void;
   toggleShowPlanes: () => void;
   toggleShowGrid: () => void;
@@ -585,6 +600,7 @@ export const useStore = create<AppState>((set, get) => {
     transientDimLabel: null,
     inlineEdit: null,
     contextMenu: null,
+    faceSelection: null,
     solids: {},
     kernelReady: false,
     motionStatus: "idle",
@@ -650,6 +666,12 @@ export const useStore = create<AppState>((set, get) => {
     toggleSelect: (id) =>
       set((s) => ({ selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id] })),
     clearSelection: () => set({ selection: [] }),
+    selectFace: (point, normal, screen, bodyId) => {
+      if (!point || !normal) { if (get().faceSelection) set({ faceSelection: null }); return; }
+      const meshes = Object.values(get().solids).filter((s) => s.mesh).map((s) => ({ featureId: s.featureId, mesh: s.mesh! }));
+      const hit = pickFace(meshes, point);
+      set({ faceSelection: { bodyId: bodyId ?? hit?.featureId ?? "", faceName: hit?.faceName, point, normal, screen: screen ?? { x: 0, y: 0 } } });
+    },
     setHover: (id) => set({ hover: id }),
     toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
     toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
