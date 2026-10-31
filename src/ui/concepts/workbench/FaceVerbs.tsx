@@ -10,7 +10,8 @@ import { LiveNumber } from "../../kit/LiveNumber";
 import { useFeatureRows } from "../../kit/useFeatureRows";
 import { useEditQueue } from "../../kit/useEditQueue";
 import { useCardSize } from "../../kit/useCardSize";
-import { measurements, paramsWith, pushParamOf, pushed, rowForFace } from "./workbench";
+import { measurements, paramsWith, pushEdit, pushParamOf, rowForFace } from "./workbench";
+import { lookAtFace } from "../contextActions";
 
 export function FaceVerbs() {
   const rows = useFeatureRows();
@@ -35,6 +36,7 @@ export function FaceVerbs() {
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
   const sendPush = (v: number) => { if (row && push) edit.live(row.opId, paramsWith(row, push.key, v)); };
   const commitPush = (v: number) => { if (row && push) edit.commit(row.opId, paramsWith(row, push.key, v)); };
+  const step = (dir: -1 | 1) => { const e = pushEdit(row, dir); if (e) edit.live(e.opId, e.params); };
 
   return (
     <div style={{ display: "contents" }} onKeyDown={onKey}>
@@ -42,12 +44,12 @@ export function FaceVerbs() {
         <div className="wb-verb-row">
           {row && push && (
             <span className="wb-push" role="group" aria-label="Push/Pull">
-              <Button size="sm" icon ariaLabel={`Pull ${push.label} in`} onClick={() => sendPush(pushed(push.value, -1, push.spec))}>−</Button>
+              <Button size="sm" icon ariaLabel={`Pull ${push.label} in`} onClick={() => step(-1)}>−</Button>
               <LiveNumber value={push.value} spec={push.spec} unit={push.unit} name={`${push.label} (Push/Pull)`} onChange={sendPush} onCommit={commitPush} />
-              <Button size="sm" icon ariaLabel={`Push ${push.label} out`} onClick={() => sendPush(pushed(push.value, 1, push.spec))}>+</Button>
+              <Button size="sm" icon ariaLabel={`Push ${push.label} out`} onClick={() => step(1)}>+</Button>
             </span>
           )}
-          <Button size="sm" title="Orient the view to this face" onClick={() => window.dispatchEvent(new CustomEvent("chisel:lookAt", { detail: { point: sel.point, normal: sel.normal } }))}>Look at</Button>
+          <Button size="sm" title="Orient the view to this face" onClick={() => lookAtFace(sel)}>Look at</Button>
           <Button size="sm" on={measuring} onClick={() => setMeasuring((m) => !m)}>Measure</Button>
         </div>
         {measuring && (
