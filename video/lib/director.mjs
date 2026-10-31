@@ -83,7 +83,7 @@ export class Director {
   api(name, ...args) { return this.page.evaluate(([n, a]) => window.__chiselDemo[n](...a), [name, args]); }
   /** Run `fn(demo, arg)` in the page (fn must be self-contained). */
   run(fn, arg) { return this.page.evaluate(fn, arg); }
-  async settle(quietMs = 250) { const ok = await this.api("settle", quietMs); if (!ok) this.note("settle timed out"); return ok; }
+  async settle(quietMs = 250, { camera = true } = {}) { const ok = await this.api("settle", quietMs, 20000, camera); if (!ok) this.note("settle timed out"); return ok; }
   async rect(selector, text) {
     const r = await this.api("rect", selector, text);
     if (!r) throw new Error(`no element ${selector}${text ? ` with "${text}"` : ""}`);

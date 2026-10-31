@@ -20,6 +20,8 @@ async function load(d, name) {
       if (D.store.getState().showPlanes) D.store.getState().toggleShowPlanes();
       D.ui.getState().togglePanel("workbench", false); // no pins in the montage
       D.view("iso");
+      await new Promise((r) => setTimeout(r, 700));
+      D.frameAll(); // fill the frame with the model
     }, name);
     await d.settle(500);
   });
@@ -33,7 +35,7 @@ async function sweep(d, name, values, ms = 3000) {
     for (const v of values) {
       const t = Date.now();
       await d.run(async ([n, x]) => { await window.__chiselDemo.store.getState().setParameterExpr(n, String(x)); }, [name, v]);
-      await d.settle(60);
+      await d.settle(60, { camera: false }); // a turntable may be running
       const left = step - (Date.now() - t);
       if (left > 0) await d.wait(left);
     }
@@ -80,7 +82,7 @@ export async function act3(d) {
     await d.wait(1200);
   });
   if (hasExample("clockwork")) {
-    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel", "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train.", async () => {
+    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm", "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train.", async () => {
       // the driving parameter: the first bounded one (the clockwork's turn)
       const drive = await d.run(() => window.__chiselDemo.store.getState().session.doc.parameters.find((p) => p.min != null && p.max != null));
       if (!drive) throw new Error("the clockwork has no bounded drive parameter");

@@ -91,10 +91,10 @@ const turn = { rate: 0, target: 0, raf: 0 };
 const api = {
   // ---- waiting ----
   /** Resolves when the model has finished rebuilding, the camera has stopped, and nothing has changed for `quietMs`, plus two painted frames. */
-  async settle(quietMs = 250, timeoutMs = 20000): Promise<boolean> {
+  async settle(quietMs = 250, timeoutMs = 20000, camera = true): Promise<boolean> {
     const t0 = performance.now();
-    // rounded: orbit damping leaves sub-pixel drift that would never read as still
-    const pose = () => JSON.stringify(getActiveScene()?.cameraPose() ?? null, (_k, v) => (typeof v === "number" ? Math.round(v * 10) / 10 : v));
+    // rounded: orbit damping leaves sub-pixel drift that would never read as still; `camera` false ignores it (a turntable runs)
+    const pose = () => (camera ? JSON.stringify(getActiveScene()?.cameraPose() ?? null, (_k, v) => (typeof v === "number" ? Math.round(v * 10) / 10 : v)) : "");
     let last = useStore.getState().rev, lastPose = pose(), since = performance.now();
     for (;;) {
       await whenRebuilt();
