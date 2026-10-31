@@ -12,7 +12,7 @@ Five ways of working, prototyped on the design canvas, now built into Chisel:
 
 ## Tenets
 
-1. **One command path.** Every route — pin, verb, sentence, map, lens, intent line, hotkey, agent, MCP — ends in `useStore.getState().dispatch(...)`, `editOperation`, `moveRollback`, `suppressOperation` or a hotkey action (`hotkeys.runAction`). Nothing talks to `CadSession` or the kernel directly, and nothing keeps its own copy of document state.
+1. **One command path.** Every route — pin, verb, sentence, map, lens, intent line, hotkey, action ring, agent, MCP — ends in `useStore.getState().dispatch(...)`, `editOperation`, `moveRollback`, `suppressOperation` or a hotkey action (`hotkeys.runAction`). Nothing talks to `CadSession` or the kernel directly, and nothing keeps its own copy of document state.
 2. **Logic in pure modules, components are templates.** Anything with arithmetic or a decision lives in a `.ts` module with no React import, tested in Node (`test/*.test.ts`). A `.tsx` file only maps module output to kit primitives, and gets a behaviour test in jsdom with Testing Library (`test/ui/*.test.tsx`: what it shows, what a click/key/drag sends). If a component needs an `if` about numbers, the `if` belongs in a module.
 3. **One catalog of features.** `src/model/concepts/featureCatalog.ts` is the only place that knows a feature kind's label, editable parameters (key, unit, range, step), sentence template and push-param. Pins, cards, the Ledger, the history strip, the verbs and the intent line all read `featureRows(...)` from it. A new feature kind is added there once.
 4. **One kit.** `src/ui/kit/` holds the tokens (`kit.css`), the primitives (`Button`, `Pills`, `Card` with its `float | inline | agent` variants, `Readout`, `Legend`, `Chip`, `Track`, `Pin`, `Input`, `Select`), `LiveNumber`, the projection hooks (`useProjected`, `useViewportRect`, `useViewTick`, `useScene`), the placement rules (`placeCard`, `clusterPins`, the `CARD_W*` widths, `useCardSize` to measure a placed card), the one edit throttle (`editQueue.ts`, `useEditQueue` over `store.editOperation`), the one feature-rows hook (`useFeatureRows`, `useActiveComponent`) and the number helpers (`arrowDir`, `formatMagnitude`). Concepts never restate a colour, a control height, a card placement, a throttle or a formatter; they compose. A concept's own CSS (`src/ui/concepts/<name>/<name>.css`) holds only layout for its own elements. The hot (hovered) feature is the kit's `.k-hot` wherever it shows.
@@ -31,6 +31,36 @@ Five ways of working, prototyped on the design canvas, now built into Chisel:
 - **Analysis in 3D:** `store.analysis` / `setAnalysis({ mode })` drives `SceneManager.analysisMaterial` (zebra, draft, curvature). The lens adds a masked second pass in `SceneManager` and an overhang mode. Both passes share their GLSL and `curvatureColors` through `src/viewport/analysisShaders.ts` (the lens hands it a mask); the `--k-an-*` legend tokens in `kit.css` mirror those colours.
 - **Geometry metrics:** `solids[id].volume`, `.area`, `.bounds`, `.centroid`; material density via `densityOf(materialForComponent(doc, componentId))` (a density field when the material has one, else a guess from its kind, else aluminium; `source` says which). `unionBounds` / `boundsCentre` / `paramsWith` / `unitLabel` are the catalog's.
 - **Agent:** `agentChat` entries; suggestions the Ledger shows come from `src/model/concepts/intents.ts` (pure checks over parameters and metrics) and are applied through the same `dispatch`.
+
+## Contexts and the action ring
+
+**The context stack.** Every hotkey action belongs to one context, and the active contexts stack bottom → top (`src/model/contexts.ts`; `contextStack(contextInput())` in `hotkeyActions.ts` keeps `hotkeys.setContexts` in step with the store and `useUi`). A key or a ring slot resolves top-down, so the most specific context wins and everything below still works:
+
+| Context | Label | On when | What lives there |
+|---------|-------|---------|------------------|
+| `global` | Everywhere | always | frame (`f`), views, undo/redo (`⌘Z` / `⌘⇧Z`), cancel (`Esc`), the intent line (`⌘K`, `/`), the panel toggles, the action ring (`Space`) |
+| `model` | Model | model mode | new sketch, extrude, new component |
+| `sketch` | Sketch | a sketch is open (replaces `model`) | the drawing tools (`l` `r` `c` `a` `g` `o` `i` `p` `d` `t` `e` `s`), construction (`x`), look at the plane (`f`), delete |
+| `component` | Inside a component | the active component is not the root | up a level, back to the root |
+| `lens` | Lens on | the lens panel is on | the lens modes (zebra, draft, curvature, x-ray, overhang), lens shape |
+| `feature` | Feature card open | a feature card is open with Pins on | roll to, next / previous, suppress, delete |
+| `face` | Face selected | a face is selected in model mode | sketch on face, extrude, push / pull, its feature, look at (`f` — wins over the model's frame) |
+
+The focus contexts (`component`, `lens`, `feature`, `face`) exist only in model mode and sit on `global` + `model` (`CONTEXT_BASE`). The Hotkeys panel labels each group with its context and marks the active ones; `get_hotkeys` returns the same list (with the live bindings) to the agent and MCP, so this table is a guide, not the source.
+
+**The action ring.** Hold `Space` (the `ring.open` action — rebindable like any key), point, release: eight compass slots around the pointer, N, NE, E, SE, S, SW, W, NW clockwise. Releasing on a slot runs it; a quick tap leaves the ring open to click; right-click in the model opens it too. Each slot holds a hotkey action id and the ring runs it with `hotkeys.runAction`, so it can do nothing a key, the intent line or a 3D-mouse button can't, and it greys out a slot whose action can't run now (`hotkeys.can`).
+
+- **Every context has its own ring** (`DEFAULT_RING` in `src/model/ring.ts`). A slot left empty (`null`) *inherits* the same slot from the contexts below on the active stack (`resolveRing`), so the outer slots keep their muscle memory — `global` fills all eight (top, iso, right, frame, front, intent line, undo, redo) — and a focused context overrides only what it needs: with a face selected, N is *sketch on face* where the model has *new sketch*.
+- **Configuration.** Hotkeys panel → *Ring*: pick a context (a dot marks one you changed), and the compass shows its slots — its own in full, inherited ones dimmed with "from <context>". Click a slot to choose an action (or *Inherit*); only actions from the contexts the ring sits on are offered (`ringSources`: its own and its base), so a slot never holds something that can't run where it shows. *Reset to default* per slot, *Reset this ring*, *Reset all rings*; the line under the compass is what `Space` shows on the current stack. Overrides are per context, per slot, in `localStorage` (`useRing`), layered over the defaults. The agent and MCP read and write the same thing: `get_ring` (each context's own row, its defaults and sources, and the ring resolved for the active stack) and `set_ring_slot {context, slot: 0-7 | "N"…, action: id | null | "default"}`, validated like the editor (`ringConfig.ts`).
+
+**Add an action, get every surface.** A new command is one `HotkeyAction` (`id`, `label`, `context`, `run`, optional `when` and default key) registered with `hotkeys`, in the context where it makes sense — usually in `ACTIONS` in `hotkeyActions.ts`, or `hotkeys.registerAll` from the module that owns it. Its `run` goes through the store's command path. That one registration makes it:
+
+- a key, bound or bindable in the Hotkeys panel, with per-context conflict checks;
+- a choice for that context's ring slots (and any ring that sits on it) in the ring editor and `set_ring_slot` — add its id to `DEFAULT_RING` to ship it in a slot;
+- a phrase on the intent line, which matches the labels of the actions on the active stack;
+- runnable from a 3D-mouse button (button → action id, run through `hotkeys.runAction` in `spaceMouseInput.ts`; the Settings picker offers only the view actions so far), and listed for the agent and MCP in `get_hotkeys`.
+
+Don't wire a feature into the ring, the palette or a button map separately; register the action and let the surfaces find it. Its `when` keeps every surface honest at once: the key falls through, the ring greys the slot, the intent line says it isn't available.
 
 ## Layout
 
@@ -52,7 +82,7 @@ Five ways of working, prototyped on the design canvas, now built into Chisel:
 
 **Panel toggles** (`useUi.panels`, persisted in localStorage): Pins (workbench pins, card, verbs and the history strip), Lens, Ledger (adds the tab and selects it), Space (same), and the ⌘K button that opens the intent line. The same switches are hotkey actions `view.workbench`, `view.lens`, `view.ledger`, `view.space` — unbound by default, bindable in the Hotkeys panel — and the intent line understands `ledger`, `space`, `lens`, `workbench`.
 
-**Hotkeys that matter here:** `⌘K` / `Ctrl+K` or `/` opens the intent line (`intent.open`; Escape closes, ↑/↓ choose, Enter runs); `f` frames (model) or looks at the sketch plane (sketch); view names (`front`, `iso`, …) are hotkey actions and intent-line words. Everything the intent line runs is reported in the status bar.
+**Hotkeys that matter here:** `⌘K` / `Ctrl+K` or `/` opens the intent line (`intent.open`; Escape closes, ↑/↓ choose, Enter runs); hold `Space` for the action ring (see *Contexts and the action ring*); `f` frames (model) or looks at the sketch plane (sketch); view names (`front`, `iso`, …) are hotkey actions and intent-line words. Everything the intent line runs is reported in the status bar.
 
 **Shared plumbing added for the concepts:** `store.setMessage(text)` (status line), `store.requestCurvature(on)` (the lens's Curvature mode asks the geometry backend for curvature data while the inspector's analysis mode is off), `SceneManager.lookAtFace(point, normal)` behind `chisel:lookAt` with `detail: { point, normal }` in model mode, `FeatureRow.body` (the body a modifier changed, resolved like the kernel's "most recent body"; pins anchor there), `Chip.onHover/hot`, `LiveNumber` commits the last scrubbed value and keeps the spec it started a drag with, the `--k-an-*` legend tokens that mirror the shader colours, and `.k-overlay > svg { pointer-events: none }` so a full-size SVG layer (leaders, the lens frame) never swallows orbit or pick events.
 

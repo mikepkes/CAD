@@ -146,6 +146,11 @@ on.
   while sketching). Primary + secondary bindings, rebind in the UI, per-context
   conflict detection; bindings persist in the browser and are readable/settable
   over the agent and WebMCP (`get_hotkeys` / `set_hotkey`).
+- **Action ring:** hold `Space` (or right-click in the model), point, release —
+  eight compass slots of hotkey actions that follow the context (sketch tools
+  while sketching, face verbs with a face selected; empty slots inherit from the
+  context below). Configurable per context in the hotkey manager's *Ring* tab
+  and over the agent and WebMCP (`get_ring` / `set_ring_slot`).
 - **PlaneGCS** (FreeCAD's constraint solver, via WebAssembly) solves the sketch
   and reports **degrees of freedom**, a **fully-constrained** state, and on
   over-constraint **which constraints conflict** — surfaced as a toast and
@@ -319,6 +324,7 @@ stops when the window closes. This is distinct from `npm run mcp`, the
 | Frame / Look At | `F` (fit in model · align to plane in sketch) | — |
 | Construction | `X` (toggle mode, or convert selection) | — |
 | Undo / redo | `Ctrl/Cmd+Z` / `Ctrl/Cmd+Shift+Z` | — |
+| Action ring | Hold `Space`, point, release · right-click in the model | — |
 
 All shortcuts are customizable in the hotkey manager (⌨ in the toolbar). On a
 trackpad, two-finger scroll pans and pinch zooms; a mouse wheel zooms.

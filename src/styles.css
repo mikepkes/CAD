@@ -1215,7 +1215,7 @@ body {
 .hk-warn { font-size: 12px; color: #e9b949; margin: 6px 0; }
 .hk-context { margin-top: 14px; }
 .hk-context-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.hk-ctx-name { font-weight: 600; text-transform: capitalize; color: var(--text-dim); }
+.hk-ctx-name { font-weight: 600; color: var(--text-dim); }
 .hk-ctx-name.active { color: var(--text); }
 .hk-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: #0a0c10; }
 .hk-badge.off { background: var(--panel-2); color: var(--text-dim); }
@@ -1235,6 +1235,29 @@ body {
 .hk-key.conflict { border-color: #e4564e; color: #ff8a82; }
 .hk-clear { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
 .hk-clear:hover { color: #ff8a82; }
+.hk-tabs { padding: 10px 14px 0; }
+/* The ring section: context pills, the compass of slots (laid out like the ring), the slot picker. */
+.hk-ring-ctx { margin: 10px 0 4px; }
+.hk-ring-ctx .k-pills { flex-wrap: wrap; }
+.hk-compass { position: relative; margin: 6px 0; }
+.hk-compass-hub, .hk-slot { position: absolute; transform: translate(-50%, -50%); }
+.hk-compass-hub { left: 50%; top: 50%; font-size: 11px; color: var(--text-dim); text-align: center; max-width: 110px; }
+.hk-slot {
+  width: 128px; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  padding: 4px 6px; border-radius: var(--k-radius-sm); border: 1px solid var(--k-float-line); background: var(--k-float);
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.hk-slot:hover { border-color: var(--text-dim); }
+.hk-slot.picking { border-color: var(--k-select); background: var(--k-select-tint); }
+.hk-slot.inherits .hk-slot-action { color: var(--text-dim); }
+.hk-slot-name { font-family: var(--k-mono); font-size: 10px; color: var(--text-dim); }
+.hk-slot-action { font-size: 12px; line-height: 1.2; text-align: center; }
+.hk-slot-from { font-size: 10px; color: var(--text-dim); }
+.hk-slot-picker { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; }
+.hk-slot-picker .k-select { flex: 1; min-width: 0; }
+.hk-slot-picker-name { font-family: var(--k-mono); font-size: 12px; min-width: 22px; }
+.hk-ring-now { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; margin: 6px 0; }
+.hk-ring-foot { display: flex; gap: 8px; }
 
 /* ---------- Extrude panel ---------- */
 .extrude-panel {
