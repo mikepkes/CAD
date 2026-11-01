@@ -127,7 +127,7 @@ export async function act2(d) {
 
   await d.beat("make-it-yours", async () => {
     await d.lower(null);
-    await d.clickEl("button[title='Keyboard shortcuts']");
+    await d.clickEl(`${await d.toolbar("keys")} button[title='Keyboard shortcuts']`);
     await d.settle(300);
     await d.clickEl(".hk-modal button", "Ring");
     await d.wait(600);
