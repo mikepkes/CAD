@@ -374,7 +374,9 @@ export interface AppState {
   // persistence
   initApp: () => Promise<void>;
   newDocument: () => Promise<void>;
-  loadDocument: (doc: CadDocument) => Promise<void>;
+  /** The document's name: the file it was opened from (without .json), else null (the Ledger says "Untitled model"). */
+  docName: string | null;
+  loadDocument: (doc: CadDocument, name?: string | null) => Promise<void>;
   saveToFile: () => void;
   openFile: (file: File) => Promise<void>;
   /** Import a STEP / BREP / STL / FreeCAD file as bodies (feature.import on the timeline). */
@@ -665,6 +667,7 @@ export const useStore = create<AppState>((set, get) => {
     motionProgress: 0,
     motionResult: null,
     hasMotionStudy: false,
+    docName: null,
     kernelLoading: false,
     toast: null,
     lastMessage: "Pick an origin plane to start a sketch.",
@@ -1404,9 +1407,10 @@ export const useStore = create<AppState>((set, get) => {
         }
       }
     },
-    loadDocument: async (doc) => {
+    loadDocument: async (doc, name = null) => {
       const s = new CadSession(doc, registry, solver);
       set({
+        docName: name,
         session: s,
         mode: "model",
         activeSketchId: null,
@@ -1443,7 +1447,7 @@ export const useStore = create<AppState>((set, get) => {
     openFile: async (file) => {
       try {
         const text = await file.text();
-        await get().loadDocument(deserializeDocument(text));
+        await get().loadDocument(deserializeDocument(text), file.name.replace(/(\.vibecad)?\.json$/i, ""));
         bump({ toast: { kind: "info", text: `Opened ${file.name}` } });
       } catch (e) {
         bump({ toast: { kind: "error", text: `Open failed: ${(e as Error).message}` } });

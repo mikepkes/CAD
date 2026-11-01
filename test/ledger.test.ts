@@ -6,6 +6,7 @@ import { checkIntents, intentScope, metricsOf, parseIntent, type Metrics } from 
 import {
   densityOf, formatDelta, formatMass, formatNow, intentDeps, intentGlyph, massGrams, mergeSegments, paramToken, plainNumber,
   rhsStep, rowClasses, suggestFixes, suggestionText, tidy, uncheckedResult, unitLabel, useIntents, useSuggestions, visibleSuggestions,
+  intentUnit, documentTitle,
   candidateValues, findMetricFixes, metricDeps, metricFailures, needsMetricSearch, metricNote, allPass, variantScope, VariantCache, fixSearchText, mergeSuggestions,
   type Suggestion,
 } from "../src/ui/concepts/ledger/ledger";
@@ -315,6 +316,16 @@ describe("ledger: sampled fixes for metric intents", () => {
     expect(fixSearchText("idle", 0, null)).toBe("");
     expect(fixSearchText("searching", 0, null)).toBe("Looking for a fix…");
     expect(fixSearchText("done", 0, null)).toMatch(/No change to a bounded parameter/);
+    expect(fixSearchText("searching", 0, null, { n: 12, of: 81 })).toBe("Looking for a fix… tried 12 of 81");
+    expect(fixSearchText("done", 0, null, { n: 20, of: 81 })).toBe("No change to a bounded parameter fixes this within its range (tried 20 of 81).");
+    expect(intentUnit({ lhs: "mass" })).toBe("g");
+    expect(intentUnit({ lhs: " height " })).toBe("mm");
+    expect(intentUnit({ lhs: "mass", unit: "kg" })).toBe("kg");
+    expect(intentUnit({ lhs: "w*2" })).toBe("");
+    expect(documentTitle({ rootComponentId: "r", components: { r: { name: "Root Component" } } }, "starbox")).toBe("starbox");
+    expect(documentTitle({ rootComponentId: "r", components: { r: { name: "Root Component" } } })).toBe("Untitled model");
+    expect(documentTitle({ rootComponentId: "r", components: { r: { name: "Workbench" } } })).toBe("Workbench");
+    expect(documentTitle({ drawing: { title: "Roubo" }, rootComponentId: "r", components: { r: { name: "Root Component" } } })).toBe("Roubo");
     expect(fixSearchText("done", 2, null)).toBe("");
     expect(fixSearchText("error", 0, "no wasm")).toBe("Could not look for a fix: no wasm");
     const guess: Suggestion = { id: "g", intentId: "i", label: "L", param: "h", from: 15, to: 12, delta: -3, confirm: true };

@@ -51,7 +51,8 @@ describe("LedgerPanel", () => {
   it("reads each feature as a numbered sentence with live numbers and an estimated mass", () => {
     const solids = { [b.extrudeId]: { featureId: b.extrudeId, name: "x", sketchId: "", distance: 24, mesh: {}, volume: 19200 } };
     mount(b.s, solids);
-    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Root Component");
+    // the header names the document (the file it came from), not the root component
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Untitled model");
     const prose = screen.getByRole("region", { name: "Features" });
     const paras = prose.querySelectorAll("p.ledger-row");
     expect(paras.length).toBe(2);
@@ -170,6 +171,31 @@ describe("LedgerPanel", () => {
     await waitFor(() => expect(s.doc.intents.length).toBe(1));
     expect(useIntents.getState().intents.length).toBe(1);
     expect(s.doc.operations.at(-1)?.type).toBe("intent.delete");
+  });
+
+  it("puts the intents and suggestions first; a long model's sentences fold below them", async () => {
+    const { s } = await bracket();
+    for (let i = 0; i < 12; i++) await s.dispatch("feature.fillet", { radius: "1" });
+    useStore.setState({ docName: "starbox" });
+    mount(s);
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("starbox");
+    const ledger = screen.getByRole("region", { name: "Ledger" });
+    const sections = [...ledger.querySelectorAll("section")].map((e) => e.getAttribute("aria-label"));
+    expect(sections.indexOf("Design intents")).toBeLessThan(sections.indexOf("Features"));
+    const fold = screen.getByRole("button", { name: /Features \(14\)/ });
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    expect(ledger.querySelectorAll("p.ledger-row").length).toBe(0);
+    await userEvent.click(fold);
+    expect(ledger.querySelectorAll("p.ledger-row").length).toBe(14);
+    useStore.setState({ docName: null });
+  });
+
+  it("reads a built-in metric with its unit: mass in grams", async () => {
+    const { s } = await bracket();
+    mount(s, { x: { featureId: "x", name: "x", sketchId: "", distance: 24, mesh: {}, volume: 12500, bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 50, y: 25, z: 10 } } } });
+    await act(async () => { await useIntents.getState().add("mass <= 5", "Light"); });
+    const section = screen.getByRole("region", { name: "Design intents" });
+    await waitFor(() => expect(within(section).getByText(/^now [\d.]+ g$/)).toBeTruthy());
   });
 
   it("rejects text that is not a comparison", async () => {
@@ -297,7 +323,7 @@ describe("LedgerPanel: built fixes for metric intents", () => {
     expect(createBackend).not.toHaveBeenCalled();
     expect(screen.queryByRole("status")).toBeNull();
     await act(async () => { await useIntents.getState().add("mass <= 1", "Mass"); }); // the smallest box, 10 × 5 × 10, is still 1.35 g
-    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/No change to a bounded parameter fixes this/));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/No change to a bounded parameter fixes this within its range \(tried 4 of \d+\)/));
     expect(screen.getByRole("status").getAttribute("data-status")).toBe("done");
     expect(evaluate).toHaveBeenCalledTimes(4); // each side's bound only: w 50, w 10, h 25, h 5
     expect(screen.getByRole("group", { name: "Suggestion for Tall" })).toBeTruthy(); // the instant one stays
