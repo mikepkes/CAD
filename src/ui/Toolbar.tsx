@@ -233,7 +233,7 @@ export function Toolbar() {
   const lastSketch = root?.sketches[root.sketches.length - 1];
 
   return (
-    <div className="toolbar">
+    <div className={`toolbar${mode === "sketch" ? " sketching" : ""}`}>
       <div className="brand">
         <span className="logo">◆</span> Vibe<span className="brand-dim">CAD</span>
       </div>

@@ -71,14 +71,13 @@ async function clickFace(d, which) {
   await d.shot(`face${which}`);
 }
 
-/** Draw a closed outline with the line tool: click each corner, then the first again, then Escape. */
+/** Draw a closed outline with the line tool: click each corner, then the first again (closing the loop ends the chain). */
 async function drawOutline(d, pts) {
   for (const p of [...pts, pts[0]]) {
     const s = await d.api("sketchWorldToScreen", p);
     await d.click(s.x, s.y, { ms: 380 });
     await d.wait(120);
   }
-  await d.key("Escape");
   await d.settle();
 }
 /** Extrude the open sketch across the base up to its far side: Extent "To face", then press and hold over that hidden

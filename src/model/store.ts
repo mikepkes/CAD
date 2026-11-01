@@ -38,7 +38,7 @@ import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane
 import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
 import type { CutPart } from "../core/drawings";
-import { pickItems, type PickItem } from "./pickMenu";
+import { pickItems, sketchPickItems, type PickItem } from "./pickMenu";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
 import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
 import { renameViaEdit } from "./assist";
@@ -370,6 +370,8 @@ export interface AppState {
   /** The long-press selection picker: everything under the cursor, nearest first; null when closed. */
   pickMenu: { screen: { x: number; y: number }; items: PickItem[] } | null;
   openPickMenu: (screen: { x: number; y: number }, hits: Parameters<typeof pickItems>[0]) => void;
+  /** The picker for a long press in a sketch: the entities under the cursor (ids, points first). */
+  openSketchPickMenu: (screen: { x: number; y: number }, hits: { id: string }[]) => void;
   closePickMenu: () => void;
   /** Act on a picker entry exactly as clicking that face (or plane) would, in whatever session is open. */
   choosePick: (item: PickItem) => void;
@@ -1425,10 +1427,16 @@ export const useStore = create<AppState>((set, get) => {
       const items = pickItems(hits, get().solids, get().session.doc);
       if (items.length) set({ pickMenu: { screen, items } });
     },
-    closePickMenu: () => set({ pickMenu: null }),
+    openSketchPickMenu: (screen, hits) => {
+      const sk = activeSketch(get());
+      if (!sk || !hits.length) return;
+      set({ pickMenu: { screen, items: sketchPickItems(sk, hits) } });
+    },
+    closePickMenu: () => set({ pickMenu: null, hover: null }),
     choosePick: (item) => {
       const s = get();
       set({ pickMenu: null });
+      if (item.kind === "entity") { s.select([item.id]); set({ hover: null }); return; }
       if (item.kind === "plane") { if (s.sketchPlacing) void s.startSketch(item.planeId); return; }
       if (s.extrudeActive && s.extrudeExtent === "toFace" && s.extrudeTarget) s.pickExtrudeToFace(item.point, item.normal);
       else if (s.extrudeActive) void s.startFaceExtrude(item.point, item.normal);

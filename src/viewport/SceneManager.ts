@@ -713,6 +713,9 @@ export class SceneManager {
       // grabbing/editing the label is reliable (it's an overlay you reach for).
       const label = hits.find((h) => h.object.userData?.dimLabel);
       if (label) return { type: "entity", id: label.object.userData.id as string, entityKind: "dimension", world: label.point };
+      // A point within a few pixels wins over the curve it sits on: clicking a line's end picks the end (M8).
+      const point = hits.find((h) => h.object.userData?.id && h.object.userData?.kind === "point");
+      if (point) return { type: "entity", id: point.object.userData.id as string, entityKind: "point", world: point.point };
       for (const h of hits) {
         const id = h.object.userData?.id as string | undefined;
         if (id) return { type: "entity", id, entityKind: h.object.userData?.kind, world: h.point };
@@ -742,6 +745,21 @@ export class SceneManager {
       if (ph) return { type: "plane", id: ph.object.userData.planeId, world: ph.point };
       return { type: "empty" };
     }
+  }
+
+  /** Every sketch entity under a screen point (sketch mode), points first then curves, without repeats: what a long
+   *  press in a sketch offers to pick from. */
+  pickAllSketch(clientX: number, clientY: number): { id: string; kind: string }[] {
+    this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
+    this.raycaster.params.Line = { threshold: this.worldThreshold(6) };
+    this.raycaster.params.Points = { threshold: this.worldThreshold(8) };
+    const out: { id: string; kind: string }[] = [];
+    for (const h of this.raycaster.intersectObjects(this.sketchGroup.children, true)) {
+      const id = h.object.userData?.id as string | undefined;
+      if (!id || out.some((o) => o.id === id)) continue;
+      out.push({ id, kind: h.object.userData?.dimLabel ? "dimension" : String(h.object.userData?.kind ?? "") });
+    }
+    return out.sort((a, b) => Number(b.kind === "point") - Number(a.kind === "point"));
   }
 
   /** Everything along the ray under a screen point, nearest first: every solid face crossing (front and back, so a

@@ -18,15 +18,17 @@ import { nearestEdge } from "../model/edgePick";
 type Vec3 = { x: number; y: number; z: number };
 
 type Snap = InferResult;
+/** A created point and the snap its click had (how to attach it: coincident or on a line by default, or on a circle). */
+type Anchor = [string | undefined, Snap | undefined, ("coincident" | "onCircle")?];
 
 type Stage =
   | { kind: "idle" }
-  | { kind: "line"; from: GeoRef; fromUV: { u: number; v: number }; startInfer?: { onLine?: string; midpointOf?: string } }
-  | { kind: "rect"; from: { u: number; v: number } }
+  | { kind: "line"; from: GeoRef; fromUV: { u: number; v: number }; startInfer?: { onLine?: string; midpointOf?: string }; chainStart?: string }
+  | { kind: "rect"; from: { u: number; v: number }; snap: Snap }
   | { kind: "circle"; center: GeoRef; centerUV: { u: number; v: number } }
   | { kind: "arc"; center?: GeoRef; centerUV?: { u: number; v: number }; start?: GeoRef; startUV?: { u: number; v: number } }
-  | { kind: "polygon"; centerUV: { u: number; v: number } }
-  | { kind: "pts"; pts: { u: number; v: number }[] }; // generic multi-click for tool variants
+  | { kind: "polygon"; centerUV: { u: number; v: number }; snap: Snap }
+  | { kind: "pts"; pts: { u: number; v: number }[]; snaps: Snap[] }; // generic multi-click for tool variants
 
 /** How long a still press must last to open the selection picker (Fusion uses about this). */
 export const LONG_PRESS_MS = 450;
@@ -317,6 +319,23 @@ export class Interactions {
       return;
     }
 
+    // Sketch: a long press without moving opens the picker for what lies under the cursor (pick-behind, M9).
+    if (st.tool === "select" || st.constraintTool) {
+      clearTimeout(this.longPress);
+      this.longPressed = false;
+      const at = { x: e.clientX, y: e.clientY };
+      this.longPress = setTimeout(() => {
+        if (this.moved || !this.downPt) return;
+        const hits = this.scene.pickAllSketch(at.x, at.y);
+        if (!hits.length) return;
+        this.longPressed = true;
+        if (this.dragging) { this.dragging = false; this.st().endDrag(); }
+        if (this.dimDragging) { this.dimDragging = false; this.st().endDimDrag(); }
+        this.clearBox();
+        this.st().openSketchPickMenu(at, hits);
+      }, LONG_PRESS_MS);
+    }
+
     // While an explicit constraint tool is active, clicks pick entities for it
     // (no dragging / box-select) — handled in onUp → handleSelectClick.
     if (st.constraintTool) return;
@@ -468,6 +487,8 @@ export class Interactions {
       this.downPt = null;
       return;
     }
+    clearTimeout(this.longPress);
+    if (this.longPressed) { this.longPressed = false; this.downPt = null; return; } // the picker took this press
     if (this.dragging) {
       this.dragging = false;
       this.downPt = null;
@@ -555,50 +576,84 @@ export class Interactions {
     const st = this.st();
     const need = this.variantNeed(st.tool, st.toolVariant);
     const pts = this.stage.kind === "pts" ? this.stage.pts.slice() : [];
+    const snaps = this.stage.kind === "pts" ? this.stage.snaps.slice() : [];
     pts.push({ u: snap.u, v: snap.v });
-    if (pts.length < need) { this.stage = { kind: "pts", pts }; return; }
-    await this.executeVariant(st.tool, st.toolVariant, pts);
+    snaps.push(snap);
+    if (pts.length < need) { this.stage = { kind: "pts", pts, snaps }; return; }
+    await this.attachSnaps(() => this.executeVariant(st.tool, st.toolVariant, pts), (r) => this.variantAnchors(st.tool, st.toolVariant, r, snaps));
     this.stage = { kind: "idle" };
     this.setPreview(null);
   }
 
-  private async executeVariant(tool: string, variant: string, pts: { u: number; v: number }[]) {
+  /** Which created points the clicks of a shape variant became, paired with each click's snap (what to attach). */
+  private variantAnchors(tool: string, variant: string, r: { createdIds: string[] }, snaps: Snap[]): Anchor[] {
+    const ids = r.createdIds;
+    if (tool === "rectangle") return variant === "center" ? [[ids[2], snaps[1]]] : [[ids[0], snaps[0]], [ids[1], snaps[1]]];
+    if (tool === "slot") return [[ids[4], snaps[0]], [ids[5], snaps[1]]];
+    if (tool === "ellipse") return [[ids[1], snaps[0]]];
+    if (tool === "arc") return [[ids[2], snaps[0]], [ids[3], snaps[1]]];
+    // a circle through 2 or 3 clicked points: each snapped click lies on it
+    if (tool === "circle") return snaps.map((s) => [ids[0], s, "onCircle"]);
+    return [];
+  }
+
+  /** Run a shape command and tie its clicked points to what they snapped to (coincident with a point, on a line, at a
+   *  midpoint), as the line tool does, in one undo step. `anchors` maps the result to [created point, snap] pairs. */
+  private async attachSnaps(place: () => Promise<{ ok: boolean; createdIds: string[] } | void>, anchors: (r: { createdIds: string[] }) => Anchor[]) {
+    const st = this.st();
+    const sid = st.activeSketchId;
+    const cp = st.session.checkpoint();
+    const r = await place();
+    if (!r || !r.ok || !sid) return;
+    const add = (params: Record<string, unknown>) => st.dispatch("sketch.addConstraint", { sketch: sid, ...params }, { rejectOnConflict: true });
+    for (const [id, snap, how] of anchors(r)) {
+      if (!id || !snap) continue;
+      if (how === "onCircle") { if (snap.ref) await add({ type: "pointOnCircle", point: snap.ref, circle: id }); continue; }
+      if (snap.ref) await add({ type: "coincident", a: id, b: snap.ref });
+      else if (snap.midpointOf) await add({ type: "midpoint", point: id, line: snap.midpointOf });
+      else if (snap.onLine) await add({ type: "pointOnLine", point: id, line: snap.onLine });
+    }
+    this.st().session.squash(cp); // one undo step, named after the shape
+    useStore.setState((s) => ({ rev: s.rev + 1 }));
+  }
+
+  private async executeVariant(tool: string, variant: string, pts: { u: number; v: number }[]): Promise<{ ok: boolean; createdIds: string[] } | void> {
     const st = this.st();
     const P = (i: number) => ({ x: pts[i].u, y: pts[i].v });
     if (tool === "circle") {
       if (variant === "2point") {
         const c = { x: (pts[0].u + pts[1].u) / 2, y: (pts[0].v + pts[1].v) / 2 };
         const r = Math.hypot(pts[1].u - pts[0].u, pts[1].v - pts[0].v) / 2;
-        if (r > 1e-3) await st.placeCircle(c, r);
+        if (r > 1e-3) return st.placeCircle(c, r);
       } else {
         const f = circleFrom3(P(0), P(1), P(2));
-        if (f) await st.placeCircle({ x: f.x, y: f.y }, f.r);
+        if (f) return st.placeCircle({ x: f.x, y: f.y }, f.r);
       }
     } else if (tool === "rectangle") {
       if (variant === "center") {
         const c = pts[0], p = pts[1];
-        await st.placeRectangle({ x: 2 * c.u - p.u, y: 2 * c.v - p.v }, { x: p.u, y: p.v });
+        return st.placeRectangle({ x: 2 * c.u - p.u, y: 2 * c.v - p.v }, { x: p.u, y: p.v });
       } else {
-        await st.placeRectangle3(P(0), P(1), P(2));
+        return st.placeRectangle3(P(0), P(1), P(2));
       }
     } else if (tool === "arc") {
       const start = P(0), end = P(1), mid = P(2);
       const f = circleFrom3(start, mid, end);
       if (f) {
         const cr = (start.x - f.x) * (mid.y - f.y) - (start.y - f.y) * (mid.x - f.x);
-        await st.placeArc({ x: f.x, y: f.y }, start, end, cr < 0);
+        return st.placeArc({ x: f.x, y: f.y }, start, end, cr < 0);
       }
     } else if (tool === "slot") {
       const p1 = P(0), p2 = P(1), p3 = P(2);
       const dx = p2.x - p1.x, dy = p2.y - p1.y, m = Math.hypot(dx, dy) || 1;
       const width = 2 * Math.abs((-dy * (p3.x - p1.x) + dx * (p3.y - p1.y)) / m);
-      if (width > 1e-3) await st.placeSlot(p1, p2, width);
+      if (width > 1e-3) return st.placeSlot(p1, p2, width);
     } else if (tool === "ellipse") {
       const c = P(0), major = P(1), minor = P(2);
       const rx = Math.hypot(major.x - c.x, major.y - c.y);
       const rotation = Math.atan2(major.y - c.y, major.x - c.x);
       const ry = Math.abs(-Math.sin(rotation) * (minor.x - c.x) + Math.cos(rotation) * (minor.y - c.y));
-      if (rx > 1e-3 && ry > 1e-3) await st.placeEllipse(c, rx, ry, rotation);
+      if (rx > 1e-3 && ry > 1e-3) return st.placeEllipse(c, rx, ry, rotation);
     }
   }
 
@@ -664,12 +719,17 @@ export class Interactions {
   private async handlePolygonClick(snap: Snap) {
     const st = this.st();
     if (this.stage.kind !== "polygon") {
-      this.stage = { kind: "polygon", centerUV: { u: snap.u, v: snap.v } };
+      this.stage = { kind: "polygon", centerUV: { u: snap.u, v: snap.v }, snap };
       return;
     }
-    const c = this.stage.centerUV;
+    const c = this.stage.centerUV, centerSnap = this.stage.snap;
     if (Math.hypot(snap.u - c.u, snap.v - c.v) > 1e-3) {
-      await st.placePolygon({ x: c.u, y: c.v }, { x: snap.u, y: snap.v });
+      await this.attachSnaps(() => st.placePolygon({ x: c.u, y: c.v }, { x: snap.u, y: snap.v }), (r) => {
+        // [circle, ...vertices, ...lines]: the centre is the construction circle's
+        const circle = this.st().activeSketchId ? this.st().session.doc.sketches[this.st().activeSketchId!]?.entities[r.createdIds[0]] : undefined;
+        const center = circle?.kind === "circle" ? circle.center : undefined;
+        return [[center, centerSnap], [r.createdIds[1], snap]];
+      });
     }
     this.stage = { kind: "idle" };
     this.setPreview(null);
@@ -746,12 +806,14 @@ export class Interactions {
         from: this.ref(snap),
         fromUV: { u: snap.u, v: snap.v },
         startInfer: snap.ref ? undefined : { onLine: snap.onLine, midpointOf: snap.midpointOf },
+        chainStart: snap.ref,
       };
       return;
     }
     const from = this.stage.from;
     const fromUV = this.stage.fromUV;
     const startInfer = this.stage.startInfer;
+    const chainStart = this.stage.chainStart;
     // infer() has already repositioned snap.u/v for axis/parallel/perp intent,
     // so the committed geometry is exactly what the preview showed.
     if (!snap.ref && Math.hypot(snap.u - fromUV.u, snap.v - fromUV.v) < this.scene.pixelToWorld(4)) return;
@@ -774,7 +836,10 @@ export class Interactions {
       else if (startInfer?.onLine) await add({ type: "pointOnLine", point: startId, line: startInfer.onLine });
       // End-point intent (coincident is implicit in placeLine's ref reuse).
       await this.applyPointInference(snap, endId);
-      this.stage = { kind: "line", from: { ref: endId }, fromUV: { u: snap.u, v: snap.v } };
+      // back on the chain's first point: the loop is closed, so the chain ends (M20)
+      const start = chainStart ?? startId;
+      if (snap.ref && snap.ref === start) { this.stage = { kind: "idle" }; this.st().setMessage("Closed the outline."); }
+      else this.stage = { kind: "line", from: { ref: endId }, fromUV: { u: snap.u, v: snap.v }, chainStart: start };
     } else {
       this.stage = { kind: "idle" };
     }
@@ -795,11 +860,12 @@ export class Interactions {
   private async handleRectClick(snap: Snap) {
     const st = this.st();
     if (this.stage.kind !== "rect") {
-      this.stage = { kind: "rect", from: { u: snap.u, v: snap.v } };
+      this.stage = { kind: "rect", from: { u: snap.u, v: snap.v }, snap };
       return;
     }
-    const a = this.stage.from;
-    await st.placeRectangle({ x: a.u, y: a.v }, { x: snap.u, y: snap.v });
+    const a = this.stage.from, first = this.stage.snap;
+    // the corners keep what they snapped to (M9): [p00, p10, p11, p01, lines…]
+    await this.attachSnaps(() => st.placeRectangle({ x: a.u, y: a.v }, { x: snap.u, y: snap.v }), (r) => [[r.createdIds[0], first], [r.createdIds[2], snap]]);
     this.stage = { kind: "idle" };
     this.setPreview(null);
   }

@@ -11,6 +11,8 @@ import { faceTriangles, type PickItem } from "../model/pickMenu";
 const light = (item: PickItem | null) => {
   const scene = getActiveScene();
   if (!scene) return;
+  // a sketch entity lights up as if hovered
+  if (item?.kind === "entity") { useStore.getState().setHover(item.id); return; }
   if (!item || item.kind !== "face") { scene.setPickHighlight(null); return; }
   scene.setPickHighlight(faceTriangles(useStore.getState().solids[item.bodyId]?.mesh, item.faceName));
 };
