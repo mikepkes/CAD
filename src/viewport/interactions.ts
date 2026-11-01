@@ -27,6 +27,17 @@ type Stage =
 
 /** How long a still press must last to open the selection picker (Fusion uses about this). */
 export const LONG_PRESS_MS = 450;
+/** How far (px) the pointer may wander and the press still count as held still. */
+export const LONG_PRESS_SLOP = 4;
+
+/** Whether a press was held still: the pointer's travel from where it went down to where it is now. Checked when
+ *  the long-press timer fires, so a timer that fires late (the main thread busy after a load) never mistakes an
+ *  orbit drag for a press. */
+export function heldStill(down: { x: number; y: number } | null, now: { x: number; y: number } | null, slop = LONG_PRESS_SLOP): boolean {
+  if (!down) return false;
+  if (!now) return true;
+  return Math.hypot(now.x - down.x, now.y - down.y) <= slop;
+}
 
 export class Interactions {
   private scene: SceneManager;
@@ -47,6 +58,8 @@ export class Interactions {
   /** The pending long-press timer (model mode) and whether it fired (so the release isn't also a click). */
   private longPress: ReturnType<typeof setTimeout> | undefined;
   private longPressed = false;
+  /** Where the pointer is now while a button is down (every mode), for the long press's travel check. */
+  private lastPt: { x: number; y: number } | null = null;
 
   constructor(scene: SceneManager, dom: HTMLElement) {
     this.scene = scene;
@@ -300,14 +313,18 @@ export class Interactions {
       clearTimeout(this.longPress);
       this.longPressed = false;
       const at = { x: e.clientX, y: e.clientY };
-      this.longPress = setTimeout(() => {
-        if (this.moved || !this.downPt) return;
+      this.lastPt = at;
+      const fire = () => {
+        if (this.moved || !heldStill(this.downPt, this.lastPt)) return;
         const hits = this.scene.pickAll(at.x, at.y);
         if (!hits.faces.length && !hits.planes.length) return;
         this.longPressed = true;
         this.scene.controls.enabled = false; // the press must not turn into an orbit
         this.st().openPickMenu(at, hits);
-      }, LONG_PRESS_MS);
+      };
+      // a timer that fires late (a busy main thread) waits a frame, so the moves and the release queued behind it are
+      // seen first: only a press still held where it went down opens the picker
+      this.longPress = setTimeout(() => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(fire) : fire()), LONG_PRESS_MS);
       return;
     }
 
@@ -340,6 +357,11 @@ export class Interactions {
 
   private onMove = (e: PointerEvent) => {
     const st = this.st();
+    if (this.downPt) {
+      this.lastPt = { x: e.clientX, y: e.clientY };
+      // a press that travels is a drag (an orbit in the model), never a long press
+      if (st.mode !== "sketch" && !heldStill(this.downPt, this.lastPt)) clearTimeout(this.longPress);
+    }
     if (this.handleDragging) { this.scene.handles.drag(e.clientX, e.clientY); return; }
     if (st.mode === "model" && this.scene.handles.active) {
       this.scene.handles.setHover(this.scene.handles.hitTest(e.clientX, e.clientY));
