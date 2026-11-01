@@ -20,9 +20,11 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, sessionFromDoc, FULL, itFull, expectCommittedExample } from "./helpers";
+import { rebuild } from "../src/core/build";
+import { createDefaultRegistry } from "../src/core/command/builtins";
 import { initKernel } from "../src/core/occ/kernel";
-import { serializeDocument } from "../src/core/persistence";
+import { serializeDocument, deserializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures } from "../src/core/features";
 import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
@@ -268,24 +270,39 @@ function feet(s: CadSession, t: number): { x: number; z: number }[] {
   return out;
 }
 
+// Replaying the generator is some thousands of commands, each re-solving a 74-body
+// assembly, so the default run checks the linkage on the committed example (its
+// bodies building on both paths, and staying clear through a crank turn, are the
+// example suite's: test/examples.walker.test.ts); the extended run, or a build,
+// replays the generator and checks it reproduces that file.
+const BUILD = FULL || !!OUT;
+
 describe("Jansen walker", () => {
   let s: CadSession;
   beforeAll(async () => {
     await initKernel({ wasmBinary: wasm });
-    s = realSession();
-    await buildWalker(s);
-    await s.recompute();
-  }, 300000);
+    if (BUILD) {
+      s = realSession();
+      await buildWalker(s);
+    } else {
+      s = sessionFromDoc(deserializeDocument(readFileSync(fileURLToPath(new URL("../public/examples/walker.json", import.meta.url)), "utf8")));
+      rebuild(s.doc, createDefaultRegistry()); // replay the timeline (the parameters are in it); the solids aren't needed
+    }
+  }, 1800000);
 
-  it("builds: every bar, the crankshaft and the frame, the linkage closing at every crank angle", async () => {
+  it.runIf(BUILD)("builds the committed example: every bar, the crankshaft and the frame", async () => {
+    await s.recompute();
     if (OUT) writeFileSync(`${OUT}/walker.vibecad.json`, serializeDocument(s.doc));
+    expectCommittedExample(s, "walker");
     const sc = resolveParameters(s.doc.parameters).scope;
     placeComponentSketches(s.doc, sc);
     const sol = Object.values(evaluateFeatures(s.doc, sc));
     for (const b of sol) expect(b.error, b.name).toBeUndefined();
     expect(sol.filter((b) => b.mesh).length).toBe(12 * 6 + 2);
+  }, 1800000);
+
+  it("closes the linkage at every crank angle: the solved pins sit on their bars' circles all the way round", () => {
     expect(s.doc.parameters.filter((p) => !p.hidden).map((p) => p.name)).toEqual(["t", "s"]);
-    // every bar stays its length: the solved pins sit on their circles all the way round
     for (let t = 0; t < 360; t += 15) {
       const q = resolveParameters(s.doc.parameters.map((p) => (p.name === "t" ? { ...p, expr: String(t) } : p))).scope;
       const len = (k: string, a: string, b: string) => Math.hypot(q[`${k}${a}x`] - q[`${k}${b}x`], q[`${k}${a}z`] - q[`${k}${b}z`]) / q.s;
@@ -294,7 +311,7 @@ describe("Jansen walker", () => {
       expect(len("w5", "E", "F")).toBeCloseTo(J.f, 6);
       expect(len("w2m", "D", "F")).toBeCloseTo(J.g, 6);
     }
-  }, 300000);
+  });
 
   it("walks: each foot traces a flat ground stroke, and at every moment several feet are on the ground", () => {
     const ground = Math.min(...Array.from({ length: 72 }, (_, i) => Math.min(...feet(s, i * 5).map((f) => f.z))));
@@ -304,8 +321,9 @@ describe("Jansen walker", () => {
     }
   });
 
-  for (const t of [0, 47, 133]) {
-    it(`is clear at t = ${t}°: no bar, web or stub runs into another`, () => {
+  // the suite sweeps `t` every 90° by default; these phases fall between its samples
+  for (const t of [47, 133]) {
+    itFull(`is clear at t = ${t}°: no bar, web or stub runs into another`, () => {
       const params = s.doc.parameters.map((p) => (p.name === "t" ? { ...p, expr: String(t) } : p));
       const sc = resolveParameters(params).scope;
       const doc = { ...s.doc, parameters: params, sketches: Object.fromEntries(Object.entries(s.doc.sketches).map(([k, v]) => [k, { ...v }])) };
