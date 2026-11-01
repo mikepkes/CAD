@@ -240,7 +240,7 @@ describe("FaceVerbs", () => {
 
   it("has no Push/Pull on a body whose row has no push param, dispatches Look at, and measures", async () => {
     const lookAt = vi.fn();
-    window.addEventListener("chisel:lookAt", lookAt);
+    window.addEventListener("vibecad:lookAt", lookAt);
     select(undefined, ringId);
     useStore.setState({ activeComponentId: rows[2].componentId });
     render(<FaceVerbs />);
@@ -250,7 +250,7 @@ describe("FaceVerbs", () => {
     expect(screen.queryByRole("group", { name: "Push/Pull" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Look at" }));
     expect(lookAt).toHaveBeenCalledTimes(1);
-    window.removeEventListener("chisel:lookAt", lookAt);
+    window.removeEventListener("vibecad:lookAt", lookAt);
     act(() => select(`${extrudeId}:end`));
     await userEvent.click(screen.getByRole("button", { name: "Measure" }));
     expect(screen.getByText("Volume")).toBeTruthy();

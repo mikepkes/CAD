@@ -11,7 +11,7 @@
 //                          and one "N more in other components" chip for what the scope hides.
 //
 // Every mutation goes through the store: editOperation, moveRollback, suppressOperation,
-// deleteOperation, selectFace, activateComponent, and the chisel:lookAt window event.
+// deleteOperation, selectFace, activateComponent, and the vibecad:lookAt window event.
 //
 // The face selection follows its context: one store subscription drops it (selectFace(null))
 // when the timeline length, the rollback marker, the active component or the mode changes

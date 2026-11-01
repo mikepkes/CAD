@@ -1,4 +1,4 @@
-// End-to-end: a clockwork of every kind of gear Chisel makes, all driven by one
+// End-to-end: a clockwork of every kind of gear VibeCAD makes, all driven by one
 // slider. Turn the knob (`turn`, degrees) and:
 //   - a planetary stage reduces it 4:1 — the sun on the knob's shaft, three
 //     planets riding a carrier inside a ring gear fixed to the base;

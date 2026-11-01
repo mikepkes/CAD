@@ -7,8 +7,8 @@ import type AnthropicNS from "@anthropic-ai/sdk";
 import { ChatEntry, AgentContext, runAgent } from "./agent";
 import { CommandRegistry } from "../core/command/registry";
 
-export const AGENT_KEY_LS = "chisel.anthropic.key";
-export const AGENT_MODEL_LS = "chisel.anthropic.model";
+export const AGENT_KEY_LS = "vibecad.anthropic.key";
+export const AGENT_MODEL_LS = "vibecad.anthropic.model";
 
 /** Store fields the agent reads/writes. Kept structural so this module doesn't
  *  depend on the full AppState (which would be a cycle). */

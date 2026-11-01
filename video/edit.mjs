@@ -1,6 +1,6 @@
 // The edit pass: `node video/edit.mjs --run NAME [--acts 1,2,3]`.
 // Turns recorded takes (video/takes/NAME/actN) into video/out/NAME/:
-//   chisel-tutorial.mp4  1440p60 H.264, sped-up spans with their speed chyron, cut spans removed,
+//   vibecad-tutorial.mp4  1440p60 H.264, sped-up spans with their speed chyron, cut spans removed,
 //                        subtitles burned in (from the script text, never speech recognition)
 //   subtitles.srt        the same subtitles as a sidecar file (for YouTube)
 //   cue-sheet.md         the ADR sheet: every line with its timecode and length, for recording the voiceover to picture
@@ -100,7 +100,7 @@ writeFileSync(join(out, "plan.json"), JSON.stringify({ fps: FPS, width: 2560, he
 console.log(`plan: ${outFrame} frames (${tc(outFrame, ".")}), ${captions.length} captions, ${chyrons.length} chyrons`);
 
 // ---- render ----
-const mp4 = join(out, preview ? "chisel-tutorial-preview.mp4" : "chisel-tutorial.mp4");
+const mp4 = join(out, preview ? "vibecad-tutorial-preview.mp4" : "vibecad-tutorial.mp4");
 const fd = openSync(mp4, "w");
 const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".jpg": "image/jpeg" };
 const server = createServer((req, res) => {

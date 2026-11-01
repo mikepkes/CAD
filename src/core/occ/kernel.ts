@@ -858,7 +858,7 @@ export function readStep(text: string): Shape3D {
     STEPControl_Reader: new () => { ReadFile(p: string): Status; TransferRoots(): number; NbShapes(): number; OneShape(): unknown; delete(): void };
     IFSelect_ReturnStatus: { IFSelect_RetDone: Status };
   };
-  const file = `/chisel-import-${++importSeq}.step`;
+  const file = `/vibecad-import-${++importSeq}.step`;
   oc.FS.writeFile(file, text);
   const reader = new oc.STEPControl_Reader();
   try {
@@ -921,7 +921,7 @@ export function readStl(bytes: Uint8Array): Shape3D {
   // the binary layout, mark the free-form header so it reads as binary.
   const facets = bytes.length >= 84 ? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(80, true) : -1;
   if (facets >= 0 && bytes.length === 84 + 50 * facets) { bytes = bytes.slice(); bytes.fill(0xff, 0, 8); }
-  const file = `/chisel-import-${++importSeq}.stl`;
+  const file = `/vibecad-import-${++importSeq}.stl`;
   oc.FS.writeFile(file, bytes);
   const owned: Obj[] = [];
   const own = <T extends Obj>(x: T): T => { owned.push(x); return x; };

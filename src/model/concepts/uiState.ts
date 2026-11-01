@@ -28,8 +28,8 @@ export interface UiState {
   setRightTab: (t: RightTab) => void;
 }
 
-const KEY = "chisel.ui.panels.v1";
-const TAB_KEY = "chisel.ui.rightTab.v1";
+const KEY = "vibecad.ui.panels.v1";
+const TAB_KEY = "vibecad.ui.rightTab.v1";
 const DEFAULT_PANELS: Record<ConceptPanel, boolean> = { workbench: true, ledger: false, space: false, lens: false, intent: true, mechanism: false };
 
 function loadPanels(): Record<ConceptPanel, boolean> {

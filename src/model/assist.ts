@@ -4,7 +4,7 @@
 // (its plane or face, its entities and dimensions, what uses it). The embedded
 // agent, when the user has one, answers the inbox in the background with one
 // short, cheap request; external agents read the same inbox over MCP
-// (`get_assist_inbox`, the `chisel://assist/inbox` resource) and answer it with
+// (`get_assist_inbox`, the `vibecad://assist/inbox` resource) and answer it with
 // `resolve_assist`. Every name is applied as an edit of the operation that made
 // the sketch or feature (its `name` param), so it is undoable, replays, and
 // survives a rollback.
@@ -580,7 +580,7 @@ export function onAssistChange(fn: () => void): () => void { hubListeners.add(fn
 
 // ---------------------------------------------------------------- the tools, shared by every surface
 
-export const ASSIST_INBOX_URI = "chisel://assist/inbox";
+export const ASSIST_INBOX_URI = "vibecad://assist/inbox";
 
 export const GET_ASSIST_INBOX_DESCRIPTION =
   "Organizational assist: the inbox of housekeeping an agent can do for the user — so far, naming sketches and features still called \"Sketch 12\" or \"Extrude\". Returns the pending items, each with an id, its target (sketch or feature id), its current name and a context object (a sketch's plane or face and the feature owning that face, its entities, size, dimensions and the features that use it; a feature's kind and parameters, the sketches it reads, the features before it, the names already in use). Answer each with resolve_assist. `all: true` also lists done/dismissed items. `enabled` is false when the user turned the assist off in Settings; `agent` is true when the embedded agent is already naming items automatically. The same inbox is the MCP resource " + ASSIST_INBOX_URI + " (subscribe to hear when it changes).";

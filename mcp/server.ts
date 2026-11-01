@@ -1,4 +1,4 @@
-// MCP server exposing the Chisel CAD core to an LLM/agent.
+// MCP server exposing the VibeCAD core to an LLM/agent.
 //
 // Every registry command becomes a tool; plus timeline/undo/query tools. After
 // any mutation the response carries the solver diagnosis (DoF, fully
@@ -84,12 +84,12 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
   let session = new CadSession(createDocument(), registry, solver);
 
   const server = new Server(
-    { name: "chisel-cad", version: "0.1.0" },
+    { name: "vibecad", version: "0.1.0" },
     { capabilities: { tools: {}, resources: { subscribe: true, listChanged: false } } }
   );
 
   // Organizational assist over this session: sketches and features left with default names wait in an
-  // inbox (get_assist_inbox / the chisel://assist/inbox resource) for the agent to name (resolve_assist).
+  // inbox (get_assist_inbox / the vibecad://assist/inbox resource) for the agent to name (resolve_assist).
   // Headless, a sketch counts as finished once a feature reads it or a newer sketch starts.
   const assist = new AssistService({
     doc: () => session.doc,

@@ -6,7 +6,7 @@
 //! (src/viewport/spaceMouse.ts): report 1 = six axes, report 3 = buttons.
 //!
 //! The client is registered "manually" and switched on while the app's window
-//! has focus, so the driver keeps serving other apps when Chisel is behind.
+//! has focus, so the driver keeps serving other apps when VibeCAD is behind.
 
 use std::ffi::{c_void, CStr};
 use std::sync::atomic::{AtomicU16, Ordering};
@@ -153,7 +153,7 @@ pub fn start(app: AppHandle, shared: SpaceMouse) -> bool {
         }
         // the client must exist before registering: the driver announces the device straight away
         let _ = CLIENT.set(Client { control, app, shared });
-        let name = pascal("Chisel CAD");
+        let name = pascal("VibeCAD");
         let id = register(CLIENT_MANUAL, name.as_ptr(), MODE_TAKE_OVER, MASK_ALL);
         if id == 0 {
             return false;
@@ -192,6 +192,6 @@ mod tests {
 
     #[test]
     fn names_are_pascal_strings() {
-        assert_eq!(pascal("Chisel"), b"\x06Chisel".to_vec());
+        assert_eq!(pascal("VibeCAD"), b"\x07VibeCAD".to_vec());
     }
 }

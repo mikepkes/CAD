@@ -14,8 +14,8 @@ function FileMenu() {
   return (
     <div className="file-menu">
       <button className="btn ghost" title="New document" onClick={() => void ask({ title: "New document", text: "Start a new document? The current one is replaced; unsaved work is autosaved in this browser or app only.", confirmLabel: "New document", danger: true }).then((ok) => { if (ok) newDocument(); })}>New</button>
-      <button className="btn ghost" title="Open a .chisel.json file" onClick={() => inputRef.current?.click()}>Open</button>
-      <button className="btn ghost" title="Save to a .chisel.json file" onClick={saveToFile}>Save</button>
+      <button className="btn ghost" title="Open a .vibecad.json file" onClick={() => inputRef.current?.click()}>Open</button>
+      <button className="btn ghost" title="Save to a .vibecad.json file" onClick={saveToFile}>Save</button>
       <button className="btn ghost" title="Import STEP, BREP, STL, FreeCAD (.FCStd) or Rhino (.3dm) as bodies" onClick={() => importRef.current?.click()}>Import</button>
       <ExportMenu />
       <input
@@ -191,7 +191,7 @@ export function Toolbar() {
   return (
     <div className="toolbar">
       <div className="brand">
-        <span className="logo">◆</span> Chisel<span className="brand-dim">CAD</span>
+        <span className="logo">◆</span> Vibe<span className="brand-dim">CAD</span>
       </div>
       <FileMenu />
       <button className="btn ghost" title="Claude agent — sketch by describing it" onClick={() => useStore.getState().toggleAgent()}>✦ Agent</button>
@@ -249,7 +249,7 @@ export function Toolbar() {
           <button
             className="btn ghost"
             title="Look at the sketch plane (orient normal-to)"
-            onClick={() => window.dispatchEvent(new CustomEvent("chisel:lookAt"))}
+            onClick={() => window.dispatchEvent(new CustomEvent("vibecad:lookAt"))}
           >
             ⟂ Look At
           </button>

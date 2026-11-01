@@ -46,7 +46,7 @@ describe("persistence round-trip", () => {
 
   it("only operations are serialized; derived state is omitted", () => {
     const json = JSON.parse(
-      serializeDocument(deserializeDocument(JSON.stringify({ format: "chisel-cad", version: 1, operations: [], nextId: 1 })))
+      serializeDocument(deserializeDocument(JSON.stringify({ format: "vibecad", version: 1, operations: [], nextId: 1 })))
     );
     expect(json).not.toHaveProperty("sketches");
     expect(json).not.toHaveProperty("features");

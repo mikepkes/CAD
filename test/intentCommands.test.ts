@@ -92,10 +92,10 @@ describe("intent commands", () => {
     await loaded.recompute();
     expect(loaded.doc.intents).toEqual(s.doc.intents); // and rebuilt from the recipe
 
-    const old = deserializeDocument(JSON.stringify({ format: "chisel-cad", version: 1, operations: [], nextId: 1 }));
+    const old = deserializeDocument(JSON.stringify({ format: "vibecad", version: 1, operations: [], nextId: 1 }));
     expect(old.intents).toEqual([]);
     expect(JSON.parse(serializeDocument(old))).not.toHaveProperty("intents"); // none → no key
-    const junk = deserializeDocument(JSON.stringify({ format: "chisel-cad", version: 1, operations: [], nextId: 1, intents: [null, 3, { id: "i1", label: "a", lhs: "a", op: "<", rhs: "1" }] }));
+    const junk = deserializeDocument(JSON.stringify({ format: "vibecad", version: 1, operations: [], nextId: 1, intents: [null, 3, { id: "i1", label: "a", lhs: "a", op: "<", rhs: "1" }] }));
     expect(junk.intents.map((i) => i.id)).toEqual(["i1"]);
   });
 

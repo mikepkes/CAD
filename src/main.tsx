@@ -1,3 +1,4 @@
+import "./model/legacyStorage"; // first: settings move to their VibeCAD keys before any store reads them
 import { createRoot } from "react-dom/client";
 import { App } from "./ui/App";
 import { CustomizeApp } from "./ui/CustomizeApp";
@@ -6,7 +7,7 @@ import "./styles.css";
 import "./ui/kit/kit.css";
 
 // DEV-only: expose the store for debugging/automation (like __scene in Viewport).
-if (import.meta.env?.DEV) (window as unknown as { __chisel?: unknown }).__chisel = useStore;
+if (import.meta.env?.DEV) (window as unknown as { __vibecad?: unknown }).__vibecad = useStore;
 
 // Slider-only customize mode is selected by the URL (?mode=customize or
 // ?customize), so a model link can open straight into end-user tuning.

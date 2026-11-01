@@ -13,7 +13,7 @@ export interface Executor {
   undo(): void;
   redo(): void;
   /** window.dispatchEvent(new CustomEvent(name, { detail })) */
-  fire(name: "chisel:view" | "chisel:frame" | "chisel:lookAt", detail?: string): void;
+  fire(name: "vibecad:view" | "vibecad:frame" | "vibecad:lookAt", detail?: string): void;
   /** hotkeys.runAction */
   runAction(id: string): boolean;
   setOpenFeature(id: string | null): void;
@@ -28,8 +28,8 @@ export async function execute(action: IntentAction, x: Executor): Promise<void> 
   switch (action.type) {
     case "setParameter": await x.setParameterExpr(action.name, action.expr); return;
     case "editOperation": await x.editOperation(action.opId, action.params); return;
-    case "view": x.fire("chisel:view", action.view); return;
-    case "frame": x.fire("chisel:frame"); return;
+    case "view": x.fire("vibecad:view", action.view); return;
+    case "frame": x.fire("vibecad:frame"); return;
     case "rollback": await x.moveRollback(action.index); return;
     case "suppress": await x.suppressOperation(action.opId, action.suppressed); return;
     case "undo": x.undo(); return;

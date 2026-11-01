@@ -1,5 +1,5 @@
 // Where render outputs (PNG stills, MP4 turntables) end up. In the desktop app the
-// Rust side writes them into ~/Downloads/Chisel CAD/ — a caller (e.g. an MCP
+// Rust side writes them into ~/Downloads/VibeCAD/ — a caller (e.g. an MCP
 // client) picks the filename, never the path. In a plain browser the file is
 // offered as a download instead.
 
@@ -16,7 +16,7 @@ export function sanitizeOutputName(name: string | undefined, ext: string, fallba
   return `${stem || fallbackStem}.${ext}`;
 }
 
-/** A timestamped default stem, e.g. "chisel-turntable-20261029-1452". */
+/** A timestamped default stem, e.g. "vibecad-turntable-20261029-1452". */
 export function timestampedStem(prefix: string, d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${prefix}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;

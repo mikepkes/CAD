@@ -5,9 +5,9 @@
 import { enableWebMcp, disableWebMcp, WebMcpHost } from "./webmcp";
 import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus, isTauri, startDesktopMcp, stopDesktopMcp } from "./desktopMcp";
 
-export const WEBMCP_LS = "chisel.webmcp.enabled";
-export const DESKTOP_MCP_LS = "chisel.desktopmcp.enabled";
-export const DESKTOP_MCP_PORT_LS = "chisel.desktopmcp.port";
+export const WEBMCP_LS = "vibecad.webmcp.enabled";
+export const DESKTOP_MCP_LS = "vibecad.desktopmcp.enabled";
+export const DESKTOP_MCP_PORT_LS = "vibecad.desktopmcp.port";
 
 export interface McpStateSlice {
   webMcpEnabled: boolean;

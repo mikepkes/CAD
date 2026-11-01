@@ -66,7 +66,7 @@ const lensOn = () => ui().panels.lens && st().mode === "model";
 
 /** Orient the view to a face (the face verbs' "Look at"). */
 export function lookAtFace(sel: Pick<FaceSelection, "point" | "normal">): void {
-  window.dispatchEvent(new CustomEvent("chisel:lookAt", { detail: { point: sel.point, normal: sel.normal } }));
+  window.dispatchEvent(new CustomEvent("vibecad:lookAt", { detail: { point: sel.point, normal: sel.normal } }));
 }
 
 /** Delete a feature after asking in the app (the feature card's Delete): closes its card first. Resolves to whether it was deleted. */

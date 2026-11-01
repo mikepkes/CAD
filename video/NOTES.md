@@ -8,6 +8,15 @@ open, so the next pass starts from here rather than from memory.
 
 Hold: no recording until the pass 2 review is finished.
 
+### Renamed to VibeCAD
+
+The app is now **VibeCAD** (was Chisel CAD). The scripts, title cards, VO
+lines and output names (`vibecad-tutorial.mp4`) say VibeCAD; the demo API is
+`window.__vibecadDemo`. Passes 1 and 2 below keep the old name as recorded.
+Their cuts still show "Chisel": pass 3 must be recorded fresh, with nothing
+reused from older takes (the montage included). The address stays
+mikepkes.github.io/CAD while the repository is named CAD.
+
 ### Your review of pass 2
 
 - **Gyroscope section: show the bearing.** The bearing is the most interesting
@@ -60,6 +69,11 @@ Hold: no recording until the pass 2 review is finished.
     step, or pre-bake the frames; fixes the "19×" open item too;
   - slow enough to follow a tooth through a mesh, perhaps a close-in on one
     pair (worm and wheel) after the wide shot.
+  - **No turntable at all in the gear clip** (your follow-up): the spinning
+    camera detracts. Spend that time on the gear motions instead, and go
+    further into the mechanisms: after the wide shot, move in on two or three
+    meshes in turn (worm and wheel, rack and pinion, the bevel pair, the ring
+    gear and its pinion) with the camera still while each turns.
 - **A flash of the bench before "just describe it".** Cause: the Roubo clip
   ends with `d.key("Escape")` inside the recorded beat (`act3.mjs`), which
   closes the shop drawing and shows the bench again for the rest of the beat

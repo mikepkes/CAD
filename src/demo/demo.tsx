@@ -1,5 +1,5 @@
 // Demo mode for the tutorial video (`?demo` in the URL): a presenter layer over
-// the app and a small API on window.__chiselDemo that the video director
+// the app and a small API on window.__vibecadDemo that the video director
 // (video/director.mjs, through Playwright) drives. Nothing here changes how the
 // app works: input arrives as real pointer and key events, and the layer only
 // draws what happened (the cursor where the pointer is, a ripple on a press,
@@ -176,10 +176,10 @@ const api = {
     };
     turn.raf = requestAnimationFrame(tick);
   },
-  view(name: string) { window.dispatchEvent(new CustomEvent("chisel:view", { detail: name })); },
-  frameAll() { window.dispatchEvent(new CustomEvent("chisel:frame")); },
+  view(name: string) { window.dispatchEvent(new CustomEvent("vibecad:view", { detail: name })); },
+  frameAll() { window.dispatchEvent(new CustomEvent("vibecad:frame")); },
   // ---- documents ----
-  async openText(text: string, name = "model.chisel.json") { await useStore.getState().openFile(new File([text], name)); await api.settle(); },
+  async openText(text: string, name = "model.vibecad.json") { await useStore.getState().openFile(new File([text], name)); await api.settle(); },
   async newDocument() { await useStore.getState().newDocument(); await api.settle(); },
   documentText() { return JSON.stringify(useStore.getState().session.doc); },
   // ---- the agent ----
@@ -215,7 +215,7 @@ const api = {
 export type DemoApi = typeof api;
 
 export function installDemo() {
-  (window as unknown as { __chiselDemo: DemoApi }).__chiselDemo = api;
+  (window as unknown as { __vibecadDemo: DemoApi }).__vibecadDemo = api;
   document.documentElement.classList.add("demo");
   const host = document.createElement("div");
   document.body.appendChild(host);

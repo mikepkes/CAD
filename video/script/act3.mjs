@@ -12,11 +12,11 @@ const hasExample = (name) => existsSync(new URL(`../../public/examples/${name}.j
 async function load(d, name) {
   await d.cut(async () => {
     await d.run(async (n) => {
-      const D = window.__chiselDemo;
+      const D = window.__vibecadDemo;
       D.closeCards();
       D.store.getState().setSection(null);
       const text = await (await fetch(`/examples/${n}.json`)).text();
-      await D.openText(text, `${n}.chisel.json`);
+      await D.openText(text, `${n}.vibecad.json`);
       if (D.store.getState().showPlanes) D.store.getState().toggleShowPlanes();
       D.ui.getState().togglePanel("workbench", false); // no pins in the montage
       D.view("iso");
@@ -34,7 +34,7 @@ async function sweep(d, name, values, ms = 3000) {
   const run = async () => {
     for (const v of values) {
       const t = Date.now();
-      await d.run(async ([n, x]) => { await window.__chiselDemo.store.getState().setParameterExpr(n, String(x)); }, [name, v]);
+      await d.run(async ([n, x]) => { await window.__vibecadDemo.store.getState().setParameterExpr(n, String(x)); }, [name, v]);
       await d.settle(60, { camera: false }); // a turntable may be running
       const left = step - (Date.now() - t);
       if (left > 0) await d.wait(left);
@@ -51,7 +51,7 @@ const there = (a, b, n) => [...range(a, b, n), ...range(b, a, n).slice(1)];
 export async function act3(d) {
   await d.api("cursor", false);
   await d.cut(async () => {
-    await d.run(() => window.__chiselDemo.ui.getState().togglePanel("workbench", false));
+    await d.run(() => window.__vibecadDemo.ui.getState().togglePanel("workbench", false));
     // the montage shows the model, not the panels (there is no presentation mode yet: a gap)
     await d.clickEl(".side-toggle.left"); await d.clickEl(".side-toggle.right");
   });
@@ -76,15 +76,15 @@ export async function act3(d) {
     await d.wait(2600);
     await d.api("turntable", null);
     await d.fast("motion study", async () => {
-      await d.run(async () => { await window.__chiselDemo.store.getState().runMotionStudy(); });
-      await d.page.waitForFunction(() => !["running", "pending"].includes(window.__chiselDemo.store.getState().motionStatus), null, { timeout: 180000 });
+      await d.run(async () => { await window.__vibecadDemo.store.getState().runMotionStudy(); });
+      await d.page.waitForFunction(() => !["running", "pending"].includes(window.__vibecadDemo.store.getState().motionStatus), null, { timeout: 180000 });
     });
     await d.wait(1200);
   });
   if (hasExample("clockwork")) {
     await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm", "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train.", async () => {
       // the driving parameter: the first bounded one (the clockwork's turn)
-      const drive = await d.run(() => window.__chiselDemo.store.getState().session.doc.parameters.find((p) => p.min != null && p.max != null));
+      const drive = await d.run(() => window.__vibecadDemo.store.getState().session.doc.parameters.find((p) => p.min != null && p.max != null));
       if (!drive) throw new Error("the clockwork has no bounded drive parameter");
       await d.api("turntable", 6);
       await sweep(d, drive.name, range(drive.min, Math.min(drive.max, drive.min + 360), 40), 6000);
@@ -98,7 +98,7 @@ export async function act3(d) {
   await d.cut(async () => {
     await load(d, "bistable");
     await d.clickEl(".side-toggle.right"); // the Mechanism tab lives in the right panel
-    await d.run((c) => window.__chiselDemo.mockAgent(c), forcesCache);
+    await d.run((c) => window.__vibecadDemo.mockAgent(c), forcesCache);
   });
   await d.beat("bistable-forces", "Ask about a design, and Claude can drive the interface for you: here it opens the force analysis on a bistable switch, sweeps it through its travel, and turns the lens to strain. Both rest positions and the snap force are marked on the curve.", async () => {
     await d.lower("Bistable switch", "Claude opens the force analysis for you");
@@ -107,14 +107,14 @@ export async function act3(d) {
     await d.clickEl(".agent-input textarea");
     await d.type(forcesCache.prompt, 40);
     await d.key("Enter");
-    await d.fast("Claude working", () => d.page.waitForFunction(() => !window.__chiselDemo.store.getState().agentRunning, null, { timeout: 120000 }));
+    await d.fast("Claude working", () => d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 }));
     await d.page.waitForSelector("[data-testid=rest-marker]", { timeout: 60000 }).catch(() => d.note("no rest markers"));
     await d.page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Sweep travel"), null, { timeout: 60000 }).catch(() => d.note("sweep did not finish"));
     await d.api("cursor", false);
     await d.wait(1200);
   }, { minMs: 12000 });
   await d.cut(async () => {
-    await d.run(() => { const D = window.__chiselDemo; D.ui.getState().togglePanel("lens", false); D.ui.getState().togglePanel("mechanism", false); D.store.getState().agentOpen && D.store.getState().toggleAgent(); });
+    await d.run(() => { const D = window.__vibecadDemo; D.ui.getState().togglePanel("lens", false); D.ui.getState().togglePanel("mechanism", false); D.store.getState().agentOpen && D.store.getState().toggleAgent(); });
     await d.clickEl(".side-toggle.right");
   });
 
@@ -132,7 +132,7 @@ export async function act3(d) {
 
   await d.cut(async () => {
     await d.api("newDocument");
-    await d.run((c) => { const D = window.__chiselDemo; D.mockAgent(c); D.view("iso"); }, agentCache);
+    await d.run((c) => { const D = window.__vibecadDemo; D.mockAgent(c); D.view("iso"); }, agentCache);
     await d.settle(400);
   });
   await d.beat("agent", "Or just describe it. Claude builds it with the same commands you use, and the result is an ordinary parametric model you can keep editing.", async () => {
@@ -143,16 +143,16 @@ export async function act3(d) {
     await d.type(agentCache.prompt, 40);
     await d.key("Enter");
     await d.fast("Claude building", async () => {
-      await d.page.waitForFunction(() => !window.__chiselDemo.store.getState().agentRunning, null, { timeout: 120000 });
+      await d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 });
       await d.settle(400);
     });
     await d.api("frameAll");
     await d.wait(2000);
   }, { minMs: 9000 });
 
-  await d.beat("outro", "That's Chisel. Free, open source, in your browser or on your desktop. Thanks for watching.", async () => {
+  await d.beat("outro", "That's VibeCAD. Free, open source, in your browser or on your desktop. Thanks for watching.", async () => {
     await d.lower(null);
     await d.api("cursor", false);
-    await d.api("titleCard", { title: "Chisel CAD", subtitle: "mikepkes.github.io/CAD", chips: ["Free", "Open source (MIT)", "Browser or desktop"] });
+    await d.api("titleCard", { title: "VibeCAD", subtitle: "mikepkes.github.io/CAD", chips: ["Free", "Open source (MIT)", "Browser or desktop"] });
   }, { minMs: 6000 });
 }

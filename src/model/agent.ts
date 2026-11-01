@@ -29,7 +29,7 @@ export interface AgentContext {
   render: (opts: { view?: string; width?: number; height?: number }) => Promise<{ base64: string; width: number; height: number; view: string }>;
 }
 
-const SYSTEM = `You are the embedded assistant inside ChiselCAD, a browser-based parametric 2D sketch CAD app (an OpenCASCADE/PlaneGCS modeler). You build and edit sketches for the user by calling tools, which are the app's own commands — the user watches the geometry appear as you work.
+const SYSTEM = `You are the embedded assistant inside VibeCAD, a browser-based parametric 2D sketch CAD app (an OpenCASCADE/PlaneGCS modeler). You build and edit sketches for the user by calling tools, which are the app's own commands — the user watches the geometry appear as you work.
 
 Core rules:
 - Tool names mirror the commands but with "." replaced by "__" (e.g. sketch__create, sketch__addLine, sketch__addDimension, sketch__addConstraint, feature__extrude). Read each tool's description for its parameters.

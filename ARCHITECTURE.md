@@ -1,6 +1,6 @@
 # Architecture
 
-Chisel CAD is a **local-first, static** parametric CAD app. It runs entirely in
+VibeCAD is a **local-first, static** parametric CAD app. It runs entirely in
 the browser (no server), so it can be served from GitHub Pages. Server/cloud
 features can be layered on later without changing the core.
 

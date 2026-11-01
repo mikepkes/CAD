@@ -1,4 +1,4 @@
-//! Chisel CAD desktop shell. The app itself is the web build (`../dist`); this
+//! VibeCAD desktop shell. The app itself is the web build (`../dist`); this
 //! crate adds a window and, on request from the settings UI, a local MCP server
 //! that lets external agents drive the running document. See `mcp.rs`.
 
@@ -92,7 +92,7 @@ fn mcp_notify(state: State<'_, AppState>, notification: Value) -> usize {
 
 /// Write an output the MCP tools produced (a PNG still, an MP4 turntable, or an
 /// exported STEP/STL/3MF model) into
-/// `~/Downloads/Chisel CAD/`. The request body is the raw file bytes and the name
+/// `~/Downloads/VibeCAD/`. The request body is the raw file bytes and the name
 /// comes in the `x-filename` header; it must be a plain filename, so an agent can
 /// choose what a render is called but never where it lands.
 #[tauri::command]
@@ -102,7 +102,7 @@ fn save_render(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Resul
     };
     let name = request.headers().get("x-filename").and_then(|v| v.to_str().ok()).unwrap_or_default();
     let name = render_file_name(name)?;
-    let dir = app.path().download_dir().map_err(|e| e.to_string())?.join("Chisel CAD");
+    let dir = app.path().download_dir().map_err(|e| e.to_string())?.join("VibeCAD");
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     let path = confined_target(&dir, name)?;
     write_no_follow(&path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
@@ -190,7 +190,7 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running Chisel CAD");
+        .expect("error while running VibeCAD");
 }
 
 #[cfg(test)]
@@ -209,8 +209,8 @@ mod tests {
 
     #[test]
     fn renders_never_write_through_symlinks() {
-        let base = std::env::temp_dir().join(format!("chisel-render-test-{}", std::process::id()));
-        let dir = base.join("Chisel CAD");
+        let base = std::env::temp_dir().join(format!("vibecad-render-test-{}", std::process::id()));
+        let dir = base.join("VibeCAD");
         std::fs::create_dir_all(&dir).unwrap();
         let ok = confined_target(&dir, "a.png").unwrap();
         assert_eq!(ok.parent().unwrap(), dir.canonicalize().unwrap());

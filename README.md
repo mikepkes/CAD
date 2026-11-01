@@ -1,4 +1,4 @@
-# Chisel CAD
+# VibeCAD
 
 **Live demo: https://mikepkes.github.io/CAD/**
 
@@ -48,7 +48,7 @@ backlash a side.
 ### Compliant mechanisms
 
 Parts that move by **bending** instead of sliding on pins, printed flat as one
-piece. Chisel solves how they move and what the bending costs: the strain in
+piece. VibeCAD solves how they move and what the bending costs: the strain in
 every flexing strip against the material's limit, the force to drive it, and
 where it comes to rest. Each one has a `material` dropdown that checks the
 strain against what you print it in; in the four-bar and the gripper the hinge
@@ -101,7 +101,7 @@ strips also resize for it. How it works is in
     X; the platform hangs in the carriage on four horizontal blades and moves in
     Y.
   - **The physics:** the blades are solved as beams. Each stage's sideways
-    drift and turn aren't set by any input, so Chisel lets them settle where
+    drift and turn aren't set by any input, so VibeCAD lets them settle where
     the stored energy is least.
   - **The redundancy:** the blades on either side hold each stage centred
     against each other, so they must stretch. That makes the stage stiffen with
@@ -171,7 +171,7 @@ on.
   an API key, Claude Haiku names them in the background — one short request,
   applied as undoable renames; without one you accept a suggestion or type a
   name. MCP agents see the same inbox (`get_assist_inbox` / `resolve_assist`,
-  and the subscribable resource `chisel://assist/inbox`).
+  and the subscribable resource `vibecad://assist/inbox`).
 - **PlaneGCS** (FreeCAD's constraint solver, via WebAssembly) solves the sketch
   and reports **degrees of freedom**, a **fully-constrained** state, and on
   over-constraint **which constraints conflict** — surfaced as a toast and
@@ -269,7 +269,7 @@ on.
 - **Command-driven, with a parametric timeline separate from undo/redo.** Edit
   an earlier operation and it propagates downstream (Fusion-style), and that
   edit is undoable. Drag a point for live preview; release commits one step.
-- **Persistence:** autosave to the browser, plus save/open `.chisel.json`.
+- **Persistence:** autosave to the browser, plus save/open `.vibecad.json`.
 - **MCP server** (`npm run mcp`) exposes every command to an LLM/agent — see
   [`mcp/README.md`](mcp/README.md).
 - **Embedded Claude agent** (✦ Agent): bring your own Anthropic API key
@@ -283,7 +283,7 @@ on.
 - **WebMCP** (Settings → *Expose tools to browser agents*): registers the same
   commands as MCP tools for external in-browser agents (an AI browser, a Chrome
   extension, Claude-in-Chrome) via `navigator.modelContext`, and always
-  publishes `window.chiselWebMCP` (`.listTools()` / `.callTool(name, args)`) —
+  publishes `window.vibecadWebMCP` (`.listTools()` / `.callTool(name, args)`) —
   no server, the page stays static.
 
 See [`docs/SKETCHING.md`](docs/SKETCHING.md) for the Fusion-parity sketching
@@ -326,19 +326,19 @@ transaction that rolls back on the first failing step), plus hotkeys. Every
 tool carries MCP annotations (read-only / destructive):
 
 ```bash
-claude mcp add --transport http chisel-cad http://127.0.0.1:4673/mcp
+claude mcp add --transport http vibecad http://127.0.0.1:4673/mcp
 ```
 
 Claude Desktop (`claude_desktop_config.json`):
 
 ```json
-{ "mcpServers": { "chisel-cad": { "type": "http", "url": "http://127.0.0.1:4673/mcp" } } }
+{ "mcpServers": { "vibecad": { "type": "http", "url": "http://127.0.0.1:4673/mcp" } } }
 ```
 
 Renders can go to disk: `render_view` takes a free camera (`azimuthDeg`,
 `elevationDeg`, `fovDeg`, `rollDeg`) and a `saveAs` filename, and
 `record_turntable` records a 360° WebCodecs video (H.264, VP9 fallback) and
-saves the MP4. Desktop saves land in `~/Downloads/Chisel CAD/` — clients name
+saves the MP4. Desktop saves land in `~/Downloads/VibeCAD/` — clients name
 the file, not the folder, and a symlinked folder or file is refused.
 
 The toggle and port persist; the server starts with the app when enabled and
@@ -393,7 +393,7 @@ mcp/             MCP server exposing the core to agents
   part on or off, such as an insert or a second-material core.
 - **Modify tools**: mirror, linear pattern, and construction (reference)
   geometry — all command-based, so they're parametric and undoable.
-- **Save / Open** `.chisel.json` and **autosave** to the browser, so a reload
+- **Save / Open** `.vibecad.json` and **autosave** to the browser, so a reload
   restores your work. Files store just the operation recipe and rebuild on load.
 
 ## Customize mode
@@ -412,7 +412,7 @@ straight from a URL:
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&example=gimbal         # two-axis flexure gimbal: eight cross-blade flexures, alpha/beta steer the mirror; blade, platform and range sliders
 ?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm), driven by `turn`
-?mode=customize&model=<url-to.json>    # any Chisel CAD model file
+?mode=customize&model=<url-to.json>    # any VibeCAD model file
 ```
 
 It shows just the 3D preview with the model's **bounded parameters** (those with
@@ -458,7 +458,7 @@ or is uploaded to **MakerWorld** for cloud slicing, then printed.
 
 Most CAD (Fusion 360 included) lets you pattern a *component*, but the copies
 come out **rigid** — the joints don't come along, so you can't have a mechanism
-whose instance count is a parameter *and* still articulates. Chisel prototypes
+whose instance count is a parameter *and* still articulates. VibeCAD prototypes
 exactly that. Three pieces make it work:
 
 - **Connectors** — named attachment frames (joint origins) on a component, in
@@ -507,7 +507,7 @@ rebuild).
 
 ## License
 
-Chisel CAD is free and open source under the [MIT License](LICENSE).
+VibeCAD is free and open source under the [MIT License](LICENSE).
 
 It is built on third-party software under its own licenses, nearly all
 permissive. The two exceptions are LGPL libraries used unmodified as separate,

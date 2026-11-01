@@ -1,8 +1,8 @@
 # The tutorial video, automated
 
-Everything that makes the Chisel CAD tutorial video lives here, so a take can be
+Everything that makes the VibeCAD tutorial video lives here, so a take can be
 re-shot after any change to the app by re-running two commands. The plan (acts,
-beats, why each beat exists) is the doc *Chisel CAD video tutorial plan*; what
+beats, why each beat exists) is the doc *VibeCAD video tutorial plan*; what
 worked and what didn't on each pass is in [NOTES.md](NOTES.md).
 
 ```
@@ -16,7 +16,7 @@ node video/sheet.mjs --run pass2 --every 15   # contact sheets of the cut, for r
 Don't change files in the repo while a take records: the dev server reloads the page (it ignores `video/takes`,
 `video/out` and `.claude/`, but not your source). `record.mjs` warms the app up first and flags any reload.
 
-Output: `video/out/<run>/chisel-tutorial.mp4` (2560×1440, 60 fps, H.264),
+Output: `video/out/<run>/vibecad-tutorial.mp4` (2560×1440, 60 fps, H.264),
 `subtitles.srt`, `cue-sheet.md` (the ADR sheet for recording the voiceover to
 picture) and `plan.json`. Takes (every captured frame, as JPEG) are in
 `video/takes/<run>/act<N>/`; both folders are git-ignored and large (about 1 GB a
@@ -26,7 +26,7 @@ minute of takes).
 
 | Piece | File | What it does |
 |---|---|---|
-| Demo layer | `src/demo/demo.tsx` (loaded by `?demo`) | Draws the presenter cursor where the (automated) pointer really is, a ripple on each press, keycaps for real key presses, lower thirds and title cards. Exposes `window.__chiselDemo`: `settle()` (rebuild done, camera still, nothing changing), screen positions of world and sketch points, the stand builder, the mock agent. |
+| Demo layer | `src/demo/demo.tsx` (loaded by `?demo`) | Draws the presenter cursor where the (automated) pointer really is, a ripple on each press, keycaps for real key presses, lower thirds and title cards. Exposes `window.__vibecadDemo`: `settle()` (rebuild done, camera still, nothing changing), screen positions of world and sketch points, the stand builder, the mock agent. |
 | The running project | `src/demo/stand.ts` | The phone stand as data and steps; `test/tutorialStand.test.ts` builds it in Node so a change that breaks the video's model fails a test first. |
 | Mock agent | `src/demo/agentReplay.ts`, `video/mock/agent-*.json` | Replays a cached Claude response through the real agent loop: the text streams into the panel and the cached tool calls run as real commands. `test/videoMocks.test.ts` checks every cached call still builds. `recordAgent(prompt)` on the demo API records a real run (with an API key) to refresh a cache. |
 | Director | `video/lib/director.mjs` | Opens Chromium (Playwright) at 1440×810 points × 16/9 = 2560×1440 pixels, drives the app with real mouse and keyboard input, captures every painted frame over CDP (about 57 fps), pads each beat to its narration's read time (150 words a minute + 0.5 s), and logs spans to speed up (`fast`) or remove (`cut`). |

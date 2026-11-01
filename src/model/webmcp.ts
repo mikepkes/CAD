@@ -3,7 +3,7 @@
 //
 // There is no relay and no server — everything stays in the page. We register
 // the tools with the emerging `navigator.modelContext` API when it exists, and
-// always publish a stable, self-describing surface at `window.chiselWebMCP` so
+// always publish a stable, self-describing surface at `window.vibecadWebMCP` so
 // an external agent can discover and call tools even without the native API.
 
 import { CommandRegistry } from "../core/command/registry";
@@ -98,7 +98,7 @@ export interface WebMcpHost {
 }
 
 export const WEBMCP_INFO = {
-  name: "ChiselCAD",
+  name: "VibeCAD",
   version: 1,
   description:
     "A parametric CAD app (sketch → solid, OpenCASCADE kernel). Tools are its commands: create a sketch (sketch.create with a plane XY/XZ/YZ/offset/datum/planeDef, or sketch_on_face at a world point → returns ids + the sketch frame), add geometry (sketch.addLine/addPolyline/addCircle/addRing/addArc/addRectangle{cornerRadius}/addBar/addPolygon/addEllipse/addSlot), constrain/dimension (sketch.addConstraint/addDimension, expressions allowed), edit (sketch.trim/extend/offset/offsetLoop/fillet/filletCorners/chamfer/mirror/*Pattern), then build solids: feature.extrude (new/join/cut, symmetric, direction reverse, extent throughAll), feature.revolve, feature.fillet/chamfer (EdgeSelector), feature.shell, feature.pattern (linear/circular bodies), feature.mirror. Modifiers act on the most recent body. Points are {x,y} or {ref:<pointId>}; reuse a point id to make endpoints coincident. Call get_state first and after creating geometry to read live ids and body bounds — never guess them. Feature results include kernel errors/warnings (e.g. a cut that removed nothing).",
@@ -133,7 +133,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
   });
   tools.push({
     name: "render_view",
-    description: "Render the current model and return a PNG image. `view` is one of iso (default), front, back, top, bottom, left, right. Or aim a free camera with `azimuthDeg` (around Z from +X toward +Y; -90 = looking at the front from -Y) and `elevationDeg` (up from the XY plane), which override `view`; `fovDeg` sets the vertical field of view (default 45 — narrow it, e.g. 10, to match a zoomed photo) and `rollDeg` rotates about the view axis. The model is framed automatically. Optional `width`/`height` in pixels (max 1920). `hideSketches` hides sketch curves/points/constraint glyphs; `clean` also hides the grid and axes for a product shot. `saveAs` (a filename) also writes the PNG to disk — in the desktop app into ~/Downloads/Chisel CAD/ — and reports the path. Use it to see what you've built.",
+    description: "Render the current model and return a PNG image. `view` is one of iso (default), front, back, top, bottom, left, right. Or aim a free camera with `azimuthDeg` (around Z from +X toward +Y; -90 = looking at the front from -Y) and `elevationDeg` (up from the XY plane), which override `view`; `fovDeg` sets the vertical field of view (default 45 — narrow it, e.g. 10, to match a zoomed photo) and `rollDeg` rotates about the view axis. The model is framed automatically. Optional `width`/`height` in pixels (max 1920). `hideSketches` hides sketch curves/points/constraint glyphs; `clean` also hides the grid and axes for a product shot. `saveAs` (a filename) also writes the PNG to disk — in the desktop app into ~/Downloads/VibeCAD/ — and reports the path. Use it to see what you've built.",
     inputSchema: {
       type: "object",
       properties: {
@@ -160,7 +160,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
         });
         const content: WebMcpResult["content"] = [{ type: "image", data: r.base64, mimeType: "image/png" }];
         if (a.saveAs && host.saveOutput) {
-          const name = sanitizeOutputName(a.saveAs, "png", `chisel-${r.view}`);
+          const name = sanitizeOutputName(a.saveAs, "png", `vibecad-${r.view}`);
           const saved = await host.saveOutput(name, base64Bytes(r.base64), "image/png");
           content.push({ type: "text", text: JSON.stringify({ ok: true, saved, width: r.width, height: r.height, view: r.view }) });
         }
@@ -173,7 +173,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
   if (host.recordTurntable && host.saveOutput) {
     tools.push({
       name: "record_turntable",
-      description: "Record a 360° turntable video of the current bodies with WebCodecs and save it as an MP4 (H.264 when the platform can encode it, else VP9) — in the desktop app into ~/Downloads/Chisel CAD/. The camera orbits Z around the bodies, framed automatically. Defaults: 1280×720, 60 fps, 4 s, one revolution, elevationDeg 25, startAzDeg -60 (front-right), fovDeg 30. Width/height ≤ 1920, fps ≤ 60, seconds ≤ 30. Returns the saved path, codec and frame count. Takes a few seconds; it briefly borrows the viewport and restores it.",
+      description: "Record a 360° turntable video of the current bodies with WebCodecs and save it as an MP4 (H.264 when the platform can encode it, else VP9) — in the desktop app into ~/Downloads/VibeCAD/. The camera orbits Z around the bodies, framed automatically. Defaults: 1280×720, 60 fps, 4 s, one revolution, elevationDeg 25, startAzDeg -60 (front-right), fovDeg 30. Width/height ≤ 1920, fps ≤ 60, seconds ≤ 30. Returns the saved path, codec and frame count. Takes a few seconds; it briefly borrows the viewport and restores it.",
       inputSchema: {
         type: "object",
         properties: {
@@ -185,7 +185,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
           elevationDeg: { type: "number" },
           startAzDeg: { type: "number" },
           fovDeg: { type: "number" },
-          filename: { type: "string", description: "Filename (no directories); default chisel-turntable-<timestamp>.mp4." },
+          filename: { type: "string", description: "Filename (no directories); default vibecad-turntable-<timestamp>.mp4." },
         },
       },
       annotations: EDIT,
@@ -204,7 +204,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
             fovDeg: clamp(a.fovDeg, 30, 1, 120),
           };
           const r = await host.recordTurntable!(opts);
-          const name = sanitizeOutputName(a.filename, "mp4", timestampedStem("chisel-turntable"));
+          const name = sanitizeOutputName(a.filename, "mp4", timestampedStem("vibecad-turntable"));
           const saved = await host.saveOutput!(name, r.bytes, "video/mp4");
           return ok({ ok: true, saved, codec: r.codec, width: r.width, height: r.height, fps: r.fps, frames: r.frames, seconds: opts.seconds, bytes: r.bytes.length });
         } catch (e) {
@@ -341,7 +341,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
   if (host.members) {
     tools.push({
       name: "cut_list",
-      description: "The weldment cut list: every structural member grouped by profile, cut length (mm, to 0.1) and end-cut angles (0° = square, 45° = a right-angle mitre), with quantities and the member bodies in each row. `saveAs` (a filename) also writes it as CSV — in the desktop app into ~/Downloads/Chisel CAD/.",
+      description: "The weldment cut list: every structural member grouped by profile, cut length (mm, to 0.1) and end-cut angles (0° = square, 45° = a right-angle mitre), with quantities and the member bodies in each row. `saveAs` (a filename) also writes it as CSV — in the desktop app into ~/Downloads/VibeCAD/.",
       inputSchema: { type: "object", properties: { saveAs: { type: "string" } } },
       annotations: { ...READ_ONLY, idempotentHint: true },
       execute: async (args) => {
@@ -360,7 +360,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
   if (host.sheets) {
     tools.push({
       name: "flat_pattern",
-      description: "Sheet-metal / paper flat patterns: for each sheet body (or just `body`), its thickness, K-factor, flat size, every fold (angle in degrees: + up / valley, − down / mountain; inner radius; bend allowance — solved crease angles included), its blank's edge names (for feature.flange) and whether it's stale (changed by another feature while folded). `format` svg (cut black, valley folds dashed blue, mountain dash-dot red) or dxf (layers CUT / BEND_UP / BEND_DOWN) with `saveAs` writes the pattern — in the desktop app into ~/Downloads/Chisel CAD/; without `saveAs` the file's text is returned.",
+      description: "Sheet-metal / paper flat patterns: for each sheet body (or just `body`), its thickness, K-factor, flat size, every fold (angle in degrees: + up / valley, − down / mountain; inner radius; bend allowance — solved crease angles included), its blank's edge names (for feature.flange) and whether it's stale (changed by another feature while folded). `format` svg (cut black, valley folds dashed blue, mountain dash-dot red) or dxf (layers CUT / BEND_UP / BEND_DOWN) with `saveAs` writes the pattern — in the desktop app into ~/Downloads/VibeCAD/; without `saveAs` the file's text is returned.",
       inputSchema: { type: "object", properties: { body: { type: "string" }, format: { type: "string", enum: ["svg", "dxf"] }, saveAs: { type: "string" } } },
       annotations: { ...READ_ONLY, idempotentHint: true },
       execute: async (args) => {
@@ -466,7 +466,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
     const MIME = { step: "model/step", stl: "model/stl", "3mf": "model/3mf" } as const;
     tools.push({
       name: "export_model",
-      description: "Export the model and save it — in the desktop app into ~/Downloads/Chisel CAD/. `format` step (CAD/CNC), stl (3D print) or 3mf (one part per material). `body` exports one body (its creating feature id); default the whole model (fused, or every part for 3MF). `configuration` exports that variant without switching to it; `all: true` writes one file per configuration. Returns the saved path(s).",
+      description: "Export the model and save it — in the desktop app into ~/Downloads/VibeCAD/. `format` step (CAD/CNC), stl (3D print) or 3mf (one part per material). `body` exports one body (its creating feature id); default the whole model (fused, or every part for 3MF). `configuration` exports that variant without switching to it; `all: true` writes one file per configuration. Returns the saved path(s).",
       inputSchema: {
         type: "object",
         required: ["format"],
@@ -489,8 +489,8 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
           for (const cfg of rows) {
             const bytes = await host.exportModel!(a.format, a.format === "3mf" ? null : a.body ?? null, cfg);
             if (!bytes) throw new Error(`export produced nothing${cfg ? ` for ${cfg}` : ""}`);
-            const stem = [a.filename?.replace(/\.(step|stp|stl|3mf)$/i, "") || timestampedStem("chisel-model"), cfg].filter(Boolean).join(" ");
-            saved.push({ ...(cfg ? { configuration: cfg } : {}), saved: await host.saveOutput!(sanitizeOutputName(stem, a.format, "chisel-model"), bytes, MIME[a.format]), bytes: bytes.length });
+            const stem = [a.filename?.replace(/\.(step|stp|stl|3mf)$/i, "") || timestampedStem("vibecad-model"), cfg].filter(Boolean).join(" ");
+            saved.push({ ...(cfg ? { configuration: cfg } : {}), saved: await host.saveOutput!(sanitizeOutputName(stem, a.format, "vibecad-model"), bytes, MIME[a.format]), bytes: bytes.length });
           }
           return ok({ ok: true, files: saved });
         } catch (e) {
@@ -662,7 +662,7 @@ function base64Bytes(b64: string): Uint8Array {
   return out;
 }
 
-/** MCP resources the app serves (the desktop server and window.chiselWebMCP): the assist inbox. */
+/** MCP resources the app serves (the desktop server and window.vibecadWebMCP): the assist inbox. */
 export const WEBMCP_RESOURCES = [{
   uri: ASSIST_INBOX_URI,
   name: "assist-inbox",
@@ -693,11 +693,11 @@ export function enableWebMcp(host: WebMcpHost): void {
   unregister.push(onAssistChange(() => {
     const n = assistUpdatedNotification();
     for (const fn of [...listeners]) { try { fn(n); } catch { /* a listener's own problem */ } }
-    window.dispatchEvent(new CustomEvent("chisel:mcp-notification", { detail: n }));
+    window.dispatchEvent(new CustomEvent("vibecad:mcp-notification", { detail: n }));
   }));
 
   // Stable, framework-agnostic surface for any external agent/extension.
-  (window as unknown as Record<string, unknown>).chiselWebMCP = {
+  (window as unknown as Record<string, unknown>).vibecadWebMCP = {
     info: WEBMCP_INFO,
     listResources: () => WEBMCP_RESOURCES,
     readResource: (uri: string) => readWebMcpResource(uri),
@@ -753,7 +753,7 @@ export function enableWebMcp(host: WebMcpHost): void {
       provideContext: () => {},
       listTools: () => tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, ...(t.annotations ? { annotations: t.annotations } : {}) })),
       callTool: (name: string, args: Record<string, unknown>) =>
-        (window as unknown as { chiselWebMCP: { callTool: (n: string, a: unknown) => unknown } }).chiselWebMCP.callTool(name, args),
+        (window as unknown as { vibecadWebMCP: { callTool: (n: string, a: unknown) => unknown } }).vibecadWebMCP.callTool(name, args),
     };
   }
   registered = true;
@@ -762,6 +762,6 @@ export function enableWebMcp(host: WebMcpHost): void {
 export function disableWebMcp(): void {
   for (const un of unregister) { try { un(); } catch { /* ignore */ } }
   unregister.length = 0;
-  delete (window as unknown as Record<string, unknown>).chiselWebMCP;
+  delete (window as unknown as Record<string, unknown>).vibecadWebMCP;
   registered = false;
 }

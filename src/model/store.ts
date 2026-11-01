@@ -59,7 +59,7 @@ let rebuildDirty = false;    // a newer rebuild was requested while one ran
 /** Resolves once no solid rebuild is running (the video director's "the model is done" signal). */
 export const whenRebuilt = (): Promise<void> => rebuildInFlight ?? Promise.resolve();
 
-const AUTOSAVE_KEY = "chisel.autosave.v1";
+const AUTOSAVE_KEY = "vibecad.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 
@@ -1294,7 +1294,7 @@ export const useStore = create<AppState>((set, get) => {
       const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
       // Native share sheet (phones) → Save to Files / AirDrop / another app.
       if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
-        try { await nav.share({ files: [file], title: file.name, text: `3D model (${multi ? "3MF" : "STL"}) from Chisel CAD` }); return; }
+        try { await nav.share({ files: [file], title: file.name, text: `3D model (${multi ? "3MF" : "STL"}) from VibeCAD` }); return; }
         catch (e) { if ((e as Error).name === "AbortError") return; /* else fall through to download */ }
       }
       const url = URL.createObjectURL(file);
@@ -1353,7 +1353,7 @@ export const useStore = create<AppState>((set, get) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "model.chisel.json";
+      a.download = "model.vibecad.json";
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     },
@@ -1388,5 +1388,5 @@ export const activeEvaluations = (s: AppState): Evaluations => s.session.evaluat
 
 // dev handle
 if (typeof window !== "undefined" && import.meta.env?.DEV) {
-  (window as any).__chisel = useStore;
+  (window as any).__vibecad = useStore;
 }

@@ -48,7 +48,7 @@ export async function handleMcpRpc(req: RpcRequest, toolset: WebMcpTool[] = tool
         protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
         // Resources: the assist inbox. The server is stateless, so an update goes to every open GET stream.
         capabilities: { tools: { listChanged: false }, resources: { subscribe: true, listChanged: false } },
-        serverInfo: { name: "chisel-cad", title: WEBMCP_INFO.name, version: "0.1.0" },
+        serverInfo: { name: "vibecad", title: WEBMCP_INFO.name, version: "0.1.0" },
         instructions: WEBMCP_INFO.description,
       });
     }
