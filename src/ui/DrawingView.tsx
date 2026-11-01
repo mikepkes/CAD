@@ -44,15 +44,15 @@ export function DrawingView(p: { viewer?: boolean } = {}) {
           <span>{ready ? drawing.title : "Shop drawing"}</span>
           <span className="drawing-actions">
             {!p.viewer && (
-              <label className="drawing-publish" title="Offer this drawing in the customize viewer, with a PDF download">
-                <input type="checkbox" checked={published} onChange={(e) => void useStore.getState().dispatch("drawing.publish", e.target.checked ? (ready ? { title: drawing.title } : {}) : { off: true })} /> Show in the viewer
+              <label className="drawing-publish" title="People who open the shared model (its customize view) get a button for this drawing, with a PDF download. Saved with the model.">
+                <input type="checkbox" checked={published} onChange={(e) => void useStore.getState().dispatch("drawing.publish", e.target.checked ? (ready ? { title: drawing.title } : {}) : { off: true })} /> Offer this drawing to people viewing the shared model
               </label>
             )}
             {ready && (
               <Button size="sm" accent disabled={pdfBusy} onClick={() => {
                 setPdfBusy(true);
                 sheetPdf(drawing.svg, drawing.title)
-                  .then((b) => saveBlob(`${file}.pdf`, b))
+                  .then((b) => { saveBlob(`${file}.pdf`, b); useStore.setState({ toast: { kind: "info", text: `Saved ${file}.pdf` } }); })
                   .catch((e) => useStore.setState({ toast: { kind: "error", text: `PDF failed: ${(e as Error).message}` } }))
                   .finally(() => setPdfBusy(false));
               }}>{pdfBusy ? "Making PDF…" : "Download PDF"}</Button>
@@ -73,8 +73,9 @@ export function DrawingView(p: { viewer?: boolean } = {}) {
               <table>
                 <thead><tr><th>Part</th><th>Qty</th><th>T × W × L (mm)</th></tr></thead>
                 <tbody>
-                  {drawing.parts.map((p) => (
-                    <tr key={p.part + p.material}><td>{p.part}<span className="k-dim"> · {p.material}</span></td><td>{p.qty}</td><td className="k-mono">{p.thickness} × {p.width} × {p.length}</td></tr>
+                  {drawing.parts.map((p, i) => (
+                    // the same part and material can come twice in different sizes (two Pins): the row's place keeps keys unique
+                    <tr key={`${i}:${p.part}:${p.material}`}><td>{p.part}<span className="k-dim"> · {p.material}</span></td><td>{p.qty}</td><td className="k-mono">{p.thickness} × {p.width} × {p.length}</td></tr>
                   ))}
                 </tbody>
               </table>

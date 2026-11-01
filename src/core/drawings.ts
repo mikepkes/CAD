@@ -115,6 +115,67 @@ function esc(s: string): string {
 
 export interface SheetOptions { title?: string; units?: string; }
 
+export interface SheetLayout {
+  /** Paper units per model mm. */
+  scale: number;
+  /** Top-left of each view on the paper. */
+  front: { x: number; y: number };
+  top: { x: number; y: number };
+  right: { x: number; y: number };
+  /** Where the cut list goes: under the views, in a column at the right, or in the corner the third-angle
+   *  arrangement leaves empty (right of the top view, above the right view). */
+  table: { x: number; y: number; w: number; place: "below" | "side" | "corner" };
+}
+
+/** The cut list's width when it is a column (part, qty, material, three dimensions). */
+export const CUT_LIST_COLUMN_W = 440;
+
+/** Where the views and the cut list go: whichever of three arrangements draws the views largest — the list under
+ *  them, in a column at the right, or in the corner third-angle leaves empty — with the views centred in what is
+ *  left. View sizes are in model mm (0 for a view that isn't drawn); everything else in paper units. Pure. */
+export function sheetLayout(o: { sheet: { w: number; h: number }; margin: number; gap: number; titleH: number; tableH: number; views: { fW: number; fH: number; rW: number; tH: number } }): SheetLayout {
+  const { sheet, margin: M, gap, titleH, tableH } = o;
+  const { fW, fH, rW, tH } = o.views;
+  const TW = CUT_LIST_COLUMN_W;
+  const inner = { x: M, y: M + titleH, w: sheet.w - 2 * M, h: sheet.h - 2 * M - titleH };
+  type Place = SheetLayout["table"]["place"];
+  /** The views block's size at a scale (the table counted in for "corner"). */
+  const block = (sc: number, place: Place) => {
+    const topH = tH ? sc * tH : 0, rightW = rW ? sc * rW : 0;
+    if (place === "corner") {
+      const col = Math.max(rightW, TW), row = Math.max(topH, tableH);
+      return { w: sc * fW + gap + col, h: sc * fH + gap + row, row };
+    }
+    return { w: sc * fW + (rW ? gap + rightW : 0), h: sc * fH + (tH ? gap + topH : 0), row: topH };
+  };
+  const areaOf = (place: Place) => place === "below" ? { ...inner, h: inner.h - tableH - gap } : place === "side" ? { ...inner, w: inner.w - TW - gap } : inner;
+  /** The largest scale whose block fits the area (bisection: the block grows with the scale). */
+  const fit = (place: Place) => {
+    const area = areaOf(place);
+    if (area.w <= 0 || area.h <= 0) return 0;
+    let lo = 0, hi = 4;
+    for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2, b = block(mid, place); if (b.w <= area.w && b.h <= area.h) lo = mid; else hi = mid; }
+    return lo;
+  };
+  const sideFits = tableH <= inner.h;
+  const options: Place[] = ["below", ...(sideFits ? (["side", "corner"] as Place[]) : [])];
+  // the first that is clearly better wins: the list under the views stays the default
+  let place: Place = "below", best = fit("below");
+  for (const p of options.slice(1)) { const f = fit(p); if (f > best * 1.05) { best = f; place = p; } }
+  const scale = best * 0.95;
+  const area = areaOf(place), b = block(scale, place);
+  const x0 = area.x + (area.w - b.w) / 2, y0 = area.y + (area.h - b.h) / 2;
+  const topH = tH ? scale * tH : 0;
+  const frontY = y0 + (tH || place === "corner" ? b.row + gap : 0);
+  const front = { x: x0, y: frontY };
+  const top = { x: x0, y: frontY - gap - topH };
+  const right = { x: x0 + scale * fW + gap, y: frontY };
+  const table = place === "below" ? { x: M, y: sheet.h - M - tableH + 18, w: sheet.w - 2 * M, place }
+    : place === "side" ? { x: sheet.w - M - TW, y: inner.y + 18, w: TW, place }
+    : { x: right.x, y: y0 + 18, w: TW, place };
+  return { scale, front, top, right, table };
+}
+
 /** A full third-angle drawing sheet (SVG): front / top / right views, each with
  *  overall dimensions, a title block, and the cut list as a table. Pure string
  *  output — no DOM, no kernel beyond the geometry already evaluated. */
@@ -125,12 +186,12 @@ export function drawingSheetSVG(doc: CadDocument, scope: Scope, opts: SheetOptio
     .map((dir) => { const segs = viewSegments(doc, scope, dir); return { dir, label: dir[0].toUpperCase() + dir.slice(1), segs, box: boundsOf(segs) }; })
     .filter((v) => v.segs.length > 0 && Number.isFinite(v.box.minU));
 
-  // sheet layout (mm of paper). A4 landscape-ish; views scaled to fit the drawing area.
-  const SHEET_W = 1120, SHEET_H = 790, M = 30, GAP = 40;
+  // sheet layout (mm of paper). A4 landscape-ish; the views are scaled to fit the drawing area and centred in
+  // it. The cut list goes under the views or, when that leaves them bigger (a long list, a wide model), in a
+  // column on the right: whichever uses the sheet better.
+  const SHEET_W = 1120, SHEET_H = 790, M = 30, GAP = 40, TITLE_H = 44, ROW = 18;
   const cutRows = cutList(doc, scope);
-  const tableH = 24 + (cutRows.length + 1) * 18 + 10;
-  const drawAreaH = SHEET_H - 2 * M - tableH - GAP;
-  const drawAreaW = SHEET_W - 2 * M;
+  const tableH = 18 + 24 + (cutRows.length + 1) * ROW + 10; // its heading, the header row, the rows
   // two columns (front+right side by side, top above front) → need ~ (frontW+rightW) x (frontH+topH)
   const front = views.find((v) => v.dir === "front")!;
   const top = views.find((v) => v.dir === "top");
@@ -138,10 +199,8 @@ export function drawingSheetSVG(doc: CadDocument, scope: Scope, opts: SheetOptio
   const fW = front.box.maxU - front.box.minU, fH = front.box.maxV - front.box.minV;
   const rW = right ? right.box.maxU - right.box.minU : 0;
   const tH = top ? top.box.maxV - top.box.minV : 0;
-  const needW = fW + (right ? GAP + rW : 0);
-  const needH = fH + (top ? GAP + tH : 0);
-  const scale = Math.min(drawAreaW / needW, drawAreaH / needH) * 0.9;
-
+  const layout = sheetLayout({ sheet: { w: SHEET_W, h: SHEET_H }, margin: M, gap: GAP, titleH: TITLE_H, tableH, views: { fW, fH, rW, tH } });
+  const scale = layout.scale;
   const parts: string[] = [];
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SHEET_W} ${SHEET_H}" font-family="Helvetica,Arial,sans-serif">`);
   parts.push(`<rect x="0" y="0" width="${SHEET_W}" height="${SHEET_H}" fill="#ffffff"/>`);
@@ -176,23 +235,23 @@ export function drawingSheetSVG(doc: CadDocument, scope: Scope, opts: SheetOptio
     return { svg: g.join(""), w, h };
   };
 
-  // third-angle: top above front, right to the right of front
-  const originX = M + 24, originY = M + (top ? tH * scale + GAP : 0);
-  const f = drawView(front, originX, originY, true, true);
+  // third-angle: top above front, right to the right of front; placed by sheetLayout
+  const f = drawView(front, layout.front.x, layout.front.y, true, true);
   parts.push(f.svg);
-  if (top) parts.push(drawView(top, originX, M).svg);
-  if (right) parts.push(drawView(right, originX + f.w + GAP, originY, false, true).svg);
+  if (top) parts.push(drawView(top, layout.top.x, layout.top.y).svg);
+  if (right) parts.push(drawView(right, layout.right.x, layout.right.y, false, true).svg);
 
   // ---- cut list table ----
-  const tY = SHEET_H - M - tableH;
-  const colX = [M + 8, M + 230, M + 300, M + 420, M + 520, M + 640];
+  const tb = layout.table;
+  const tY = tb.y;
+  const colX = (tb.place !== "below" ? [0, 140, 172, 280, 330, 380] : [0, 222, 292, 412, 512, 632]).map((x) => tb.x + 8 + x);
   const heads = ["Part", "Qty", "Material", "Thick", "Width", "Length"];
-  parts.push(`<text x="${M + 8}" y="${tY - 6}" font-size="14" font-weight="bold" fill="#111">Cut list (${esc(units)})</text>`);
-  parts.push(`<line x1="${M}" y1="${tY}" x2="${SHEET_W - M}" y2="${tY}" stroke="#111" stroke-width="1"/>`);
+  parts.push(`<text x="${tb.x + 8}" y="${tY - 6}" font-size="14" font-weight="bold" fill="#111">Cut list (${esc(units)})</text>`);
+  parts.push(`<line x1="${tb.x}" y1="${tY}" x2="${tb.x + tb.w}" y2="${tY}" stroke="#111" stroke-width="1"/>`);
   heads.forEach((h, i) => parts.push(`<text x="${colX[i]}" y="${tY + 16}" font-size="12" font-weight="bold" fill="#111">${esc(h)}</text>`));
-  parts.push(`<line x1="${M}" y1="${tY + 22}" x2="${SHEET_W - M}" y2="${tY + 22}" stroke="#111" stroke-width="0.5"/>`);
+  parts.push(`<line x1="${tb.x}" y1="${tY + 22}" x2="${tb.x + tb.w}" y2="${tY + 22}" stroke="#111" stroke-width="0.5"/>`);
   cutRows.forEach((row, i) => {
-    const y = tY + 22 + (i + 1) * 18;
+    const y = tY + 22 + (i + 1) * ROW;
     const cells = [row.part, String(row.qty), row.material, `${r1(row.thickness)}`, `${r1(row.width)}`, `${r1(row.length)}`];
     cells.forEach((c, j) => parts.push(`<text x="${colX[j]}" y="${y}" font-size="11" fill="#222">${esc(c)}</text>`));
   });

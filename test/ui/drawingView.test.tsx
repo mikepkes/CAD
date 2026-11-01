@@ -1,5 +1,7 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+vi.mock("../../src/ui/pdf", () => ({ sheetPdf: vi.fn(async () => new Blob(["%PDF"])), saveBlob: vi.fn() }));
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { saveBlob } from "../../src/ui/pdf";
 import { useStore } from "../../src/model/store";
 import { DrawingView, cutListCsv } from "../../src/ui/DrawingView";
 
@@ -17,6 +19,18 @@ describe("shop drawing view", () => {
     expect(screen.getByRole("button", { name: "Cut list (CSV)" })).toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(useStore.getState().drawing).toBeNull();
+  });
+  it("keys identical cut-list rows apart, says plainly what publishing does, and confirms the PDF", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const pins = [{ part: "Pin", qty: 1, material: "Iron", kind: "metal", thickness: 19.8, width: 19.8, length: 40.8 }, { part: "Pin", qty: 4, material: "Iron", kind: "metal", thickness: 19.8, width: 19.8, length: 36 }];
+    useStore.setState({ drawing: { svg: "<svg></svg>", parts: pins, title: "Roubo bench" }, toast: null });
+    render(<DrawingView />);
+    expect(errors.mock.calls.some((c) => String(c[0]).includes("same key"))).toBe(false);
+    errors.mockRestore();
+    expect(screen.getByLabelText("Offer this drawing to people viewing the shared model")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+    await waitFor(() => expect(useStore.getState().toast).toEqual({ kind: "info", text: "Saved roubo-bench.pdf" }));
+    expect(saveBlob).toHaveBeenCalledWith("roubo-bench.pdf", expect.any(Blob));
   });
   it("shows progress while the kernel draws", () => {
     useStore.setState({ drawing: { loading: true } });

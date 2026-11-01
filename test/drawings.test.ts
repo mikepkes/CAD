@@ -5,7 +5,7 @@ import { realSession, sessionFromDoc } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { deserializeDocument } from "../src/core/persistence";
 import { resolveParameters } from "../src/core/parameters";
-import { cutList, viewSegments, drawingSheetSVG } from "../src/core/drawings";
+import { cutList, viewSegments, drawingSheetSVG, sheetLayout } from "../src/core/drawings";
 import type { CadSession } from "../src/core/command/session";
 
 const OUT = process.env.BUILD_DRAWING || "";
@@ -79,6 +79,35 @@ describe("shop drawings (cut list + orthographic views)", () => {
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain("Cut list");
     expect(svg).toContain("Front");
+    // the sheet is used across its width, not only its left half: the views from the left margin, the long cut
+    // list in a column at the right
+    const views = [...svg.matchAll(/<line x1="([\d.]+)" y1="[\d.]+" x2="([\d.]+)"[^>]*stroke-width="0.6"/g)].flatMap((m) => [Number(m[1]), Number(m[2])]);
+    const rules = [...svg.matchAll(/<line x1="([\d.]+)" y1="[\d.]+" x2="([\d.]+)"[^>]*stroke-width="(1|0.5)"/g)].flatMap((m) => [Number(m[1]), Number(m[2])]);
+    expect(Math.min(...views)).toBeLessThan(0.1 * 1120);
+    expect(Math.max(...rules) - Math.min(...views)).toBeGreaterThan(0.85 * 1120);
     if (OUT) { writeFileSync(`${OUT}/roubo.drawing.svg`, svg); console.log(`drawing written: ${rows.length} part types`); }
+  });
+});
+
+describe("sheet layout", () => {
+  const base = { sheet: { w: 1120, h: 790 }, margin: 30, gap: 40, titleH: 44 };
+  const tableH = (rows: number) => 18 + 24 + (rows + 1) * 18 + 10;
+  it("puts a long cut list where the views come out largest, here the corner third-angle leaves empty", () => {
+    const views = { fW: 1700, fH: 850, rW: 700, tH: 700 };
+    const l = sheetLayout({ ...base, tableH: tableH(16), views });
+    expect(l.table.place).toBe("corner");
+    // the table sits right of the top view and above the right view, inside the sheet
+    expect(l.table.x).toBeCloseTo(l.right.x, 6);
+    expect(l.table.x + l.table.w).toBeLessThanOrEqual(1120 - 30 + 0.001);
+    expect(l.table.y).toBeLessThan(l.right.y);
+    // the views end up larger than with the list squeezed under them
+    const below = (790 - 60 - 44 - tableH(16) - 40 - 40) / (850 + 700);
+    expect(l.scale).toBeGreaterThan(below * 1.3);
+  });
+  it("keeps a short list under the views, and centres the views across the sheet", () => {
+    const l = sheetLayout({ ...base, tableH: tableH(2), views: { fW: 1000, fH: 300, rW: 0, tH: 0 } });
+    expect(l.table.place).toBe("below");
+    const w = 1000 * l.scale;
+    expect(l.front.x - 30).toBeCloseTo(1120 - 30 - (l.front.x + w), 6);
   });
 });
