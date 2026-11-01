@@ -10,7 +10,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFusedBlob } from "../src/core/features";
@@ -133,6 +133,8 @@ async function buildFourBar(s: CadSession): Promise<void> {
   await dis(s, "joint.create", { ...flex, base: crank, moved: coupler, baseOrigin: A, movedOrigin: A, solve: true, name: "Hinge A" });
   await dis(s, "joint.create", { ...flex, base: ground, moved: rocker, baseOrigin: O4, movedOrigin: O4, solve: true, name: "Hinge O4" });
   await dis(s, "joint.create", { ...flex, base: coupler, moved: rocker, baseOrigin: B, movedOrigin: B, closes: true, name: "Hinge B" });
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "Compliant four-bar", "description": "Four links joined by thin flexure strips, printed flat as one part. Push the finger pad and the crank turns; the coupler and rocker follow."}, {"theta": {"label": "Crank angle", "unit": "°", "description": "Turn the crank: the coupler and rocker follow, bending the flexures"}, "crank": {"label": "Crank", "unit": "mm", "description": "Length of the input link"}, "rocker": {"label": "Rocker", "unit": "mm", "description": "Length of the output link"}, "ground": {"label": "Ground", "unit": "mm", "description": "Distance between the two ground hinges"}, "material": {"label": "Material", "description": "What it's printed in; the thin parts are sized for it"}});
 }
 
 const sweep = Array.from({ length: 9 }, (_, k) => -THETA + (2 * THETA * k) / 8);

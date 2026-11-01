@@ -9,7 +9,7 @@
 
 import { GeometryBackend, GeometryRequest, GeometryRequestInit, GeometryResponse, ExportFormat, EvaluateResult, TopologyOpts } from "../core/geometry/backend";
 import { CadDocument } from "../core/document";
-import { CollisionResult, BodyTopology, BodyAnalysisResult } from "../core/features";
+import { CollisionResult, BodyTopology, BodyAnalysisResult, type BuildProgressSink } from "../core/features";
 import { KernelInitOptions, Edge3D } from "../core/occ/kernel";
 import type { CutPart, SheetOptions } from "../core/drawings";
 
@@ -21,14 +21,14 @@ export class WorkerGeometryBackend implements GeometryBackend {
   private seq = 1;
   /** Per request: handles an answer, returning true once the request is done. */
   private pending = new Map<number, (r: GeometryResponse) => boolean>();
-  private progress = new Map<number, (fraction: number) => void>();
+  private progress = new Map<number, BuildProgressSink>();
 
   constructor() {
     this.worker = new Worker(new URL("./geometry.worker.ts", import.meta.url), { type: "module" });
     this.worker.onmessage = (e: MessageEvent) => {
       const msg = e.data as { kind: "ready" } | GeometryResponse;
       if (msg.kind === "ready") { this.isReady = true; this.readyResolve?.(); return; }
-      if (msg.kind === "progress") { this.progress.get(msg.id)?.(msg.fraction); return; }
+      if (msg.kind === "progress") { this.progress.get(msg.id)?.(msg.fraction, msg.step); return; }
       // a request's handler hears every answer to it and says when it is done (a staged evaluate has two)
       const handle = this.pending.get(msg.id);
       if (handle && handle(msg)) { this.pending.delete(msg.id); this.progress.delete(msg.id); }
@@ -44,7 +44,7 @@ export class WorkerGeometryBackend implements GeometryBackend {
   }
   ready(): boolean { return this.isReady; }
 
-  private send(req: GeometryRequestInit, onProgress?: (fraction: number) => void, onEarly?: (r: GeometryResponse) => void): Promise<GeometryResponse> {
+  private send(req: GeometryRequestInit, onProgress?: BuildProgressSink, onEarly?: (r: GeometryResponse) => void): Promise<GeometryResponse> {
     const id = this.seq++;
     if (onProgress) this.progress.set(id, onProgress);
     return new Promise((resolve) => {
@@ -58,7 +58,7 @@ export class WorkerGeometryBackend implements GeometryBackend {
     });
   }
 
-  async evaluate(doc: CadDocument, onProgress?: (fraction: number) => void, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult> {
+  async evaluate(doc: CadDocument, onProgress?: BuildProgressSink, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult> {
     if (!onMeshes) {
       const r = await this.send({ kind: "evaluate", doc }, onProgress);
       if (r.kind === "evaluate") return { solids: r.solids, facePlanes: r.facePlanes, complete: true };

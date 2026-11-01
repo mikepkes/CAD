@@ -3,7 +3,8 @@
 // another, or dismiss; and the last few names the agent gave, each renamable.
 // Logic lives in model/assist.ts and model/assistController.ts.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { modalOpen } from "./kit/Modal";
 import { useStore } from "../model/store";
 import { useAssist, nameWithAgent, resolveAssist } from "../model/assistController";
 import { inboxSections, suggestName, currentName, type AssistItem } from "../model/assist";
@@ -57,6 +58,19 @@ export function AssistChip() {
   const busy = useAssist((s) => s.busy);
   const hasAgent = useStore((s) => !!s.apiKey);
   const [open, setOpen] = useState(false);
+  // Escape closes the card (a dialog over it takes Escape first); the app's own Escape doesn't also run
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || modalOpen()) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setOpen(false);
+      document.querySelector<HTMLElement>(".assist-wrap > .k-btn")?.focus();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
   if (!enabled) return null;
   const { pending, recent } = inboxSections(items);
   if (!pending.length && !recent.length) return null;

@@ -19,7 +19,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures } from "../src/core/features";
@@ -286,6 +286,8 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   const cuts = Object.values(s.doc.sketches).filter((k) => ["Locking disc", "Locking disc relief", "Star", "Star slots", "Star locking arcs"].includes(k.name)).map((k) => k.id);
   const hid = await s.setVisibility(cuts, false);
   if (!hid.ok) throw new Error(hid.error);
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "Clockwork", "description": "Every kind of gear VibeCAD makes, all turned by one knob: a planetary stage, spur, helical and herringbone pairs, a rack, bevels, a worm and a Geneva drive."}, {"turn": {"label": "Knob", "unit": "°", "description": "Turn the knob: every gear train follows"}});
   return ids;
 }
 

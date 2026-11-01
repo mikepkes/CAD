@@ -27,11 +27,11 @@ import { importRequests, ImportRequest } from "../core/importers";
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
 import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
-import type { SolidEval } from "../core/features";
+import type { SolidEval, BuildStep } from "../core/features";
 import { GeometryBackend, InlineGeometryBackend, TopologyOpts, ExportFormat, EvaluateResult } from "../core/geometry/backend";
 import { hasFlexures } from "../sim/flexure";
 import { WorkerGeometryBackend } from "./worker-backend";
-import { runMotionStudy, driveParams, MotionStatus, MotionResult } from "./motionStudy";
+import { runMotionStudy, driveParams, motionKey, MotionStatus, MotionResult } from "./motionStudy";
 import { meshesToStlBinary } from "../core/export/stl";
 import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
@@ -39,6 +39,7 @@ import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
 import type { CutPart } from "../core/drawings";
 import { pickItems, type PickItem } from "./pickMenu";
+import { exampleTitle, exampleUrl } from "./examples";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
 import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
 
@@ -50,17 +51,44 @@ function createGeometryBackend(): GeometryBackend {
   } catch { /* fall through to inline */ }
   return new InlineGeometryBackend();
 }
-const geometry = createGeometryBackend();
+let geometry = createGeometryBackend();
+/** Tests only: put a stand-in geometry backend behind the store. */
+export function __setGeometryBackend(g: GeometryBackend, study?: GeometryBackend): void { geometry = g; if (study) { studyGeometry = study; studyReady = false; } }
 // A second backend dedicated to the motion study, so its 360° sweep runs in
 // parallel with (and never blocks) the live preview on the main backend.
-const studyGeometry = createGeometryBackend();
+let studyGeometry = createGeometryBackend();
 let studyReady = false;
 let motionToken = 0; // bumped to cancel/supersede an in-flight study
+/** Motion verdicts by parameter values (motionKey): a value checked before answers at once. */
+const motionCache = new Map<string, MotionResult>();
+/** How long the last full study of each design took (ms): the first estimate of the next. */
+const motionLastMs = new Map<string, number>();
 let rebuildInFlight: Promise<void> | null = null; // the running preview evaluate (its whole coalesced loop)
 let rebuildDirty = false;    // a newer rebuild was requested while one ran
 let buildToken = 0;          // the latest build started: measurements of an older one are stale
-/** Resolves once no solid rebuild is running (the video director's "the model is done" signal). */
-export const whenRebuilt = (): Promise<void> => rebuildInFlight ?? Promise.resolve();
+let rebuildRequested: Promise<void> | null = null; // the latest rebuildSolids call, from the moment it's made
+/** Resolves once no solid rebuild is running or asked for — including one requested a
+ *  moment ago that hasn't started yet (it first waits for the kernel). The video
+ *  director's "the model is done" signal, and what Save waits for so it never
+ *  exports the model as it was before the last edit. */
+export const whenRebuilt = async (): Promise<void> => {
+  for (let i = 0; i < 100; i++) {
+    const p = rebuildRequested ?? rebuildInFlight;
+    if (!p) return;
+    await p.catch(() => { /* a failed build is still a finished one */ });
+  }
+};
+
+/** What Save writes: a 3MF with a part per material when the model has more than one print material, else one STL. */
+export function printFormat(doc: CadDocument, solids: Record<string, SolidEval>): "stl" | "3mf" {
+  const scope = resolveParameters(doc.parameters).scope;
+  const materials = new Set(Object.values(solids).filter((sol) => sol.mesh)
+    .map((sol) => materialForComponent(doc, sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined, scope)?.id ?? ""));
+  return materials.size > 1 ? "3mf" : "stl";
+}
+
+/** Save's progress: waiting for the model to catch up with the last edit, then making the file. */
+export type SaveState = { stage: "updating" } | { stage: "preparing"; format: "stl" | "3mf" };
 
 const AUTOSAVE_KEY = "vibecad.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -123,6 +151,8 @@ export interface AppState {
   faceSelection: FaceSelection | null;
   showPlanes: boolean;
   showGrid: boolean;
+  /** The origin axes (off in the customize viewer: a product, not a modelling view). */
+  showAxes: boolean;
   /** Draw hidden bodies as faint, unpickable ghosts. */
   showHiddenGhosts: boolean;
   /** Surface-quality display: zebra / draft / curvature map, and curvature combs. */
@@ -149,7 +179,7 @@ export interface AppState {
   solids: Record<string, SolidEval>;
   kernelReady: boolean;
   /** The model rebuilding now: when it started (performance.now) and how far it has got (0…1); null when idle. */
-  build: { started: number; fraction: number } | null;
+  build: { started: number; fraction: number; step?: BuildStep } | null;
   kernelLoading: boolean;
 
   // Motion study (customize mode): sweep the driven joints and pass/fail the
@@ -157,15 +187,25 @@ export interface AppState {
   motionStatus: MotionStatus;
   motionProgress: number; // 0..1 while running
   motionResult: MotionResult | null;
+  /** The verdict before the last edit, shown (as "before your change") until the new one is in. */
+  motionPrevious: MotionResult | null;
+  /** While running: the coarse pass came through clear ({ checked } poses of { total }), the rest is being checked. */
+  motionCoarse: { checked: number; total: number } | null;
+  /** While running: about how many seconds are left (null until there's something to go on). */
+  motionEta: number | null;
   hasMotionStudy: boolean; // the model has driven joints to sweep
   runMotionStudy: () => Promise<void>;
   cancelMotionStudy: () => void;
 
   toast: Toast | null;
+  /** Save / share for printing is running (the button is busy and a second press does nothing). */
+  saving: SaveState | null;
   lastMessage: string;
 
   // embedded agent (BYO Claude API key, stored in the browser only)
   settingsOpen: boolean;
+  /** The Settings field to open at ("apiKey" from the Agent drawer's "connect your key"). */
+  settingsFocus: "apiKey" | null;
   hotkeysOpen: boolean;
   agentOpen: boolean;
   apiKey: string;
@@ -351,10 +391,12 @@ export interface AppState {
   /** The whole model as one print file, offered through the native share sheet
    *  on phones (Save to Files / AirDrop / another app) and downloaded elsewhere:
    *  an STL, or a 3MF with a part per material when it has more than one. */
-  shareModel: (name?: string) => Promise<void>;
+  /** Save the model for printing. `flush` first commits a control edit still waiting
+   *  (customize mode's debounce); the model is then rebuilt to match before the file is made. */
+  shareModel: (name?: string, opts?: { flush?: () => Promise<void> }) => Promise<void>;
 
   // agent
-  setSettingsOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean, focus?: "apiKey") => void;
   setHotkeysOpen: (open: boolean) => void;
   toggleAgent: () => void;
   setApiKey: (key: string) => void;
@@ -372,6 +414,8 @@ export interface AppState {
   loadDocument: (doc: CadDocument) => Promise<void>;
   saveToFile: () => void;
   openFile: (file: File) => Promise<void>;
+  /** Open a bundled example (public/examples/<name>.json) in place of the document. */
+  openExample: (name: string) => Promise<void>;
   /** Import a STEP / BREP / STL / FreeCAD file as bodies (feature.import on the timeline). */
   importFile: (file: File) => Promise<void>;
 }
@@ -638,6 +682,7 @@ export const useStore = create<AppState>((set, get) => {
     hover: null,
     showPlanes: true,
     showGrid: true,
+    showAxes: true,
     showHiddenGhosts: false,
     analysis: { mode: "none", stripes: 12, draftDeg: 1, pull: { x: 0, y: 0, z: 1 }, quantity: "mean", combs: false },
     curvatureRequested: false,
@@ -659,12 +704,17 @@ export const useStore = create<AppState>((set, get) => {
     motionStatus: "idle",
     motionProgress: 0,
     motionResult: null,
+    motionPrevious: null,
+    motionCoarse: null,
+    motionEta: null,
     hasMotionStudy: false,
     kernelLoading: false,
     toast: null,
+    saving: null,
     lastMessage: "Pick an origin plane to start a sketch.",
     activeComponentId: session.doc.rootComponentId,
     settingsOpen: false,
+    settingsFocus: null,
     hotkeysOpen: false,
     extrudeActive: false,
     extrudeTarget: null,
@@ -1016,7 +1066,7 @@ export const useStore = create<AppState>((set, get) => {
     openContextMenu: (x, y) => set({ contextMenu: { x, y } }),
     closeContextMenu: () => set({ contextMenu: null }),
 
-    setSettingsOpen: (open) => set({ settingsOpen: open }),
+    setSettingsOpen: (open, focus) => set({ settingsOpen: open, settingsFocus: open ? focus ?? null : null }),
     setHotkeysOpen: (open) => set({ hotkeysOpen: open }),
     ...agentActions,
     ...mcpActions,
@@ -1078,7 +1128,9 @@ export const useStore = create<AppState>((set, get) => {
         set({ kernelLoading: false, toast: { kind: "error", text: `3D kernel failed to load: ${(e as Error).message}` } });
       }
     },
-    rebuildSolids: async () => {
+    rebuildSolids: () => {
+      // tracked from the call (whenRebuilt), not only once the kernel is ready and the build starts
+      const run = (async () => {
       await get().ensureKernel();
       if (!get().kernelReady) return;
       // Coalesce, latest-wins: while one evaluate is in flight, a new request
@@ -1116,7 +1168,7 @@ export const useStore = create<AppState>((set, get) => {
             };
             let landed!: () => void;
             const meshes = new Promise<void>((res) => { landed = res; });
-            const measured = geometry.evaluate(doc, (fraction) => set({ build: { started, fraction } }), (r) => { shown(r); landed(); });
+            const measured = geometry.evaluate(doc, (fraction, step) => set({ build: { started, fraction, step } }), (r) => { shown(r); landed(); });
             void measured.then((r) => {
               if (token !== buildToken || r.complete === false) return;
               set((s) => ({ rev: s.rev + 1, solids: Object.fromEntries(Object.entries(s.solids).map(([id, row]) => [id, r.solids[id] ? { ...row, ...r.solids[id], mesh: row.mesh } : row])) }));
@@ -1130,27 +1182,46 @@ export const useStore = create<AppState>((set, get) => {
         }
       })();
       return rebuildInFlight;
+      })();
+      const tracked: Promise<void> = run.then(() => {}, () => {}).finally(() => { if (rebuildRequested === tracked) rebuildRequested = null; });
+      rebuildRequested = tracked;
+      return run;
     },
     runMotionStudy: async () => {
       const doc = get().session.doc;
-      if (!driveParams(doc).length) { set({ hasMotionStudy: false, motionStatus: "idle", motionResult: null }); return; }
+      if (!driveParams(doc).length) { set({ hasMotionStudy: false, motionStatus: "idle", motionResult: null, motionPrevious: null }); return; }
       const token = ++motionToken; // supersede any in-flight study
-      set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null });
+      // a set of values checked before answers at once
+      const key = motionKey(doc);
+      const known = motionCache.get(key);
+      if (known) { set({ hasMotionStudy: true, motionStatus: known.status, motionResult: known, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null }); return; }
+      const lastMs = motionLastMs.get(doc.id);
+      set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null, motionCoarse: null, motionEta: lastMs != null ? Math.round(lastMs / 1000) : null });
+      const started = performance.now();
       try {
         if (!studyReady) { await studyGeometry.init({ wasmUrl: occWasmUrl }); studyReady = studyGeometry.ready(); }
         const res = await runMotionStudy(studyGeometry, doc, {
           steps: 8,
-          onProgress: (f) => { if (token === motionToken) set({ motionProgress: f }); },
+          coarse: 4,
+          onProgress: (f) => {
+            if (token !== motionToken) return;
+            const ms = performance.now() - started;
+            set({ motionProgress: f, motionEta: f > 0 ? Math.max(1, Math.round((ms / f) * (1 - f) / 1000)) : get().motionEta });
+          },
+          onCoarseClear: (checked, total) => { if (token === motionToken) set({ motionCoarse: { checked, total } }); },
           cancelled: () => token !== motionToken,
         });
         if (token !== motionToken) return;            // superseded by a newer run
         if (!res) { set({ motionStatus: "idle" }); return; } // cancelled
-        set({ motionStatus: res.status, motionResult: res, motionProgress: 1 });
+        motionCache.set(key, res);
+        motionLastMs.set(doc.id, performance.now() - started);
+        set({ motionStatus: res.status, motionResult: res, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null });
       } catch (e) {
-        if (token === motionToken) set({ motionStatus: "fail", motionResult: { status: "fail", reason: (e as Error).message, worstOverlap: 0 }, motionProgress: 1 });
+        if (token === motionToken) set({ motionStatus: "fail", motionResult: { status: "fail", reason: (e as Error).message, worstOverlap: 0 }, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null });
       }
     },
-    cancelMotionStudy: () => { motionToken++; set({ motionStatus: "idle", motionProgress: 0 }); },
+    // an edit: the verdict so far becomes "before your change" until the new one is in
+    cancelMotionStudy: () => { motionToken++; set((s) => ({ motionStatus: "idle", motionProgress: 0, motionCoarse: null, motionEta: null, motionPrevious: s.motionResult ?? s.motionPrevious, motionResult: null })); },
     extrudeSketch: async (sketchId, distanceExpr, opts) => {
       if (distanceExpr != null && !opts?.toFace) {
         const problem = expressionProblem(distanceExpr, get().session.doc.parameters.map((p) => p.name));
@@ -1340,35 +1411,49 @@ export const useStore = create<AppState>((set, get) => {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     },
-    shareModel: async (name) => {
-      const meshes = Object.values(get().solids)
-        .filter((s) => s.mesh)
-        .map((s) => ({ positions: s.mesh!.positions, indices: s.mesh!.indices }));
-      if (!meshes.length) { set({ toast: { kind: "info", text: "Nothing to export yet." } }); return; }
-      // A compliant mechanism prints unbent and in one piece, whatever pose the
-      // sliders show; anything else exports as it stands.
-      const doc = get().session.doc;
-      // two print materials (an embedded skeleton): a 3MF, one part each
-      const scope = resolveParameters(doc.parameters).scope;
-      const materials = new Set(Object.values(get().solids).filter((sol) => sol.mesh)
-        .map((sol) => materialForComponent(doc, sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined, scope)?.id ?? ""));
-      const multi = materials.size > 1;
-      const bytes = multi ? await geometry.exportBytes(doc, null, "3mf")
-        : hasFlexures(doc) ? await geometry.exportBytes(doc, null, "stl") : meshesToStlBinary(meshes);
-      if (!bytes) { set({ toast: { kind: "error", text: "Export failed." } }); return; }
-      const file = multi
-        ? new File([bytes as BlobPart], `${name || "model"}.3mf`, { type: "model/3mf" })
-        : new File([bytes as BlobPart], `${name || "model"}.stl`, { type: "model/stl" });
-      const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
-      // Native share sheet (phones) → Save to Files / AirDrop / another app.
-      if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
-        try { await nav.share({ files: [file], title: file.name, text: `3D model (${multi ? "3MF" : "STL"}) from VibeCAD` }); return; }
-        catch (e) { if ((e as Error).name === "AbortError") return; /* else fall through to download */ }
+    shareModel: async (name, opts) => {
+      if (get().saving) return; // one save at a time: a double press saves once
+      set({ saving: { stage: "updating" } });
+      try {
+        // the file must match the screen: commit an edit still waiting, then let the rebuild it starts finish
+        await opts?.flush?.();
+        await whenRebuilt();
+        const meshes = Object.values(get().solids)
+          .filter((s) => s.mesh)
+          .map((s) => ({ positions: s.mesh!.positions, indices: s.mesh!.indices }));
+        if (!meshes.length) { set({ toast: { kind: "info", text: "Nothing to export yet." } }); return; }
+        // A compliant mechanism prints unbent and in one piece, whatever pose the
+        // sliders show; anything else exports as it stands.
+        const doc = get().session.doc;
+        // two print materials (an embedded skeleton): a 3MF, one part each
+        const format = printFormat(doc, get().solids);
+        const multi = format === "3mf";
+        set({ saving: { stage: "preparing", format } });
+        const bytes = multi ? await geometry.exportBytes(doc, null, "3mf")
+          : hasFlexures(doc) ? await geometry.exportBytes(doc, null, "stl") : meshesToStlBinary(meshes);
+        if (!bytes) { set({ toast: { kind: "error", text: "Export failed." } }); return; }
+        const file = multi
+          ? new File([bytes as BlobPart], `${name || "model"}.3mf`, { type: "model/3mf" })
+          : new File([bytes as BlobPart], `${name || "model"}.stl`, { type: "model/stl" });
+        const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
+        // Native share sheet (phones) → Save to Files / AirDrop / another app.
+        if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+          try {
+            await nav.share({ files: [file], title: file.name, text: `3D model (${multi ? "3MF" : "STL"}) from VibeCAD` });
+            set({ toast: { kind: "info", text: `Shared ${file.name}` } });
+            return;
+          } catch (e) { if ((e as Error).name === "AbortError") return; /* else fall through to download */ }
+        }
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url; a.download = file.name; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        set({ toast: { kind: "info", text: `Saved ${file.name}${multi ? ", a part per material" : ""}` } });
+      } catch (e) {
+        set({ toast: { kind: "error", text: `Save failed: ${(e as Error).message}` } });
+      } finally {
+        set({ saving: null });
       }
-      const url = URL.createObjectURL(file);
-      const a = document.createElement("a");
-      a.href = url; a.download = file.name; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
     },
 
     initApp: async () => {
@@ -1378,6 +1463,9 @@ export const useStore = create<AppState>((set, get) => {
       void get().ensureKernel();
       // a 3D mouse: the desktop's native reader, or a browser device paired before
       void import("./spaceMouseInput").then((m) => m.autoConnectSpaceMouse()).catch(() => { /* no device support here */ });
+      // a link to an example (?example=roubo) opens it; otherwise the autosaved document comes back
+      const example = typeof location !== "undefined" ? new URLSearchParams(location.search).get("example") : null;
+      if (example) { await get().openExample(example); return; }
       let saved: string | null = null;
       try {
         saved = localStorage.getItem(AUTOSAVE_KEY);
@@ -1435,6 +1523,19 @@ export const useStore = create<AppState>((set, get) => {
         bump({ toast: { kind: "info", text: `Opened ${file.name}` } });
       } catch (e) {
         bump({ toast: { kind: "error", text: `Open failed: ${(e as Error).message}` } });
+      }
+    },
+    openExample: async (name) => {
+      try {
+        const resp = await fetch(exampleUrl(name));
+        const text = await resp.text();
+        if (!resp.ok || /^\s*</.test(text)) { bump({ toast: { kind: "error", text: `Couldn't find the example “${name}”.` } }); return; }
+        await get().loadDocument(deserializeDocument(text));
+        const doc = get().session.doc;
+        bump({ toast: { kind: "info", text: `Opened ${doc.about?.title ?? exampleTitle(name)}` }, lastMessage: `Opened the ${exampleTitle(name)} example` });
+        window.dispatchEvent(new CustomEvent("vibecad:view", { detail: "iso" }));
+      } catch (e) {
+        bump({ toast: { kind: "error", text: `Couldn't open the example: ${(e as Error).message}` } });
       }
     },
     importFile: async (file) => {

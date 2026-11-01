@@ -37,6 +37,7 @@ const hasSolid = () => Object.keys(st().session.doc.features).length > 0;
 const ACTIONS: HotkeyAction[] = [
   // ---- global ----
   { id: "view.frame", label: "Frame selection / fit", context: "global", defaultPrimary: "f", run: () => fire("vibecad:frame") },
+  { id: "help.shortcuts", label: "Keyboard shortcuts", context: "global", defaultPrimary: "shift+?", defaultSecondary: "?", run: () => st().setHotkeysOpen(!st().hotkeysOpen) },
   ...(["iso", "front", "top", "right", "back", "left", "bottom"] as const).map((v) => ({
     id: `view.${v}`, label: `View: ${v[0].toUpperCase()}${v.slice(1)}`, context: "global", run: () => window.dispatchEvent(new CustomEvent("vibecad:view", { detail: v })),
   })),

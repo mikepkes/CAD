@@ -36,4 +36,23 @@ describe("editCommitter", () => {
     vi.advanceTimersByTime(500);
     expect(got).toEqual([]);
   });
+
+  it("flush commits the waiting value now and resolves once every commit has been applied", async () => {
+    const got: string[] = [];
+    let release!: () => void;
+    const slow = new Promise<void>((r) => { release = r; });
+    const c = editCommitter(async (n, v) => { got.push(`${n}=${v}`); if (n === "H") await slow; }, 200);
+    c.edit("H", "900", true);    // applied, still settling
+    c.edit("L", "2400", false);  // waiting for its pause
+    let done = false;
+    const flushed = c.flush().then(() => { done = true; });
+    expect(got).toEqual(["H=900", "L=2400"]); // committed at once
+    await Promise.resolve();
+    expect(done).toBe(false); // H's commit hasn't finished
+    release();
+    await flushed;
+    expect(done).toBe(true);
+    await c.flush(); // nothing waiting: resolves straight away
+    expect(got).toEqual(["H=900", "L=2400"]);
+  });
 });

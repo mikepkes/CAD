@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 1203,
-  "rollbackIndex": 574,
+  "nextId": 1208,
+  "rollbackIndex": 579,
   "operations": [
     {
       "opId": "op1",
@@ -9498,6 +9498,67 @@
       ],
       "label": "Joint template",
       "at": 1793138251312
+    },
+    {
+      "opId": "op1203",
+      "type": "parameter.describe",
+      "params": {
+        "name": "width",
+        "label": "Width",
+        "unit": "mm",
+        "description": "Across the star, point to point"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561655473
+    },
+    {
+      "opId": "op1204",
+      "type": "parameter.describe",
+      "params": {
+        "name": "height",
+        "label": "Height",
+        "unit": "mm",
+        "description": "Of the closed box"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561655512
+    },
+    {
+      "opId": "op1205",
+      "type": "parameter.describe",
+      "params": {
+        "name": "fullBox",
+        "label": "Both halves",
+        "description": "Show the second half snapped on"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561655555
+    },
+    {
+      "opId": "op1206",
+      "type": "parameter.describe",
+      "params": {
+        "name": "material",
+        "label": "Material",
+        "description": "What it's printed in; the thin parts are sized for it"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561655592
+    },
+    {
+      "opId": "op1207",
+      "type": "document.describe",
+      "params": {
+        "title": "Star box",
+        "description": "A snap-together star box made of two identical halves: one is flipped over, and its barbed tongues click into the other's pockets."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561655619
     }
   ],
   "timelineGroups": []

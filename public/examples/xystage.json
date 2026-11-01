@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 1115,
-  "rollbackIndex": 550,
+  "nextId": 1121,
+  "rollbackIndex": 556,
   "operations": [
     {
       "opId": "op1",
@@ -8933,6 +8933,78 @@
       ],
       "label": "Joint",
       "at": 1793549697066
+    },
+    {
+      "opId": "op1115",
+      "type": "parameter.describe",
+      "params": {
+        "name": "x",
+        "label": "Move in X",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561626367
+    },
+    {
+      "opId": "op1116",
+      "type": "parameter.describe",
+      "params": {
+        "name": "y",
+        "label": "Move in Y",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561626391
+    },
+    {
+      "opId": "op1117",
+      "type": "parameter.describe",
+      "params": {
+        "name": "blade",
+        "label": "Blade length",
+        "unit": "mm",
+        "description": "Longer blades give more travel for the same strain"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561626398
+    },
+    {
+      "opId": "op1118",
+      "type": "parameter.describe",
+      "params": {
+        "name": "thickness",
+        "label": "Blade thickness",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561626418
+    },
+    {
+      "opId": "op1119",
+      "type": "parameter.describe",
+      "params": {
+        "name": "material",
+        "label": "Material",
+        "description": "What it's printed in; the thin parts are sized for it"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561626444
+    },
+    {
+      "opId": "op1120",
+      "type": "document.describe",
+      "params": {
+        "title": "XY flexure stage",
+        "description": "A one-piece stage: a carriage moves in X on four blades, and a platform moves in Y inside it on four more."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561626470
     }
   ],
   "timelineGroups": []

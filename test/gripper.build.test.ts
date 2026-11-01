@@ -9,7 +9,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFusedBlob } from "../src/core/features";
@@ -229,6 +229,8 @@ async function buildGripper(s: CadSession, opts: { springs?: number; skeleton?: 
       beam: { width: Hz, thickness: "springT", when: nth(k + 1) }, name: `Spring ${k + 1}`,
     });
   }
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "Compliant gripper", "description": "One printed part: push the plunger and both jaws swing open; let go and they spring shut on whatever is between them."}, {"push": {"label": "Push", "unit": "mm", "description": "How far the plunger is pushed in; the jaws open"}, "jaw": {"label": "Jaw length", "unit": "mm"}, "material": {"label": "Material", "description": "What it's printed in; the thin parts are sized for it"}, "springs": {"label": "Return springs", "description": "Extra springs that shut the jaws harder"}, "skeleton": {"label": "PLA skeleton", "description": "A stiff PLA core in the frame, for a two-material print (saves as a 3MF)"}});
 }
 
 const scopeOf = (s: CadSession) => resolveParameters(s.doc.parameters).scope;

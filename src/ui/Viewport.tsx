@@ -112,6 +112,7 @@ function buildView(s: AppState): ViewData {
     preview: null,
     showPlanes: s.showPlanes,
     showGrid: s.showGrid,
+    showAxes: s.showAxes,
     gridSize: s.gridSize,
     showConstraints: s.showConstraints,
     constraintState: !sketch
@@ -160,13 +161,21 @@ function buildExtrudeRegions(s: AppState): ViewData["extrudeRegions"] {
   return { plane: resolveSketchPlane(sk), regions };
 }
 
-function ViewportInner({ overlays }: { overlays?: ReactNode }) {
+/** What a screen reader hears for the 3D view when no one names it. */
+export const DEFAULT_VIEW_LABEL = "3D view of the model. Drag to orbit, right-drag or two fingers to pan, scroll or pinch to zoom.";
+
+function ViewportInner({ overlays, label }: { overlays?: ReactNode; label?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef(label ?? DEFAULT_VIEW_LABEL);
+  labelRef.current = label ?? DEFAULT_VIEW_LABEL;
 
   useEffect(() => {
     const container = containerRef.current!;
     const scene = new SceneManager(container);
     const controller = new Interactions(scene, scene.renderer.domElement);
+    // the canvas is a picture to assistive technology, named for what it shows
+    scene.renderer.domElement.setAttribute("role", "img");
+    scene.renderer.domElement.setAttribute("aria-label", labelRef.current);
     setActiveScene(scene);
     if (import.meta.env?.DEV) {
       const w = window as unknown as { __scene?: unknown; __recordTurntable?: unknown };
@@ -217,6 +226,7 @@ function ViewportInner({ overlays }: { overlays?: ReactNode }) {
       scene.dispose();
     };
   }, []);
+  useEffect(() => { containerRef.current?.querySelector("canvas")?.setAttribute("aria-label", labelRef.current); }, [label]);
 
   return (
     <div className="viewport" ref={containerRef}>
@@ -228,8 +238,8 @@ function ViewportInner({ overlays }: { overlays?: ReactNode }) {
 }
 
 /** Screen-anchored concept pieces (pins, cards, lens) drawn over the 3D view. */
-export function Viewport(p: { overlays?: ReactNode } = {}) {
-  return <ViewportInner overlays={p.overlays} />;
+export function Viewport(p: { overlays?: ReactNode; label?: string } = {}) {
+  return <ViewportInner overlays={p.overlays} label={p.label} />;
 }
 
 /** Small floating input for placing a new dimension or editing one in place. */

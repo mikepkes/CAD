@@ -2,7 +2,8 @@
 // overall dimensions, a title block and the cut list), made from the live geometry
 // by the kernel (core/drawings.ts), with the cut list beside it and downloads.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Modal } from "./kit/Modal";
 import { useStore } from "../model/store";
 import { Button } from "./kit/primitives";
 import type { CutPart } from "../core/drawings";
@@ -27,21 +28,12 @@ export function DrawingView(p: { viewer?: boolean } = {}) {
   const close = useStore((s) => s.closeDrawing);
   const published = useStore((s) => !!s.session.doc.drawing);
   const [pdfBusy, setPdfBusy] = useState(false);
-  useEffect(() => {
-    if (!drawing) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); } };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [drawing, close]);
   if (!drawing) return null;
   const ready = "svg" in drawing;
   const file = ready ? drawing.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "drawing" : "drawing";
 
   return (
-    <div className="modal-backdrop" onPointerDown={close}>
-      <div className="drawing-view" role="dialog" aria-label="Shop drawing" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <span>{ready ? drawing.title : "Shop drawing"}</span>
+    <Modal title={ready ? drawing.title : "Shop drawing"} onClose={close} className="drawing-view" actions={
           <span className="drawing-actions">
             {!p.viewer && (
               <label className="drawing-publish" title="Offer this drawing in the customize viewer, with a PDF download">
@@ -59,9 +51,8 @@ export function DrawingView(p: { viewer?: boolean } = {}) {
             )}
             {ready && <Button size="sm" onClick={() => download(`${file}.svg`, drawing.svg, "image/svg+xml")}>Download SVG</Button>}
             {ready && <Button size="sm" onClick={() => download(`${file}-cut-list.csv`, cutListCsv(drawing.parts), "text/csv")}>Cut list (CSV)</Button>}
-            <button className="icon-btn" aria-label="Close" onClick={close}>✕</button>
           </span>
-        </div>
+        }>
         {!ready ? (
           <div className="drawing-loading k-dim">Drawing the views…</div>
         ) : (
@@ -81,7 +72,6 @@ export function DrawingView(p: { viewer?: boolean } = {}) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

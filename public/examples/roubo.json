@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 1099,
-  "rollbackIndex": 465,
+  "nextId": 1100,
+  "rollbackIndex": 466,
   "operations": [
     {
       "opId": "op1",
@@ -14,13 +14,16 @@
         "expression": "1700",
         "min": 1200,
         "max": 2400,
-        "step": 10
+        "step": 10,
+        "label": "Length",
+        "unit": "mm",
+        "description": "Overall length of the bench top"
       },
       "createdIds": [
         "param2"
       ],
       "label": "Add parameter",
-      "at": 1793550024323
+      "at": 1793561612712
     },
     {
       "opId": "op3",
@@ -30,13 +33,16 @@
         "expression": "500",
         "min": 400,
         "max": 700,
-        "step": 10
+        "step": 10,
+        "label": "Depth",
+        "unit": "mm",
+        "description": "Front to back across the top"
       },
       "createdIds": [
         "param4"
       ],
       "label": "Add parameter",
-      "at": 1793550024324
+      "at": 1793561612720
     },
     {
       "opId": "op5",
@@ -46,13 +52,16 @@
         "expression": "850",
         "min": 750,
         "max": 950,
-        "step": 5
+        "step": 5,
+        "label": "Height",
+        "unit": "mm",
+        "description": "Floor to the top surface; about your wrist height when standing"
       },
       "createdIds": [
         "param6"
       ],
       "label": "Add parameter",
-      "at": 1793550024325
+      "at": 1793561612720
     },
     {
       "opId": "op7",
@@ -62,13 +71,16 @@
         "expression": "100",
         "min": 60,
         "max": 140,
-        "step": 5
+        "step": 5,
+        "label": "Top thickness",
+        "unit": "mm",
+        "description": "How thick the laminated top is"
       },
       "createdIds": [
         "param8"
       ],
       "label": "Add parameter",
-      "at": 1793550024325
+      "at": 1793561612721
     },
     {
       "opId": "op9",
@@ -78,13 +90,16 @@
         "expression": "100",
         "min": 70,
         "max": 130,
-        "step": 5
+        "step": 5,
+        "label": "Leg size",
+        "unit": "mm",
+        "description": "The legs' square section"
       },
       "createdIds": [
         "param10"
       ],
       "label": "Add parameter",
-      "at": 1793550024325
+      "at": 1793561612721
     },
     {
       "opId": "op11",
@@ -94,13 +109,16 @@
         "expression": "60",
         "min": 0,
         "max": 170,
-        "step": 5
+        "step": 5,
+        "label": "Vise opening",
+        "unit": "mm",
+        "description": "How far the leg vise's chop stands open"
       },
       "createdIds": [
         "param12"
       ],
       "label": "Add parameter",
-      "at": 1793550024325
+      "at": 1793561612721
     },
     {
       "opId": "op13",
@@ -7724,6 +7742,17 @@
       "createdIds": [],
       "label": "Publish drawing",
       "at": 1793550025222
+    },
+    {
+      "opId": "op1099",
+      "type": "document.describe",
+      "params": {
+        "title": "Roubo workbench",
+        "description": "A full-size woodworking bench with a leg vise. Size it to your shop, then download the shop drawing and cut list."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561615205
     }
   ],
   "timelineGroups": []

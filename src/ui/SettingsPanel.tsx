@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Modal } from "./kit/Modal";
 import { useStore } from "../model/store";
 import { isTauri } from "../model/desktopMcp";
 import { connectWebHid, onSpaceMouseStatus, setSpaceMouseSettings, spaceMouseSettings, spaceMouseStatus, webHidAvailable, SpaceMouseStatus } from "../model/spaceMouseInput";
@@ -66,7 +67,7 @@ function SpaceMouseSettingsSection() {
 
 export function SettingsPanel() {
   const open = useStore((s) => s.settingsOpen);
-  const close = () => useStore.getState().setSettingsOpen(false);
+  const focus = useStore((s) => s.settingsFocus);
   const apiKey = useStore((s) => s.apiKey);
   const setApiKey = useStore((s) => s.setApiKey);
   const model = useStore((s) => s.agentModel);
@@ -82,21 +83,24 @@ export function SettingsPanel() {
   const setAssistOn = useAssist((s) => s.setEnabled);
   const [draft, setDraft] = useState(apiKey);
   const [portDraft, setPortDraft] = useState(String(desktopMcpPort));
+  const keyRef = useRef<HTMLInputElement>(null);
+  // the key typed so far is kept however the dialog closes (✕, Escape, outside), as leaving the field does
+  const close = () => {
+    if (keyRef.current && keyRef.current.value.trim() !== apiKey) setApiKey(keyRef.current.value.trim());
+    useStore.getState().setSettingsOpen(false);
+  };
 
   if (!open) return null;
   return (
-    <div className="modal-backdrop" onPointerDown={close}>
-      <div className="modal" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <span>Settings</span>
-          <button className="icon-btn" onClick={close}>✕</button>
-        </div>
+    <Modal title="Settings" onClose={close} initialFocus={focus === "apiKey" ? keyRef : undefined} className="settings-modal">
         <div className="modal-body">
           <AppearanceSection />
 
           <div className="field-divider" />
-          <label className="field-label">Claude API key</label>
+          <label className="field-label" htmlFor="settings-api-key">Claude API key</label>
           <input
+            ref={keyRef}
+            id="settings-api-key"
             className="field-input"
             type="password"
             placeholder="sk-ant-…"
@@ -112,8 +116,8 @@ export function SettingsPanel() {
             <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">console.anthropic.com</a>.
           </p>
 
-          <label className="field-label">Model</label>
-          <select className="field-input" value={model} onChange={(e) => setAgentModel(e.target.value)}>
+          <label className="field-label" htmlFor="settings-model">Model</label>
+          <select id="settings-model" className="field-input" value={model} onChange={(e) => setAgentModel(e.target.value)}>
             {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
           <p className="field-note">The agent drives the same commands you use by hand — ask it to sketch, constrain, dimension, or extrude.</p>
@@ -185,7 +189,6 @@ export function SettingsPanel() {
         <div className="modal-foot">
           <button className="btn primary" onClick={() => { setApiKey(draft.trim()); close(); }}>Save</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

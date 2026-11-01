@@ -122,7 +122,7 @@
   font-size: 13px;
   color: var(--text);
   background: var(--field);
-  border: 1px solid var(--k-float-line);
+  border: 1px solid var(--field-line); /* 3:1 on the panel (WCAG 1.4.11) */
   border-radius: var(--k-radius-sm);
   text-transform: none;
   letter-spacing: 0;

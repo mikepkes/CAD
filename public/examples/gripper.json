@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 1895,
-  "rollbackIndex": 937,
+  "nextId": 1901,
+  "rollbackIndex": 943,
   "operations": [
     {
       "opId": "op1",
@@ -14916,6 +14916,78 @@
       ],
       "label": "Joint",
       "at": 1793549589498
+    },
+    {
+      "opId": "op1895",
+      "type": "parameter.describe",
+      "params": {
+        "name": "push",
+        "label": "Push",
+        "unit": "mm",
+        "description": "How far the plunger is pushed in; the jaws open"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561625486
+    },
+    {
+      "opId": "op1896",
+      "type": "parameter.describe",
+      "params": {
+        "name": "jaw",
+        "label": "Jaw length",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561625501
+    },
+    {
+      "opId": "op1897",
+      "type": "parameter.describe",
+      "params": {
+        "name": "material",
+        "label": "Material",
+        "description": "What it's printed in; the thin parts are sized for it"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561625524
+    },
+    {
+      "opId": "op1898",
+      "type": "parameter.describe",
+      "params": {
+        "name": "springs",
+        "label": "Return springs",
+        "description": "Extra springs that shut the jaws harder"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561625542
+    },
+    {
+      "opId": "op1899",
+      "type": "parameter.describe",
+      "params": {
+        "name": "skeleton",
+        "label": "PLA skeleton",
+        "description": "A stiff PLA core in the frame, for a two-material print (saves as a 3MF)"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561625563
+    },
+    {
+      "opId": "op1900",
+      "type": "document.describe",
+      "params": {
+        "title": "Compliant gripper",
+        "description": "One printed part: push the plunger and both jaws swing open; let go and they spring shut on whatever is between them."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561625581
     }
   ],
   "timelineGroups": []

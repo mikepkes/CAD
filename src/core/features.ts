@@ -1580,10 +1580,15 @@ function applyInTemplateFrame(apply: () => void, f: FeatureDef, bodies: Body[], 
 
 /** Build every feature in order into live bodies (caller frees the shapes).
  *  With a cache, unchanged steps replay instead of running the kernel. */
+/** Which phase a build is in, and how far through it: building the features, then meshing the bodies.
+ *  The meshing is a tenth of the bar but can take seconds (a clock's gear teeth), so it is named. */
+export interface BuildStep { phase: "features" | "meshing"; done: number; total: number }
+/** Hears a running build's progress: the fraction (0…1) and the step it is on. */
+export type BuildProgressSink = (fraction: number, step?: BuildStep) => void;
 /** Where a build reports how far it has got (0…1): set around one evaluation by its caller. */
-let buildProgress: ((fraction: number) => void) | null = null;
+let buildProgress: BuildProgressSink | null = null;
 /** Report a running evaluation's progress to `sink` while `fn` runs (the features, then the meshing). */
-export function withBuildProgress<T>(sink: ((fraction: number) => void) | undefined, fn: () => T): T {
+export function withBuildProgress<T>(sink: BuildProgressSink | undefined, fn: () => T): T {
   const was = buildProgress;
   buildProgress = sink ?? null;
   try { return fn(); } finally { buildProgress = was; }
@@ -1598,7 +1603,8 @@ function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): 
   const active = activeFeatures(doc, scope);
   let done = 0;
   for (const f of active) {
-    buildProgress?.((FEATURE_SHARE * done++) / active.length);
+    buildProgress?.((FEATURE_SHARE * done) / active.length, { phase: "features", done, total: active.length });
+    done++;
     let T: Rigid | undefined;
     if (f.instanceFrame) {
       worlds ??= resolveComponentWorld(doc, scope);
@@ -1675,7 +1681,8 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
     const { bodies, out } = evaluateBodies(doc, scope, cache);
     let meshed = 0;
     for (const body of bodies) {
-      buildProgress?.(FEATURE_SHARE + ((1 - FEATURE_SHARE) * meshed++) / bodies.length);
+      buildProgress?.(FEATURE_SHARE + ((1 - FEATURE_SHARE) * meshed) / bodies.length, { phase: "meshing", done: meshed, total: bodies.length });
+      meshed++;
       const row: SolidEval = { ...(out[body.id] ?? {}), featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance };
       if (body.decals?.length) row.threadDecals = body.decals;
       let keep = false; // the shape stays alive for its measuring

@@ -6,13 +6,23 @@
 
 export interface EditCommitter {
   edit(name: string, value: string, flush: boolean): void;
+  /** Commit the waiting value now (if any); resolves once every commit made so far has been applied. */
+  flush(): Promise<void>;
   cancel(): void;
 }
 
-export function editCommitter(apply: (name: string, value: string) => void, delayMs: number): EditCommitter {
+export function editCommitter(apply: (name: string, value: string) => void | Promise<void>, delayMs: number): EditCommitter {
   let pending: [string, string] | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const fire = () => { if (!pending) return; const [n, v] = pending; pending = null; apply(n, v); };
+  let applied: Promise<void> = Promise.resolve(); // every commit so far, settled
+  const fire = () => {
+    if (!pending) return;
+    const [n, v] = pending; pending = null;
+    let r: void | Promise<void>;
+    try { r = apply(n, v); } catch { r = undefined; }
+    const done = Promise.resolve(r).then(() => {}, () => {});
+    applied = Promise.all([applied, done]).then(() => {});
+  };
   return {
     edit(name, value, flush) {
       clearTimeout(timer);
@@ -21,6 +31,7 @@ export function editCommitter(apply: (name: string, value: string) => void, dela
       if (flush) fire();
       else timer = setTimeout(fire, delayMs);
     },
+    flush() { clearTimeout(timer); fire(); return applied; },
     cancel() { clearTimeout(timer); pending = null; },
   };
 }

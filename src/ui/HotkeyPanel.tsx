@@ -5,6 +5,7 @@ import { contextLabel } from "../model/ringConfig";
 import { Pills } from "./kit/primitives";
 import { RingEditor } from "./RingEditor";
 import { Icon, iconForAction } from "./icons";
+import { Modal } from "./kit/Modal";
 
 type Capture = { id: string; slot: "primary" | "secondary" } | null;
 type Tab = "keys" | "ring";
@@ -58,12 +59,8 @@ export function HotkeyPanel() {
   };
 
   return (
-    <div className="modal-backdrop" onPointerDown={close}>
-      <div className="modal hk-modal" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <span>Keyboard shortcuts</span>
-          <button className="icon-btn" onClick={close}>✕</button>
-        </div>
+    // while a key is being captured, Escape cancels the capture instead of closing
+    <Modal title="Keyboard shortcuts" onClose={close} className="hk-modal" closeOnEscape={!capturing}>
         <div className="hk-tabs">
           <Pills<Tab>
             ariaLabel="Hotkeys section"
@@ -108,7 +105,6 @@ export function HotkeyPanel() {
           {tab === "keys" ? <button className="btn ghost" onClick={() => hotkeys.resetAll()}>Reset all keys to defaults</button> : <span />}
           <button className="btn primary" onClick={close}>Done</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

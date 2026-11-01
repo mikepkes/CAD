@@ -7,163 +7,36 @@
 // again, so it never churns through the values a drag passed through.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { flexureEquilibria, flexureState, flexureSweep, hasFlexures, isAngularDrive, type EquilibriumStudy } from "../sim/flexure";
-import { drivesOf } from "../model/concepts/mechanism";
 import { Viewport } from "./Viewport";
 import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
 import { editCommitter } from "./editCommitter";
 import { DrawingView } from "./DrawingView";
+import { Control, FlexureReadout, LoadingOverlay, LoadProblem, MotionBadge, SaveButton, modelTitle, viewerControls, type LoadFailure } from "./CustomizeControls";
+import { BuildProgress } from "./BuildProgress";
+import { Toast } from "./Toast";
+import { exampleUrl } from "../model/examples";
+import { getActiveScene } from "../viewport/sceneRef";
 
-const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000));
+/** The canvas the controls cover: the card on the right (desktop), the sheet at the bottom (phone). */
+export function coveredBy(panel: DOMRect, view: { width: number; height: number }, phone: boolean): { right: number; bottom: number } {
+  return phone ? { right: 0, bottom: Math.max(0, view.height - panel.top) } : { right: Math.max(0, view.width - panel.left), bottom: 0 };
+}
+
 // The 3D rebuild is the slow part, so the slider's own value updates live while
 // the model is rebuilt only when you briefly pause or release (debounce, not
 // per-frame), and the (secondary) motion study runs only well after you stop.
 const IDLE_MS = 2000;   // run the motion study after this long with no interaction
 const COMMIT_MS = 200;  // debounce: rebuild the model this long after the last move
 
-function modelUrl(): string | null {
+/** What the link asks for: an example by name, or a model by URL. */
+function requested(): { url: string; example?: string } | null {
   const q = new URLSearchParams(location.search);
   const model = q.get("model");
-  if (model) return model;
+  if (model) return { url: model };
   const example = q.get("example");
-  if (example) return `${import.meta.env.BASE_URL}examples/${encodeURIComponent(example)}.json`;
+  if (example) return { url: exampleUrl(example), example };
   return null;
-}
-
-/** One bounded parameter. Shows its own local value instantly while dragging
- *  (so the slider never lags the model), reporting changes up via `onEdit`. */
-function Control({ name, value, expr, min, max, step: paramStep, values, boolean, options, onEdit }: {
-  name: string; value: number; expr: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[];
-  onEdit: (name: string, value: string, flush: boolean) => void;
-}) {
-  const [local, setLocal] = useState(value);
-  const dragging = useRef(false);
-  useEffect(() => { if (!dragging.current) setLocal(value); }, [value]); // follow external changes when idle
-
-  const label = <span className="cz-row-name" title={expr}>{name}</span>;
-  if (boolean) {
-    return (
-      <label className="cz-row">
-        {label}
-        <input className="cz-check" type="checkbox" checked={value !== 0} onChange={(e) => onEdit(name, e.target.checked ? "1" : "0", true)} />
-      </label>
-    );
-  }
-  if (values && values.length) {
-    return (
-      <label className="cz-row">
-        {label}
-        <select className="cz-select" value={values.some((v) => Math.abs(v - value) < 1e-9) ? String(value) : ""} onChange={(e) => onEdit(name, e.target.value, true)}>
-          {!values.some((v) => Math.abs(v - value) < 1e-9) && <option value="">{fmt(value)}…</option>}
-          {values.map((v) => <option key={v} value={String(v)}>{options?.[v] ?? fmt(v)}</option>)}
-        </select>
-      </label>
-    );
-  }
-  const span = max! - min!;
-  // An explicit increment wins; otherwise pick a sensible precision from the span.
-  const step = paramStep && paramStep > 0 ? paramStep : span >= 20 ? 1 : span >= 2 ? 0.1 : 0.01;
-  return (
-    <label className="cz-row">
-      {label}
-      <input
-        className="cz-range" type="range" min={min} max={max} step={step}
-        value={Math.min(max!, Math.max(min!, local))}
-        onPointerDown={() => { dragging.current = true; }}
-        onPointerUp={() => { dragging.current = false; onEdit(name, String(local), true); }}
-        onChange={(e) => { const v = Number(e.target.value); setLocal(v); onEdit(name, String(v), false); }}
-      />
-      <span className="cz-row-val">{fmt(local)}</span>
-    </label>
-  );
-}
-
-/** Pass / fail / progress for the current configuration's motion study. */
-function MotionBadge() {
-  const status = useStore((s) => s.motionStatus);
-  const progress = useStore((s) => s.motionProgress);
-  const result = useStore((s) => s.motionResult);
-  const has = useStore((s) => s.hasMotionStudy);
-  if (!has) return null;
-  const pct = Math.round(progress * 100);
-  const cls = status === "pass" ? "pass" : status === "fail" ? "fail" : status === "running" ? "running" : "idle";
-  const label =
-    status === "running" ? `Checking motion… ${pct}%` :
-    status === "pass" ? "Rotates freely — passes" :
-    status === "fail" ? (result?.reason ?? "Does not clear — fails") :
-    "Not checked";
-  const icon = status === "pass" ? "✓" : status === "fail" ? "✕" : status === "running" ? "◍" : "○";
-  return (
-    <div className={`cz-badge ${cls}`} title="Motion study: can the mechanism move through its full range without parts colliding?">
-      <span className="cz-badge-icon">{icon}</span>
-      <span className="cz-badge-text">{label}</span>
-      {status === "running" && <span className="cz-badge-bar"><span style={{ width: `${pct}%` }} /></span>}
-    </div>
-  );
-}
-
-/** Live hinge readout for a compliant mechanism: how hard each flexure is
- *  working (strain against its material's limit), what it takes to hold this
- *  pose, and the energy stored. Pure math on the solved pose — no rebuild — so it
- *  follows the slider. */
-function FlexureReadout() {
-  const doc = useStore((s) => s.session.doc);
-  const rev = useStore((s) => s.rev);
-  const drives = hasFlexures(doc) ? drivesOf(doc) : [];
-  const param = drives[0];
-  // Where it rests along its drive (a bistable switch has two): a sweep of the
-  // whole range, so it waits until the controls have been still for a moment.
-  const [rest, setRest] = useState<{ key: string; study: EquilibriumStudy } | null>(null);
-  const key = param ? JSON.stringify(doc.parameters.filter((q) => q.name !== param.name).map((q) => [q.name, q.expr])) : "";
-  useEffect(() => {
-    if (!param || rest?.key === key) return;
-    const t = setTimeout(() => setRest({ key, study: flexureEquilibria(doc, param.name, param.min!, param.max!, 32) }), 700);
-    return () => clearTimeout(t);
-  }, [key, rev]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!hasFlexures(doc)) return null;
-  // the effort at each drive; the first drive's sweep runs last, leaving it posed as it stands
-  const efforts = drives.slice(1).map((d) => ({ d, effort: flexureSweep(doc, d.name, [d.value])[0].effort }));
-  const st = param ? flexureSweep(doc, param.name, [param.value])[0] : { ...flexureState(doc), effort: NaN };
-  if (param) efforts.unshift({ d: param, effort: st.effort });
-  const over = st.utilisation > 1;
-  const angular = param ? isAngularDrive(doc, param.name) : false;
-  const unit = angular ? "°" : " mm"; // a non-angle drive is a length
-  const study = rest?.key === key ? rest.study : undefined;
-  const stable = study?.states.filter((q) => q.stable) ?? [];
-  return (
-    <div className="cz-flex" title="Each flexure is a thin strip that bends instead of a pin. Its bar shows the peak strain against the material's limit.">
-      <div className="cz-flex-head">
-        <span>Flexures</span>
-        <span className={over || st.error ? "cz-flex-bad" : "cz-flex-ok"}>{st.error ? "can't reach this pose" : over ? "over the strain limit" : "within the strain limit"}</span>
-      </div>
-      {st.flexures.map((f) => {
-        const u = f.allowable ? f.strain / f.allowable : 0;
-        return (
-          <div className="cz-flex-row" key={f.joint}>
-            <span className="cz-flex-name">{f.name}</span>
-            <span className="cz-flex-bar"><span className={u > 1 ? "over" : ""} style={{ width: `${Math.min(100, u * 100)}%` }} /></span>
-            <span className="cz-flex-val">{(f.strain * 100).toFixed(1)}%</span>
-          </div>
-        );
-      })}
-      <div className="cz-flex-foot">
-        {st.flexures[0]?.allowable != null && <span>limit {(st.flexures[0].allowable * 100).toFixed(0)}%</span>}
-        {efforts.length > 1
-          ? efforts.map(({ d, effort }) => <span key={d.name}>{isAngularDrive(doc, d.name) ? `${d.name} torque ${Math.abs(effort).toFixed(0)} N·mm` : `${d.name} force ${Math.abs(effort).toFixed(1)} N`}</span>)
-          : Number.isFinite(st.effort) && <span>{angular ? `input torque ${Math.abs(st.effort).toFixed(0)} N·mm` : `input force ${Math.abs(st.effort).toFixed(1)} N`}</span>}
-        <span>stored {st.energy.toFixed(1)} mJ</span>
-      </div>
-      {param && study && stable.length > 0 && (
-        <div className="cz-flex-rest" title="Where it stays put when you let go: the effort is zero there and pushes back either way.">
-          {study.multistable
-            ? <><span className="cz-flex-ok">bistable</span> rests at {param.name} = {stable.map((q) => `${fmt(Math.round(q.value * 10) / 10)}${unit}`).join(" and ")}</>
-            : <>springs back to {param.name} = {fmt(Math.round(stable[0].value * 10) / 10)}{unit}</>}
-          {study.snap && <> · snaps over at {angular ? `${Math.abs(study.snap.effort).toFixed(0)} N·mm` : `${Math.abs(study.snap.effort).toFixed(1)} N`}</>}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export function CustomizeApp() {
@@ -172,13 +45,17 @@ export function CustomizeApp() {
   const runMotionStudy = useStore((s) => s.runMotionStudy);
   const cancelMotionStudy = useStore((s) => s.cancelMotionStudy);
   const shareModel = useStore((s) => s.shareModel);
-  const params = useStore((s) => s.session.doc.parameters);
+  const doc = useStore((s) => s.session.doc);
   const hasDrawing = useStore((s) => !!s.session.doc.drawing);
   const openDrawing = useStore((s) => s.openDrawing);
   useStore((s) => s.rev); // re-render as the model resolves
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  const [error, setError] = useState("");
+  const [state, setState] = useState<"loading" | "building" | "ready" | "error">("loading");
+  const [failure, setFailure] = useState<LoadFailure | null>(null);
   const [open, setOpen] = useState(true);
+  const req = useRef(requested());
+  const panelRef = useRef<HTMLElement>(null);
+  const framed = useRef(false);
+  const example = req.current?.example;
 
   const idle = useRef<ReturnType<typeof setTimeout>>();
 
@@ -191,7 +68,7 @@ export function CustomizeApp() {
 
   // Commit a control's value to the model after a pause (see editCommitter). The
   // slider's own number tracks every move regardless (Control keeps a local value).
-  const committer = useRef(editCommitter((n, v) => void useStore.getState().setParameterExpr(n, v), COMMIT_MS));
+  const committer = useRef(editCommitter((n, v) => useStore.getState().setParameterExpr(n, v), COMMIT_MS));
   const onEdit = useCallback((name: string, value: string, flush: boolean) => {
     armStudy();
     committer.current.edit(name, value, flush);
@@ -200,60 +77,110 @@ export function CustomizeApp() {
   useEffect(() => {
     void (async () => {
       try {
-        useStore.setState({ showPlanes: false, showGrid: false }); // clean product view
-        await ensureKernel();
-        const url = modelUrl();
-        if (!url) throw new Error("No model given. Add ?model=<url> or ?example=gyroscope to the link.");
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`Could not load model (${resp.status}).`);
-        await loadDocument(deserializeDocument(await resp.text()));
-        // frame it: the default camera suits a small part, and sits inside anything the size of a workbench
-        window.dispatchEvent(new CustomEvent("vibecad:view", { detail: "iso" }));
-        window.dispatchEvent(new CustomEvent("vibecad:frame"));
-        setState("ready");
+        useStore.setState({ showPlanes: false, showGrid: false, showAxes: false }); // clean product view
+        const r = req.current;
+        if (!r) { setFailure({ kind: "none" }); setState("error"); return; }
+        // the kernel (a big download) and the model load side by side
+        const kernel = ensureKernel();
+        let text: string;
+        try {
+          const resp = await fetch(r.url);
+          text = await resp.text();
+          // a missing file comes back as a 404, or as the app's own page from a server that serves it for any path
+          if (!resp.ok || /^\s*</.test(text)) { setFailure({ kind: "missing", example: r.example, url: r.url }); setState("error"); return; }
+        } catch {
+          setFailure({ kind: "offline", example: r.example, url: r.url }); setState("error"); return;
+        }
+        let parsed;
+        try { parsed = deserializeDocument(text); } catch (e) {
+          setFailure({ kind: "unreadable", example: r.example, url: r.url, detail: (e as Error).message }); setState("error"); return;
+        }
+        await kernel;
+        setState("building");
+        await loadDocument(parsed);
+        setState("ready"); // the model is framed once the controls are laid out (below)
         armStudy(); // validate the starting configuration once
       } catch (e) {
-        setError((e as Error).message);
+        setFailure({ kind: "unreadable", example: req.current?.example, url: req.current?.url ?? "", detail: (e as Error).message });
         setState("error");
       }
     })();
     return () => { clearTimeout(idle.current); committer.current.cancel(); };
   }, [ensureKernel, loadDocument, armStudy]);
 
-  const bounded = params.filter((p) => (p.min != null && p.max != null) || (p.values && p.values.length));
+  const title = state === "ready" ? modelTitle(doc, example) : modelTitle(null, example);
+  const intro = state === "ready" ? doc.about?.description : undefined;
+  useEffect(() => {
+    document.title = state === "error" ? "Model not found · VibeCAD" : `${title} · VibeCAD`;
+  }, [title, state]);
+
+  const controls = viewerControls(doc.parameters);
+
+  // The camera centres on, and frames into, the part of the view the controls leave
+  // uncovered — above the sheet on a phone, left of the card on a desktop.
+  useEffect(() => {
+    if (state !== "ready") return;
+    const panel = panelRef.current;
+    const measure = () => {
+      const scene = getActiveScene();
+      if (!scene) return;
+      const phone = matchMedia("(max-width: 720px)").matches;
+      scene.setViewInset(panel ? coveredBy(panel.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, phone) : {});
+      if (!framed.current) {
+        framed.current = true;
+        // frame it: the default camera suits a small part, and sits inside anything the size of a workbench
+        window.dispatchEvent(new CustomEvent("vibecad:view", { detail: "iso" }));
+      }
+    };
+    measure();
+    if (!panel || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(panel);
+    addEventListener("resize", measure);
+    return () => { ro.disconnect(); removeEventListener("resize", measure); };
+  }, [state, open]);
 
   return (
     <div className="customize">
-      <Viewport />
+      <Viewport label={`3D view of ${title}. Drag to turn it; pinch or scroll to zoom.`} />
       <MotionBadge />
-      {state === "ready" && bounded.length > 0 && (
-        <div className={`cz-panel ${open ? "" : "collapsed"}`}>
-          <button className="cz-handle" onClick={() => setOpen((v) => !v)} title={open ? "Hide controls" : "Show controls"}>
-            <span>Customize</span><span className="cz-chevron">{open ? "▾" : "▴"}</span>
-          </button>
+      {state === "ready" && (
+        <section ref={panelRef} className={`cz-panel ${open ? "" : "collapsed"}`} aria-labelledby="cz-title">
+          {/* the whole head row toggles the sheet; the button is what a keyboard or screen reader uses */}
+          <div className="cz-head" onClick={() => setOpen((v) => !v)}>
+            <h1 className="cz-title" id="cz-title">{title}</h1>
+            <button className="cz-handle" aria-expanded={open} aria-controls="cz-body" aria-label={open ? "Hide the controls" : "Show the controls"} title={open ? "Hide the controls" : "Show the controls"}>
+              <span className="cz-chevron" aria-hidden="true">{open ? "▾" : "▴"}</span>
+            </button>
+          </div>
           {open && (
-            <div className="cz-controls">
-              {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} step={p.step} values={p.values} boolean={p.boolean} options={p.options} onEdit={onEdit} />)}
-              <FlexureReadout />
-              {hasDrawing && (
-                <button className="cz-drawing" title="The design's shop drawing: views, dimensions and the cut list, as a PDF" onClick={() => void openDrawing()}>
-                  ▤ Drawing (PDF)
-                </button>
-              )}
-              <button
-                className="cz-share"
-                title="Save the model for printing: an STL (all parts in one file), or a 3MF with a part per material when it has more than one; or share it to Files / AirDrop / another app on a phone"
-                onClick={() => void shareModel(new URLSearchParams(location.search).get("example") || "model")}
-              >
-                ⬇ Save / share for printing
-              </button>
-            </div>
+            <>
+              <div className="cz-controls" id="cz-body">
+                {intro && <p className="cz-intro">{intro}</p>}
+                {controls.map((p) => (
+                  <Control key={p.id} name={p.name} label={p.label} unit={p.unit} description={p.description} value={p.value} expr={p.expr}
+                    min={p.min} max={p.max} step={p.step} values={p.values} boolean={p.boolean} options={p.options} onEdit={onEdit} />
+                ))}
+                <FlexureReadout />
+              </div>
+              {/* Save and the drawing stay in reach, outside the scrolling controls */}
+              <div className="cz-foot">
+                {hasDrawing && (
+                  <button className="cz-drawing" title="The design's shop drawing: views, dimensions and the cut list, as a PDF" onClick={() => void openDrawing()}>
+                    ▤ Drawing (PDF)
+                  </button>
+                )}
+                <SaveButton onSave={() => void shareModel(example || "model", { flush: () => committer.current.flush() })} />
+              </div>
+            </>
           )}
-        </div>
+        </section>
       )}
       <DrawingView viewer />
-      {state === "loading" && <div className="cz-overlay">Loading…</div>}
-      {state === "error" && <div className="cz-overlay error">{error}</div>}
+      <Toast />
+      {state === "ready" && <BuildProgress />}
+      {(state === "loading" || state === "building") && <LoadingOverlay phase={state} name={title} />}
+      {state === "error" && failure && <LoadProblem failure={failure} />}
     </div>
   );
 }

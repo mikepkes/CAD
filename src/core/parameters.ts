@@ -9,6 +9,8 @@ export interface Parameter {
   value: number;
   unit?: string;
   comment?: string;
+  label?: string;
+  description?: string;
   error?: string;
   min?: number;
   max?: number;

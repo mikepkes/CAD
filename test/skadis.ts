@@ -36,7 +36,7 @@
 import { expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { collideFeatures, evaluateFeatures } from "../src/core/features";
 import { placeComponentSketches, placeParametricPoints } from "../src/core/recompute";
@@ -395,6 +395,15 @@ export async function buildSkadis(s: CadSession): Promise<Record<string, string>
   if (!hid.ok) throw new Error(hid.error);
 
   await dis(s, "drawing.publish", { title: "SKÅDIS gravity holder" });
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, { title: "SKÅDIS gravity holder", description: "A shaver or toothbrush holder for an IKEA SKÅDIS pegboard: the item's own weight drops a rack that swings two side pads in to clamp it; lift it out and they open." }, {
+    drop: { label: "Rack drop", unit: "mm", description: "0 is open and empty; the item's weight pushes the rack down" },
+    item: { label: "Item width", unit: "mm", description: "The width the pads close on" },
+    hooks: { label: "Hook spacing", unit: "mm", description: "One or two of the board's slot pitches between the strip's hook and peg" },
+    arm: { label: "Arm width", unit: "mm" },
+    lift: { label: "Lift off the strip", unit: "mm", description: "Slides the holder up off its mounting strip" },
+    board: { label: "Show the pegboard", description: "A piece of the board and a stand-in item, for context (not printed)" },
+  });
   return ids;
 }
 
