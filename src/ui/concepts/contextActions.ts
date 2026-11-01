@@ -16,6 +16,7 @@ import { pushEdit, pushToExpr, rowForFace, shouldDelete, namedParam, paramNamePr
 import { useLens, MODES, type LensMode } from "./lens/lens";
 import { cycleFeature, cycleRows, faceCornerSelector, faceEdgeSelector, historyRange, newSolidCentre, nextLensSize, otherShape, parentComponent, stepRollback } from "./contextActions.logic";
 import { ask, askText } from "../kit/askDialog";
+import { edgesAroundFace, edgesBehindFace } from "../../model/edgePick";
 
 const st = () => useStore.getState();
 const ui = () => useUi.getState();
@@ -188,8 +189,13 @@ export async function addGear(): Promise<void> {
  *  its size can be scrubbed or named. Faces square to an axis only (the edge selector names planes by axis). */
 export async function edgeFace(kind: "fillet" | "chamfer", which: "outline" | "corners" = "outline"): Promise<void> {
   const f = face();
-  const sel = f ? (which === "corners" ? faceCornerSelector(f.point, f.normal) : faceEdgeSelector(f.point, f.normal)) : null;
-  if (!f || !sel) return;
+  if (!f) return;
+  // By name (the faces each edge separates), so the edges follow the body when it moves or resizes (M25); the
+  // coordinate-plane selector is only the fallback for a mesh without face names.
+  const mesh = st().solids[f.bodyId]?.mesh;
+  const names = mesh && f.faceName ? (which === "corners" ? edgesBehindFace(mesh, f.point, f.normal) : edgesAroundFace(mesh, f.faceName)) : [];
+  const sel = names.length ? { names } : which === "corners" ? faceCornerSelector(f.point, f.normal) : faceEdgeSelector(f.point, f.normal);
+  if (!sel) return;
   const params = kind === "fillet"
     ? { radius: which === "corners" ? "5" : "2", edges: sel, body: f.bodyId, requireEffect: true }
     : { distance: "1", edges: sel, body: f.bodyId, requireEffect: true };
@@ -200,7 +206,12 @@ export async function edgeFace(kind: "fillet" | "chamfer", which: "outline" | "c
     ui().setOpenFeature(r.createdIds[0]);
   }
 }
-const canEdgeFace = () => { const f = face(); return !!f && !!faceEdgeSelector(f.point, f.normal) && !st().kernelLoading; };
+/** Whether "Round edges" can name the face's edges: by name (any face of a named mesh), else by its axis plane. */
+export const faceHasEdges = (f: Pick<FaceSelection, "bodyId" | "faceName" | "point" | "normal">): boolean => {
+  const mesh = st().solids[f.bodyId]?.mesh;
+  return (!!mesh && !!f.faceName && edgesAroundFace(mesh, f.faceName).length > 0) || !!faceEdgeSelector(f.point, f.normal);
+};
+const canEdgeFace = () => { const f = face(); return !!f && faceHasEdges(f) && !st().kernelLoading; };
 
 // ---- the actions ----
 

@@ -461,12 +461,22 @@ export function blendEdges(shape: Shape3D, mode: "fillet" | "chamfer", size: num
   } finally { freeAll(named); }
 }
 
-/** Hollow a solid to `thickness`, removing the selected faces as openings. Returns a NEW shape. */
-export function shellShape(shape: Shape3D, thickness: number, open: FaceSelector): Shape3D {
+/** Hollow a solid to `thickness`, removing the selected faces as openings. Returns a NEW shape.
+ *  `faceNames` (aligned with the shape's faces) resolves a `names` selector. */
+export function shellShape(shape: Shape3D, thickness: number, open: FaceSelector, faceNames?: string[]): Shape3D {
   if (isEmptySelector(open)) throw new Error("shell needs at least one face to open (openFaces)");
-  const clone = (shape as unknown as { clone: () => Shape3D }).clone();
-  return (clone as unknown as { shell: (t: number, f: (f: FaceFinder) => FaceFinder) => Shape3D })
-    .shell(thickness, (f) => applyFaceSelector(f, open));
+  const named = open.names?.length ? facesOf(shape) : [];
+  try {
+    let byName: ((f: OcFace) => boolean) | undefined;
+    if (open.names?.length) {
+      const find = indexer(named);
+      const want = new Set(open.names);
+      byName = (f) => { const i = find(f.wrapped, f.hashCode); return i >= 0 && want.has(faceNames?.[i] ?? ""); };
+    }
+    const clone = (shape as unknown as { clone: () => Shape3D }).clone();
+    return (clone as unknown as { shell: (t: number, f: (f: FaceFinder) => FaceFinder) => Shape3D })
+      .shell(thickness, (f) => { const g = applyFaceSelector(f, open); return byName ? g.when(({ element }) => byName!(element as unknown as OcFace)) : g; });
+  } finally { freeAll(named); }
 }
 
 /** Revolve regions on a plane about a world axis (origin + direction) by `angle` degrees; fused. */

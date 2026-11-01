@@ -53,7 +53,7 @@ describe("<RingOverlay/>", () => {
 
   it("names the top context and follows the stack and the user's overrides", () => {
     render(<RingOverlay />);
-    act(() => { hotkeys.setContexts(["global", "model"]); useRing.setState({ overrides: { global: { 2: null } } }); });
+    act(() => { hotkeys.setContexts(["global", "model"]); useRing.setState({ overrides: { global: { 2: null }, model: { 2: null } } }); });
     open();
     expect(screen.getByRole("menu", { name: "Action ring: Model" })).toBeTruthy();
     // model's N is model.sketch (unregistered here, so disabled); E emptied by the override shows a dot

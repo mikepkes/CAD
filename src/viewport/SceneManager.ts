@@ -128,6 +128,8 @@ export interface PickResult {
   normal?: { x: number; y: number; z: number };
   /** Interior (u,v) of a picked extrude region. */
   interior?: { x: number; y: number };
+  /** The picked solid triangle (its first index in the body mesh's `indices`), to name the face it lies on. */
+  tri?: number;
 }
 
 /** The active theme's viewport colours (palette.ts): read at build time, so a
@@ -735,7 +737,7 @@ export class SceneManager {
       const fh = faceHits[0], ph = planeHits[0];
       if (fh && fh.face && (!ph || fh.distance <= ph.distance)) {
         const n = fh.face.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
-        return { type: "face", id: fh.object.userData.bodyId as string | undefined, world: fh.point, normal: { x: n.x, y: n.y, z: n.z } };
+        return { type: "face", id: fh.object.userData.bodyId as string | undefined, world: fh.point, normal: { x: n.x, y: n.y, z: n.z }, tri: fh.faceIndex != null ? fh.faceIndex * 3 : undefined };
       }
       if (ph) return { type: "plane", id: ph.object.userData.planeId, world: ph.point };
       return { type: "empty" };
@@ -771,6 +773,69 @@ export class SceneManager {
     this.pickHighlight = new THREE.Mesh(geo, mat);
     this.pickHighlight.renderOrder = 999;
     this.scene.add(this.pickHighlight);
+  }
+
+  /** The world placement of a body's mesh (identity unless the body is placed by a transform). */
+  private bodyMatrix(bodyId: string | undefined): THREE.Matrix4 | null {
+    if (!bodyId) return null;
+    const o = this.solidsGroup.children.find((c) => (c as THREE.Mesh).isMesh && c.userData.bodyId === bodyId);
+    if (!o) return null;
+    o.updateWorldMatrix(true, false);
+    return o.matrixWorld.clone();
+  }
+
+  private selectionLayer: THREE.Group | null = null;
+  private hoverLayer: THREE.Mesh | null = null;
+
+  private static disposeTree(o: THREE.Object3D) {
+    o.traverse((c) => { const m = c as THREE.Mesh; m.geometry?.dispose(); const mat = m.material as THREE.Material | THREE.Material[] | undefined; if (Array.isArray(mat)) mat.forEach((x) => x.dispose()); else mat?.dispose(); });
+  }
+
+  /** Light the selection: faces (triangles, flat xyz in the body's own frame) tinted in the accent colour and edges
+   *  (segments, flat xyz) drawn over them. Null/empty clears. The picked face, Shell's faces to open, and the edges
+   *  an edge-pick Fillet/Chamfer holds show here. */
+  setSelectionHighlight(parts: { bodyId?: string; faces?: Float32Array | null; edges?: Float32Array | null }[] | null) {
+    this.invalidate();
+    if (this.selectionLayer) { this.scene.remove(this.selectionLayer); SceneManager.disposeTree(this.selectionLayer); this.selectionLayer = null; }
+    if (!parts?.some((p) => p.faces?.length || p.edges?.length)) return;
+    const g = new THREE.Group();
+    for (const p of parts) {
+      const m = this.bodyMatrix(p.bodyId);
+      if (p.faces?.length) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(p.faces, 3));
+        const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xf0a44b, transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide }));
+        if (m) mesh.applyMatrix4(m);
+        mesh.renderOrder = 997;
+        g.add(mesh);
+      }
+      if (p.edges?.length) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(p.edges, 3));
+        const lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xf07a1b, depthTest: false, transparent: true }));
+        if (m) lines.applyMatrix4(m);
+        lines.renderOrder = 998;
+        g.add(lines);
+      }
+    }
+    this.selectionLayer = g;
+    this.scene.add(g);
+  }
+
+  /** A faint tint on the face under the cursor (flat xyz triangles in the body's frame), so you see what a click
+   *  would pick; null clears. */
+  setHoverHighlight(bodyId: string | undefined, faces: Float32Array | null) {
+    if (this.hoverLayer) { this.scene.remove(this.hoverLayer); SceneManager.disposeTree(this.hoverLayer); this.hoverLayer = null; this.invalidate(); }
+    if (!faces?.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(faces, 3));
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xf0a44b, transparent: true, opacity: 0.18, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, side: THREE.DoubleSide }));
+    const m = this.bodyMatrix(bodyId);
+    if (m) mesh.applyMatrix4(m);
+    mesh.renderOrder = 996;
+    this.hoverLayer = mesh;
+    this.scene.add(mesh);
+    this.invalidate();
   }
 
   /** Public: approximate world/uv distance covered by `px` screen pixels. */

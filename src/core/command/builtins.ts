@@ -86,6 +86,7 @@ const FACE_SELECTOR_SCHEMA: JSONSchema = {
     parallelTo: { type: "string", enum: PLANE_ENUM, description: "Planar faces parallel to an origin plane." },
     inPlane: { ...IN_PLANE_SCHEMA, description: "Faces lying in an origin plane offset along its normal." },
     nearPoint: { ...V3_SCHEMA, description: "The face containing this world point." },
+    names: { type: "array", items: { type: "string" }, description: "Faces by topological name (see body_topology), e.g. [\"ext3:end\"]; stable across upstream edits." },
   },
 };
 
@@ -2004,10 +2005,10 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Revolve",
     summary: "Revolve a sketch region about an axis in its plane into a solid (cylinders, domes, hoops, turned parts in one feature).",
     description:
-      "Revolves the sketch's closed region(s) about the line through `axis.p1`→`axis.p2` (sketch u,v coordinates; e.g. the v axis is {p1:{x:0,y:0},p2:{x:0,y:1}}) by `angle` degrees (expression; default 360). The profile must lie on one side of the axis. `operation` and `region` behave as in feature.extrude. Returns the feature id.",
+      "Revolves the sketch's closed region(s) about the line through `axis.p1`→`axis.p2` (sketch u,v coordinates; e.g. the v axis is {p1:{x:0,y:0},p2:{x:0,y:1}}) by `angle` degrees (expression; default 360). Or give `axisLine`, a line of the sketch (often a construction line): the axis then follows that line when the sketch changes. The profile must lie on one side of the axis. `operation` and `region` behave as in feature.extrude. Returns the feature id.",
     paramsSchema: {
       type: "object",
-      required: ["sketch", "axis"],
+      required: ["sketch"],
       additionalProperties: false,
       properties: {
         sketch: { type: "string" },
@@ -2020,6 +2021,7 @@ export const BUILTINS: CommandDef<any>[] = [
             p2: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
           },
         },
+        axisLine: { type: "string", description: "A line of the sketch to revolve about (instead of `axis`); the axis follows it." },
         angle: { type: "string", description: "Sweep angle in degrees (expression). Default 360." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
         region: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
@@ -2032,11 +2034,20 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A drum from its half profile sketched on XZ, revolved about the sketch v (world Z) axis", params: { sketch: "sketch2", axis: { p1: { x: 0, y: 0 }, p2: { x: 0, y: 1 } } } },
       { note: "A quarter-turn boss joined to the body", params: { sketch: "sketch5", axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "90", operation: "join" } },
     ],
-    apply(draft, p: { sketch: string; axis: { p1: Vec; p2: Vec }; angle?: string | number; operation?: "new" | "join" | "cut" | "intersect"; region?: Vec; body?: string; requireEffect?: boolean; name?: string }, ctx) {
-      if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
+    apply(draft, p: { sketch: string; axis?: { p1: Vec; p2: Vec }; axisLine?: string; angle?: string | number; operation?: "new" | "join" | "cut" | "intersect"; region?: Vec; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      const sk = draft.sketches[p.sketch];
+      if (!sk) throw new Error(`No sketch "${p.sketch}"`);
+      let axis = p.axis;
+      if (p.axisLine) {
+        const ln = sk.entities[p.axisLine];
+        if (!ln || ln.kind !== "line") throw new Error(`No line "${p.axisLine}" in ${sk.name}`);
+        const a = sk.entities[ln.p1], b = sk.entities[ln.p2];
+        if (a?.kind === "point" && b?.kind === "point") axis = { p1: { x: a.x, y: a.y }, p2: { x: b.x, y: b.y } };
+      }
+      if (!axis) throw new Error("revolve needs an axis: `axis` (two sketch points) or `axisLine`");
       const id = ctx.alloc("rev");
       draft.features[id] = {
-        id, kind: "revolve", name: p.name ?? "Revolve", sketchId: p.sketch, axis: p.axis,
+        id, kind: "revolve", name: p.name ?? "Revolve", sketchId: p.sketch, axis, ...(p.axisLine ? { axisLine: p.axisLine } : {}),
         angleExpr: String(p.angle ?? 360), angleValue: 360, operation: p.operation ?? "new", regionPoint: p.region,
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };

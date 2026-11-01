@@ -17,8 +17,7 @@ import { useCardSize } from "../../kit/useCardSize";
 import { createEditQueue } from "../../kit/editQueue";
 import { formatValue } from "../../kit/numberMath";
 import { extrudeCap, isFormula, measurements, namedParam, pushEdit, pushTargetOf, pushTo, rowForFace } from "./workbench";
-import { faceEdgeSelector } from "../contextActions.logic";
-import { applyPush, edgeFace, editFormula, lookAtFace, nameThisNumber, pushExpression, pushKey } from "../contextActions";
+import { applyPush, edgeFace, editFormula, faceHasEdges, lookAtFace, nameThisNumber, pushExpression, pushKey } from "../contextActions";
 
 export function FaceVerbs() {
   const rows = useFeatureRows();
@@ -42,7 +41,7 @@ export function FaceVerbs() {
   const push = target?.param ?? null;
   const named = push ? namedParam(push.expr, names) : null;
   const formula = !!push && isFormula(push.expr, names);
-  const canEdge = !!faceEdgeSelector(sel.point, sel.normal);
+  const canEdge = faceHasEdges(sel);
   const metrics = measuring ? measurements(solids[sel.bodyId], sel.faceName) : [];
   const bounds = { w: rect.w, h: rect.h };
   // beside the click, not over it: the picked face stays in view

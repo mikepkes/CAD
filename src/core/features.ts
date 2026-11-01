@@ -108,8 +108,15 @@ function buildFeatureSolid(doc: CadDocument, scope: Scope, f: SketchFeature, tar
   if (f.kind === "revolve") {
     const angle = resolveExpr(f.angleExpr, f.angleValue, scope);
     f.angleValue = angle;
-    const o = to3d(wp0, f.axis.p1.x, f.axis.p1.y);
-    const q = to3d(wp0, f.axis.p2.x, f.axis.p2.y);
+    // about a sketch line: its solved ends now, so the axis follows the line
+    let ax = f.axis;
+    const ln = f.axisLine ? sketch.entities[f.axisLine] : undefined;
+    if (ln?.kind === "line") {
+      const a = sketch.entities[ln.p1], b = sketch.entities[ln.p2];
+      if (a?.kind === "point" && b?.kind === "point") ax = { p1: { x: a.x, y: a.y }, p2: { x: b.x, y: b.y } };
+    }
+    const o = to3d(wp0, ax.p1.x, ax.p1.y);
+    const q = to3d(wp0, ax.p2.x, ax.p2.y);
     const dir = { x: q.x - o.x, y: q.y - o.y, z: q.z - o.z };
     if (Math.hypot(dir.x, dir.y, dir.z) < 1e-9) throw new Error("revolve axis points coincide");
     const shape = buildRegionsRevolved(wp0, regions, o, dir, Math.abs(angle) < 1e-9 ? 360 : angle);
@@ -1190,7 +1197,7 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
     f.thicknessValue = t;
     if (!(t > 0)) throw new Error("shell thickness must be positive");
     const before = volumeOfShape(target.shape);
-    const hollowed = shellShape(target.shape, t, f.openFaces);
+    const hollowed = shellShape(target.shape, t, f.openFaces, f.openFaces.names?.length ? target.faceNames : undefined);
     const after = volumeOfShape(hollowed);
     // An un-measurable result means OCC produced an invalid solid (usually the
     // wall is thicker than the body allows, or no face matched): keep the body.

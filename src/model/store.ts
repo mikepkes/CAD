@@ -42,6 +42,7 @@ import { pickItems, type PickItem } from "./pickMenu";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
 import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
 import { renameViaEdit } from "./assist";
+import { FeatureTool, FeatureToolKind, defaultRevolveAxis, profileChoices, toggled, toolCommand, toolExpressions } from "./featureTools";
 
 /** The geometry backend: a Web Worker when available (keeps the OCC kernel off
  *  the main thread), else inline on this thread. */
@@ -329,6 +330,17 @@ export interface AppState {
   /** Pick the face a "to face" extrude stops at; the distance field shows how far that is. */
   pickExtrudeToFace: (point: Vec3, normal: Vec3) => void;
   openExtrude: (sketchId?: string) => void;
+  /** A modelling panel's session (Revolve, Shell, Pattern, edge-pick Fillet/Chamfer): its choices so far; null when none is open. */
+  featureTool: FeatureTool | null;
+  openFeatureTool: (kind: FeatureToolKind, blend?: "fillet" | "chamfer") => void;
+  patchFeatureTool: (patch: Record<string, unknown>) => void;
+  closeFeatureTool: () => void;
+  /** Run the open session's command; resolves to the new feature's id (null when it couldn't run). */
+  commitFeatureTool: () => Promise<string | null>;
+  /** A face clicked during a session: Shell opens or closes it; any session takes its body when it has none yet. */
+  toolPickFace: (point: Vec3, normal: Vec3, bodyId: string, faceName?: string) => void;
+  /** An edge clicked during an edge-pick Fillet/Chamfer session: picked, or dropped when it was. */
+  toolPickEdge: (bodyId: string, name: string) => void;
   mirrorModel: (plane: string) => Promise<void>;
   closeExtrude: () => void;
   setExtrudeRegion: (p: { x: number; y: number } | null) => void;
@@ -1226,10 +1238,81 @@ export const useStore = create<AppState>((set, get) => {
       set({
         extrudeActive: true, extrudeTarget: target, extrudeRegion: null,
         extrudeDistanceExpr: "10", extrudeOperation: hasBody && onFace ? "join" : "new", extrudeSymmetric: false, extrudeExtent: "distance", extrudeToFace: null,
-        mode: "model", activeSketchId: null, selection: [],
+        mode: "model", activeSketchId: null, selection: [], featureTool: null,
       });
     },
     closeExtrude: () => set({ extrudeActive: false, extrudeTarget: null, extrudeRegion: null }),
+
+    featureTool: null,
+    openFeatureTool: (kind, blend) => {
+      const s = get();
+      const doc = s.session.doc;
+      const bodies = Object.values(s.solids).filter((b) => b.mesh && !b.error);
+      const lastBody = bodies.length ? bodies[bodies.length - 1].featureId : null;
+      const face = s.faceSelection;
+      let tool: FeatureTool;
+      if (kind === "revolve") {
+        const choices = profileChoices(doc);
+        if (!choices.length) { set({ toast: { kind: "info", text: "Draw a closed profile in a sketch first (and a line to turn it about), then revolve it." } }); return; }
+        const sid = s.activeSketchId && choices.some((c) => c.id === s.activeSketchId) ? s.activeSketchId : choices[choices.length - 1].id;
+        tool = { kind, sketch: sid, axis: defaultRevolveAxis(doc.sketches[sid]), angle: "360", operation: bodies.length && doc.sketches[sid]?.planeId === "custom" ? "join" : "new" };
+      } else {
+        if (!bodies.length) { set({ toast: { kind: "info", text: "Make a body first." } }); return; }
+        const body = face?.bodyId || lastBody;
+        if (kind === "shell") tool = { kind, body, faces: face?.faceName ? [{ name: face.faceName, point: face.point, normal: face.normal }] : [], thickness: "2" };
+        else if (kind === "pattern") {
+          const b = (body && s.solids[body]?.bounds) || null;
+          const spacing = b ? String(Math.ceil(b.max.x - b.min.x + 5)) : "20";
+          tool = { kind, body, mode: "linear", count: "3", direction: "X", spacing, axis: "Z", angle: "" };
+        } else tool = { kind: "edges", blend: blend ?? "fillet", body, edges: [], size: blend === "chamfer" ? "1" : "2" };
+      }
+      set({
+        featureTool: tool, extrudeActive: false, extrudeTarget: null, sketchPlacing: false, faceSelection: null,
+        mode: "model", activeSketchId: null, selection: [],
+        lastMessage: kind === "shell" ? "Shell: click the faces to open, set the wall, then Shell."
+          : kind === "edges" ? `${tool.kind === "edges" && tool.blend === "chamfer" ? "Chamfer" : "Fillet"}: click the edges on the model, then ${tool.kind === "edges" && tool.blend === "chamfer" ? "Chamfer" : "Fillet"}.`
+          : kind === "pattern" ? "Pattern: choose how many and how far apart, then Pattern."
+          : "Revolve: choose the profile and the axis, then Revolve.",
+      });
+    },
+    patchFeatureTool: (patch) => { const t = get().featureTool; if (t) set({ featureTool: { ...t, ...patch } as FeatureTool }); },
+    closeFeatureTool: () => set({ featureTool: null }),
+    commitFeatureTool: async () => {
+      const tool = get().featureTool;
+      if (!tool) return null;
+      const cmd = toolCommand(tool, get().session.doc);
+      if ("problem" in cmd) { set({ toast: { kind: "info", text: cmd.problem } }); return null; }
+      for (const [label, expr] of Object.entries(toolExpressions(tool))) {
+        const problem = typedProblem(expr);
+        if (problem) { set({ toast: { kind: "error", text: `${label}: ${problem}` } }); return null; }
+      }
+      await get().ensureKernel();
+      const r = await runDispatch(cmd.type, cmd.params);
+      if (!r.ok) return null;
+      set({ featureTool: null });
+      await get().rebuildSolids();
+      const sol = get().solids[r.createdIds[0]];
+      if (sol?.error) set({ toast: { kind: "error", text: sol.error } });
+      return r.createdIds[0] ?? null;
+    },
+    toolPickFace: (point, normal, bodyId, faceName) => {
+      const t = get().featureTool;
+      if (!t) return;
+      if (t.kind === "shell") {
+        if (!faceName) { set({ lastMessage: "That face has no name to remember it by; try another" }); return; }
+        if (t.body && bodyId && bodyId !== t.body && t.faces.length) { set({ lastMessage: "Pick faces of one body" }); return; }
+        set({ featureTool: { ...t, body: t.body ?? bodyId, faces: toggled(t.faces, { name: faceName, point, normal }, (a, b) => a.name === b.name) } });
+      } else if ((t.kind === "pattern" || t.kind === "edges") && bodyId && t.body !== bodyId && !(t.kind === "edges" && t.edges.length)) {
+        set({ featureTool: { ...t, body: bodyId } as FeatureTool });
+      }
+    },
+    toolPickEdge: (bodyId, name) => {
+      const t = get().featureTool;
+      if (!t || t.kind !== "edges") return;
+      if (t.body && t.body !== bodyId && t.edges.length) { set({ lastMessage: "Pick edges of one body" }); return; }
+      const edges = toggled(t.edges, name);
+      set({ featureTool: { ...t, body: bodyId, edges }, lastMessage: `${edges.length} edge${edges.length === 1 ? "" : "s"} picked` });
+    },
     setExtrudeRegion: (p) => set({ extrudeRegion: p }),
     setExtrudeDistanceExpr: (expr) => set({ extrudeDistanceExpr: expr }),
     setExtrudeOperation: (op) => set({ extrudeOperation: op }),
@@ -1454,7 +1537,7 @@ export const useStore = create<AppState>((set, get) => {
         toast: null,
         faceSelection: null,
         extrudeActive: false, extrudeTarget: null, extrudeRegion: null,
-        sketchPlacing: false,
+        sketchPlacing: false, featureTool: null,
         // a stale hint from the last document ("Pick an origin plane…") must not outlive it
         lastMessage: doc.operations.length ? "" : "Pick an origin plane to start a sketch.",
       });

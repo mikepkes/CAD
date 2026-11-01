@@ -11,6 +11,9 @@ import { resolveSketchPlane } from "../geometry/plane";
 import { availableOps } from "../model/selectionOps";
 import { infer, InferResult } from "./snapping";
 import { useRing } from "../model/ring";
+import { faceNameAt } from "../core/geometry/pick";
+import { faceTriangles } from "../model/pickMenu";
+import { nearestEdge } from "../model/edgePick";
 
 type Vec3 = { x: number; y: number; z: number };
 
@@ -47,6 +50,9 @@ export class Interactions {
   /** The pending long-press timer (model mode) and whether it fired (so the release isn't also a click). */
   private longPress: ReturnType<typeof setTimeout> | undefined;
   private longPressed = false;
+  /** The face the hover tint is on (model mode), and the frame a hover pick is waiting for. */
+  private hovered: string | null = null;
+  private hoverFrame = 0;
 
   constructor(scene: SceneManager, dom: HTMLElement) {
     this.scene = scene;
@@ -338,12 +344,39 @@ export class Interactions {
     }
   };
 
+  /** The body face under a screen point and its name (model mode), from the pick's triangle. */
+  private faceUnder(clientX: number, clientY: number): { bodyId: string; faceName?: string; tri?: number } | null {
+    if (!this.base) return null;
+    const pick = this.scene.pick(clientX, clientY, this.base);
+    if (pick.type !== "face" || !pick.id) return null;
+    const mesh = this.st().solids[pick.id]?.mesh;
+    return { bodyId: pick.id, tri: pick.tri, faceName: mesh && pick.tri != null ? faceNameAt(mesh, pick.tri) : undefined };
+  }
+
+  /** Tint the face under the cursor (model mode, nothing pressed), once per frame at most. */
+  private hoverAt(clientX: number, clientY: number) {
+    cancelAnimationFrame(this.hoverFrame);
+    this.hoverFrame = requestAnimationFrame(() => {
+      const st = this.st();
+      const f = st.mode === "model" && !st.extrudeActive && st.featureTool?.kind !== "edges" ? this.faceUnder(clientX, clientY) : null;
+      const key = f?.faceName ? `${f.bodyId}|${f.faceName}` : null;
+      if (key === this.hovered) return;
+      this.hovered = key;
+      this.scene.setHoverHighlight(f?.bodyId, f?.faceName ? faceTriangles(st.solids[f.bodyId]?.mesh, f.faceName) : null);
+    });
+  }
+  private clearHover() { cancelAnimationFrame(this.hoverFrame); if (this.hovered) { this.hovered = null; this.scene.setHoverHighlight(undefined, null); } }
+
   private onMove = (e: PointerEvent) => {
     const st = this.st();
     if (this.handleDragging) { this.scene.handles.drag(e.clientX, e.clientY); return; }
     if (st.mode === "model" && this.scene.handles.active) {
       this.scene.handles.setHover(this.scene.handles.hitTest(e.clientX, e.clientY));
     }
+    if (st.mode === "model") {
+      if (e.buttons === 0 && e.pointerType !== "touch") this.hoverAt(e.clientX, e.clientY);
+      else this.clearHover();
+    } else this.clearHover();
     if (st.mode !== "sketch") return;
     if (this.downPt) {
       const d = Math.hypot(e.clientX - this.downPt.x, e.clientY - this.downPt.y);
@@ -399,7 +432,19 @@ export class Interactions {
       if (this.longPressed) { this.longPressed = false; this.downPt = null; this.scene.controls.enabled = true; return; } // the picker took this press
       if (!this.moved && this.downPt && this.base) {
         const pick = this.scene.pick(e.clientX, e.clientY, this.base);
-        if (st.extrudeActive) {
+        const tool = st.featureTool;
+        if (tool && e.button === 0) {
+          // A modelling panel is open: a click adds an edge (edge-pick fillet/chamfer) or a face (shell) to it.
+          if (tool.kind === "edges") {
+            const bodies = Object.values(st.solids).filter((b) => b.mesh && !b.error).map((b) => ({ bodyId: b.featureId, mesh: b.mesh! }));
+            const hit = nearestEdge(tool.body && tool.edges.length ? bodies.filter((b) => b.bodyId === tool.body) : bodies, { x: e.clientX, y: e.clientY }, (p) => this.scene.worldToScreen(p), 10);
+            if (hit) st.toolPickEdge(hit.bodyId, hit.name);
+            else st.setMessage("No edge there: click right on an edge line");
+          } else if (pick.type === "face" && pick.world && pick.normal && pick.id) {
+            const mesh = st.solids[pick.id]?.mesh;
+            st.toolPickFace({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal, pick.id, mesh && pick.tri != null ? faceNameAt(mesh, pick.tri) : undefined);
+          }
+        } else if (st.extrudeActive) {
           // Extrude session: pick a region or a face to extrude, or (extent "To face") the face to stop at.
           if (st.extrudeExtent === "toFace" && st.extrudeTarget && pick.type === "face" && pick.world && pick.normal) {
             st.pickExtrudeToFace({ x: pick.world.x, y: pick.world.y, z: pick.world.z }, pick.normal);

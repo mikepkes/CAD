@@ -393,6 +393,15 @@ export function Toolbar() {
             >
               {kernelLoading ? "⏳ Loading 3D…" : <><Icon name="extrude" />Extrude</>}
             </button>
+            <button
+              className="btn with-icon"
+              disabled={!lastSketch || kernelLoading}
+              title={lastSketch ? "Revolve a sketch profile about a line or an axis" : "Create a sketch first"}
+              onClick={() => useStore.getState().openFeatureTool("revolve")}
+            >
+              <Icon name="revolve" />Revolve
+            </button>
+            <ModifyMenu disabled={!hasSolids || kernelLoading} />
             {hasSolids && (
               <>
                 <select
@@ -420,6 +429,41 @@ export function Toolbar() {
         </>
       )}
     </div>
+  );
+}
+
+/** The modelling tools that change a body: fillet or chamfer picked edges, shell, pattern. */
+function ModifyMenu({ disabled }: { disabled: boolean }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); setOpen(false); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
+  const S = useStore.getState;
+  const items: { label: string; note: string; icon: Parameters<typeof Icon>[0]["name"]; run: () => void }[] = [
+    { label: "Fillet edges", note: "round the edges you click", icon: "fillet", run: () => S().openFeatureTool("edges", "fillet") },
+    { label: "Chamfer edges", note: "bevel the edges you click", icon: "chamfer", run: () => S().openFeatureTool("edges", "chamfer") },
+    { label: "Shell", note: "hollow a body, opening faces", icon: "shell", run: () => S().openFeatureTool("shell") },
+    { label: "Pattern", note: "copies along a line or around an axis", icon: "pattern-linear", run: () => S().openFeatureTool("pattern") },
+  ];
+  return (
+    <span className="export-menu">
+      <button className="btn with-icon" aria-haspopup="menu" aria-expanded={open} disabled={disabled} title={disabled ? "Make a body first" : "Fillet, chamfer, shell or pattern a body"} onClick={() => setOpen((o) => !o)}><Icon name="fillet" />Modify ▾</button>
+      {open && (
+        <>
+          <div className="export-scrim" onPointerDown={() => setOpen(false)} />
+          <div className="export-list" role="menu" aria-label="Modify">
+            {items.map((it) => (
+              <button key={it.label} role="menuitem" className="export-item" onClick={() => { setOpen(false); it.run(); }}>
+                <b>{it.label}</b><span>{it.note}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
   );
 }
 

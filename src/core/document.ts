@@ -110,6 +110,8 @@ export interface RevolveFeature {
   sketchId: string;
   /** Axis in sketch (u,v) coordinates: through p1 and p2. */
   axis: { p1: { x: number; y: number }; p2: { x: number; y: number } };
+  /** A line of the sketch to revolve about instead (its current ends, so the axis follows the line when it moves). */
+  axisLine?: string;
   /** Sweep angle expression in degrees (360 = full). */
   angleExpr: string;
   angleValue: number;
@@ -393,6 +395,8 @@ export interface FaceSelector {
   inPlane?: { plane: "XY" | "XZ" | "YZ"; offset?: number };
   /** The face containing (within tolerance of) a world point. */
   nearPoint?: { x: number; y: number; z: number };
+  /** Faces by topological name (as picked in the viewport): stable across upstream edits. */
+  names?: string[];
 }
 
 /** Round or bevel selected edges of the most recent body. */
