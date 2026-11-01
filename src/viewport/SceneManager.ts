@@ -20,7 +20,16 @@ function rigidMat(R: Rigid): THREE.Matrix4 {
     0, 0, 0, 1,
   );
 }
-import { createMaterial, MaterialSpec, WoodFrame } from "./material";
+import { createMaterial, MaterialSpec, WoodFrame, wrapsTexture, wrapCoords } from "./material";
+
+/** Wrapped-texture coordinates per body mesh (see wrapCoords), computed once per mesh. */
+const WRAP = new WeakMap<Float32Array, Float32Array>();
+function addWrapCoords(geo: THREE.BufferGeometry, positions: Float32Array, normals: Float32Array, material: MaterialSpec | undefined) {
+  if (!wrapsTexture(material)) return;
+  let w = WRAP.get(positions);
+  if (!w) { w = wrapCoords(positions, normals); WRAP.set(positions, w); }
+  geo.setAttribute("aWrap", new THREE.BufferAttribute(w, 4));
+}
 import type { ThreadDecal } from "../core/document";
 import { fitDistance, orbitDirection } from "./orbitCamera";
 import { LensPass, type LensSpec } from "./lensPass";
@@ -1103,6 +1112,7 @@ export class SceneManager {
     if (s.normals.length === s.positions.length) geo.setAttribute("normal", new THREE.BufferAttribute(s.normals, 3));
     else geo.computeVertexNormals();
     geo.setIndex(new THREE.BufferAttribute(s.indices, 1));
+    addWrapCoords(geo, s.positions, s.normals, s.material);
     const clip = this.clipPlane ? [this.clipPlane] : null;
     // In section view each body gets its own colour so parts read apart; the
     // normal (un-sectioned) view keeps the assigned material, else a uniform tint.
@@ -1267,6 +1277,7 @@ export class SceneManager {
       if (solid.normals.length === solid.positions.length) geo.setAttribute("normal", new THREE.BufferAttribute(solid.normals, 3));
       else geo.computeVertexNormals();
       geo.setIndex(new THREE.BufferAttribute(solid.indices, 1));
+      addWrapCoords(geo, solid.positions, solid.normals, solid.material);
       const mat = solid.material ? this.materialFor(solid) : new THREE.MeshStandardMaterial({ color: 0x7b86e0, metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide });
       g.add(new THREE.Mesh(geo, mat));
       if (solid.edges.length) {

@@ -130,6 +130,9 @@ function MaterialEditor({ m }: { m: Material }) {
       {m.texture && m.texture !== "none" && (
         <label><span>Pitch (mm)</span><input type="number" className="k-input" aria-label="Texture pitch" min={0.1} step={0.1} defaultValue={m.textureScale ?? 1.5} onChange={(e) => Number(e.target.value) > 0 && set({ textureScale: Number(e.target.value) }, 300)} /></label>
       )}
+      {(m.texture === "dimples" || m.texture === "knurl" || m.texture === "hex") && (
+        <label title="Wrap the pattern round the part's long axis, sized along its surface (grips, knobs, collars), instead of projecting it"><span>Wrap round part</span><input type="checkbox" aria-label="Wrap round part" defaultChecked={!!m.textureWrap} onChange={(e) => set({ textureWrap: e.target.checked })} /></label>
+      )}
       {(m.texture === "ribs" || m.finish === "brushed") && (
         <label><span>{m.finish === "brushed" ? "Brushed along" : "Ribs across"}</span><Pills ariaLabel="Texture axis" value={(m.textureAxis ?? "z") as AxisKey} options={[...AXES]} onChange={(a) => set({ textureAxis: a })} /></label>
       )}

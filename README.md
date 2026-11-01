@@ -48,6 +48,19 @@ whose value is `turn` times the tooth ratios down the train — so the teeth sta
 in mesh, which the motion study checks. Printable: 5 mm bores on pins, 0.1 mm
 backlash a side.
 
+And **https://mikepkes.github.io/CAD/?mode=customize&example=handlebar** — a
+**mountain-bike cockpit** built from organic surfaces. The riser bar is one
+sweep along a 3D B-spline spine (straight through the clamp, a rise bend, a
+sweep bend, straight to the tips; every bend curvature-continuous) whose round
+section tapers from the 31.8 mm stem clamp to the 22.2 mm grip diameter on an
+eased scale law, so it is one C2 surface end to end. The lock-on grips morph
+from round at the collar into a palm wing that reaches back toward the rider
+(five sections swept along the grip's axis), in rubber with a hex pad pattern
+wrapped round them; red anodised collars, end plugs, stem, faceplate and top
+cap, titanium faceplate bolts, a brushed aluminium bar. Drag `width` (720–800),
+`rise`, `backsweep`, `upsweep`, `gripLen` and `stemLen`: the bar re-bends, the
+grips, collars and plugs ride its tips, and nothing collides at any slider end.
+
 ### Compliant mechanisms
 
 Parts that move by **bending** instead of sliding on pins, printed flat as one
@@ -415,6 +428,7 @@ straight from a URL:
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&example=gimbal         # two-axis flexure gimbal: eight cross-blade flexures, alpha/beta steer the mirror; blade, platform and range sliders
 ?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm) and a Geneva drive, driven by `turn`
+?mode=customize&example=handlebar      # a riser-bar cockpit from organic surfaces: a bar swept on a 3D spline with a tapering section, winged grips with a wrapped hex pattern; width, rise, sweep, grip and stem sliders
 ?mode=customize&model=<url-to.json>    # any VibeCAD model file
 ```
 

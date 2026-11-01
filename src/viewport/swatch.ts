@@ -3,7 +3,7 @@
 // look like. One small offscreen renderer, results cached per spec. Returns null
 // where there is no WebGL (tests, very old browsers); the UI then draws a flat chip.
 import * as THREE from "three";
-import { createMaterial, MaterialSpec } from "./material";
+import { createMaterial, MaterialSpec, wrapCoords } from "./material";
 import { studioEnvironmentScene } from "./studioEnvironment";
 
 let ctx: { renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; ball: THREE.Mesh } | null | undefined;
@@ -24,6 +24,8 @@ function setup() {
     const key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(1, -1, 2); scene.add(key);
     // a 12 mm ball, so textures and layer lines show at their real pitch
     const ball = new THREE.Mesh(new THREE.SphereGeometry(6, 96, 64));
+    // a wrapped texture (a grip's pads) wraps round the ball's axis
+    ball.geometry.setAttribute("aWrap", new THREE.BufferAttribute(wrapCoords(ball.geometry.getAttribute("position").array as Float32Array, ball.geometry.getAttribute("normal").array as Float32Array), 4));
     ball.rotation.x = Math.PI / 2;
     scene.add(ball);
     const camera = new THREE.PerspectiveCamera(30, 1, 1, 200);

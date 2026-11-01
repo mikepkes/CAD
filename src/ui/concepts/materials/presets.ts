@@ -27,6 +27,8 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
   { group: "3D print", name: "TPU", params: { kind: "printed", finish: "matte", color: "#2b2d31", layerHeight: 0.2, printAxis: "z", youngsModulus: 26, allowableStrain: 0.3, layerFactor: 0.8 } },
   { group: "Rubber", name: "Black rubber", params: { kind: "rubber", color: "#232427" } },
   { group: "Rubber", name: "Grip rubber", params: { kind: "rubber", color: "#26282b", texture: "knurl", textureScale: 2 } },
+  { group: "Rubber", name: "Hex grip", params: { kind: "rubber", color: "#232427", texture: "hex", textureScale: 3.2, textureWrap: true } },
+  { group: "Metal", name: "Red anodised", params: { kind: "metal", finish: "satin", color: "#c0261c", roughness: 0.24 } },
   { group: "Rubber", name: "Ribbed rubber", params: { kind: "rubber", color: "#2a2b2e", texture: "ribs", textureScale: 2.5, textureAxis: "x" } },
   { group: "Paint", name: "Red paint", params: { kind: "painted", color: "#b8322c" } },
   { group: "Paint", name: "Satin black", params: { kind: "painted", finish: "matte", color: "#1e1f22" } },

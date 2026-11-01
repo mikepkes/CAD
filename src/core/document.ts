@@ -466,8 +466,23 @@ export interface SweepFeature {
   id: string;
   kind: "sweep";
   name: string;
-  profileSketch: string; // closed profile (first region)
-  pathSketch: string;    // open path (spine)
+  profileSketch: string; // closed profile (first region); with `sections`, the first section's sketch
+  /** Open path (spine). With `path3d`, the sketch whose plane frames the 3D path's points instead. */
+  pathSketch: string;
+  /** A 3D spine instead of a path sketch: a smooth cubic B-spline through
+   *  (`through`) or controlled by (the default: its control polygon) these
+   *  points, each coordinate an expression — x and y along `pathSketch`'s plane,
+   *  z along its normal. A run of four collinear control points is exactly
+   *  straight; every bend is curvature-continuous. Sections stay upright
+   *  toward `up` (default: that plane's normal). */
+  path3d?: { points: { x: string; y: string; z: string }[]; through?: boolean; up?: { x: number; y: number; z: number } };
+  /** 3D path: several sections morphing along it. Each sketch's first region,
+   *  in its own sketch coordinates, is placed square to the spine `at` mm along
+   *  it (an expression; `pathLength` is the spine's length), its v axis up. */
+  sections?: { sketch: string; at: string }[];
+  /** 3D path, one profile: its scale along the spine — values at stations
+   *  (`at` as for sections), eased between them (C2, never overshooting). */
+  scale?: { at: string; value: string }[];
   operation?: BooleanOp;
   body?: string;
   requireEffect?: boolean;
@@ -774,11 +789,11 @@ export interface ComponentPattern {
  *  params); metal/plastic are PBR. Rendering turns this into a three.js material. */
 export type MaterialKind = "wood" | "metal" | "plastic" | "painted" | "rubber" | "printed";
 /** A procedural surface texture drawn in the shader (no geometry): stipple (fine grain),
- *  dimples, knurl (diamonds), ribs (rings across `textureAxis`). */
-export type SurfaceTexture = "none" | "stipple" | "dimples" | "knurl" | "ribs";
+ *  dimples, knurl (diamonds), ribs (rings across `textureAxis`), hex (raised hexagonal grip pads). */
+export type SurfaceTexture = "none" | "stipple" | "dimples" | "knurl" | "ribs" | "hex";
 export type MaterialAxis = "x" | "y" | "z";
 export const MATERIAL_KINDS: MaterialKind[] = ["metal", "plastic", "printed", "rubber", "painted", "wood"];
-export const SURFACE_TEXTURES: SurfaceTexture[] = ["none", "stipple", "dimples", "knurl", "ribs"];
+export const SURFACE_TEXTURES: SurfaceTexture[] = ["none", "stipple", "dimples", "knurl", "ribs", "hex"];
 
 export interface Material {
   id: string;
@@ -793,6 +808,8 @@ export interface Material {
   texture?: SurfaceTexture;
   textureScale?: number;
   textureAxis?: MaterialAxis;
+  /** Wrap the texture round the part's long axis, sized by arc length (a grip, a knob, a collar), instead of projecting it. */
+  textureWrap?: boolean;
   /** printed: layer height (mm) and the build direction (the axis the layers stack along, in model space). */
   layerHeight?: number;
   printAxis?: MaterialAxis;

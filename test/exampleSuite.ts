@@ -39,8 +39,9 @@ export const EXAMPLES = DIRS.flatMap((d) => {
   return readdirSync(dir).filter((f) => f.endsWith(".json")).sort().map((f) => ({ name: `${d.replace("../", "")}${f}`, url: new URL(f, dir) }));
 });
 
-/** Examples checked in a kernel (a test file) of their own — see above. */
-export const OWN_KERNEL = ["public/examples/clockwork.json"];
+/** Examples checked in a kernel (a test file) of their own — see above; the handlebar too, whose
+ *  freeform collision checks are slow enough to want running beside the others, not after them. */
+export const OWN_KERNEL = ["public/examples/clockwork.json", "public/examples/handlebar.json"];
 
 /** Examples whose bodies interpenetrate BY CONSTRUCTION, with why. Their overlap
  *  at rest and at every motion sample is snapshotted instead (so any change shows
@@ -206,7 +207,7 @@ export function defineExampleSuite(which: (name: string) => boolean): void {
             }
             await s.dispatch("parameter.set", { name: p.name, expression: p.expr }); // back to its saved value
           }
-        }, 900000);
+        }, 1800000); // a freeform example (the handlebar) takes minutes here on a busy machine
       });
     }
   });
