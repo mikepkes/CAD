@@ -40,7 +40,7 @@ export const EXAMPLES = DIRS.flatMap((d) => {
 });
 
 /** Examples checked in a kernel (a test file) of their own — see above. */
-export const OWN_KERNEL = ["public/examples/clockwork.json"];
+export const OWN_KERNEL = ["public/examples/clockwork.json", "public/examples/skadis.json"];
 
 /** Examples whose bodies interpenetrate BY CONSTRUCTION, with why. Their overlap
  *  at rest and at every motion sample is snapshotted instead (so any change shows
