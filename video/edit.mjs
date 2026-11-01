@@ -33,6 +33,12 @@ const captions = []; // { from, to, text }
 const cues = [];
 let outFrame = 0;
 
+/** Spoken addresses as written, for the captions: "mikepkes dot github dot io slash CAD" → "mikepkes.github.io/CAD".
+ *  (The narration keeps the spoken form for the voice.) Runs after chunking, so the dots don't split sentences. */
+function written(text) {
+  return text.replace(/\b[\w-]+(?: dot [\w-]+)* dot (?:com|org|net|io|dev|app|ai|co)\b(?: slash [\w-]+)*/g, (m) => m.replace(/ dot /g, ".").replace(/ slash /g, "/"));
+}
+
 /** Split a line into subtitle chunks of at most ~84 characters, at sentence then clause boundaries. */
 function chunks(text) {
   const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [text];
@@ -108,7 +114,7 @@ for (const n of acts) {
   for (const b of timing.beats) {
     const from = toOut(b.start), to = Math.max(from + FPS, toOut(b.end));
     cues.push({ act: n, id: b.id, from, to, text: b.narration });
-    const parts = chunks(b.narration);
+    const parts = chunks(b.narration).map(written);
     const words = parts.map((p) => p.split(/\s+/).length), total = words.reduce((a, c) => a + c, 0);
     const span = Math.max(FPS, to - from - Math.round(FPS * 0.3));
     let at = from;
