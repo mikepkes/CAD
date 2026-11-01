@@ -290,6 +290,11 @@ export interface AppState {
   // timeline / history
   undo: () => void;
   redo: () => void;
+  /** Where the undo history stands now: pass it to endGesture when a drag or a preview ends. */
+  beginGesture: () => number;
+  /** A drag or preview has ended: fold the steps it took since `mark` into one undoable step
+   *  named `label`, or ("drop") forget them because the preview put everything back. */
+  endGesture: (mark: number, how: { label: string } | "drop") => void;
   editOperation: (opId: string, params: Record<string, unknown>) => Promise<void>;
   suppressOperation: (opId: string, suppressed: boolean) => Promise<void>;
   deleteOperation: (opId: string) => Promise<void>;
@@ -1047,6 +1052,13 @@ export const useStore = create<AppState>((set, get) => {
 
     undo: () => { get().session.undo(); bump(); afterMutate(); },
     redo: () => { get().session.redo(); bump(); afterMutate(); },
+    // (a session stand-in without an undo history, as some tests use, has nothing to fold)
+    beginGesture: () => get().session.undoDepth ?? 0,
+    endGesture: (mark, how) => {
+      const s = get().session;
+      if (how === "drop") s.dropSince?.(mark);
+      else s.squashSince?.(mark, how.label);
+    },
     editOperation: async (opId, params) => {
       // a changed value that should be an expression must read and name only real parameters
       const was = get().session.timeline.find((o) => o.opId === opId)?.params as Record<string, unknown> | undefined;

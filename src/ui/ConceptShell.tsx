@@ -14,6 +14,7 @@ import { MechanismPanel } from "./concepts/mechanism";
 import { useStore } from "../model/store";
 import { hasFlexures } from "../sim/flexure";
 import { MaterialsPanel } from "./concepts/materials";
+import { useMechanism } from "../model/concepts/mechanismStore";
 
 /** Switches for the concept surfaces, at the top-right of the viewport; also
  *  mounts the action ring once (it renders into document.body while open). */
@@ -58,5 +59,24 @@ export function RightPanel() {
       )}
       {tab === "ledger" && panels.ledger ? <LedgerPanel /> : tab === "space" && panels.space ? <DesignSpacePanel /> : tab === "mechanism" && panels.mechanism ? <MechanismPanel /> : tab === "materials" && panels.materials ? <MaterialsPanel /> : <InspectorPanel />}
     </>
+  );
+}
+
+/** Chips at the viewport's bottom-left for something running that no open panel shows: a Sweep started
+ *  from the ring or a hotkey while the Mechanism tab is hidden, with its Stop. */
+export function ViewChips() {
+  const sweeping = useMechanism((s) => s.sweeping);
+  const watched = useMechanism((s) => s.watchers > 0);
+  const chips = sweeping && !watched;
+  if (!chips) return null;
+  return (
+    <div className="view-chips" role="status" aria-live="polite">
+      {sweeping && !watched && (
+        <span className="view-chip">
+          <span>Sweeping {sweeping}…</span>
+          <Button size="sm" onClick={() => useMechanism.getState().stopSweep()} title="Stop the sweep and put the drive back">Stop</Button>
+        </span>
+      )}
+    </div>
   );
 }

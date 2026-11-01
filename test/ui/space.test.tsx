@@ -46,6 +46,9 @@ function mount(s: CadSession, opts: { solids?: Record<string, unknown>; backend?
   return { ...r, setParameterExpr, createBackend };
 }
 
+/** The store's own parameter edit (mount() swaps in a spy). */
+const realSetParameterExpr = useStore.getState().setParameterExpr;
+
 const currentSolids = { b: { featureId: "b", name: "b", sketchId: "", distance: 0, mesh: {}, volume: 4500, bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 30, y: 15, z: 10 } } } };
 
 describe("DesignSpacePanel", () => {
@@ -139,6 +142,32 @@ describe("DesignSpacePanel", () => {
     // the intermediate request (30, 15) was superseded by the newest, so only two positions were sent
     const sent = setParameterExpr.mock.calls.map((c) => (c as unknown as [string, string]).join("="));
     expect(sent).toEqual(["w=50", "h=5", "w=10", "h=25"]);
+  });
+
+  it("a drag previews live and leaves one undoable step when it ends", async () => {
+    const real = await twoBounded();
+    const keep = { setParameterExpr: useStore.getState().setParameterExpr, rebuildSolids: useStore.getState().rebuildSolids };
+    useStore.setState({ setParameterExpr: realSetParameterExpr, rebuildSolids: async () => {} });
+    useStore.setState({ session: real, rev: useStore.getState().rev + 1, solids: currentSolids as never });
+    render(<DesignSpacePanel createBackend={async () => boxBackend()} />);
+    await waitFor(() => expect(screen.getByText("25 cells")).toBeTruthy());
+    const before = real.undoDepth;
+    const map = screen.getByRole("img", { name: /Design space map/ });
+    const L = layout(5);
+    const pts = [gridToSvg(L, 4, 0), gridToSvg(L, 3, 1), gridToSvg(L, 2, 2), gridToSvg(L, 1, 3)];
+    fireEvent.pointerDown(map, { button: 0, clientX: pts[0].x, clientY: pts[0].y, pointerId: 1 });
+    for (const p of pts.slice(1)) {
+      await waitFor(() => expect(real.doc.parameters.find((q) => q.name === "w")?.value).not.toBe(30));
+      fireEvent.pointerMove(map, { clientX: p.x, clientY: p.y });
+    }
+    fireEvent.pointerUp(map);
+    await waitFor(() => expect(real.doc.parameters.find((q) => q.name === "w")?.value).toBe(20));
+    await waitFor(() => expect(real.undoDepth).toBe(before + 1));
+    expect(real.doc.parameters.find((q) => q.name === "h")?.value).toBe(20);
+    real.undo();
+    expect(real.doc.parameters.find((q) => q.name === "w")?.value).toBe(30);
+    expect(real.doc.parameters.find((q) => q.name === "h")?.value).toBe(15);
+    useStore.setState(keep);
   });
 
   it("steps with the arrow keys when the map is focused: the parameter's step, shift = one cell", async () => {

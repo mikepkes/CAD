@@ -4,11 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MechanismPanel } from "../../src/ui/concepts/mechanism";
-import { PanelToggles, RightPanel } from "../../src/ui/ConceptShell";
+import { PanelToggles, RightPanel, ViewChips } from "../../src/ui/ConceptShell";
 import { useMechanism } from "../../src/model/concepts/mechanismStore";
 import { useStore } from "../../src/model/store";
 import { useUi } from "../../src/model/concepts/uiState";
 import type { MechanismCurve } from "../../src/model/concepts/mechanism";
+import { realSession } from "../helpers";
 
 const travel = (value: number) => ({ id: "p1", name: "travel", expr: String(value), value, min: 0, max: 10, step: 0.1 });
 const compliantDoc = (value = 0) => ({
@@ -40,7 +41,7 @@ const POSE = {
 let follow: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   follow = vi.spyOn(useMechanism.getState(), "follow").mockReturnValue(() => {});
-  useMechanism.setState({ drive: null, pose: null, curves: {}, studying: false, sweeping: null });
+  useMechanism.setState({ drive: null, pose: null, curves: {}, studying: false, sweeping: null, watchers: 0 });
   useUi.setState({ panels: { workbench: true, ledger: false, space: false, lens: false, intent: true, mechanism: false }, rightTab: "inspector" });
   useStore.setState({ mode: "model" });
 });
@@ -131,18 +132,53 @@ describe("Sweep", () => {
     useStore.setState(keep);
   });
 
-  it("stops where it stands", async () => {
+  it("stops on request and puts the drive back where it started (a sweep is a preview)", async () => {
     setDoc(compliantDoc(0));
     const sent: string[] = [];
     const keep = { setParameterExpr: useStore.getState().setParameterExpr, rebuildSolids: useStore.getState().rebuildSolids };
     useStore.setState({
-      setParameterExpr: async (_n: string, v: string) => { sent.push(v); if (sent.length === 2) useMechanism.getState().stopSweep(); },
+      setParameterExpr: async (_n: string, v: string) => { sent.push(v); setDoc(compliantDoc(Number(v))); if (sent.length === 2) useMechanism.getState().stopSweep(); },
       rebuildSolids: async () => {},
     });
     await useMechanism.getState().sweep("travel", { perLeg: 4, stepMs: 0 });
-    expect(sent).toEqual(["2.5", "5"]);
+    expect(sent).toEqual(["2.5", "5", "0"]);
     expect(useMechanism.getState().sweeping).toBeNull();
     useStore.setState(keep);
+  });
+
+  it("leaves the undo history as it was: a sweep commits nothing", async () => {
+    const s = realSession();
+    await s.dispatch("parameter.add", { name: "travel", expression: "0", min: 0, max: 10, step: 0.1 });
+    s.doc.joints = compliantDoc(0).joints as never;
+    const keep = { session: useStore.getState().session, rebuildSolids: useStore.getState().rebuildSolids };
+    useStore.setState({ session: s, rebuildSolids: async () => {}, rev: useStore.getState().rev + 1 });
+    const before = s.undoDepth;
+    await useMechanism.getState().sweep("travel", { perLeg: 4, stepMs: 0 });
+    expect(s.doc.parameters.find((p) => p.name === "travel")?.value).toBe(0);
+    expect(s.undoDepth).toBe(before);
+    useStore.setState(keep);
+  });
+
+  it("a sweep nobody watches (started from the ring) shows a Stop chip over the viewport", async () => {
+    const stop = vi.spyOn(useMechanism.getState(), "stopSweep").mockImplementation(() => {});
+    render(<ViewChips />);
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+    act(() => useMechanism.setState({ sweeping: "travel", watchers: 0 }));
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(stop).toHaveBeenCalled();
+    act(() => useMechanism.setState({ watchers: 1 }));
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+    stop.mockRestore();
+  });
+
+  it("stops when the Mechanism tab goes away (switching tabs ends the preview)", async () => {
+    const stop = vi.spyOn(useMechanism.getState(), "stopSweep").mockImplementation(() => {});
+    setDoc(compliantDoc(0));
+    const r = render(<MechanismPanel />);
+    act(() => useMechanism.setState({ sweeping: "travel" }));
+    r.unmount();
+    expect(stop).toHaveBeenCalled();
+    stop.mockRestore();
   });
 });
 

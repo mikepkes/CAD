@@ -262,6 +262,27 @@ export class CadSession {
     return true;
   }
 
+  /** How many undoable steps there are: a mark for squashSince / dropSince. */
+  get undoDepth(): number {
+    return this.undoStack.length;
+  }
+
+  /** Fold every undoable step taken since `mark` into one (a drag that wrote a
+   *  value on each move undoes in one step). Nothing happens with fewer than one. */
+  squashSince(mark: number, label?: string): void {
+    const from = Math.max(0, Math.min(mark, this.undoStack.length));
+    const steps = this.undoStack.splice(from);
+    if (!steps.length) return;
+    const first = steps[0], last = steps[steps.length - 1];
+    this.undoStack.push({ label: label ?? last.label, docBefore: first.docBefore, evalsBefore: first.evalsBefore, docAfter: last.docAfter, evalsAfter: last.evalsAfter });
+  }
+
+  /** Forget the undoable steps taken since `mark`, keeping the document as it is
+   *  (a preview that has put everything back leaves nothing to undo). */
+  dropSince(mark: number): void {
+    this.undoStack.splice(Math.max(0, Math.min(mark, this.undoStack.length)));
+  }
+
   /** Capture the current state, for an all-or-nothing batch of edits. */
   checkpoint(): SessionCheckpoint {
     return { doc: this.doc, evaluations: this.evaluations, undo: this.undoStack.slice(), redo: this.redoStack.slice() };

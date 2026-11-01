@@ -17,7 +17,7 @@ import { useUi } from "../model/concepts/uiState";
 import { WorkbenchOverlay, HistoryStrip } from "./concepts/workbench";
 import { LensOverlay } from "./concepts/lens";
 import { IntentLine } from "./concepts/intent";
-import { PanelToggles, RightPanel } from "./ConceptShell";
+import { PanelToggles, RightPanel, ViewChips } from "./ConceptShell";
 import { Dialog } from "./kit/Dialog";
 import { DrawingView } from "./DrawingView";
 import { PickMenu } from "./PickMenu";
@@ -79,6 +79,7 @@ export function App() {
           <div className="center-view">
             <Viewport overlays={<>{workbench && <WorkbenchOverlay />}<LensOverlay /></>} />
             <PanelToggles />
+            <ViewChips />
             <Toast />
             <BuildProgress />
             <ExtrudePanel />

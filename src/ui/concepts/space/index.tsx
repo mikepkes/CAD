@@ -170,10 +170,18 @@ export function DesignSpacePanel(p: DesignSpacePanelProps = {}) {
   const lightest = spec ? lightestPassing(cells, metric, spec.n) : null;
 
   // ---- steering: one edit in flight, the latest request wins ----
+  // A drag previews each value live and leaves one undoable step when it ends.
   const queue = useRef(createMoveQueue());
-  const move = (x: number, y: number) => { if (spec) queue.current.live({ xName: spec.x.name, yName: spec.y.name, x, y }); };
-  const commit = () => { void queue.current.flush(); };
-  const goTo = (m: Move) => { queue.current.live(m); commit(); };
+  const gesture = useRef<number | null>(null);
+  const begin = () => { if (gesture.current == null) gesture.current = useStore.getState().beginGesture(); };
+  const move = (x: number, y: number) => { if (spec) { begin(); queue.current.live({ xName: spec.x.name, yName: spec.y.name, x, y }); } };
+  const commit = () => {
+    const mark = gesture.current;
+    gesture.current = null;
+    const names = spec ? `${spec.x.name} and ${spec.y.name}` : "the design";
+    void queue.current.flush().then(() => { if (mark != null) useStore.getState().endGesture(mark, { label: `Move ${names} on the map` }); });
+  };
+  const goTo = (m: Move) => { begin(); queue.current.live(m); commit(); };
 
   const cancel = () => { runToken.current++; setStatus("idle"); };
   const resample = () => { cache.open(key).clear(); setRunId((r) => r + 1); };
