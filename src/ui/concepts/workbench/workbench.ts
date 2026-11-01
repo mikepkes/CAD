@@ -494,11 +494,14 @@ export function stripState<T extends StripEntry>(rows: T[], rollbackIndex: numbe
   }));
   const built = rows.filter((r) => !r.rolledBack).length;
   const at = (r: T) => (r.num != null ? `${r.num} · ${r.name}` : r.name);
+  const failed = rows.filter((r) => !r.rolledBack && !r.suppressed && r.error);
   const text = !rows.length
     ? "No features yet"
     : rolledBack
       ? atRow ? `At ${at(atRow)} — new features insert here` : "At the start — new features insert here"
-      : `All ${countText(rows)} built`;
+      : failed.length
+        ? `${failed.length === 1 ? `${at(failed[0])} failed` : `${failed.length} features failed`}: ${rows.length - failed.length} of ${rows.length} built`
+        : `All ${countText(rows)} built`;
   return { chips, built, rolledBack, text, atRow };
 }
 

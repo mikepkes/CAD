@@ -39,6 +39,8 @@ import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
 import type { CutPart } from "../core/drawings";
 import { pickItems, type PickItem } from "./pickMenu";
+import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
+import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
 
 /** The geometry backend: a Web Worker when available (keeps the OCC kernel off
  *  the main thread), else inline on this thread. */
@@ -403,6 +405,24 @@ export const useStore = create<AppState>((set, get) => {
     bump({ ready: true, toast: toastFor(r), lastMessage: r.ok ? r.message ?? "" : r.error ?? "" });
     afterMutate();
     return r;
+  };
+
+  // ---- typed values: refuse what doesn't read or names no parameter; "name = expr" makes the parameter ----
+  const paramNames = () => get().session.doc.parameters.map((p) => p.name);
+  const typedProblem = (expr: string): string | null => {
+    const a = parameterAssignment(expr);
+    if (!a) return expressionProblem(expr, paramNames());
+    if (paramNames().includes(a.name)) return `There's already a parameter called ${a.name}: type ${a.name} on its own, or change it in Parameters`;
+    return expressionProblem(a.expression, paramNames());
+  };
+  /** The expression to store for a typed value (null, with a toast, when it can't be used). */
+  const typedExpression = async (expr: string): Promise<string | null> => {
+    const problem = typedProblem(expr);
+    if (problem) { set({ toast: { kind: "error", text: problem } }); return null; }
+    const a = parameterAssignment(expr);
+    if (!a) return expr.trim();
+    const r = await runDispatch("parameter.add", { name: a.name, expression: a.expression });
+    return r.ok ? a.name : null;
   };
 
   // Curvature and combs come from the B-rep, so they're computed in the
@@ -916,8 +936,12 @@ export const useStore = create<AppState>((set, get) => {
     updateConfiguration: async (ref, change) => { await runDispatch("configuration.update", { configuration: ref, ...change }); },
     deleteConfiguration: async (ref) => { await runDispatch("configuration.delete", { configuration: ref }); },
     renameParameter: async (name, newName) => {
-      const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
-      if (op) await get().editOperation(op.opId, { ...op.params, name: newName });
+      // every expression that used it follows the new name (one undoable step)
+      const r = await get().session.renameParameter(name, newName);
+      if (!r.ok) { set({ toast: { kind: "error", text: r.error ?? "Rename failed" } }); return; }
+      bump();
+      set({ lastMessage: `Renamed ${name} to ${newName}, and everything that used it` });
+      if (Object.keys(get().session.doc.features).length) await get().rebuildSolids();
     },
     setParameterBounds: async (name, bounds) => {
       const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
@@ -948,7 +972,8 @@ export const useStore = create<AppState>((set, get) => {
 
     editDimension: async (cid, expr) => {
       const op = get().session.timeline.find((o) => o.type === "sketch.addDimension" && o.createdIds.includes(cid));
-      if (op) await get().editOperation(op.opId, { ...op.params, expression: expr });
+      const value = op && (await typedExpression(expr));
+      if (op && value) await get().editOperation(op.opId, { ...op.params, expression: value });
     },
     toggleDrivenDimension: async (cid) => {
       const op = get().session.timeline.find((o) => o.type === "sketch.addDimension" && o.createdIds.includes(cid));
@@ -975,10 +1000,15 @@ export const useStore = create<AppState>((set, get) => {
     beginInlineEdit: (edit) => set({ inlineEdit: edit }),
     commitInlineEdit: async (expr) => {
       const edit = get().inlineEdit;
+      if (!edit || !expr.trim()) { set({ inlineEdit: null }); return; }
+      // a value that doesn't read, or names no parameter, keeps the editor open and says why
+      const problem = typedProblem(expr);
+      if (problem) { set({ toast: { kind: "error", text: problem } }); return; }
       set({ inlineEdit: null });
-      if (!edit || !expr.trim()) return;
-      if (edit.mode === "new") await runDispatch("sketch.addDimension", { ...edit.params, expression: expr });
-      else await get().editDimension(edit.cid, expr);
+      const value = await typedExpression(expr);
+      if (!value) return;
+      if (edit.mode === "new") await runDispatch("sketch.addDimension", { ...edit.params, expression: value });
+      else await get().editDimension(edit.cid, value);
     },
     cancelInlineEdit: () => set({ inlineEdit: null }),
 
@@ -1017,6 +1047,18 @@ export const useStore = create<AppState>((set, get) => {
     undo: () => { get().session.undo(); bump(); afterMutate(); },
     redo: () => { get().session.redo(); bump(); afterMutate(); },
     editOperation: async (opId, params) => {
+      // a changed value that should be an expression must read and name only real parameters
+      const was = get().session.timeline.find((o) => o.opId === opId)?.params as Record<string, unknown> | undefined;
+      if (was && !String(get().session.timeline.find((o) => o.opId === opId)?.type).startsWith("intent.")) {
+        for (const [k, v] of Object.entries(params)) {
+          if (typeof v !== "string" || v === was[k] || PROSE_KEYS.has(k)) continue;
+          const problem = expressionProblem(v, get().session.doc.parameters.map((p) => p.name));
+          if (problem && expressionProblem(String(was[k] ?? "0"), get().session.doc.parameters.map((p) => p.name)) === null) {
+            set({ toast: { kind: "error", text: problem } });
+            return;
+          }
+        }
+      }
       const r = await get().session.editOperation(opId, params);
       bump({ toast: toastFor(r), lastMessage: r.ok ? r.message ?? "" : r.error ?? "" });
       afterMutate();
@@ -1095,6 +1137,10 @@ export const useStore = create<AppState>((set, get) => {
     },
     cancelMotionStudy: () => { motionToken++; set({ motionStatus: "idle", motionProgress: 0 }); },
     extrudeSketch: async (sketchId, distanceExpr, opts) => {
+      if (distanceExpr != null && !opts?.toFace) {
+        const problem = expressionProblem(distanceExpr, get().session.doc.parameters.map((p) => p.name));
+        if (problem) { set({ toast: { kind: "error", text: `Distance: ${problem}` } }); return; }
+      }
       await get().ensureKernel();
       await runDispatch("feature.extrude", {
         sketch: sketchId,

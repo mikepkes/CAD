@@ -23,6 +23,8 @@ import { rebuild } from "../build";
 import { CommandRegistry } from "./registry";
 import { CommandApplyInfo, OperationRecord } from "./types";
 import { validate } from "./validate";
+import { renameInOperation } from "../parameterRename";
+import { isValidParamName } from "../parameters";
 
 export interface DispatchOptions {
   rejectOnConflict?: boolean;
@@ -139,6 +141,19 @@ export class CadSession {
     op.params = newParams;
     // Keep op.createdIds so ids (and downstream references) stay stable.
     return this.finish(before, evalsBefore, draft, op, def.constrains ?? false, opts);
+  }
+
+  /** Rename a parameter and every reference to it, in one undoable step (see parameterRename.ts). */
+  async renameParameter(from: string, to: string): Promise<DispatchResult> {
+    if (!isValidParamName(to)) return this.fail(`"${to}" isn't a valid name: use letters, digits and _, starting with a letter`);
+    if (from === to) return this.fail("That's already its name");
+    if (this.doc.parameters.some((p) => p.name === to)) return this.fail(`There's already a parameter called ${to}`);
+    if (!this.doc.parameters.some((p) => p.name === from)) return this.fail(`No parameter called ${from}`);
+    const before = this.doc;
+    const evalsBefore = this.evaluations;
+    const draft = clone(before);
+    for (const op of draft.operations) op.params = renameInOperation(op, from, to);
+    return this.finish(before, evalsBefore, draft, undefined, false, {});
   }
 
   /** Suppress or unsuppress an operation (skipped during replay when suppressed). */

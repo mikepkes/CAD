@@ -19,6 +19,7 @@ import { ProjectedCurve } from "../geometry/project";
 import { blendCorner, copyEntities, extendCurve, offsetCurve, trimCurve, Vec } from "./sketch-ops";
 import { gearOutline, GearType } from "../geometry/gear";
 import { GEAR_DIMS, GEAR_LABEL, checkGear, checkMesh, gearMeshExprs } from "../gears";
+import { expressionProblem } from "../expressionCheck";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 /** A material's appearance fields, as material.create and material.update take them. */
@@ -1924,6 +1925,9 @@ export const BUILTINS: CommandDef<any>[] = [
       const id = ctx.alloc("d");
       const { sketch, expression, ...rest } = p;
       void sketch;
+      // an expression that doesn't read, or names no parameter, is refused (it would quietly drive the dimension to 0)
+      const problem = expressionProblem(String(expression), draft.parameters.map((q) => q.name));
+      if (problem) throw new Error(problem);
       sk.constraints[id] = { id, value: 0, expr: expression, ...rest } as DimensionConstraint;
       return { createdIds: [id], affectedSketchId: sk.id };
     },
