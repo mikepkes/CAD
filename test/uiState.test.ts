@@ -17,6 +17,8 @@ describe("right panel tab rules", () => {
     expect(rightTabAfterToggle("ledger", "ledger", false, panels())).toBe("inspector");
     expect(rightTabAfterToggle("ledger", "space", false, panels({ ledger: true }))).toBe("ledger");
     expect(rightTabAfterToggle("inspector", "lens", true, panels({ lens: true }))).toBe("inspector");
+    // the shown tab turned off while another is on: that one comes forward, as a closed browser tab's neighbour does
+    expect(rightTabAfterToggle("space", "space", false, panels({ ledger: true }))).toBe("ledger");
   });
 });
 
@@ -78,6 +80,8 @@ describe("useUi", () => {
     useUi.getState().setRightTab("ledger");
     expect(useUi.getState().rightTab).toBe("ledger");
     useUi.getState().togglePanel("ledger", false);
+    expect(useUi.getState().rightTab).toBe("space"); // Space is still on: its tab comes forward
+    useUi.getState().togglePanel("space", false);
     expect(useUi.getState().rightTab).toBe("inspector");
   });
   it("sets hot feature only when it changes", () => {

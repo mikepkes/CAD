@@ -118,9 +118,11 @@ export function switchPress(p: ConceptPanel, panels: Record<ConceptPanel, boolea
   return "off";
 }
 
-/** The right tab after a panel toggle: turning Ledger/Space/Mechanism/Materials on shows it; turning the shown one off returns to the inspector. */
+/** The right tab after a panel toggle: turning Ledger/Space/Mechanism/Materials on shows it; turning the shown one
+ *  off shows another tab that is still on (as closing a browser tab does), else the inspector. */
 export function rightTabAfterToggle(tab: RightTab, p: ConceptPanel, on: boolean, panels: Record<ConceptPanel, boolean>): RightTab {
   if (TABS.includes(p as RightTab) && on) return p as RightTab;
+  if (!on && tab === p) return TABS.find((t) => t !== p && panels[t as ConceptPanel]) ?? "inspector";
   return rightTabFor(tab, panels);
 }
 
