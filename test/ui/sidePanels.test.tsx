@@ -3,7 +3,10 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { useStore } from "../../src/model/store";
 import { useUi, SIDE_DEFAULT, SIDE_MAX, SIDE_MIN, MIN_VIEW } from "../../src/model/concepts/uiState";
 import { SideResizer } from "../../src/ui/SideResizer";
-import { ParametersPanel } from "../../src/ui/ParametersPanel";
+import { ParametersPanel, configurationCapture } from "../../src/ui/ParametersPanel";
+import { useDialog } from "../../src/ui/kit/askDialog";
+import { vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { realSession } from "../helpers";
 
 describe("resizable side panels", () => {
@@ -71,5 +74,30 @@ describe("parameter sliders", () => {
     expect([...line.querySelectorAll(".param-slider-end")].map((e) => e.textContent)).toEqual(["6", "16"]);
     expect(container.querySelectorAll("input.param-expr")).toHaveLength(2); // phone's expression field, and free's
     expect(screen.queryByRole("slider", { name: "free" })).toBeNull();
+  });
+});
+
+describe("the configurations grid", () => {
+  it("a new configuration captures the parameters a person tunes, not every expression", () => {
+    const p = (name: string, expr: string, value: number, extra: object = {}) => ({ name, expr, value, ...extra });
+    expect(configurationCapture([p("width", "40", 40, { min: 20, max: 80 }), p("half", "width/2", 20), p("wall", "2", 2), p("flag", "1", 1, { boolean: true }), p("j", "3", 3, { min: 0, max: 9, hidden: true })]))
+      .toEqual({ width: "40", flag: "1" });
+    // nothing tuned: the plain numbers, still not the expressions
+    expect(configurationCapture([p("half", "width/2", 20), p("wall", "2.5", 2.5)])).toEqual({ wall: "2.5" });
+  });
+
+  it("names its controls in the header row (Paste table, + Column), so they never scroll away", async () => {
+    const s = realSession();
+    await s.dispatch("parameter.add", { name: "width", expression: "40", min: 20, max: 80 });
+    await s.dispatch("parameter.add", { name: "half", expression: "width/2" });
+    const createConfiguration = vi.fn(async () => "cfg1");
+    const keep = useStore.getState().createConfiguration;
+    useStore.setState({ session: s, rev: 7, createConfiguration } as never);
+    render(<ParametersPanel />);
+    expect(screen.getByRole("button", { name: "Paste table" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "New configuration" }));
+    act(() => { const c = useDialog.getState().current; if (c?.kind === "text") c.settle("Small"); });
+    await vi.waitFor(() => expect(createConfiguration).toHaveBeenCalledWith("Small", { width: "40" }));
+    useStore.setState({ createConfiguration: keep } as never);
   });
 });
