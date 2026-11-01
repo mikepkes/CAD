@@ -197,7 +197,8 @@ export function featureRows(doc: CadDocument, timeline: OperationRecord[], rollb
     rows.push({
       featureId, opId: op.opId, op, spec, num, index,
       name: f?.name || (typeof op.params.name === "string" && op.params.name) || `${spec.label} ${num}`,
-      values, exprs, suppressed: !!op.suppressed, rolledBack: index >= rollbackIndex, error: op.error, solid, body, componentId,
+      // the command's error, else the kernel's: a feature that failed to build must say so, not show as built
+      values, exprs, suppressed: !!op.suppressed, rolledBack: index >= rollbackIndex, error: op.error ?? solid?.error, solid, body, componentId,
     });
   });
   return rows;

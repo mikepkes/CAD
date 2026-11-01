@@ -206,6 +206,13 @@ describe("with a real session", () => {
     expect(st.text).toBe("All 3 features built");
     expect(st.chips[2].err).toBe(false);
 
+    // a feature the kernel couldn't build says so: its row, its chip and the strip's summary
+    const failed = featureRows(s.doc, s.timeline, s.rollbackIndex, { [rows[2].featureId]: { featureId: rows[2].featureId, name: "x", sketchId: "", distance: 0, error: "the radius is too big for this edge" } });
+    expect(failed[2].error).toBe("the radius is too big for this edge");
+    st = stripState(failed, s.rollbackIndex, s.timeline.length);
+    expect(st.chips[2].err).toBe(true);
+    expect(st.text).toBe(`3 · ${failed[2].name} failed: 2 of 3 built`);
+
     await s.moveRollback(rows[1].index + 1);
     const r2 = featureRows(s.doc, s.timeline, s.rollbackIndex, {});
     st = stripState(r2, s.rollbackIndex, s.timeline.length);
