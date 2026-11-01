@@ -27,7 +27,7 @@ export function renameInExpression(src: string, from: string, to: string): strin
 export const NOT_EXPRESSIONS = new Set(["name", "label", "title", "description", "unit", "kind", "type", "finish", "species", "color", "texture", "textureAxis", "printAxis", "op", "operation", "extent", "direction", "profile", "plane", "base", "datum", "sketch", "component", "parent", "moved", "material", "body", "slotBase", "gear", "id"]);
 /** Commands whose `name` (or other key) names a parameter. */
 const NAMES_A_PARAMETER: Record<string, string[]> = {
-  "parameter.add": ["name"], "parameter.set": ["name"], "parameter.setBounds": ["name"], "parameter.delete": ["name"],
+  "parameter.add": ["name"], "parameter.set": ["name"], "parameter.setBounds": ["name"], "parameter.describe": ["name"], "parameter.delete": ["name"],
   "material.assign": ["by"],
 };
 

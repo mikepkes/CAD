@@ -33,6 +33,12 @@ export interface Parameter {
   /** An intermediate value (a linkage's joint positions, say): computed like any
    *  other, but kept out of the Parameters list unless asked for. */
   hidden?: boolean;
+  /** What a person calls it ("Length", "Wall thickness"); the viewer shows it in place of the name. */
+  label?: string;
+  /** One sentence on what it changes ("Overall length of the bench top"). */
+  description?: string;
+  /** The unit its value is in, as shown beside it ("mm", "°", "teeth"). Display only: values stay canonical. */
+  unit?: string;
   options?: string[];
   /** Set when the resolved value falls outside the extents / enum. */
   warning?: string;
@@ -895,6 +901,9 @@ export interface CadDocument {
   /** The design publishes its shop drawing (drawing.publish): the customize
    *  viewer then offers it, with a PDF download. */
   drawing?: { title: string };
+  /** The design's own title and a sentence or two about it (document.describe): the viewer's heading,
+   *  intro and page title. */
+  about?: { title?: string; description?: string };
   parameters: Parameter[];
   rootComponentId: string;
   components: Record<string, Component>;

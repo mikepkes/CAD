@@ -12,6 +12,7 @@ const COMMANDS: Record<string, IconName> = {
   "parameter.add": "parameter-add",
   "parameter.set": "parameter-edit",
   "parameter.setBounds": "parameter-bounds",
+  "parameter.describe": "parameter-edit",
   "parameter.delete": "parameter-delete",
   "intent.add": "intent-add",
   "intent.update": "intent-edit",
@@ -30,6 +31,7 @@ const COMMANDS: Record<string, IconName> = {
   "material.update": "material-edit",
   "material.assign": "material-assign",
   "drawing.publish": "drawing",
+  "document.describe": "parameter-edit",
   // sketches and planes
   "sketch.create": "sketch",
   "plane.create": "plane-offset",
