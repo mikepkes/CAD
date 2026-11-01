@@ -112,6 +112,7 @@ for (const n of acts) {
   }
   const toOut = (src) => { let best = srcToOut[0]?.[1] ?? 0; for (const [st, of] of srcToOut) { if (st <= src) best = of; else break; } return best; };
   for (const b of timing.beats) {
+    if (!b.narration.trim()) continue; // a silent beat (the title): no line to read or caption
     const from = toOut(b.start), to = Math.max(from + FPS, toOut(b.end));
     cues.push({ act: n, id: b.id, from, to, text: b.narration });
     const parts = chunks(b.narration).map(written);
