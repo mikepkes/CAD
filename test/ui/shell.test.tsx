@@ -37,6 +37,19 @@ describe("PanelToggles, more", () => {
     await userEvent.click(within(bar).getByRole("button", { name: "Ledger" }));
     expect(useUi.getState().panels.ledger).toBe(false);
   });
+  it("says Pins also shows the history strip, and names each panel as its switch does in the hotkeys", async () => {
+    render(<PanelToggles />);
+    expect(screen.getByRole("button", { name: "Pins" }).getAttribute("title")).toMatch(/history strip/);
+    const { installHotkeys } = await import("../../src/model/hotkeyActions");
+    const { hotkeys } = await import("../../src/model/hotkeys");
+    const off = installHotkeys();
+    const labels = Object.fromEntries(hotkeys.describe().contexts.flatMap((c) => c.actions).map((a) => [a.id, a.label]));
+    expect(labels["view.workbench"]).toMatch(/^Toggle Pins/);
+    expect(labels["view.space"]).toBe("Toggle Space");
+    expect(labels["view.materials"]).toBe("Toggle Materials"); // Materials has a hotkey action now
+    off();
+  });
+
   it("is hidden while sketching (the sketch needs the whole view)", () => {
     useStore.setState({ mode: "sketch" });
     render(<PanelToggles />);

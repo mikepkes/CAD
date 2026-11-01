@@ -3,7 +3,7 @@
 // tabbed right side panel. Thin templates over useUi; which tab can show is
 // decided in uiState.ts (rightTabFor).
 
-import { useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { InspectorPanel } from "./InspectorPanel";
 import { useUi, PANEL_NAMES, type ConceptPanel, type RightTab } from "../model/concepts/uiState";
 import { OverflowRow, type OverflowRowItem } from "./kit/OverflowRow";
@@ -29,6 +29,8 @@ export function PanelToggles() {
   const compliant = useStore((s) => hasFlexures(s.session.doc));
   const mode = useStore((s) => s.mode);
   const crumb = useStore((s) => showCrumb(s.session.doc)) && panels.workbench && mode === "model";
+  useStore((s) => s.activeComponentId); // the crumb's width follows the active component
+  const left = useCrumbClearance(crumb);
   const sw = (p: ConceptPanel, title: string) => ({
     key: p,
     node: <Button size="sm" on={!!panels[p]} title={title} onClick={() => toggle(p)}>{PANEL_NAMES[p]}</Button>,
@@ -45,11 +47,24 @@ export function PanelToggles() {
   return (
     <>
       {mode !== "sketch" && (
-        <OverflowRow className={`k-panel-toggle${crumb ? " beside-crumb" : ""}`} role="toolbar" ariaLabel="Concept panels" moreLabel="More panels" items={items} />
+        <OverflowRow className={`k-panel-toggle${crumb ? " beside-crumb" : ""}`} style={left != null ? { left } : undefined} role="toolbar" ariaLabel="Concept panels" moreLabel="More panels" items={items} />
       )}
       <RingOverlay />
     </>
   );
+}
+
+/** Where the switch row may start: just right of the component crumb at the view's top-left (null: no crumb,
+ *  the stylesheet's default). Measured after each render, as the crumb's width follows the active component. */
+function useCrumbClearance(crumb: boolean): number | null {
+  const [left, setLeft] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const view = document.querySelector(".center-view");
+    const el = crumb ? view?.querySelector(".wb-crumb") : null;
+    const next = el && view ? Math.round(el.getBoundingClientRect().right - view.getBoundingClientRect().left + 12) : null;
+    if (next !== left && !(next != null && next <= 12)) setLeft(next);
+  });
+  return left;
 }
 
 /** The right side panel: the inspector, with Ledger, Space, Mechanism and Materials as tabs while their panels are on. */

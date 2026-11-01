@@ -4,7 +4,7 @@
 // and moves the view. Each item is rendered once: in the row, or (while the
 // menu is open) in the menu.
 
-import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CSSProperties, ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fitItems, sameKeys } from "./overflow";
 
 export interface OverflowRowItem {
@@ -27,6 +27,7 @@ export interface OverflowRowProps {
   ariaLabel?: string;
   /** The menu button's accessible name (default "More"). */
   moreLabel?: string;
+  style?: CSSProperties;
 }
 
 const MORE_FALLBACK = 40;
@@ -80,7 +81,7 @@ export function OverflowRow(p: OverflowRowProps) {
 
   const inMenu = p.items.filter((it) => hidden.has(it.key));
   return (
-    <div ref={rowRef} className={`k-ovf${p.className ? ` ${p.className}` : ""}`} role={p.role} aria-label={p.ariaLabel}>
+    <div ref={rowRef} className={`k-ovf${p.className ? ` ${p.className}` : ""}`} role={p.role} aria-label={p.ariaLabel} style={p.style}>
       {p.items.map((it) =>
         it.spacer ? <span key={it.key} className="k-ovf-spacer" /> : (
           <span
