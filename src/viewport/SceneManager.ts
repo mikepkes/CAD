@@ -22,7 +22,8 @@ function rigidMat(R: Rigid): THREE.Matrix4 {
 }
 import { createMaterial, MaterialSpec, WoodFrame } from "./material";
 import type { ThreadDecal } from "../core/document";
-import { fitDistance, orbitDirection } from "./orbitCamera";
+import { fitDistance, fitTangent, orbitDirection } from "./orbitCamera";
+import { prefersReducedMotion } from "./motion";
 import { LensPass, type LensSpec } from "./lensPass";
 import { onViewportTheme, viewportColors } from "./palette";
 import { WORLD_VERT, curvatureColors, draftFrag, zebraFrag } from "./analysisShaders";
@@ -248,7 +249,7 @@ export class SceneManager {
     this.camera = this.perspCam;
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
+    this.controls.enableDamping = !prefersReducedMotion(); // no gliding on after a drag when reduced motion is asked for
     this.controls.dampingFactor = 0.12;
     this.controls.screenSpacePanning = true;
     this.controls.zoomToCursor = true; // pinch / wheel zoom toward the cursor
@@ -487,11 +488,39 @@ export class SceneManager {
     this.orthoCam.left = -halfH * aspect;
     this.orthoCam.right = halfH * aspect;
     this.orthoCam.updateProjectionMatrix();
+    this.applyViewInset();
     this.renderer.setSize(w, h);
     // setSize clears the canvas; draw again now, or the browser can paint it blank before the next frame
     // (the model flickers out while a side panel is dragged). The recorder draws its own frames.
     if (!this.recording) this.drawFrame();
   };
+
+  // ---- what the UI covers ----
+  /** Canvas covered by UI (CSS px): the customize viewer's card on the right, its bottom sheet on a
+   *  phone. The camera centres on, and frames into, the part of the canvas that's left. */
+  private viewInset = { right: 0, bottom: 0 };
+  setViewInset(inset: { right?: number; bottom?: number }) {
+    const next = { right: Math.max(0, Math.round(inset.right ?? 0)), bottom: Math.max(0, Math.round(inset.bottom ?? 0)) };
+    if (next.right === this.viewInset.right && next.bottom === this.viewInset.bottom) return;
+    this.viewInset = next;
+    this.applyViewInset();
+    this.invalidate();
+  }
+  /** Shift the projection so the camera's target sits in the middle of the free area. */
+  private applyViewInset() {
+    const w = this.container.clientWidth, h = this.container.clientHeight;
+    if (!w || !h) return;
+    const { right, bottom } = this.viewInset;
+    for (const cam of [this.perspCam, this.orthoCam]) {
+      if (right || bottom) cam.setViewOffset(w, h, right / 2, bottom / 2, w, h);
+      else if (cam.view?.enabled) cam.clearViewOffset();
+    }
+  }
+  /** The tangent of the half-angle a model may fill when framed: the vertical field of view, narrowed
+   *  to the horizontal one on a portrait screen, and to the area the UI leaves uncovered. */
+  private fitTan(fovDeg: number): number {
+    return fitTangent(fovDeg, this.container.clientWidth, this.container.clientHeight, this.viewInset);
+  }
 
   // ---- render on demand ----
   // A frame is drawn when something to see changed: the view was rebuilt, an overlay
@@ -1004,7 +1033,7 @@ export class SceneManager {
     const center = box.isEmpty() ? this.controls.target.clone() : box.getCenter(new THREE.Vector3());
     const radius = box.isEmpty() ? Math.max(20, this.camOff().length() / 3) : Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
     const pc = this.perspCam;
-    const dist = (radius * 1.3) / Math.tan(((pc.fov * Math.PI) / 180) / 2);
+    const dist = (radius * 1.3) / this.fitTan(pc.fov);
     const up = this.camera.up.clone();
     this.beginTween({
       from: { off: this.camOff(), target: this.controls.target.clone(), up, zoom: pc.zoom },
@@ -1042,7 +1071,7 @@ export class SceneManager {
       this.beginTween({ from, to: { off: dir.clone().multiplyScalar(len), target: center, up, zoom: halfH / (radius * margin) } });
     } else {
       const pc = this.perspCam;
-      const dist = (radius * margin) / Math.tan(((pc.fov * Math.PI) / 180) / 2);
+      const dist = (radius * margin) / this.fitTan(pc.fov);
       this.beginTween({ from, to: { off: dir.clone().multiplyScalar(dist), target: center, up, zoom: pc.zoom } });
     }
   }
@@ -1054,7 +1083,10 @@ export class SceneManager {
     dur?: number;
   }) {
     this.controls.enabled = false;
-    this.tween = { t: 0, dur: spec.dur ?? 0.5, from: spec.from, to: spec.to, onDone: spec.onDone };
+    // with reduced motion asked for, the app's own camera moves (a view, Frame) cut instead of gliding;
+    // a script that names a duration (the tutorial video's shots) still gets it
+    const dur = spec.dur ?? (prefersReducedMotion() ? 0.001 : 0.5);
+    this.tween = { t: 0, dur, from: spec.from, to: spec.to, onDone: spec.onDone };
   }
 
   /** Turn and move (animated over `seconds`) to look along `-dir` at `center`, far enough that a sphere of

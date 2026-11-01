@@ -16,6 +16,12 @@ import { Control, FlexureReadout, LoadingOverlay, LoadProblem, MotionBadge, Save
 import { BuildProgress } from "./BuildProgress";
 import { Toast } from "./Toast";
 import { exampleUrl } from "../model/examples";
+import { getActiveScene } from "../viewport/sceneRef";
+
+/** The canvas the controls cover: the card on the right (desktop), the sheet at the bottom (phone). */
+export function coveredBy(panel: DOMRect, view: { width: number; height: number }, phone: boolean): { right: number; bottom: number } {
+  return phone ? { right: 0, bottom: Math.max(0, view.height - panel.top) } : { right: Math.max(0, view.width - panel.left), bottom: 0 };
+}
 
 // The 3D rebuild is the slow part, so the slider's own value updates live while
 // the model is rebuilt only when you briefly pause or release (debounce, not
@@ -47,6 +53,8 @@ export function CustomizeApp() {
   const [failure, setFailure] = useState<LoadFailure | null>(null);
   const [open, setOpen] = useState(true);
   const req = useRef(requested());
+  const panelRef = useRef<HTMLElement>(null);
+  const framed = useRef(false);
   const example = req.current?.example;
 
   const idle = useRef<ReturnType<typeof setTimeout>>();
@@ -90,9 +98,7 @@ export function CustomizeApp() {
         await kernel;
         setState("building");
         await loadDocument(parsed);
-        // frame it: the default camera suits a small part, and sits inside anything the size of a workbench
-        window.dispatchEvent(new CustomEvent("vibecad:view", { detail: "iso" }));
-        setState("ready");
+        setState("ready"); // the model is framed once the controls are laid out (below)
         armStudy(); // validate the starting configuration once
       } catch (e) {
         setFailure({ kind: "unreadable", example: req.current?.example, url: req.current?.url ?? "", detail: (e as Error).message });
@@ -110,12 +116,36 @@ export function CustomizeApp() {
 
   const controls = viewerControls(doc.parameters);
 
+  // The camera centres on, and frames into, the part of the view the controls leave
+  // uncovered — above the sheet on a phone, left of the card on a desktop.
+  useEffect(() => {
+    if (state !== "ready") return;
+    const panel = panelRef.current;
+    const measure = () => {
+      const scene = getActiveScene();
+      if (!scene) return;
+      const phone = matchMedia("(max-width: 720px)").matches;
+      scene.setViewInset(panel ? coveredBy(panel.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, phone) : {});
+      if (!framed.current) {
+        framed.current = true;
+        // frame it: the default camera suits a small part, and sits inside anything the size of a workbench
+        window.dispatchEvent(new CustomEvent("vibecad:view", { detail: "iso" }));
+      }
+    };
+    measure();
+    if (!panel || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(panel);
+    addEventListener("resize", measure);
+    return () => { ro.disconnect(); removeEventListener("resize", measure); };
+  }, [state, open]);
+
   return (
     <div className="customize">
       <Viewport label={`3D view of ${title}. Drag to turn it; pinch or scroll to zoom.`} />
       <MotionBadge />
       {state === "ready" && (
-        <section className={`cz-panel ${open ? "" : "collapsed"}`} aria-labelledby="cz-title">
+        <section ref={panelRef} className={`cz-panel ${open ? "" : "collapsed"}`} aria-labelledby="cz-title">
           {/* the whole head row toggles the sheet; the button is what a keyboard or screen reader uses */}
           <div className="cz-head" onClick={() => setOpen((v) => !v)}>
             <h1 className="cz-title" id="cz-title">{title}</h1>
