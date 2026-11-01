@@ -193,21 +193,27 @@ if (voiced) {
 
 const tc = (f, sep = ",") => { const ms = Math.round((f / FPS) * 1000); const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}${sep}${String(ms % 1000).padStart(3, "0")}`; };
 // chapters: each runs to the next one's start (the first from 0:00), as ffmpeg metadata for the MP4 and as a YouTube
-// description list, which wants every chapter at least 10 s long (a shorter one joins the one before it)
+// description list, which wants every chapter at least 10 s long (a shorter one's time goes to the one before it,
+// so no title ends up over another beat; a short first one takes in the one after it)
 if (chapters.length) chapters[0].from = 0;
 const chapterMs = chapters.map((c, i) => ({ title: c.title, start: Math.round((c.from / FPS) * 1000), end: Math.round(((chapters[i + 1]?.from ?? outFrame) / FPS) * 1000) }));
 const esc = (t) => t.replace(/[=;#\\\n]/g, (c) => `\\${c}`);
 writeFileSync(join(out, "chapters.ffmeta"), `;FFMETADATA1\n${chapterMs.map((c) => `[CHAPTER]\nTIMEBASE=1/1000\nSTART=${c.start}\nEND=${c.end}\ntitle=${esc(c.title)}\n`).join("")}`);
-const yt = [];
-for (const c of chapterMs) { if (yt.length && c.start - yt.at(-1).start < 10000) continue; yt.push(c); }
-while (yt.length > 1 && (outFrame / FPS) * 1000 - yt.at(-1).start < 10000) yt.pop(); // the last one too
+const yt = chapterMs.map((c) => ({ ...c }));
+for (let i = 0; i < yt.length && yt.length > 1;) {
+  if (yt[i].end - yt[i].start >= 10000) { i++; continue; }
+  if (i === 0) { yt[0].end = yt[1].end; yt.splice(1, 1); } else { yt[i - 1].end = yt[i].end; yt.splice(i, 1); }
+}
 const mmss = (ms) => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s % 60).padStart(2, "0")}`; };
 writeFileSync(join(out, "chapters.txt"), yt.map((c) => `${mmss(c.start)} ${c.title}`).join("\n") + "\n");
 if (chapters.length) console.log(`chapters: ${chapterMs.length} in the MP4, ${yt.length} in chapters.txt (YouTube's 10 s minimum)`);
 writeFileSync(join(out, "subtitles.srt"), captions.map((c, i) => `${i + 1}\n${tc(c.from)} --> ${tc(c.to)}\n${c.text}\n`).join("\n"));
 const voCol = (c) => (c.clips.length ? `${(Math.max(...c.clips.map((k) => k.ms)) / 1000).toFixed(1)} s` : "–");
 writeFileSync(join(out, "cue-sheet.md"), `# Voiceover cue sheet (${run})\n\nRecord each line to picture (ADR), or use the synthesised voiceover (video/vo.mjs), whose clips start at "In". Times are in the cut; the picture holds about half a second of settled tail after each line. "VO" is the longest synthesised clip of the line.\n\n| # | Act | Beat | In | Length | VO | Line |\n|---|---|---|---|---|---|---|\n${cues.map((c, i) => `| ${i + 1} | ${c.act} | ${c.id} | ${tc(c.from, ".").slice(3, 9)} | ${((c.to - c.from) / FPS).toFixed(1)} s | ${voCol(c)} | ${c.text} |`).join("\n")}\n\nTotal: ${tc(outFrame, ".").slice(3, 9)}\n`);
-const audio = mixes.length ? { file: `/video/out/${run}/vo/${mixes[0].voice.id}.wav`, title: mixes[0].voice.title, bitrate: preview ? 64000 : 128000 } : null;
+const audio = mixes.length ? { file: `/video/out/${run}/vo/${mixes[0].voice.id}.wav`, title: mixes[0].voice.title, bitrate: preview ? 48000 : 128000 } : null;
+// the preview's video bitrate: what keeps the file under PREVIEW_MB (a phone's attachment limit) at this length
+const PREVIEW_MB = 28;
+const previewBitrate = Math.min(550000, Math.floor((PREVIEW_MB * 8e6) / (outFrame / FPS) - (audio?.bitrate ?? 0) - 8000));
 writeFileSync(join(out, "plan.json"), JSON.stringify({ fps: FPS, width: 2560, height: 1440, takes: takeFiles, frames, chyrons, captions, audio }));
 console.log(`plan: ${outFrame} frames (${tc(outFrame, ".")}), ${captions.length} captions, ${chyrons.length} chyrons`);
 
@@ -235,7 +241,7 @@ const browser = await chromium.launch({ headless: false, args: ["--window-size=4
 const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
 page.on("console", (m) => console.log(`  [compositor] ${m.text()}`));
 page.on("pageerror", (e) => console.error(`  [compositor error] ${e.message}`));
-await page.goto(`http://localhost:${port}/video/compositor/index.html?plan=/video/out/${run}/plan.json${preview ? "&w=1280&h=720&bitrate=550000" : ""}`);
+await page.goto(`http://localhost:${port}/video/compositor/index.html?plan=/video/out/${run}/plan.json${preview ? `&w=1280&h=720&bitrate=${previewBitrate}` : ""}`);
 const result = await page.evaluate(() => window.render());
 console.log(`\nrendered ${result.frames} frames, ${(result.bytes / 1e6).toFixed(1)} MB, ${result.codec}`);
 await browser.close();
