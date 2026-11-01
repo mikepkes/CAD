@@ -482,7 +482,9 @@ export function countText(entries: StripEntry[]): string {
   return parts.join(" and ");
 }
 
-export function stripState<T extends StripEntry>(rows: T[], rollbackIndex: number, timelineLength: number): StripState<T> {
+/** `building` is how far a rebuild running now has got (0…1), or null when idle: while it runs the strip says so
+ *  ("Building… 2/5") instead of claiming everything is built. */
+export function stripState<T extends StripEntry>(rows: T[], rollbackIndex: number, timelineLength: number, building: number | null = null): StripState<T> {
   let atRow: T | null = null;
   for (const r of rows) if (r.index < rollbackIndex) atRow = r;
   const rolledBack = rollbackIndex < timelineLength;
@@ -499,6 +501,8 @@ export function stripState<T extends StripEntry>(rows: T[], rollbackIndex: numbe
     ? "No features yet"
     : rolledBack
       ? atRow ? `At ${at(atRow)} — new features insert here` : "At the start — new features insert here"
+      : building != null
+        ? `Building… ${Math.max(0, Math.min(built, Math.floor(building * built)))}/${built}`
       : failed.length
         ? `${failed.length === 1 ? `${at(failed[0])} failed` : `${failed.length} features failed`}: ${rows.length - failed.length} of ${rows.length} built`
         : `All ${countText(rows)} built`;

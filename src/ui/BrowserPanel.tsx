@@ -4,6 +4,7 @@ import { EyeToggle } from "./EyeToggle";
 import type { CadDocument, RoleRef } from "../core/document";
 import { resolveParameters } from "../core/parameters";
 import { compileExpr } from "../math/expr";
+import { sketchStatus } from "./sketchStatus";
 
 /** Resolve a count expression against the document's parameters for display. */
 function resolvedCount(doc: CadDocument, expr: string, fallback: number): number {
@@ -101,7 +102,7 @@ function ComponentNode({ doc, id, depth }: { doc: CadDocument; id: string; depth
           <div key={sid} className={`tree-row sketch ${editing ? "active" : ""}`} style={{ paddingLeft: pad + 14 }} onClick={() => (editing ? finishSketch() : editSketch(sid))} title={st.message}>
             <span className="tree-icon">✎</span>
             <span className="tree-label">{sk.name} <span className="muted-inline">· {sk.planeId}</span></span>
-            <span className={`dof-dot ${st.fullyConstrained ? "ok" : st.conflicting ? "bad" : "warn"}`} />
+            <span className={`dof-dot ${sketchStatus(sk).cls}`} title={sketchStatus(sk).text} />
             <EyeToggle id={sid} label={sk.name} />
           </div>
         );

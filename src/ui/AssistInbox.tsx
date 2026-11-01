@@ -60,7 +60,8 @@ export function AssistChip() {
   if (!enabled) return null;
   const { pending, recent } = inboxSections(items);
   if (!pending.length && !recent.length) return null;
-  const label = busy ? "Naming…" : pending.length ? `${pending.length} to name` : "Named";
+  // say what is waiting: suggested names to review, not a bare count
+  const label = busy ? "Suggesting names…" : pending.length ? `${pending.length} name${pending.length === 1 ? "" : "s"} to review` : "Named";
   return (
     <span className="assist-wrap">
       <Button size="sm" ghost on={open} ariaLabel="Organizational assist" title="Organizational assist: names for sketches and features" onClick={() => setOpen((v) => !v)}>

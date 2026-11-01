@@ -1,5 +1,6 @@
 import { activeSketch, useStore } from "../model/store";
 import { AssistChip } from "./AssistInbox";
+import { sketchStatus } from "./sketchStatus";
 
 export function StatusBar() {
   const message = useStore((s) => s.lastMessage);
@@ -18,15 +19,7 @@ export function StatusBar() {
       {mcp.running && mcp.port && (
         <span className="status-dof ok" title={`MCP server live at ${mcp.url}`}>● MCP :{mcp.port}</span>
       )}
-      {sk && (
-        <span className={`status-dof ${sk.status.fullyConstrained ? "ok" : sk.status.conflicting ? "bad" : "warn"}`}>
-          {sk.status.fullyConstrained
-            ? "● Fully constrained"
-            : sk.status.conflicting
-              ? "● Conflicting"
-              : `● ${sk.status.dof} DOF`}
-        </span>
-      )}
+      {sk && (() => { const st = sketchStatus(sk); return <span className={`status-dof ${st.cls}`}>● {st.text}</span>; })()}
     </div>
   );
 }

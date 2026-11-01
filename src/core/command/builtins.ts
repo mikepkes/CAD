@@ -1994,7 +1994,7 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.body ? { body: p.body } : {}),
         ...(p.requireEffect ? { requireEffect: true } : {}),
       };
-      return { createdIds: [id], message: `Extrude ${p.sketch}` };
+      return { createdIds: [id], message: `Extrude ${draft.sketches[p.sketch]?.name ?? p.sketch}` };
     },
   },
   {
@@ -2038,7 +2038,7 @@ export const BUILTINS: CommandDef<any>[] = [
         angleExpr: String(p.angle ?? 360), angleValue: 360, operation: p.operation ?? "new", regionPoint: p.region,
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
-      return { createdIds: [id], message: `Revolve ${p.sketch}` };
+      return { createdIds: [id], message: `Revolve ${draft.sketches[p.sketch]?.name ?? p.sketch}` };
     },
   },
   {

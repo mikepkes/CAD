@@ -97,6 +97,8 @@ export interface FaceSelection {
 export interface Toast {
   kind: "error" | "info";
   text: string;
+  /** A way forward the toast offers (a button): "Make it a reference dimension". */
+  action?: { label: string; run: () => void };
 }
 
 const registry = createDefaultRegistry();
@@ -376,10 +378,10 @@ export interface AppState {
   importFile: (file: File) => Promise<void>;
 }
 
+// The error names the conflicting constraints in words (session.ts); their ids stay in r.conflicting for agents.
 function toastFor(r: DispatchResult): Toast | null {
   if (r.ok) return null;
-  const extra = r.conflicting && r.conflicting.length ? ` — conflicts: ${r.conflicting.join(", ")}` : "";
-  return { kind: "error", text: (r.error ?? "Rejected") + extra };
+  return { kind: "error", text: r.error ?? "Rejected" };
 }
 
 export const useStore = create<AppState>((set, get) => {
@@ -793,8 +795,11 @@ export const useStore = create<AppState>((set, get) => {
       const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, faceRef: faceRefOf(normal, hit), ...scopeComponent() });
       if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: "Sketching on face." });
     },
-    finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null }),
-    editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [] }),
+    finishSketch: () => {
+      const sk = activeSketch(get());
+      set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null, constraintTool: null, lastMessage: sk ? `Finished ${sk.name}.` : "" });
+    },
+    editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [], lastMessage: `Editing ${get().session.doc.sketches[id]?.name ?? "the sketch"}.` }),
 
     placePoint: (x, y) => runDispatch("sketch.addPoint", { sketch: activeId(), x, y }),
     placeLine: (start, end) => runDispatch("sketch.addLine", { sketch: activeId(), start, end, construction: get().constructionMode }),
@@ -1008,7 +1013,14 @@ export const useStore = create<AppState>((set, get) => {
       set({ inlineEdit: null });
       const value = await typedExpression(expr);
       if (!value) return;
-      if (edit.mode === "new") await runDispatch("sketch.addDimension", { ...edit.params, expression: value });
+      if (edit.mode === "new") {
+        const params = { ...edit.params, expression: value };
+        const r = await runDispatch("sketch.addDimension", params);
+        // Over-constrained: the way forward is a reference (driven) dimension that measures without constraining.
+        if (!r.ok && r.conflicting?.length) {
+          set({ toast: { kind: "error", text: r.error ?? "That would over-constrain the sketch", action: { label: "Make it a reference dimension", run: () => { set({ toast: null }); void runDispatch("sketch.addDimension", { ...params, driven: true }); } } } });
+        }
+      }
       else await get().editDimension(edit.cid, value);
     },
     cancelInlineEdit: () => set({ inlineEdit: null }),
@@ -1045,8 +1057,16 @@ export const useStore = create<AppState>((set, get) => {
       bump(); scheduleAutosave();
     },
 
-    undo: () => { get().session.undo(); bump(); afterMutate(); },
-    redo: () => { get().session.redo(); bump(); afterMutate(); },
+    undo: () => {
+      const label = get().session.undoLabel();
+      if (!get().session.undo()) { set({ lastMessage: "Nothing to undo" }); return; }
+      bump({ lastMessage: `Undid ${label ?? "the last change"}`, toast: null, faceSelection: null }); afterMutate();
+    },
+    redo: () => {
+      const label = get().session.redoLabel();
+      if (!get().session.redo()) { set({ lastMessage: "Nothing to redo" }); return; }
+      bump({ lastMessage: `Redid ${label ?? "the last change"}`, toast: null, faceSelection: null }); afterMutate();
+    },
     editOperation: async (opId, params) => {
       // a changed value that should be an expression must read and name only real parameters
       const was = get().session.timeline.find((o) => o.opId === opId)?.params as Record<string, unknown> | undefined;
@@ -1406,6 +1426,11 @@ export const useStore = create<AppState>((set, get) => {
         inlineEdit: null,
         solids: {},
         toast: null,
+        faceSelection: null,
+        extrudeActive: false, extrudeTarget: null, extrudeRegion: null,
+        sketchPlacing: false,
+        // a stale hint from the last document ("Pick an origin plane…") must not outlive it
+        lastMessage: doc.operations.length ? "" : "Pick an origin plane to start a sketch.",
       });
       await s.recompute();
       bump();
@@ -1413,6 +1438,7 @@ export const useStore = create<AppState>((set, get) => {
     },
     newDocument: async () => {
       await get().loadDocument(createDocument());
+      set({ lastMessage: "New document. Pick an origin plane to start a sketch." });
       try {
         localStorage.removeItem(AUTOSAVE_KEY);
       } catch {

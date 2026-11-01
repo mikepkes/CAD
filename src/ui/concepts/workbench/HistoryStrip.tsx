@@ -26,7 +26,8 @@ export function HistoryStrip() {
   const timelineLength = session.timeline.length;
   const entries = stripEntries(rows, doc, active, session.timeline, session.rollbackIndex);
   const hidden = rowsInScope(rows, doc, active).hidden;
-  const st = stripState(entries, session.rollbackIndex, timelineLength);
+  const building = useStore((s) => s.build?.fraction ?? null);
+  const st = stripState(entries, session.rollbackIndex, timelineLength, building);
   const range = stripRange(entries);
   /** A chip's icon: its op's command (the feature's, or the assembly step's). */
   const chipIcon = (index: number) => { const op = session.timeline[index]; return op ? iconForCommand(op.type, op.params) : "box"; };

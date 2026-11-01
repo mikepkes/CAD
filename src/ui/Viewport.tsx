@@ -13,6 +13,7 @@ import { materialForComponent } from "../core/document";
 import { materialSpec, woodFrameFromBounds } from "../viewport/material";
 import { ghostSolidViews, useGhost } from "../model/concepts/ghostVariant";
 import { ContextMenu } from "./ContextMenu";
+import { sketchIsEmpty } from "./sketchStatus";
 import { onViewportTheme, viewportColors } from "../viewport/palette";
 
 function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
@@ -118,7 +119,7 @@ function buildView(s: AppState): ViewData {
       ? "under"
       : sketch.status.conflicting
         ? "conflict"
-        : sketch.status.fullyConstrained
+        : sketch.status.fullyConstrained && !sketchIsEmpty(sketch)
           ? "full"
           : "under",
     solids,

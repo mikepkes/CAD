@@ -25,9 +25,29 @@ import { CommandApplyInfo, OperationRecord } from "./types";
 import { validate } from "./validate";
 import { renameInOperation } from "../parameterRename";
 import { isValidParamName } from "../parameters";
+import { describeConstraint, listWords } from "../../sketch/types";
+
+/** Why a change was refused for over-constraining, in the sketch's and the constraints' own names (ids stay in
+ *  `conflicting` for agents). The constraints the change itself added are left out of "conflicts with". */
+function overConstraintText(doc: CadDocument, sketchId: string, conflicting: string[], added: string[]): string {
+  const sk = doc.sketches[sketchId];
+  const others = conflicting.filter((id) => !added.includes(id)).map((id) => describeConstraint(sk?.constraints[id]));
+  const where = sk?.name ?? "the sketch";
+  return others.length
+    ? `That would over-constrain ${where}: it conflicts with ${listWords([...new Set(others)])}`
+    : `That would over-constrain ${where}: it's already fully determined there`;
+}
 
 export interface DispatchOptions {
   rejectOnConflict?: boolean;
+}
+
+/** What one step does, in words ("Edit Extrude 2", "Set width = 40"): the undo stack's label and the message an edit reports. */
+function stepLabel(op: OperationRecord, verb = "Edit"): string {
+  const p = op.params as Record<string, unknown>;
+  if (verb === "Edit" && op.type === "parameter.add" && typeof p.name === "string") return `Set ${p.name} = ${String(p.expression ?? "")}`;
+  const name = typeof p.name === "string" && p.name && !op.type.startsWith("parameter.") ? p.name : op.label;
+  return `${verb} ${name}`;
 }
 
 export interface DispatchResult {
@@ -140,7 +160,10 @@ export class CadSession {
 
     op.params = newParams;
     // Keep op.createdIds so ids (and downstream references) stay stable.
-    return this.finish(before, evalsBefore, draft, op, def.constrains ?? false, opts);
+    // An edit reports itself ("Set width = 40", "Edit Extrude 2"), not the message its op gives when first applied.
+    const label = stepLabel(op);
+    const r = await this.finish(before, evalsBefore, draft, op, def.constrains ?? false, opts, label);
+    return r.ok ? { ...r, message: op.error ? r.message : label } : r;
   }
 
   /** Rename a parameter and every reference to it, in one undoable step (see parameterRename.ts). */
@@ -153,7 +176,7 @@ export class CadSession {
     const evalsBefore = this.evaluations;
     const draft = clone(before);
     for (const op of draft.operations) op.params = renameInOperation(op, from, to);
-    return this.finish(before, evalsBefore, draft, undefined, false, {});
+    return this.finish(before, evalsBefore, draft, undefined, false, {}, `Rename ${from} to ${to}`);
   }
 
   /** Suppress or unsuppress an operation (skipped during replay when suppressed). */
@@ -164,7 +187,7 @@ export class CadSession {
     const op = draft.operations.find((o) => o.opId === opId);
     if (!op) return this.fail(`No operation "${opId}"`);
     op.suppressed = suppressed;
-    return this.finish(before, evalsBefore, draft, undefined, false, {});
+    return this.finish(before, evalsBefore, draft, undefined, false, {}, stepLabel(op, suppressed ? "Suppress" : "Unsuppress"));
   }
 
   /** Delete an operation. Downstream operations that referenced it will error. */
@@ -174,9 +197,9 @@ export class CadSession {
     const draft = clone(before);
     const idx = draft.operations.findIndex((o) => o.opId === opId);
     if (idx < 0) return this.fail(`No operation "${opId}"`);
-    draft.operations.splice(idx, 1);
+    const [gone] = draft.operations.splice(idx, 1);
     if (draft.rollbackIndex > idx) draft.rollbackIndex--;
-    return this.finish(before, evalsBefore, draft, undefined, false, {});
+    return this.finish(before, evalsBefore, draft, undefined, false, {}, stepLabel(gone, "Delete"));
   }
 
   /** Move the rollback bar: operations at index >= `index` become inactive. */
@@ -185,7 +208,7 @@ export class CadSession {
     const evalsBefore = this.evaluations;
     const draft = clone(before);
     draft.rollbackIndex = Math.max(0, Math.min(index, draft.operations.length));
-    return this.finish(before, evalsBefore, draft, undefined, false, {});
+    return this.finish(before, evalsBefore, draft, undefined, false, {}, draft.rollbackIndex >= draft.operations.length ? "Roll to the end" : "Roll back");
   }
 
   /** Make a configuration active (by id or name), or none (`null`): the model
@@ -201,7 +224,7 @@ export class CadSession {
     } else {
       draft.activeConfiguration = undefined;
     }
-    return this.finish(before, evalsBefore, draft, undefined, false, {});
+    return this.finish(before, evalsBefore, draft, undefined, false, {}, "Change configuration");
   }
 
   /** Replace the hidden list (display-only; undoable, not a timeline step). Ids
@@ -217,7 +240,7 @@ export class CadSession {
     const draft = clone(before);
     const list = [...new Set(ids)];
     draft.hidden = list.length ? list : undefined;
-    return this.finish(before, evalsBefore, draft, undefined, false, {});
+    return this.finish(before, evalsBefore, draft, undefined, false, {}, "Show or hide");
   }
 
   /** Show or hide some ids, leaving the rest of the hidden list as it is. */
@@ -242,6 +265,25 @@ export class CadSession {
     rebuild(draft, this.registry);
     await recompute(draft, this.solver);
     return draft;
+  }
+
+  /** What undo would take back ("Edit Extrude 2"), or null when there is nothing to undo. */
+  undoLabel(): string | null {
+    return this.undoStack[this.undoStack.length - 1]?.label ?? null;
+  }
+  /** What redo would put back, or null. */
+  redoLabel(): string | null {
+    return this.redoStack[this.redoStack.length - 1]?.label ?? null;
+  }
+
+  /** Fold every step taken since `cp` into one undo step called `label` (a gesture that took several commands,
+   *  like a rectangle and the constraints its snaps add, undoes in one go). No-op when nothing was done since. */
+  squash(cp: SessionCheckpoint, label?: string): void {
+    const added = this.undoStack.length - cp.undo.length;
+    if (added < 1 || this.doc === cp.doc) return;
+    if (added === 1 && !label) return;
+    const first = this.undoStack[cp.undo.length];
+    this.undoStack = [...cp.undo, { label: label ?? first.label, docBefore: cp.doc, evalsBefore: cp.evaluations, docAfter: this.doc, evalsAfter: this.evaluations }];
   }
 
   undo(): boolean {
@@ -291,7 +333,8 @@ export class CadSession {
     draft: CadDocument,
     newOp: OperationRecord | undefined,
     constrains: boolean,
-    opts: DispatchOptions
+    opts: DispatchOptions,
+    label?: string
   ): Promise<DispatchResult> {
     const { infos } = rebuild(draft, this.registry);
 
@@ -313,7 +356,7 @@ export class CadSession {
         ok: false,
         createdIds: [],
         evaluations: this.evaluations,
-        error: `Change would over-constrain sketch ${conflict.sketchId}`,
+        error: overConstraintText(draft, conflict.sketchId, conflict.conflicting, newOp?.createdIds ?? []),
         conflicting: conflict.conflicting,
         message: `Rejected: conflicts with ${conflict.conflicting.join(", ") || "existing constraints"}`,
       };
@@ -323,7 +366,7 @@ export class CadSession {
     this.doc = draft;
     this.evaluations = evalsAfter;
     this.undoStack.push({
-      label: newOp?.label ?? "Edit",
+      label: label ?? newOp?.label ?? "Edit",
       docBefore: before,
       evalsBefore,
       docAfter: draft,
