@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { sampleSpline, splineCurvatureComb } from "../core/geometry/spline";
 import { SpaceMouseState, SpaceMouseSettings, NavigationDelta, IDLE, DEFAULT_SETTINGS, navigationDelta, isIdle } from "./spaceMouse";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { studioEnvironmentScene } from "./studioEnvironment";
 import { PLANES, WorkPlane, to3d } from "../geometry/plane";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchEllipse, SketchLine, SketchPoint } from "../sketch/types";
@@ -835,9 +838,12 @@ export class SceneManager {
         g.add(mesh);
       }
       if (p.edges?.length) {
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute("position", new THREE.BufferAttribute(p.edges, 3));
-        const lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xf07a1b, depthTest: false, transparent: true }));
+        // picked edges as screen-space thick lines (a plain line is one pixel wide), drawn over the faces
+        const geo = new LineSegmentsGeometry().setPositions(p.edges);
+        const size = this.renderer.getSize(new THREE.Vector2());
+        const mat = new LineMaterial({ color: 0xf07a1b, linewidth: 4, depthTest: false, transparent: true });
+        mat.resolution.set(size.x, size.y);
+        const lines = new LineSegments2(geo, mat);
         if (m) lines.applyMatrix4(m);
         lines.renderOrder = 998;
         g.add(lines);

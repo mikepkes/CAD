@@ -1311,7 +1311,7 @@ export const useStore = create<AppState>((set, get) => {
       });
     },
     patchFeatureTool: (patch) => { const t = get().featureTool; if (t) set({ featureTool: { ...t, ...patch } as FeatureTool }); },
-    closeFeatureTool: () => set({ featureTool: null }),
+    closeFeatureTool: () => { if (get().featureTool) set({ featureTool: null, lastMessage: "" }); },
     commitFeatureTool: async () => {
       const tool = get().featureTool;
       if (!tool) return null;
