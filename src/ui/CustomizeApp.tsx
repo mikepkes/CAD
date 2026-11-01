@@ -13,6 +13,7 @@ import { Viewport } from "./Viewport";
 import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
 import { editCommitter } from "./editCommitter";
+import { DrawingView } from "./DrawingView";
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000));
 // The 3D rebuild is the slow part, so the slider's own value updates live while
@@ -172,6 +173,8 @@ export function CustomizeApp() {
   const cancelMotionStudy = useStore((s) => s.cancelMotionStudy);
   const shareModel = useStore((s) => s.shareModel);
   const params = useStore((s) => s.session.doc.parameters);
+  const hasDrawing = useStore((s) => !!s.session.doc.drawing);
+  const openDrawing = useStore((s) => s.openDrawing);
   useStore((s) => s.rev); // re-render as the model resolves
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
@@ -232,6 +235,11 @@ export function CustomizeApp() {
             <div className="cz-controls">
               {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} step={p.step} values={p.values} boolean={p.boolean} options={p.options} onEdit={onEdit} />)}
               <FlexureReadout />
+              {hasDrawing && (
+                <button className="cz-drawing" title="The design's shop drawing: views, dimensions and the cut list, as a PDF" onClick={() => void openDrawing()}>
+                  ▤ Drawing (PDF)
+                </button>
+              )}
               <button
                 className="cz-share"
                 title="Save the model for printing: an STL (all parts in one file), or a 3MF with a part per material when it has more than one; or share it to Files / AirDrop / another app on a phone"
@@ -243,6 +251,7 @@ export function CustomizeApp() {
           )}
         </div>
       )}
+      <DrawingView viewer />
       {state === "loading" && <div className="cz-overlay">Loading…</div>}
       {state === "error" && <div className="cz-overlay error">{error}</div>}
     </div>

@@ -1254,7 +1254,7 @@ export const useStore = create<AppState>((set, get) => {
       await get().ensureKernel();
       const doc = get().session.doc;
       if (!Object.keys(doc.features).length) { set({ toast: { kind: "info", text: "Nothing to draw yet: make a body first." } }); return; }
-      const title = doc.components[doc.rootComponentId]?.name && doc.components[doc.rootComponentId].name !== "Root Component" ? doc.components[doc.rootComponentId].name : "Shop drawing";
+      const title = doc.drawing?.title ?? (doc.components[doc.rootComponentId]?.name && doc.components[doc.rootComponentId].name !== "Root Component" ? doc.components[doc.rootComponentId].name : "Shop drawing");
       set({ drawing: { loading: true } });
       try {
         const r = await geometry.drawing(doc, { title, units: "mm" });

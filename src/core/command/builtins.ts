@@ -313,6 +313,7 @@ export const BUILTINS: CommandDef<any>[] = [
         step: { type: "number", exclusiveMinimum: 0, description: "Optional increment: the slider snaps to multiples of this. `step: 1` makes the parameter integer-only." },
         values: { type: "array", items: { type: "number" }, description: "Optional set of acceptable values (an enum). Mutually exclusive with min/max." },
         boolean: { type: "boolean", description: "A yes/no switch: the value is 1 (checked) or 0, shown as a checkbox. Use it in expressions, e.g. a pattern count of `1 + showBoth`. Implies values [0, 1]." },
+        hidden: { type: "boolean", description: "An intermediate value other expressions use (e.g. a linkage's joint positions): kept out of the Parameters list unless the user asks to see it." },
         options: { type: "array", items: { type: "string" }, description: "Named choices (an enum), shown as a dropdown of these names. The value is the chosen index 0…n−1 (the expression sets the default); other parameters use it with pick(), e.g. `pick(material, 0.8, 1.1, 1.4)`. Implies values [0 … n−1]." },
       },
     },
@@ -324,13 +325,13 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A checkbox (1 = checked)", params: { name: "showLid", expression: "1", boolean: true } },
       { note: "Named choices (0 = PLA, 1 = PETG, 2 = TPU), defaulting to PETG", params: { name: "material", expression: "1", options: ["PLA", "PETG", "TPU"] } },
     ],
-    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[] }, ctx) {
+    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[]; hidden?: boolean }, ctx) {
       if (draft.parameters.some((x) => x.name === p.name)) throw new Error(`Parameter "${p.name}" exists`);
       if (p.boolean && (p.min != null || p.max != null || p.step != null || p.values)) throw new Error("a boolean parameter takes no extents or value list");
       const options = p.options && checkOptions(p);
       const bounds = normalizeBounds(p.boolean ? { values: [0, 1] } : options ? { values: options.map((_, i) => i) } : p);
       const id = ctx.alloc("param");
-      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}), ...(p.boolean ? { boolean: true } : {}), ...(options ? { options } : {}) });
+      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}), ...(p.boolean ? { boolean: true } : {}), ...(options ? { options } : {}), ...(p.hidden ? { hidden: true } : {}) });
       return { createdIds: [id], message: `Added parameter ${p.name}` };
     },
   },
@@ -909,6 +910,27 @@ export const BUILTINS: CommandDef<any>[] = [
       if (p.youngsModulus !== undefined) m.mechanical = { E: p.youngsModulus as number, allowableStrain: p.allowableStrain as number, ...(p.layerFactor !== undefined ? { layerFactor: p.layerFactor as number } : {}) };
       draft.materials[id] = m;
       return { createdIds: [id], message: `Material ${p.name}` };
+    },
+  },
+  {
+    type: "drawing.publish",
+    title: "Publish drawing",
+    summary: "Publish the design's shop drawing with it (or stop), so the viewer offers it as a PDF.",
+    description: "Marks the design as having a shop drawing (the third-angle sheet with dimensions and the cut list, made from the live geometry). The customize viewer then shows a Drawing button that swaps to the sheet and downloads it as a PDF. `title` heads the sheet (default the model's name); `off: true` withdraws it.",
+    paramsSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        title: { type: "string", description: "The sheet's title." },
+        off: { type: "boolean", description: "Withdraw the drawing." },
+      },
+    },
+    examples: [{ note: "Publish the shop drawing", params: { title: "Roubo workbench" } }],
+    apply(draft, p: { title?: string; off?: boolean }) {
+      if (p.off) { draft.drawing = undefined; return { message: "Drawing withdrawn" }; }
+      const root = draft.components[draft.rootComponentId]?.name;
+      draft.drawing = { title: p.title?.trim() || (root && root !== "Root Component" ? root : "Shop drawing") };
+      return { message: `Drawing published: ${draft.drawing.title}` };
     },
   },
   {

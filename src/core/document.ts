@@ -30,6 +30,9 @@ export interface Parameter {
   boolean?: boolean;
   /** Named choices (an enum): values [0 … n−1], shown as a dropdown of these
    *  names; the value is the chosen index (use it with pick()). */
+  /** An intermediate value (a linkage's joint positions, say): computed like any
+   *  other, but kept out of the Parameters list unless asked for. */
+  hidden?: boolean;
   options?: string[];
   /** Set when the resolved value falls outside the extents / enum. */
   warning?: string;
@@ -878,6 +881,9 @@ export interface CadDocument {
   hidden?: string[];
 
   // ---- derived state (a cache, always reproducible from `operations`) ----
+  /** The design publishes its shop drawing (drawing.publish): the customize
+   *  viewer then offers it, with a PDF download. */
+  drawing?: { title: string };
   parameters: Parameter[];
   rootComponentId: string;
   components: Record<string, Component>;

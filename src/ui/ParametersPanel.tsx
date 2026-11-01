@@ -138,8 +138,10 @@ export function ParametersPanel() {
   const renameParameter = useStore((s) => s.renameParameter);
   const deleteParameter = useStore((s) => s.deleteParameter);
   const [editing, setEditing] = useState<string | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
 
-  const parameters = session.doc.parameters;
+  const hiddenCount = session.doc.parameters.filter((p) => p.hidden).length;
+  const parameters = showHidden ? session.doc.parameters : session.doc.parameters.filter((p) => !p.hidden);
 
   return (
     <div className="panel parameters">
@@ -154,7 +156,12 @@ export function ParametersPanel() {
           <span>Current</span>
           <span />
         </div>
-        {parameters.length === 0 && <div className="param-empty">No parameters yet.</div>}
+        {parameters.length === 0 && !hiddenCount && <div className="param-empty">No parameters yet.</div>}
+        {hiddenCount > 0 && (
+          <button className="param-hidden-toggle" onClick={() => setShowHidden((v) => !v)} title="Intermediate values the model computes (e.g. a linkage's joint positions)">
+            {showHidden ? `Hide ${hiddenCount} intermediate values` : `+ ${hiddenCount} intermediate values`}
+          </button>
+        )}
         {parameters.map((p) => (
           <div key={p.id}>
             <div className={`param-row ${p.error ? "error" : p.warning ? "warn" : ""}`}>

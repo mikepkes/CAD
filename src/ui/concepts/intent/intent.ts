@@ -44,14 +44,14 @@ export interface HotkeyContext { active: boolean; actions: { id: string; label: 
 
 /** What the resolver can see, built from the open document, the active hotkey contexts and the shared intents. */
 export function buildCtx(
-  session: { doc: { parameters: { name: string; value: number; min?: number; max?: number; step?: number }[] }; timeline: unknown[] },
+  session: { doc: { parameters: { name: string; value: number; min?: number; max?: number; step?: number; hidden?: boolean }[] }; timeline: unknown[] },
   rows: FeatureRow[],
   contexts: HotkeyContext[],
   intents: Intent[],
 ): IntentCtx {
   return {
     rows,
-    params: session.doc.parameters.map((p) => ({ name: p.name, value: p.value, min: p.min, max: p.max, step: p.step })),
+    params: session.doc.parameters.filter((p) => !p.hidden).map((p) => ({ name: p.name, value: p.value, min: p.min, max: p.max, step: p.step })),
     views: VIEWS,
     actions: contexts.flatMap((c) => (c.active ? c.actions.map((a) => ({ id: a.id, label: a.label })) : [])),
     intents: intents.map(intentText),

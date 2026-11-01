@@ -2,10 +2,11 @@
 // overall dimensions, a title block and the cut list), made from the live geometry
 // by the kernel (core/drawings.ts), with the cut list beside it and downloads.
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../model/store";
 import { Button } from "./kit/primitives";
 import type { CutPart } from "../core/drawings";
+import { saveBlob, sheetPdf } from "./pdf";
 
 const download = (name: string, text: string, type: string) => {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -20,9 +21,12 @@ export function cutListCsv(parts: CutPart[]): string {
   return ["part,qty,material,thickness_mm,width_mm,length_mm", ...parts.map((p) => [q(p.part), p.qty, q(p.material), p.thickness, p.width, p.length].join(","))].join("\n") + "\n";
 }
 
-export function DrawingView() {
+/** The sheet as a dialog over the model. `viewer`: in the customize viewer (no publishing switch there). */
+export function DrawingView(p: { viewer?: boolean } = {}) {
   const drawing = useStore((s) => s.drawing);
   const close = useStore((s) => s.closeDrawing);
+  const published = useStore((s) => !!s.session.doc.drawing);
+  const [pdfBusy, setPdfBusy] = useState(false);
   useEffect(() => {
     if (!drawing) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); } };
@@ -39,6 +43,20 @@ export function DrawingView() {
         <div className="modal-head">
           <span>{ready ? drawing.title : "Shop drawing"}</span>
           <span className="drawing-actions">
+            {!p.viewer && (
+              <label className="drawing-publish" title="Offer this drawing in the customize viewer, with a PDF download">
+                <input type="checkbox" checked={published} onChange={(e) => void useStore.getState().dispatch("drawing.publish", e.target.checked ? (ready ? { title: drawing.title } : {}) : { off: true })} /> Show in the viewer
+              </label>
+            )}
+            {ready && (
+              <Button size="sm" accent disabled={pdfBusy} onClick={() => {
+                setPdfBusy(true);
+                sheetPdf(drawing.svg, drawing.title)
+                  .then((b) => saveBlob(`${file}.pdf`, b))
+                  .catch((e) => useStore.setState({ toast: { kind: "error", text: `PDF failed: ${(e as Error).message}` } }))
+                  .finally(() => setPdfBusy(false));
+              }}>{pdfBusy ? "Making PDF…" : "Download PDF"}</Button>
+            )}
             {ready && <Button size="sm" onClick={() => download(`${file}.svg`, drawing.svg, "image/svg+xml")}>Download SVG</Button>}
             {ready && <Button size="sm" onClick={() => download(`${file}-cut-list.csv`, cutListCsv(drawing.parts), "text/csv")}>Cut list (CSV)</Button>}
             <button className="icon-btn" aria-label="Close" onClick={close}>✕</button>
