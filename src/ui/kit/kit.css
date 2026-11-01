@@ -49,11 +49,42 @@
   /* leader lines from a pin to its geometry */
   --k-leader: rgba(236, 234, 230, 0.55);
   --k-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  /* behind the action ring */
+  --k-scrim: rgba(8, 10, 12, 0.32);
   --k-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --k-control: 30px;
   --k-control-lg: 34px;
   --k-radius-sm: 6px;
   --k-radius: 10px;
+}
+
+/* Light theme (styles.css has the app tokens): the same orange, deepened to
+   read on white; selection, agent and status inks likewise. The analysis
+   swatches (--k-an-*) mirror the shaders and stay as they are, but for the
+   x-ray edge, drawn dark on a light ground (viewport/palette.ts xrayEdge). */
+:root[data-theme="light"] {
+  --k-an-edge: #2a303a;
+  --k-accent: #b35a00;
+  --k-accent-ink: #ffffff;
+  --k-accent-tint: rgba(214, 120, 20, 0.12);
+  --k-accent-dim: #94672f;
+  --k-select: #0e7fae;
+  --k-select-tint: #e3f0f6; /* opaque: an "on" button over the viewport stays crisp */
+  --k-agent: #19794f;
+  --k-agent-tint: rgba(25, 121, 79, 0.07);
+  --k-agent-line: #78b394;
+  --k-ok: #1a7f45;
+  --k-bad: #c8382a;
+  --k-ghost: rgba(217, 130, 43, 0.7);
+  --k-float: rgba(255, 255, 255, 0.96);
+  --k-float-line: #d3d8df;
+  --k-chip-at: #fcefdf;
+  --k-ghost-line: #d1b48c;
+  --k-ghost-ink: #85653a;
+  --k-track: #c6cbd3;
+  --k-leader: rgba(40, 46, 58, 0.45);
+  --k-shadow: 0 12px 32px rgba(20, 28, 40, 0.16);
+  --k-scrim: rgba(24, 30, 42, 0.16);
 }
 
 /* ---- buttons ---- */
@@ -90,7 +121,7 @@
   font: inherit;
   font-size: 13px;
   color: var(--text);
-  background: var(--bg);
+  background: var(--field);
   border: 1px solid var(--k-float-line);
   border-radius: var(--k-radius-sm);
   text-transform: none;
@@ -158,7 +189,7 @@
 }
 .k-live:focus-visible { outline: 2px solid var(--k-select); outline-offset: 1px; }
 .k-live.hot, .k-live:hover { background: var(--k-accent); color: var(--k-accent-ink); }
-.k-live-input { font: inherit; font-family: var(--k-mono); width: 6ch; background: var(--bg); color: var(--text); border: 1px solid var(--k-accent); border-radius: 3px; padding: 0 3px; }
+.k-live-input { font: inherit; font-family: var(--k-mono); width: 6ch; background: var(--field); color: var(--text); border: 1px solid var(--k-accent); border-radius: 3px; padding: 0 3px; }
 
 /* ---- pin on the part ---- */
 .k-pin {

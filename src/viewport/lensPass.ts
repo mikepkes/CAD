@@ -13,6 +13,7 @@
 import * as THREE from "three";
 import { COLOR_VERT, WORLD_VERT, curvatureColors, curvatureFrag, draftFrag, zebraFrag, type ShaderMask } from "./analysisShaders";
 import type { StrainSegment } from "../sim/flexure";
+import { viewportColors } from "./palette";
 
 export { curvatureColors };
 
@@ -402,11 +403,13 @@ export class LensPass {
   private lineMaterial(): THREE.ShaderMaterial {
     if (!this.line) {
       this.line = new THREE.ShaderMaterial({
-        uniforms: { ...maskUniforms(this.mask), uColor: { value: srgb(0xeceae6) }, uAlpha: { value: 0.75 } },
+        uniforms: { ...maskUniforms(this.mask), uColor: { value: srgb(viewportColors().xrayEdge) }, uAlpha: { value: 0.75 } },
         vertexShader: LINE_VERT, fragmentShader: LINE_FRAG,
         transparent: true, depthTest: false, depthWrite: false, clipping: true,
       });
     }
+    // the x-ray's edges contrast with the theme's background (palette.ts; kit.css --k-an-edge mirrors it)
+    (this.line.uniforms.uColor.value as THREE.Color).copy(srgb(viewportColors().xrayEdge));
     return this.line;
   }
 

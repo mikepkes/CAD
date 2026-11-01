@@ -5,12 +5,34 @@ import { connectWebHid, onSpaceMouseStatus, setSpaceMouseSettings, spaceMouseSet
 import type { SpaceMouseSettings } from "../viewport/spaceMouse";
 import { SpaceMouseButtons } from "./SpaceMouseButtons";
 import { useAssist } from "../model/assistController";
+import { useTheme, type ThemePref } from "../model/theme";
+import { Pills } from "./kit/primitives";
 
 const MODELS = [
   { id: "claude-opus-5-5", label: "Claude Opus 5.5 (most capable)" },
   { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5 (fast, balanced)" },
   { id: "claude-haiku-5-5", label: "Claude Haiku 5.5 (cheapest)" },
 ];
+
+const THEME_OPTIONS: { key: ThemePref; label: string; title: string }[] = [
+  { key: "system", label: "System", title: "Follow the system's light or dark setting" },
+  { key: "light", label: "Light", title: "Always light" },
+  { key: "dark", label: "Dark", title: "Always dark" },
+];
+
+/** Light or dark: follows the system unless chosen; applies at once (chrome and viewport). */
+function AppearanceSection() {
+  const pref = useTheme((s) => s.pref);
+  const theme = useTheme((s) => s.theme);
+  const setPref = useTheme((s) => s.setPref);
+  return (
+    <>
+      <label className="field-label">Appearance</label>
+      <Pills ariaLabel="Appearance" value={pref} options={THEME_OPTIONS} onChange={setPref} />
+      <p className="field-note">{pref === "system" ? `Follows the system setting (now ${theme}).` : `Always ${theme}.`}</p>
+    </>
+  );
+}
 
 /** 3D mouse (3Dconnexion SpaceMouse): connection, speed, axes, buttons. */
 function SpaceMouseSettingsSection() {
@@ -66,10 +88,13 @@ export function SettingsPanel() {
     <div className="modal-backdrop" onPointerDown={close}>
       <div className="modal" onPointerDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <span>Settings · Claude agent</span>
+          <span>Settings</span>
           <button className="icon-btn" onClick={close}>✕</button>
         </div>
         <div className="modal-body">
+          <AppearanceSection />
+
+          <div className="field-divider" />
           <label className="field-label">Claude API key</label>
           <input
             className="field-input"

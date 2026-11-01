@@ -3,11 +3,15 @@ import { createRoot } from "react-dom/client";
 import { App } from "./ui/App";
 import { CustomizeApp } from "./ui/CustomizeApp";
 import { useStore } from "./model/store";
+import { installTheme } from "./model/theme";
 import "./styles.css";
 import "./ui/kit/kit.css";
 
 // DEV-only: expose the store for debugging/automation (like __scene in Viewport).
 if (import.meta.env?.DEV) (window as unknown as { __vibecad?: unknown }).__vibecad = useStore;
+
+// Light or dark (Settings; follows the system by default), before the first render.
+installTheme();
 
 // Slider-only customize mode is selected by the URL (?mode=customize or
 // ?customize), so a model link can open straight into end-user tuning.
