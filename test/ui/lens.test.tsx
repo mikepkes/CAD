@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, within, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LensFrame } from "../../src/ui/concepts/lens/LensFrame";
 import { LensHud } from "../../src/ui/concepts/lens/LensHud";
@@ -92,6 +92,26 @@ describe("LensHud", () => {
     await userEvent.click(screen.getByRole("button", { name: "On back" }));
     expect(props.onOrient).toHaveBeenCalledWith("back");
     expect(screen.getByText("Overhang over 45°: needs support")).toBeTruthy();
+  });
+
+  it("is the one home of the analysis settings: stripes, draft angle and pull, curvature quantity and combs", async () => {
+    const onAnalysis = vi.fn();
+    const { rerender } = render(<LensHud {...props} mode="zebra" onAnalysis={onAnalysis} />);
+    const stripes = screen.getByRole("group", { name: "Stripes" });
+    await userEvent.click(within(stripes).getByRole("button", { name: "More stripes" }));
+    expect(onAnalysis).toHaveBeenLastCalledWith({ stripes: A.stripes + 2 });
+    rerender(<LensHud {...props} mode="draft" onAnalysis={onAnalysis} />);
+    await userEvent.click(within(screen.getByRole("group", { name: "Draft angle" })).getByRole("button", { name: "Less draft angle" }));
+    expect(onAnalysis).toHaveBeenLastCalledWith({ draftDeg: A.draftDeg - 0.5 });
+    await userEvent.click(within(screen.getByRole("group", { name: "Pull direction" })).getByRole("button", { name: "+X" }));
+    expect(onAnalysis).toHaveBeenLastCalledWith({ pull: { x: 1, y: 0, z: 0 } });
+    rerender(<LensHud {...props} mode="curvature" onAnalysis={onAnalysis} />);
+    await userEvent.click(screen.getByRole("button", { name: "Gaussian" }));
+    expect(onAnalysis).toHaveBeenLastCalledWith({ quantity: "gaussian" });
+    await userEvent.click(screen.getByRole("button", { name: "Combs" }));
+    expect(onAnalysis).toHaveBeenLastCalledWith({ combs: true });
+    await userEvent.click(screen.getByRole("button", { name: "Whole view" }));
+    expect(props.onShape).toHaveBeenCalledWith("whole");
   });
 
   it("reads out the worst flexure and shows the strain legend in strain mode", async () => {

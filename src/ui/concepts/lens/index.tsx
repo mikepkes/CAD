@@ -15,7 +15,7 @@ import { CARD_W_WIDE, CARD_FALLBACK_H } from "../../kit/anchor";
 import { useCardSize } from "../../kit/useCardSize";
 import { LensFrame } from "./LensFrame";
 import { LensHud } from "./LensHud";
-import { bodyCentres, countInside, frameOf, hasCurvature, hudPlacement, strainSummary, toLensSpec, useLens } from "./lens";
+import { HUD_TOP_KEEPOUT, bodyCentres, countInside, frameOf, hasCurvature, hudPlacement, orientUp, strainSummary, supportArea, toLensSpec, useLens, type ShapeChoice } from "./lens";
 import { useMechanism } from "../../../model/concepts/mechanismStore";
 import "./lens.css";
 
@@ -66,6 +66,15 @@ export function LensOverlay(p: { rect?: { left: number; top: number; w: number; 
   const projected = useProjected(centres);
   const bodiesInside = countInside(frame, projected);
 
+  // the area that needs support, read only while the overhang lens shows it
+  const wantsSupport = visible && lens.mode === "overhang";
+  const support = useMemo(() => (wantsSupport ? supportArea(Object.values(solids).flatMap((b) => (b.mesh ? [b.mesh] : [])), orientUp(lens.orient)) : undefined), [wantsSupport, solids, lens.orient]);
+  const onShape = (k: ShapeChoice) => {
+    if (k === "whole") { lens.setShape("wipe"); lens.moveTo({ x: frame.x, y: frame.y, wipeX: 0 }); return; }
+    if (k === "wipe" && lens.shape === "wipe" && frame.wipeX <= 0) lens.moveTo({ x: frame.x, y: frame.y, wipeX: Math.round(bounds.w / 2) });
+    lens.setShape(k);
+  };
+
   const cardRef = useRef<HTMLDivElement>(null);
   const cardSize = useCardSize(cardRef, { w: CARD_W_WIDE, h: CARD_FALLBACK_H });
 
@@ -75,11 +84,13 @@ export function LensOverlay(p: { rect?: { left: number; top: number; w: number; 
       <LensFrame frame={frame} rect={rect} onMove={lens.moveTo} />
       <LensHud
         ref={cardRef}
-        at={hudPlacement(frame, cardSize, bounds)}
+        at={hudPlacement(frame, cardSize, bounds, HUD_TOP_KEEPOUT)}
         width={CARD_W_WIDE}
         mode={lens.mode} shape={lens.shape} size={lens.size} orient={lens.orient}
         analysis={analysis} bodiesInside={bodiesInside} hasCurvature={curvature} strain={strain}
-        onMode={lens.setMode} onShape={lens.setShape} onSize={lens.setSize} onOrient={lens.setOrient} onClose={() => togglePanel("lens", false)}
+        wipeX={lens.wipeX} combs={analysis.combs} support={support}
+        onAnalysis={(patch) => void useStore.getState().setAnalysis(patch)}
+        onMode={lens.setMode} onShape={onShape} onSize={lens.setSize} onOrient={lens.setOrient} onClose={() => togglePanel("lens", false)}
       />
     </>
   );

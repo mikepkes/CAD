@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   lensRadius, initialPosition, clampLens, frameOf, inLens, countInside, handlePos, dragTo, orientUp, overhangClass,
-  hudPlacement, toLensSpec, legendFor, readoutsFor, arrowDelta, boundsCentre, bodyCentres, hasCurvature, MODES, useLens, DEFAULT_LENS, strainSummary,
+  hudPlacement, HUD_TOP_KEEPOUT, supportArea, shapeChoice, stepTo, STRIPES, toLensSpec, legendFor, readoutsFor, arrowDelta, boundsCentre, bodyCentres, hasCurvature, MODES, useLens, DEFAULT_LENS, strainSummary,
 } from "../src/ui/concepts/lens/lens";
 import { curvatureColors, OVERHANG_RED_SIN, STRAIN_COLORS, packStrain } from "../src/viewport/lensPass";
 import { readFileSync } from "node:fs";
@@ -87,7 +87,48 @@ describe("lens geometry", () => {
   });
 });
 
+describe("HUD keep-out", () => {
+  it("keeps the card out of the top band where the panel switches and the crumb sit", () => {
+    const B = { w: 800, h: 600 };
+    const card = { w: 300, h: 200 };
+    const wipe = hudPlacement({ shape: "wipe", x: 400, y: 300, r: 100, wipeX: 100 }, card, B, HUD_TOP_KEEPOUT);
+    expect(wipe.y).toBeGreaterThanOrEqual(HUD_TOP_KEEPOUT);
+    const high = hudPlacement({ shape: "lens", x: 200, y: 60, r: 50, wipeX: 400 }, card, B, HUD_TOP_KEEPOUT);
+    expect(high.y).toBeGreaterThanOrEqual(HUD_TOP_KEEPOUT);
+    // a view too short for the band and the card: the band gives way rather than the card leaving the view
+    const short = hudPlacement({ shape: "wipe", x: 400, y: 100, r: 50, wipeX: 100 }, card, { w: 800, h: 240 }, HUD_TOP_KEEPOUT);
+    expect(short.y + card.h).toBeLessThanOrEqual(240);
+  });
+  it("reads a wipe at the left edge as the whole view, and steps settings within their range", () => {
+    expect(shapeChoice("wipe", 0)).toBe("whole");
+    expect(shapeChoice("wipe", 300)).toBe("wipe");
+    expect(shapeChoice("wipe", -1)).toBe("wipe"); // not placed yet
+    expect(shapeChoice("lens", 0)).toBe("lens");
+    expect(stepTo(12, 1, STRIPES)).toBe(14);
+    expect(stepTo(60, 1, STRIPES)).toBe(60);
+    expect(stepTo(2, -1, STRIPES)).toBe(2);
+  });
+});
+
 describe("overhang", () => {
+  it("sums the area that needs support for the print orientation, never the face on the bed", () => {
+    // a 10 × 10 slab from z 0 to 5 as two triangles per face: the bottom on the bed, the top facing up
+    const P = [0, 0, 0, 10, 0, 0, 10, 10, 0, 0, 10, 0, 0, 0, 5, 10, 0, 5, 10, 10, 5, 0, 10, 5];
+    const bottom = [0, 2, 1, 0, 3, 2], top = [4, 5, 6, 4, 6, 7];
+    const mesh = { positions: new Float32Array(P), indices: new Uint32Array([...bottom, ...top]) };
+    const standing = supportArea([mesh], { x: 0, y: 0, z: 1 });
+    expect(standing.steep).toBe(0); // the bottom is on the bed
+    expect(standing.total).toBeCloseTo(200);
+    // a shelf's underside 20 mm up faces down: it needs support
+    const shelf = { positions: new Float32Array([0, 0, 20, 10, 0, 20, 10, 10, 20, 0, 10, 20]), indices: new Uint32Array([0, 2, 1, 0, 3, 2]) };
+    const withShelf = supportArea([mesh, shelf], { x: 0, y: 0, z: 1 });
+    expect(withShelf.steep).toBeCloseTo(100);
+    expect(readoutsFor("overhang", A, { bodiesInside: 0, orient: "standing", hasCurvature: false, support: withShelf })[1]).toMatchObject({ label: "Needs support", value: "100 mm² · 33%", state: "bad" });
+    // upside down, the slab's top is on the bed and its old bottom faces up: nothing needs support
+    expect(supportArea([mesh], { x: 0, y: 0, z: -1 }).steep).toBe(0);
+    expect(readoutsFor("overhang", A, { bodiesInside: 0, orient: "standing", hasCurvature: false, support: standing })[1]).toMatchObject({ value: "none", state: "ok" });
+  });
+
   it("maps orientation to the build direction", () => {
     expect(orientUp("standing")).toEqual({ x: 0, y: 0, z: 1 });
     expect(orientUp("back")).toEqual({ x: 0, y: -1, z: 0 });
