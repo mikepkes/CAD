@@ -230,6 +230,7 @@ const ACTIONS: Record<string, IconName> = {
   "feature.rollTo": "roll-to",
   "feature.suppress": "suppress",
   "feature.delete": "feature-delete",
+  "feature.rename": "sketch",
   // lens
   "lens.zebra": "zebra",
   "lens.draft": "draft",

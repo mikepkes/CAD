@@ -181,7 +181,6 @@ export function featureRows(doc: CadDocument, timeline: OperationRecord[], rollb
     if (!spec) return;
     num++;
     const featureId = op.createdIds[0] ?? op.opId;
-    const f = doc.features[featureId] as (FeatureDef & { name?: string }) | undefined;
     const values: Record<string, number> = {}, exprs: Record<string, string> = {};
     for (const p of spec.params) {
       const raw = op.params[p.key];
@@ -197,7 +196,8 @@ export function featureRows(doc: CadDocument, timeline: OperationRecord[], rollb
     const componentId = (sketchId && doc.sketches[sketchId]?.componentId) || doc.rootComponentId;
     rows.push({
       featureId, opId: op.opId, op, spec, num, index,
-      name: f?.name || (typeof op.params.name === "string" && op.params.name) || `${spec.label} ${num}`,
+      // one name wherever it shows (strip, card, Timeline), built or rolled back: the one it was given, else what it is
+      name: (typeof op.params.name === "string" && op.params.name.trim()) || defaultFeatureName(op, spec),
       // the command's error, else the kernel's: a feature that failed to build must say so, not show as built
       values, exprs, suppressed: !!op.suppressed, rolledBack: index >= rollbackIndex, error: op.error ?? solid?.error, solid, body, componentId,
     });
@@ -206,6 +206,14 @@ export function featureRows(doc: CadDocument, timeline: OperationRecord[], rollb
 }
 
 const hasGeometry = (s: SolidEval | undefined): s is SolidEval => !!s && (!!s.bounds || !!s.centroid);
+
+/** What a feature is called when it was given no name: what it is ("Box", "Circular pattern", "Fillet"); its number
+ *  sits beside it wherever it shows, so two fillets read "2 · Fillet" and "4 · Fillet". */
+export function defaultFeatureName(op: Pick<OperationRecord, "params">, spec: Pick<FeatureSpec, "kind" | "label">): string {
+  if (spec.kind === "primitive") { const sh = String(op.params.shape ?? "box"); return sh[0].toUpperCase() + sh.slice(1); }
+  if (spec.kind === "pattern") return op.params.mode === "circular" ? "Circular pattern" : "Linear pattern";
+  return spec.label;
+}
 
 /** The body a modifier changed: the named target, else the latest earlier body with geometry
  *  (the kernel's "most recent body" rule). Undefined when the row's own solid has geometry. */
@@ -242,7 +250,7 @@ export function nameFromTimeline(timeline: OperationRecord[], id: string): strin
     if (!op.createdIds.includes(id)) continue;
     if (typeof op.params.name === "string" && op.params.name) return op.params.name;
     if (isSketch) return `Sketch ${sketches}`;
-    if (spec) return `${spec.label} ${features}`;
+    if (spec) return defaultFeatureName(op, spec); // as featureRows names it: the same built or rolled back (M14)
     return undefined;
   }
   return undefined;

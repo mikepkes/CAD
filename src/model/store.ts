@@ -42,6 +42,7 @@ import { pickItems, sketchPickItems, type PickItem } from "./pickMenu";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
 import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
 import { renameViaEdit } from "./assist";
+import { sketchIsEmpty } from "../ui/sketchStatus";
 import { FeatureTool, FeatureToolKind, defaultRevolveAxis, hasClosedRegion, profileChoices, toggled, toolCommand, toolExpressions } from "./featureTools";
 
 /** The geometry backend: a Web Worker when available (keeps the OCC kernel off
@@ -264,7 +265,8 @@ export interface AppState {
   renderSketch: () => Sketch | null;
 
   // parameters
-  addParameter: (name?: string, expr?: string) => Promise<void>;
+  /** Add a parameter (a unique name from `name`); resolves to the name it got, null when it couldn't. */
+  addParameter: (name?: string, expr?: string) => Promise<string | null>;
   /** A typed value checked against the parameters: the expression to store, or null (with a toast saying why).
    *  "name = expr" makes the parameter and gives its name. */
   resolveTyped: (expr: string) => Promise<string | null>;
@@ -836,6 +838,21 @@ export const useStore = create<AppState>((set, get) => {
     finishSketch: () => {
       const sk = activeSketch(get());
       set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null, constraintTool: null, lastMessage: sk ? `Finished ${sk.name}.` : "" });
+      // a sketch finished with nothing in it isn't left behind (M18): its ops go, in one undo step
+      if (sk && sketchIsEmpty(sk)) {
+        const tl = get().session.timeline;
+        const used = tl.some((o) => o.params.sketch === sk.id && o.type !== "sketch.create" && !o.type.startsWith("sketch."))
+          || tl.some((o) => Array.isArray(o.params.sketches) && (o.params.sketches as unknown[]).includes(sk.id));
+        const own = tl.filter((o) => (o.type === "sketch.create" && o.createdIds[0] === sk.id) || o.params.sketch === sk.id);
+        if (!used && own.length) void (async () => {
+          const s = get().session;
+          const cp = s.checkpoint();
+          for (const o of [...own].reverse()) await s.deleteOperation(o.opId);
+          s.squash(cp, `Remove the empty ${sk.name}`);
+          bump({ lastMessage: `Removed the empty ${sk.name}.` });
+          scheduleAutosave();
+        })();
+      }
     },
     editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [], lastMessage: `Editing ${get().session.doc.sketches[id]?.name ?? "the sketch"}.` }),
 
@@ -933,7 +950,8 @@ export const useStore = create<AppState>((set, get) => {
       const names = new Set(get().session.doc.parameters.map((p) => p.name));
       let n = base, i = 1;
       while (names.has(n)) n = `${base}${i++}`;
-      await runDispatch("parameter.add", { name: n, expression: expr ?? "10" });
+      const r = await runDispatch("parameter.add", { name: n, expression: expr ?? "10" });
+      return r.ok ? n : null;
     },
     resolveTyped: (expr) => typedExpression(expr),
     promoteDimension: async (cid) => {
@@ -949,12 +967,15 @@ export const useStore = create<AppState>((set, get) => {
       while (names.has(name)) name = `${base}${i++}`;
       const v = dim.value;
       const valueStr = Number.isInteger(v) ? String(v) : String(Math.round(v * 1000) / 1000);
+      // the parameter and the dimension pointing at it are one undo step (M17)
+      const cp = get().session.checkpoint();
       const r = await runDispatch("parameter.add", { name, expression: valueStr });
       if (!r.ok) return;
       // Point the dimension's expression at the new parameter.
       const op = get().session.timeline.find((o) => o.type === "sketch.addDimension" && o.createdIds.includes(cid));
       if (op) await get().editOperation(op.opId, { ...op.params, expression: name });
-      set({ lastMessage: `Promoted dimension to parameter "${name}".` });
+      get().session.squash(cp, `Name ${name}`);
+      bump({ lastMessage: `Named the dimension ${name}.` });
     },
     setParameterExpr: async (name, expr) => {
       // While a configuration supplies this parameter, an edit changes its cell.

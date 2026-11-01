@@ -121,6 +121,21 @@ export async function editFormula(row: FeatureRow, p: CardParam): Promise<boolea
   return true;
 }
 
+/** Rename a feature or a sketch where it shows (a strip chip's or a card title's double-click, F2): asks for the
+ *  new name, then renames it in one undo step. */
+export async function renameThing(id: string, current: string, what = "feature"): Promise<boolean> {
+  const name = await askText({ title: `Rename ${what}`, label: "Name", initial: current, confirmLabel: "Rename" });
+  if (!name || name.trim() === current) return false;
+  await st().renameEntity(id, name);
+  return true;
+}
+
+/** Open a feature's card (a strip chip's plain click). */
+export function openFeatureCard(featureId: string): void {
+  if (!ui().panels.workbench) ui().togglePanel("workbench", true);
+  ui().setOpenFeature(featureId);
+}
+
 /** Flip an extrude to the other side of its sketch (the card's Reverse). */
 export function reverseExtrude(row: FeatureRow): Promise<void> {
   const op = st().session.timeline.find((o) => o.opId === row.opId);
@@ -150,10 +165,14 @@ export async function nameThisNumber(row: FeatureRow, p: CardParam): Promise<boo
   if (!name) return false;
   const problem = paramNameProblem(name, paramNames());
   if (problem) { st().setMessage(problem); return false; }
+  // the parameter and the feature pointing at it are one undo step (M17)
+  const cp = st().session.checkpoint();
   const r = await st().dispatch("parameter.add", { name, expression: p.expr });
   if (!r.ok) return false;
   const op = st().session.timeline.find((o) => o.opId === row.opId);
   await st().editOperation(row.opId, { ...(op?.params ?? row.op.params), [p.key]: name });
+  st().session.squash(cp, `Name ${name}`);
+  st().setMessage(`Named ${row.name}'s ${p.label.toLowerCase()} ${name}.`);
   return true;
 }
 
@@ -309,6 +328,11 @@ export const CONTEXT_ACTIONS: HotkeyAction[] = [
     id: "feature.suppress", label: "Suppress / unsuppress", context: "feature", defaultPrimary: "h",
     when: () => !!openRow(),
     run: () => { const row = openRow(); if (row) void st().suppressOperation(row.opId, !row.suppressed); },
+  },
+  {
+    id: "feature.rename", label: "Rename feature", context: "feature", defaultPrimary: "f2",
+    when: () => !!openRow(),
+    run: () => { const row = openRow(); if (row) void renameThing(row.featureId, row.name); },
   },
   {
     id: "feature.delete", label: "Delete feature", context: "feature", defaultPrimary: "delete", defaultSecondary: "backspace",

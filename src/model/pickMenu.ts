@@ -45,6 +45,30 @@ export function sketchPickItems(sk: Sketch, hits: { id: string }[], max = 8): Pi
   return hits.slice(0, max).map((h, i) => ({ kind: "entity", id: h.id, label: entityLabel(sk, h.id), detail: i === 0 ? "nearest" : `under it, ${i}` }));
 }
 
+/** Which way a face looks, in words: "top"/"bottom" (±Z), "+X"/"-X", "+Y"/"-Y", or null when it isn't square to an axis. */
+export function orientationWord(n: P3): string | null {
+  if (n.z > 0.9) return "top";
+  if (n.z < -0.9) return "bottom";
+  if (Math.abs(n.x) > 0.9) return n.x > 0 ? "+X" : "-X";
+  if (Math.abs(n.y) > 0.9) return n.y > 0 ? "+Y" : "-Y";
+  return null;
+}
+
+/** A face as a person would name it (M19): which way it looks and what part it is ("top", "+X end", "curved side",
+ *  "rounded edge"), never the topology's internal names ("side:ln5", "blend(…)"). */
+export function faceLabel(part: string, normal: P3): string {
+  const way = orientationWord(normal);
+  const kind = part.split(":")[0].replace(/@\d+$/, "").replace(/#\d+$/, "");
+  if (kind === "end" || kind === "start") return way ? (way === "top" || way === "bottom" ? `${way} (${kind})` : `${way} ${kind}`) : `${kind} face`;
+  if (kind === "side" || kind === "rev") return way ? (way === "top" || way === "bottom" ? way : `${way} side`) : "curved side";
+  if (/^blend/.test(kind)) return "rounded edge";
+  if (/^chamfer/.test(kind)) return "bevelled edge";
+  if (/^inner/.test(kind)) return way ? `inside, ${way}` : "inside face";
+  if (kind === "bore") return "hole wall";
+  if (/^[+-][XYZ]$/.test(kind) || !kind) return way ?? "face";
+  return way ? `${way} face` : "face";
+}
+
 /** The picker's entries for the ray hits: one per distinct face (named by the feature that made it), then the planes. */
 export function pickItems(
   hits: { faces: { bodyId: string; world: P3; normal: P3 }[]; planes: { planeId: string; world: P3 }[] },
@@ -65,7 +89,7 @@ export function pickItems(
     const n = out.length;
     out.push({
       kind: "face", bodyId: h.bodyId, faceName: named?.faceName, point: h.world, normal: h.normal,
-      label: `${feature?.name ?? "Body"}${part ? ` · ${part}` : ""}`,
+      label: `${feature?.name ?? "Body"} · ${faceLabel(part, h.normal)}`,
       detail: n === 0 ? "nearest" : `behind, ${n}`,
     });
   }

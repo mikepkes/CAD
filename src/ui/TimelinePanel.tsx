@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useStore } from "../model/store";
 import { OperationRecord } from "../core/command/types";
 import { Icon, iconForCommand } from "./icons";
+import { featureRows } from "../model/concepts/featureCatalog";
 
 // Which sketch an operation belongs to (for context grouping). Features and
 // parameters stay top-level; a sketch.create heads its own group, and the
@@ -25,6 +26,9 @@ export function TimelinePanel() {
 
   const ops = session.timeline;
   const rollback = session.rollbackIndex;
+  const solids = useStore((s) => s.solids);
+  // one name and one number per feature, the same as the strip and the cards (M14)
+  const featureOf = new Map(featureRows(session.doc, ops, rollback, solids).map((r) => [r.opId, r]));
 
   // Explicit open/closed overrides; by default the active sketch is open, others closed.
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -43,14 +47,15 @@ export function TimelinePanel() {
 
   const opRow = (op: OperationRecord, i: number, nested: boolean) => {
     const active = i < rollback && !op.suppressed;
-    const cls = op.error ? "err" : op.suppressed ? "sup" : active ? "on" : "off";
+    const feature = featureOf.get(op.opId);
+    const cls = op.error || feature?.error ? "err" : op.suppressed ? "sup" : active ? "on" : "off";
     return (
       <div className={`op-row ${cls} ${nested ? "grouped" : ""}`} key={op.opId}>
-        <span className="op-idx">{i + 1}</span>
+        <span className="op-idx" title={feature ? `Feature ${feature.num}` : undefined}>{feature ? feature.num : ""}</span>
         <span className="op-dot" />
         <Icon name={iconForCommand(op.type, op.params)} size={14} className="op-icon" />
-        <span className="op-label" title={`${op.type} — click to roll back to here`} onClick={() => moveRollback(i + 1)}>
-          {op.label}
+        <span className="op-label" title={`${op.label} — click to roll back to here`} onClick={() => moveRollback(i + 1)}>
+          {feature ? feature.name : op.label}
           {op.error && <span className="op-err"> ⚠</span>}
         </span>
         <button className="op-mini" title={op.suppressed ? "Unsuppress" : "Suppress"} onClick={() => suppressOperation(op.opId, !op.suppressed)}>
@@ -95,7 +100,7 @@ export function TimelinePanel() {
                 </button>
                 <Icon name="sketch" size={14} className="group-glyph" />
                 <span className="group-name" onClick={() => toggle(sid)}>
-                  Sketch {sketchNum.get(sid)} <span className="group-sub">· {planeLabel}</span>
+                  {sk?.name ?? `Sketch ${sketchNum.get(sid)}`} <span className="group-sub">· {planeLabel}</span>
                   {anyErr && <span className="op-err"> ⚠</span>}
                 </span>
                 <span className="group-count">{group.length}</span>

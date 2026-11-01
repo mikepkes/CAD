@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../model/store";
 import { isValidParamName } from "../core/parameters";
 import type { Parameter } from "../core/document";
@@ -161,6 +161,13 @@ export function ParametersPanel() {
   const renameParameter = useStore((s) => s.renameParameter);
   const [editing, setEditing] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  // a new parameter's name is ready to type over once its row is there (M17)
+  const [focusName, setFocusName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusName) return;
+    const el = document.querySelector<HTMLInputElement>(`.param-name[data-name="${focusName}"]`);
+    if (el) { el.focus(); el.select(); setFocusName(null); }
+  });
 
   const hiddenCount = session.doc.parameters.filter((p) => p.hidden).length;
   const parameters = showHidden ? session.doc.parameters : session.doc.parameters.filter((p) => !p.hidden);
@@ -169,7 +176,7 @@ export function ParametersPanel() {
     <div className="panel parameters">
       <div className="panel-head">
         <span>Parameters</span>
-        <button className="icon-btn" title="Add parameter" onClick={() => addParameter("d")}>＋</button>
+        <button className="icon-btn" title="Add parameter" aria-label="Add parameter" onClick={() => void addParameter("d").then((n) => setFocusName(n))}>＋</button>
       </div>
       <div className="param-table">
         <div className="param-row header">
@@ -189,12 +196,20 @@ export function ParametersPanel() {
             <div className={`param-row ${p.error ? "error" : p.warning ? "warn" : ""}`}>
               <input
                 className="param-name"
+                aria-label={`Name of ${p.name}`}
+                data-name={p.name}
                 defaultValue={p.name}
                 key={`n${p.id}${p.name}`}
                 onBlur={(e) => {
                   const v = e.target.value.trim();
                   if (v && v !== p.name && isValidParamName(v)) renameParameter(p.name, v);
                   else e.target.value = p.name;
+                }}
+                // Enter commits the name, Escape puts the old one back (M17)
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  else if (e.key === "Escape") { (e.target as HTMLInputElement).value = p.name; (e.target as HTMLInputElement).blur(); }
                 }}
               />
               <ParamControl p={p} />

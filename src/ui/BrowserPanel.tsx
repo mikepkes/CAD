@@ -1,4 +1,14 @@
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
+import { askText } from "./kit/askDialog";
+
+/** The browser's selected row (a sketch id): a single click selects it, a double-click edits it (M18). */
+const Picked = createContext<{ id: string | null; set: (id: string | null) => void }>({ id: null, set: () => {} });
+
+/** Rename a sketch (F2 or ✎ on its row): asks, then renames it in one undo step. */
+async function renameSketch(id: string, current: string) {
+  const name = await askText({ title: "Rename sketch", label: "Name", initial: current, confirmLabel: "Rename" });
+  if (name && name.trim() !== current) await useStore.getState().renameEntity(id, name);
+}
 import { useStore } from "../model/store";
 import { EyeToggle } from "./EyeToggle";
 import type { CadDocument, RoleRef } from "../core/document";
@@ -63,6 +73,7 @@ function ComponentNode({ doc, id, depth }: { doc: CadDocument; id: string; depth
   const deleteConnector = useStore((s) => s.deleteConnector);
   const createComponentPattern = useStore((s) => s.createComponentPattern);
   const [addingConn, setAddingConn] = useState(false);
+  const picked = useContext(Picked);
 
   const c = doc.components[id];
   if (!c) return null;
@@ -99,9 +110,20 @@ function ComponentNode({ doc, id, depth }: { doc: CadDocument; id: string; depth
         const editing = mode === "sketch" && activeSketchId === sid;
         const st = sk.status;
         return (
-          <div key={sid} className={`tree-row sketch ${editing ? "active" : ""}`} style={{ paddingLeft: pad + 14 }} onClick={() => (editing ? finishSketch() : editSketch(sid))} title={st.message}>
+          <div key={sid} className={`tree-row sketch ${editing ? "active" : ""} ${picked.id === sid ? "picked" : ""}`} style={{ paddingLeft: pad + 14 }}
+            role="treeitem" aria-selected={picked.id === sid} tabIndex={0}
+            // one click selects; a double-click (or Enter) edits it, or finishes the one being edited; F2 renames
+            onClick={() => picked.set(sid)}
+            onDoubleClick={() => (editing ? finishSketch() : editSketch(sid))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); if (editing) finishSketch(); else editSketch(sid); }
+              else if (e.key === "F2") { e.preventDefault(); void renameSketch(sid, sk.name); }
+            }}
+            title={`${st.message ? `${st.message} · ` : ""}Double-click to edit · F2 to rename`}>
             <span className="tree-icon">✎</span>
             <span className="tree-label">{sk.name} <span className="muted-inline">· {sk.planeId}</span></span>
+            {picked.id === sid && <button className="asm-x" title="Rename (F2)" aria-label={`Rename ${sk.name}`} onClick={(e) => { e.stopPropagation(); void renameSketch(sid, sk.name); }}>✎</button>}
+            {picked.id === sid && !editing && <button className="asm-btn" title="Edit this sketch" onClick={(e) => { e.stopPropagation(); editSketch(sid); }}>edit</button>}
             <span className={`dof-dot ${sketchStatus(sk).cls}`} title={sketchStatus(sk).text} />
             <EyeToggle id={sid} label={sk.name} />
           </div>
@@ -250,8 +272,10 @@ export function BrowserPanel() {
   const root = doc.components[doc.rootComponentId];
   const datums = Object.values(doc.planes);
   const empty = (root?.sketches.length ?? 0) === 0 && (root?.children.length ?? 0) === 0 && datums.length === 0;
+  const [picked, setPicked] = useState<string | null>(null);
 
   return (
+    <Picked.Provider value={{ id: picked, set: setPicked }}>
     <div className="panel browser">
       <div className="panel-head">
         <span>Browser</span>
@@ -284,5 +308,6 @@ export function BrowserPanel() {
         {empty && Object.keys(doc.joints).length === 0 && <div className="muted">No sketches yet.</div>}
       </div>
     </div>
+    </Picked.Provider>
   );
 }

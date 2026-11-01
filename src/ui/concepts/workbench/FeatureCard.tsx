@@ -12,7 +12,7 @@ import { useFeatureRows } from "../../kit/useFeatureRows";
 import { createEditQueue } from "../../kit/editQueue";
 import { useCardSize } from "../../kit/useCardSize";
 import { cardHeight, cardParams, isFormula, namedParam, pinAnchors, pushTo, quadrantDir } from "./workbench";
-import { applyPush, deleteFeature, editFormula, nameThisNumber, pushKey, reverseExtrude, typeExpression } from "../contextActions";
+import { applyPush, deleteFeature, editFormula, nameThisNumber, pushKey, renameThing, reverseExtrude, typeExpression } from "../contextActions";
 import { formatValue } from "../../kit/numberMath";
 
 export function FeatureCard() {
@@ -47,6 +47,8 @@ export function FeatureCard() {
       width={CARD_W}
       num={row.num}
       title={row.name}
+      onTitleDoubleClick={() => void renameThing(row.featureId, row.name)}
+      headActions={<Button size="sm" ghost icon ariaLabel={`Rename ${row.name}`} title="Rename (F2)" onClick={() => void renameThing(row.featureId, row.name)}>✎</Button>}
       onClose={() => setOpenFeature(null)}
       className="wb-card"
       foot={

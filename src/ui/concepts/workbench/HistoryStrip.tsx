@@ -11,6 +11,7 @@ import { Button, Chip, Track } from "../../kit/primitives";
 import { useFeatureRows, useActiveComponent } from "../../kit/useFeatureRows";
 import { Icon, iconForCommand } from "../../icons";
 import { moreLabel, rangeValue, rowsInScope, snapRollback, stripEntries, stripRange, stripState } from "./workbench";
+import { openFeatureCard, renameThing } from "../contextActions";
 
 export function HistoryStrip() {
   const rows = useFeatureRows();
@@ -41,8 +42,15 @@ export function HistoryStrip() {
               {i > 0 && <Track ghost={c.state === "ghost"} />}
               <Chip icon={<Icon name={chipIcon(c.row.index)} size={14} />} num={c.row.num} label={c.row.name} state={c.state} off={c.off} err={c.err} hot={c.row.featureId != null && hotFeature === c.row.featureId}
                 className={c.row.step ? "wb-step" : undefined}
-                title={c.row.error ?? (c.state === "ghost" ? "Rolled back — click to build up to here" : c.row.step ? `${c.row.step.label} — click to roll the history to just after this step` : "Click to roll the history to just after this feature")}
-                onClick={() => void moveRollback(c.row.index + 1)}
+                title={c.row.error ?? (c.row.step
+                  ? `${c.row.step.label} — click to roll the history to just after this step`
+                  : `Click to open its card · ⌥-click to ${c.state === "ghost" ? "build up to here" : "roll the history back to just after it"} · double-click to rename`)}
+                onClick={(e) => {
+                  // a plain click opens the feature; rolling back is ⌥-click or the slider (M15)
+                  if (c.row.featureId != null && !e.altKey) openFeatureCard(c.row.featureId);
+                  else void moveRollback(c.row.index + 1);
+                }}
+                onDoubleClick={c.row.featureId != null ? () => void renameThing(c.row.featureId!, c.row.name) : undefined}
                 onHover={c.row.featureId != null ? (on) => setHotFeature(on ? c.row.featureId! : null) : undefined} />
             </Fragment>
           ))}

@@ -845,6 +845,11 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .dof-dot.bad {
   background: var(--bad);
 }
+.tree-row.picked {
+  background: var(--hover);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
 .dof-dot.empty {
   background: transparent;
   border: 1px solid var(--text-dim);

@@ -108,9 +108,9 @@ describe("feature catalog", () => {
       const rows = featureRows(s.doc, s.timeline, s.rollbackIndex, {});
       expect(rows.map((r) => r.rolledBack)).toEqual([true, true]);
       expect(nameOf(s.doc, s.timeline, sketchId)).toBe("Sketch 1"); // numbered as the Timeline panel numbers it
-      expect(nameOf(s.doc, s.timeline, extrudeId)).toBe("Extrude 1");
+      expect(nameOf(s.doc, s.timeline, extrudeId)).toBe("Extrude"); // the name it has when built: one name per feature (M14)
       expect(sentenceText(rows[0], s.doc, s.timeline)).toBe("Extrude Sketch 1 by 24 mm.");
-      expect(rows[0].name).toBe("Extrude 1");
+      expect(rows[0].name).toBe("Extrude");
       await s.moveRollback(s.timeline.length);
       expect(nameOf(s.doc, s.timeline, sketchId)).toBe(s.doc.sketches[sketchId].name);
     });
