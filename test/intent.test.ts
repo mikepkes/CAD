@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import { realSession } from "./helpers";
 import { featureRows, FeatureRow } from "../src/model/concepts/featureCatalog";
-import { resolve, fuzzy, parseNumber, tokenize, moveSelection, buildCtx, VIEWS, IntentCtx, IntentAction } from "../src/ui/concepts/intent/intent";
+import { resolve, fuzzy, parseNumber, tokenize, moveSelection, buildCtx, emptySuggestions, remember, MAX_RECENT, VIEWS, IntentCtx, IntentAction } from "../src/ui/concepts/intent/intent";
 import { parseIntent } from "../src/model/concepts/intents";
 import { execute, Executor } from "../src/ui/concepts/intent/execute";
 
@@ -20,11 +20,15 @@ const top = (text: string, ctx: IntentCtx) => resolve(text, ctx)[0];
 const actions = (text: string, ctx: IntentCtx) => resolve(text, ctx).map((s) => s.action);
 
 describe("intent grammar: pieces", () => {
-  it("fuzzy ranks exact > prefix > word prefix > subsequence > none", () => {
-    const e = fuzzy("front", "front"), p = fuzzy("fro", "front"), w = fuzzy("rad", "Bend radius"), s = fuzzy("exd", "Extrude 1"), n = fuzzy("zzz", "front");
+  it("fuzzy ranks exact > prefix > word prefix > words from a word start > none, and matches only at word starts", () => {
+    const e = fuzzy("front", "front"), p = fuzzy("fro", "front"), w = fuzzy("rad", "Bend radius"), j = fuzzy("spacema", "Design space map"), q = fuzzy("des sp", "Design space"), n = fuzzy("zzz", "front");
     expect(e).toBe(1);
-    expect(p).toBeGreaterThan(w); expect(w).toBeGreaterThan(s); expect(s).toBeGreaterThan(n); expect(n).toBe(0);
+    expect(p).toBeGreaterThan(w); expect(w).toBeGreaterThan(j); expect(j).toBeGreaterThan(0); expect(q).toBeGreaterThan(0); expect(n).toBe(0);
     expect(fuzzy("Upright Wall", "upright wall")).toBe(1);
+    // no more subsequences: "stl" is not "Shuttle", "exd" is not "Extrude"
+    expect(fuzzy("stl", "Shuttle")).toBe(0);
+    expect(fuzzy("exd", "Extrude 1")).toBe(0);
+    expect(fuzzy("stl", "Export STL")).toBeGreaterThan(0.6);
   });
   it("parses numbers with units and rejects words", () => {
     expect(parseNumber("12")).toBe(12); expect(parseNumber("12mm")).toBe(12); expect(parseNumber("-1.5")).toBe(-1.5);
@@ -155,10 +159,45 @@ describe("intent grammar: resolve", () => {
     expect(top("fillet", ctx).action).toEqual({ type: "openFeature", featureId: rows[1].featureId });
   });
 
-  it("panel names toggle panels", () => {
+  it("panel names toggle panels, by the switch's name or another word for it", () => {
     expect(top("ledger", ctx).action).toEqual({ type: "togglePanel", panel: "ledger" });
     expect(top("lens", ctx).action).toEqual({ type: "togglePanel", panel: "lens" });
     expect(top("workb", ctx).action).toEqual({ type: "togglePanel", panel: "workbench" });
+    // the words on the buttons find their panels, named as the buttons are
+    const pins = top("pins", ctx);
+    expect(pins.action).toEqual({ type: "togglePanel", panel: "workbench" });
+    expect(pins.label).toBe("Toggle Pins");
+    expect(top("mechanism", ctx).action).toEqual({ type: "togglePanel", panel: "mechanism" });
+    expect(top("materials", ctx).action).toEqual({ type: "togglePanel", panel: "materials" });
+    expect(top("design space", ctx).action).toEqual({ type: "togglePanel", panel: "space" });
+  });
+
+  it("finds the app's commands by their words: section, agent, settings, help, configuration", () => {
+    const app = ctxOf(rows, { actions: [...ACTIONS,
+      { id: "view.section", label: "Section: cut the model on a plane" }, { id: "app.agent", label: "Agent: describe it to Claude" },
+      { id: "app.settings", label: "Settings" }, { id: "app.shortcuts", label: "Keyboard shortcuts" },
+      { id: "view.configurations", label: "Configurations: the design variants table" }, { id: "motion.study", label: "Motion study" },
+    ] });
+    for (const [word, id] of [["section", "view.section"], ["agent", "app.agent"], ["claude", "app.agent"], ["settings", "app.settings"], ["help", "app.shortcuts"],
+      ["shortcuts", "app.shortcuts"], ["configuration", "view.configurations"], ["motion", "motion.study"]] as const) {
+      expect(top(word, app).action, word).toEqual({ type: "hotkey", id });
+    }
+  });
+
+  it("an empty line offers the recent commands, then common ones", () => {
+    const app = ctxOf(rows, { actions: [...ACTIONS, { id: "view.section", label: "Section: cut the model on a plane" }, { id: "app.agent", label: "Agent: describe it to Claude" }, { id: "app.shortcuts", label: "Keyboard shortcuts" }] });
+    const fresh = emptySuggestions(app, []);
+    expect(fresh.every((s) => s.group === "common")).toBe(true);
+    expect(fresh.map((s) => s.label)).toEqual(expect.arrayContaining(["Toggle Pins", "Fit the view", "Section: cut the model on a plane", "Agent: describe it to Claude", "Keyboard shortcuts"]));
+    const set = top("h 20", ctx);
+    let recent = remember([], set);
+    recent = remember(recent, top("pins", app));
+    recent = remember(recent, set); // once, and to the front
+    const list = emptySuggestions(app, recent);
+    expect(list.slice(0, 2).map((s) => [s.group, s.label])).toEqual([["recent", set.label], ["recent", "Toggle Pins"]]);
+    expect(list.filter((s) => s.label === "Toggle Pins").length).toBe(1); // not again under Common
+    expect(list.map((s) => s.id)).toEqual(list.map((_, i) => `intent-${i}`));
+    expect(remember([1, 2, 3, 4].map((k) => ({ ...set, label: `x${k}` })), set).length).toBe(MAX_RECENT);
   });
 
   it("a comparator makes a design intent, and says when it already exists", () => {

@@ -1577,7 +1577,8 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .drawing-publish { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
 
 /* ---- configuration table (Parameters panel) ---- */
-.config-table { border-top: 1px solid var(--line); padding: 4px 8px 8px; }
+.config-table { border-top: 1px solid var(--line); padding: 4px 8px 8px; transition: background 0.4s ease; }
+.config-table.flash { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .panel-head.sub { padding: 6px 0; font-size: 12px; }
 .config-grid { display: grid; gap: 4px 6px; align-items: center; overflow-x: auto; }
 .config-head { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

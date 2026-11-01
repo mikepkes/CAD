@@ -12,19 +12,42 @@
 //   suppress <feature> | unsuppress [<feature>]   suppress / unsuppress
 //   undo | redo
 //   measure <feature> | <feature>                 open the feature's card
-//   ledger|space|lens|workbench|materials         toggle a concept panel
+//   pins|lens|ledger|space|materials|mechanism    toggle a concept panel (and their aliases)
 //   <lhs> <=|>=|==|<|> <rhs>                      add a design intent
-//   <hotkey action label>                         run that action
+//   <hotkey action label or alias>                run that action (section, agent, settings, help…)
+//   (nothing typed)                               the recent commands, then common ones
 
 import type { FeatureRow } from "../../../model/concepts/featureCatalog";
 import { paramsWith, unitLabel } from "../../../model/concepts/featureCatalog";
 import { intentText, parseIntent, type Comparator, type Intent } from "../../../model/concepts/intents";
-import type { ConceptPanel } from "../../../model/concepts/uiState";
+import { PANEL_NAMES, type ConceptPanel } from "../../../model/concepts/uiState";
 import { quantize, formatValue } from "../../kit/numberMath";
 
 export const VIEWS = ["iso", "front", "top", "right", "back", "left", "bottom"] as const;
 export type ViewName = (typeof VIEWS)[number];
-export const PANELS: ConceptPanel[] = ["workbench", "ledger", "space", "lens", "materials"];
+export const PANELS: ConceptPanel[] = ["workbench", "ledger", "space", "lens", "materials", "mechanism"];
+
+/** The words people use for each panel: its switch's name first, then what else it is called or shows. */
+export const PANEL_ALIASES: Record<ConceptPanel, string[]> = {
+  workbench: ["pins", "workbench", "feature pins", "history strip"],
+  lens: ["lens", "analysis", "zebra", "draft", "curvature", "x-ray", "overhang", "strain"],
+  ledger: ["ledger", "intents", "sentences"],
+  space: ["space", "design space", "map", "trade-off"],
+  materials: ["materials", "material", "finish", "colour", "color"],
+  mechanism: ["mechanism", "flexure", "force", "travel"],
+  intent: [],
+};
+
+/** Other words for hotkey actions, so the palette knows the app's own names (toolbar buttons, dialog titles). */
+export const ACTION_ALIASES: Record<string, string[]> = {
+  "view.section": ["section", "cut", "cross section", "clip"],
+  "app.agent": ["agent", "claude", "ask", "chat"],
+  "app.settings": ["settings", "preferences", "api key", "theme"],
+  "app.shortcuts": ["shortcuts", "help", "keys", "hotkeys", "keyboard"],
+  "view.configurations": ["configurations", "configuration", "config", "variants"],
+  "motion.study": ["motion", "motion study", "collisions"],
+  "mechanism.sweep": ["sweep"],
+};
 
 export interface ParamInfo { name: string; value: number; min?: number; max?: number; step?: number }
 
@@ -95,19 +118,35 @@ export const MAX_SUGGESTIONS = 8;
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const squash = (s: string) => norm(s).replace(/ /g, "");
 
-/** How well `query` names `candidate`: 1 exact, ~0.8–1 prefix, ~0.6 word-prefix, ~0.3–0.5 subsequence, 0 none. */
+/** How well `query` names `candidate`, matching only at word starts (so "stl" never finds "Shuttle"): 1 exact,
+ *  ~0.8–1 prefix, ~0.6 a word's prefix, ~0.55 words read together from a word start ("spacema" in "Design space map"), ~0.5 each
+ *  query word starting a word in order ("des sp"), 0 none. */
 export function fuzzy(query: string, candidate: string): number {
   const q = squash(query), c = squash(candidate);
   if (!q || !c) return 0;
   if (q === c) return 1;
   const ratio = q.length / c.length;
   if (c.startsWith(q)) return 0.8 + 0.2 * ratio;
-  if (norm(candidate).split(" ").some((w) => w.startsWith(q))) return 0.6 + 0.15 * ratio;
-  // subsequence: every query char appears in order
-  let i = 0;
-  for (const ch of c) if (ch === q[i]) i++;
-  if (i === q.length) return 0.3 + 0.2 * ratio;
+  const words = norm(candidate).split(" ");
+  if (words.some((w) => w.startsWith(q))) return 0.6 + 0.15 * ratio;
+  for (let i = 1; i < words.length; i++) if (words.slice(i).join("").startsWith(q)) return 0.55 + 0.15 * ratio;
+  const qw = norm(query).split(" ");
+  if (qw.length > 1) {
+    let k = 0;
+    for (const w of words) if (k < qw.length && w.startsWith(qw[k])) k++;
+    if (k === qw.length) return 0.5 + 0.15 * ratio;
+  }
   return 0;
+}
+
+/** The best match of `query` among a name and its aliases, and which alias it was (null: the name itself). */
+function bestOf(query: string, name: string, aliases: string[]): { score: number; alias: string | null } {
+  let best = { score: fuzzy(query, name), alias: null as string | null };
+  for (const a of aliases) {
+    const sc = fuzzy(query, a) * 0.97;
+    if (sc > best.score) best = { score: sc, alias: a };
+  }
+  return best;
 }
 
 /** "12", "12mm", "-1.5", "30deg", "30°", "2,5" → the number; null when it isn't one. */
@@ -272,20 +311,58 @@ export function resolve(text: string, ctx: IntentCtx): Suggestion[] {
     if (s) add({ kind: "history", score: s, action: { type: w }, label: w === "undo" ? "Undo" : "Redo", detail: w === "undo" ? "Take back the last change" : "Put the last change back", message: w === "undo" ? "Undone." : "Redone." });
   }
 
-  // ---- panels ----
+  // ---- panels, by their switch's name or another word for them ----
   for (const p of PANELS) {
-    const s = fuzzy(trimmed, p);
-    if (s) add({ kind: "panel", score: s * 0.98, action: { type: "togglePanel", panel: p }, label: `Toggle ${p[0].toUpperCase()}${p.slice(1)}`, detail: "Show or hide the panel", message: `Toggled ${p}.` });
+    const m = bestOf(trimmed, PANEL_NAMES[p], PANEL_ALIASES[p]);
+    if (m.score) add(panelSuggestion(p, m.score * 0.98, m.alias));
   }
 
-  // ---- hotkey actions, except those the grammar already covers ----
+  // ---- hotkey actions (by label or alias), except those the grammar already covers ----
   for (const a of ctx.actions) {
-    if (/^(view\.|edit\.undo|edit\.redo|intent\.)/.test(a.id)) continue;
-    const s = fuzzy(trimmed, a.label) * 0.9;
-    if (s) add({ kind: "action", score: s, action: { type: "hotkey", id: a.id }, label: a.label, detail: `Run ${a.id}`, message: `${a.label}.` });
+    if (/^(view\.(frame|iso|front|top|right|back|left|bottom|workbench|lens|ledger|space|materials|mechanism)$|edit\.undo|edit\.redo|intent\.)/.test(a.id)) continue;
+    const m = bestOf(trimmed, a.label, ACTION_ALIASES[a.id] ?? []);
+    if (m.score) add({ kind: "action", score: m.score * 0.9, action: { type: "hotkey", id: a.id }, label: a.label, detail: m.alias ? `“${m.alias}”` : "Run it", message: `${a.label}.` });
   }
 
   return rank(out);
+}
+
+function panelSuggestion(p: ConceptPanel, score: number, alias: string | null = null): Omit<Suggestion, "id"> {
+  const name = PANEL_NAMES[p];
+  return { kind: "panel", score, action: { type: "togglePanel", panel: p }, label: `Toggle ${name}`, detail: alias && alias !== name.toLowerCase() ? `Show or hide the panel · alias: ${alias}` : "Show or hide the panel", message: `Toggled ${name}.` };
+}
+
+// ---- the empty line: recent and common commands ----
+
+/** A command run from the palette, remembered for the empty line. */
+export type RecentCommand = Pick<Suggestion, "label" | "detail" | "kind" | "action" | "message">;
+export const MAX_RECENT = 4;
+
+/** Put a command at the front of the recent list (once; the oldest falls off). */
+export function remember(recent: RecentCommand[], s: RecentCommand): RecentCommand[] {
+  const keep = { label: s.label, detail: s.detail, kind: s.kind, action: s.action, message: s.message };
+  return [keep, ...recent.filter((r) => r.label !== s.label)].slice(0, MAX_RECENT);
+}
+
+/** The ids of the common commands offered when nothing is typed (each only while it can run). */
+export const COMMON_ACTIONS = ["view.section", "app.agent", "app.shortcuts", "motion.study"];
+
+/** What an empty palette offers: the recent commands, then the common ones (panels, fit, section, agent, help). */
+export function emptySuggestions(ctx: IntentCtx, recent: RecentCommand[]): (Suggestion & { group: "recent" | "common" })[] {
+  const out: (Omit<Suggestion, "id"> & { group: "recent" | "common" })[] = [];
+  for (const r of recent) out.push({ ...r, score: 1, group: "recent" });
+  const common: Omit<Suggestion, "id">[] = [
+    panelSuggestion("workbench", 1),
+    { kind: "view", score: 1, action: { type: "frame" }, label: "Fit the view", detail: "Frame the selection or the whole part", message: "Framed." },
+    ...COMMON_ACTIONS.flatMap((id) => {
+      const a = ctx.actions.find((x) => x.id === id);
+      return a ? [{ kind: "action" as const, score: 1, action: { type: "hotkey" as const, id }, label: a.label, detail: ACTION_ALIASES[id]?.[0] ? `“${ACTION_ALIASES[id][0]}”` : "Run it", message: `${a.label}.` }] : [];
+    }),
+    panelSuggestion("ledger", 1),
+  ];
+  const seen = new Set(out.map((r) => r.label));
+  for (const c of common) if (!seen.has(c.label)) out.push({ ...c, group: "common" });
+  return out.slice(0, MAX_SUGGESTIONS).map((s, i) => ({ ...s, id: `intent-${i}` }));
 }
 
 function rank(list: Suggestion[]): Suggestion[] {

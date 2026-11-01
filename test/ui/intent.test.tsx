@@ -131,6 +131,20 @@ describe("<IntentLine/>", () => {
     await waitFor(() => expect(session.timeline.find((o) => o.type === "feature.fillet")!.suppressed).toBeFalsy());
   });
 
+  it("offers common commands on an empty line, and then the ones just run under Recent", async () => {
+    render(<IntentLine />);
+    open();
+    const list = screen.getByRole("listbox", { name: "Suggestions" });
+    expect(list.textContent).toMatch(/^Common/);
+    expect(screen.getByRole("option", { name: /Toggle Pins/ })).toBeTruthy();
+    await userEvent.type(input(), "ledger{Enter}");
+    expect(useUi.getState().panels.ledger).toBe(true);
+    open();
+    expect(screen.getByRole("listbox", { name: "Suggestions" }).textContent).toMatch(/^Recent.*Toggle Ledger.*Common/);
+    await userEvent.keyboard("{Enter}"); // the first, recent one runs
+    expect(useUi.getState().panels.ledger).toBe(false);
+  });
+
   it("'measure <feature>' opens its card in the shared UI state; panel names toggle panels", async () => {
     render(<IntentLine />);
     open(); await userEvent.type(input(), "measure fillet{Enter}");
