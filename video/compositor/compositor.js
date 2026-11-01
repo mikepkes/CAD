@@ -70,9 +70,13 @@ window.render = async function render() {
   let codec = "avc1.640033", mux = "avc";
   const cfg = { codec, width: W, height: H, bitrate: Number(q.get("bitrate") ?? 14_000_000), framerate: fps, latencyMode: "quality", avc: { format: "avc" } };
   if (!(await VideoEncoder.isConfigSupported(cfg)).supported) { codec = "vp09.00.51.08"; mux = "vp9"; delete cfg.avc; cfg.codec = codec; }
-  const muxer = new Muxer({ target, video: { codec: mux, width: W, height: H, frameRate: fps }, fastStart: false, firstTimestampBehavior: "offset" });
+  // the voiceover (the default voice's mix), encoded up front and fed to the muxer alongside the frames
+  const audio = plan.audio ? await encodeAudio(plan.audio.file, plan.audio.bitrate) : null;
+  const muxer = new Muxer({ target, video: { codec: mux, width: W, height: H, frameRate: fps }, ...(audio ? { audio: { codec: "aac", numberOfChannels: 1, sampleRate: audio.sampleRate } } : {}), fastStart: false, firstTimestampBehavior: "offset" });
   const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => console.error(e.message) });
   encoder.configure(cfg);
+  let ai = 0;
+  const feedAudio = (untilUs) => { while (audio && ai < audio.chunks.length && audio.chunks[ai][0].timestamp <= untilUs) { const [c, m] = audio.chunks[ai++]; muxer.addAudioChunk(c, m); } };
 
   const capAt = new Array(plan.frames.length).fill(null), chyAt = new Array(plan.frames.length).fill(null);
   for (const c of plan.captions) for (let f = c.from; f < c.to && f < capAt.length; f++) capAt[f] = c.text;
@@ -99,11 +103,44 @@ window.render = async function render() {
     const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) });
     encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
     frame.close();
+    feedAudio(((i + 1) * 1e6) / fps); // interleave: the audio up to this frame
     while (encoder.encodeQueueSize > 12) await new Promise((r) => setTimeout(r, 2));
     if (i % 300 === 0) fetch("/progress", { method: "POST", body: `${i}/${plan.frames.length} frames, ${((performance.now() - t0) / 1000).toFixed(0)} s` });
   }
   await encoder.flush();
+  feedAudio(Infinity);
   muxer.finalize();
   await pending;
-  return { frames: plan.frames.length, bytes, codec };
+  return { frames: plan.frames.length, bytes, codec, audio: audio ? { chunks: audio.chunks.length, seconds: audio.seconds, codec: "mp4a.40.2" } : null };
 };
+
+/** A 16-bit PCM mono WAV (the edit's mix for one voice) → AAC chunks for the muxer. */
+async function encodeAudio(url, bitrate) {
+  const b = new DataView(await (await fetch(url)).arrayBuffer());
+  const tag = (p) => String.fromCharCode(b.getUint8(p), b.getUint8(p + 1), b.getUint8(p + 2), b.getUint8(p + 3));
+  let sampleRate = 0, channels = 0, data = null;
+  for (let p = 12; p + 8 <= b.byteLength; ) {
+    const size = b.getUint32(p + 4, true);
+    if (tag(p) === "fmt ") { channels = b.getUint16(p + 10, true); sampleRate = b.getUint32(p + 12, true); }
+    if (tag(p) === "data") data = [p + 8, size];
+    p += 8 + size + (size & 1);
+  }
+  if (channels !== 1 || !data) throw new Error(`${url}: expected a mono 16-bit WAV`);
+  const n = data[1] / 2, samples = new Float32Array(n);
+  for (let i = 0; i < n; i++) samples[i] = b.getInt16(data[0] + i * 2, true) / 32768;
+  const cfg = { codec: "mp4a.40.2", sampleRate, numberOfChannels: 1, bitrate };
+  if (!(await AudioEncoder.isConfigSupported(cfg)).supported) throw new Error("this Chromium can't encode AAC");
+  const chunks = [];
+  const enc = new AudioEncoder({ output: (c, m) => chunks.push([c, m]), error: (e) => console.error(e.message) });
+  enc.configure(cfg);
+  const block = sampleRate / 10;
+  for (let i = 0; i < n; i += block) {
+    const len = Math.min(block, n - i);
+    const ad = new AudioData({ format: "f32-planar", sampleRate, numberOfFrames: len, numberOfChannels: 1, timestamp: Math.round((i * 1e6) / sampleRate), data: samples.slice(i, i + len) });
+    enc.encode(ad);
+    ad.close();
+  }
+  await enc.flush();
+  console.log(`voiceover: ${(n / sampleRate).toFixed(2)} s of audio → ${chunks.length} AAC chunks`);
+  return { chunks, sampleRate, seconds: n / sampleRate };
+}

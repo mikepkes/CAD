@@ -1,5 +1,6 @@
 // Act 2 · Grow: the stand becomes a product. Starts from the parametric stand Act 1 ends with
 // (rebuilt by command in the preroll: width, depth and phone are bounded parameters).
+// Narration: lines.mjs, by beat id.
 
 const W = (x, y, z) => ({ x, y, z });
 
@@ -29,7 +30,7 @@ const toggle = (d, label) => d.clickEl(".k-panel-toggle button", label);
 export async function act2(d) {
   const S = await d.run(() => window.__vibecadDemo.STAND);
 
-  await d.beat("soften", "Sharp corners chip and catch. Click the top of the base and choose Round corners: its four corners get a fillet, and the radius is just another number you can drag, type or name. Make it generous: fifteen millimetres.", async () => {
+  await d.beat("soften", async () => {
     await d.clickWorld(W(-S.width / 4, -S.depth / 2 + 4, S.base)); await d.settle();
     await d.clickEl(".wb-verbs button", "Round corners");
     await d.settle(400);
@@ -46,7 +47,7 @@ export async function act2(d) {
     await d.api("closeCards");
   }, { lower: { title: "Fillet", sub: "a feature like any other, in the history" } });
 
-  await d.beat("rules", "Instead of checking by eye after every change, write down what must stay true. Here, the stand must weigh under two hundred grams: Command K, mass at most two hundred. It lands in the ledger, which checks it on every change, and when it fails, builds fixes and offers them. Accept one.", async () => {
+  await d.beat("rules", async () => {
     await toggle(d, "Ledger"); await d.settle(300);
     await d.intent("mass <= 200", "Keep mass <= 200", { dwell: 900 });
     await d.settle(400);
@@ -57,7 +58,7 @@ export async function act2(d) {
     await d.wait(800);
   });
 
-  await d.beat("better-versions", "Sliders show one version at a time. The design space shows them all at once: width against depth, shaded by weight, with the edge of what passes your rule. Pin the one you have, jump to the lightest that passes, and compare the two, one ghosted over the other.", async () => {
+  await d.beat("better-versions", async () => {
     await d.lower(null);
     await toggle(d, "Space"); await d.settle(300);
     await d.fast("sampling 81 designs", async () => {
@@ -72,7 +73,7 @@ export async function act2(d) {
     await d.wait(1500);
   });
 
-  await d.beat("materials", "Materials are one click, each drawn as it really looks: polished brass, walnut, grip rubber. Or as it will print: PLA, with its layer lines. Print it on its side instead, and the layers turn with it. Across the layers is a print's weak direction, and the strength studies take it into account.", async () => {
+  await d.beat("materials", async () => {
     await toggle(d, "Space"); await toggle(d, "Ledger");
     await toggle(d, "Materials"); await d.settle(300);
     await d.api("sideWidth", "right", 400, 500);
@@ -107,7 +108,7 @@ export async function act2(d) {
     await d.api("aim", { dir: [1, -1, 0.7], ms: 900, margin: 1.0 });
   }, { lower: { title: "Materials", sub: "metal, wood, rubber, and prints with their layer lines" } });
 
-  await d.beat("will-it-print", "Will it print? Bring up the lens and switch it to overhangs: red would need supports. Then zebra stripes: on the rounded corner they bend smoothly through the curve and on into the flat faces, with no kinks.", async () => {
+  await d.beat("will-it-print", async () => {
     await toggle(d, "Lens"); await d.settle(400);
     await d.move(820, 420, 500);
     await d.key("5"); await d.settle(400); await d.wait(1800);
@@ -124,7 +125,7 @@ export async function act2(d) {
     await d.api("view", "iso");
   }, { lower: { title: "Analysis lens", sub: "overhang, draft, curvature, zebra, x-ray" } });
 
-  await d.beat("make-it-yours", "Every action has a key, and the ones you use most can live on the action ring. Each context has its own ring, and you decide what's on it. Put Round edges on the face ring, and it's one flick away: here it softens every edge around the top of the base.", async () => {
+  await d.beat("make-it-yours", async () => {
     await d.lower(null);
     await d.clickEl("button[title='Keyboard shortcuts']");
     await d.settle(300);
@@ -150,7 +151,7 @@ export async function act2(d) {
     await d.api("closeCards");
   });
 
-  await d.beat("ship-it", "When it's right, export it: STL for any printer, 3MF to keep parts and materials together, or STEP for other CAD tools.", async () => {
+  await d.beat("ship-it", async () => {
     await d.clickEl("button", "Export ▾"); await d.wait(500);
     await d.clickEl("[role=menuitem]", "3MF");
     await d.fast("exporting", () => d.settle(500));

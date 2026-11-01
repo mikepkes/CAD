@@ -2,8 +2,10 @@
 // Chromium window, in real time, while capturing every painted frame. Input is
 // real (Playwright mouse and keyboard through CDP), so the app reacts exactly as
 // it would to a person; the app's demo layer (src/demo/demo.tsx, `?demo`) draws
-// the cursor and keycaps. Each beat is padded to the time its narration takes
-// to read, so the voiceover can be recorded to picture afterwards (ADR).
+// the cursor and keycaps. Each beat's line comes from video/script/lines.mjs,
+// and the beat is padded until its voiceover has played: the longest of its
+// clips across the voices (video/vo.mjs) plus a short tail, or, with no clips
+// yet, the time the line takes to read.
 //
 // One take = one act: video/takes/<run>/<act>/frames/*.jpg + frames.json +
 // timing.json. video/edit.mjs turns takes into the finished video.
@@ -12,6 +14,8 @@ import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { LINES } from "../script/lines.mjs";
+import { loadClips, VO_TAIL_MS } from "./voices.mjs";
 
 export const VIEW = { width: 1440, height: 810, scale: 2560 / 1440 }; // 1440p capture of a 1440×810-point window
 export const WPM = 150; // a competent reading pace
@@ -29,7 +33,7 @@ export function fastened(ms) {
 }
 
 export class Director {
-  static async open({ url, takeDir, headless = false, record = true }) {
+  static async open({ url, takeDir, headless = false, record = true, act = null }) {
     const browser = await chromium.launch({ headless, args: ["--hide-scrollbars", "--disable-features=Translate", "--force-color-profile=srgb"] });
     const context = await browser.newContext({ viewport: { width: VIEW.width, height: VIEW.height }, deviceScaleFactor: VIEW.scale, acceptDownloads: true, colorScheme: "dark" });
     const page = await context.newPage();
@@ -37,15 +41,17 @@ export class Director {
     page.on("console", (m) => { if (m.type() === "error") console.error("  [console]", m.text().slice(0, 300)); });
     await page.goto(url);
     await page.waitForFunction(() => !!window.__vibecadDemo, null, { timeout: 30000 });
-    const d = new Director(browser, context, page, takeDir, record);
+    const d = new Director(browser, context, page, takeDir, record, act);
     await d.api("settle");
     return d;
   }
 
-  constructor(browser, context, page, takeDir, record) {
-    Object.assign(this, { browser, context, page, takeDir, record });
+  constructor(browser, context, page, takeDir, record, act) {
+    Object.assign(this, { browser, context, page, takeDir, record, act });
     this.pointer = { x: VIEW.width / 2, y: VIEW.height / 2 };
-    this.timing = { view: VIEW, beats: [], fast: [], captions: [], notes: [], picks: [] };
+    this.lines = act == null ? {} : LINES[act] ?? {};
+    this.vo = loadClips();
+    this.timing = { view: VIEW, beats: [], fast: [], captions: [], notes: [], picks: [], vo: { voices: this.vo.voices.map((v) => v.id), tailMs: VO_TAIL_MS, clips: this.vo.any } };
     this.frames = [];
     this.t0 = null;
   }
@@ -98,8 +104,24 @@ export class Director {
   }
 
   // ---- beats ----
-  /** One beat: run `fn`, then hold until its narration has had time to be read (sped-up spans count at their sped length). */
-  async beat(id, narration, fn, opts = {}) {
+  /** How long a beat must last on screen for its line: the longest of its clips across the voices plus the tail, and
+   *  the same for the default voice alone (to report what the other voices cost); the read time when it has no clips. */
+  lineMs(id, narration) {
+    const clips = narration.trim() && this.act != null ? this.vo.clips(`act${this.act}-${id}`, narration) : [];
+    if (!clips.length) return { ms: readMs(narration), defaultMs: readMs(narration), clips: 0, longest: null };
+    const longest = clips.reduce((a, b) => (b.ms > a.ms ? b : a));
+    const def = clips.find((c) => c.voice === this.vo.voices[0]) ?? longest;
+    return { ms: longest.ms + VO_TAIL_MS, defaultMs: def.ms + VO_TAIL_MS, clips: clips.length, longest: longest.voice.id };
+  }
+
+  /** One beat: run `fn`, then hold until its line has been said (sped-up spans count at their sped length).
+   *  The line is LINES[act][id] in video/script/lines.mjs; `d.beat(id, "a line", fn)` still works for a one-off. */
+  async beat(id, ...rest) {
+    let [narration, fn, opts = {}] = typeof rest[0] === "string" ? rest : [undefined, ...rest];
+    if (narration == null) {
+      narration = this.lines[id];
+      if (narration == null) { this.note(`beat ${id} has no line in video/script/lines.mjs (act ${this.act})`); console.error(`  ✗ ${id}: no line`); narration = ""; }
+    }
     const start = this.now();
     const fastBefore = this.timing.fast.length;
     console.log(`  beat ${id}`);
@@ -108,9 +130,11 @@ export class Director {
     const fast = this.timing.fast.slice(fastBefore);
     const saved = fast.reduce((s, f) => s + (f.end - f.start) * 1000 - (f.cut ? 0 : fastened((f.end - f.start) * 1000).ms), 0);
     const onScreen = (this.now() - start) * 1000 - saved;
-    const want = Math.max(readMs(narration), opts.minMs ?? 0);
+    const line = this.lineMs(id, narration);
+    const want = Math.max(line.ms, opts.minMs ?? 0);
     if (onScreen < want) await sleep(want - onScreen);
-    this.timing.beats.push({ id, start, end: this.now(), narration, lower: opts.lower ?? null });
+    // what set the beat's length: its actions (actionsMs), or its line (wantMs: the longest voice; defaultWantMs: the default voice alone)
+    this.timing.beats.push({ id, start, end: this.now(), narration, lower: opts.lower ?? null, actionsMs: Math.round(onScreen), wantMs: want, defaultWantMs: Math.max(line.defaultMs, opts.minMs ?? 0), voClips: line.clips, longest: line.longest });
   }
   /** Mark everything `fn` does as a span the edit speeds up, with `label` on the speed chyron. */
   async fast(label, fn) {
