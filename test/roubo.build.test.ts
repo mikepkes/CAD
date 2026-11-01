@@ -82,11 +82,16 @@ function bodies(s: CadSession): { count: number; byName: Record<string, { lo: nu
 
 async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string[] }> {
   // ---- parameters: the model is driven entirely by these ----
-  const P: [string, number, number, number, number][] = [
-    ["L", N.L, 1200, 2400, 10], ["D", N.D, 400, 700, 10], ["H", N.H, 750, 950, 5],
-    ["TT", N.TT, 60, 140, 5], ["LS", N.LS, 70, 130, 5], ["viseGap", 60, 0, 170, 5],
+  // [name, value, min, max, step, label, description] — every one in millimetres
+  const P: [string, number, number, number, number, string, string][] = [
+    ["L", N.L, 1200, 2400, 10, "Length", "Overall length of the bench top"],
+    ["D", N.D, 400, 700, 10, "Depth", "Front to back across the top"],
+    ["H", N.H, 750, 950, 5, "Height", "Floor to the top surface; about your wrist height when standing"],
+    ["TT", N.TT, 60, 140, 5, "Top thickness", "How thick the laminated top is"],
+    ["LS", N.LS, 70, 130, 5, "Leg size", "The legs' square section"],
+    ["viseGap", 60, 0, 170, 5, "Vise opening", "How far the leg vise's chop stands open"],
   ];
-  for (const [name, val, min, max, step] of P) await dis(s, "parameter.add", { name, expression: String(val), min, max, step });
+  for (const [name, val, min, max, step, label, description] of P) await dis(s, "parameter.add", { name, expression: String(val), min, max, step, label, unit: "mm", description });
 
   // the planes everything is drawn on: the floor, the slab's underside, the stretchers' underside, the leg fronts
   const floor = (await dis(s, "plane.create", { base: "XY", offset: "-H/2", name: "Floor" }))[0];
@@ -304,6 +309,8 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
 
   // the shop drawing goes with it: the viewer offers it as a PDF
   await dis(s, "drawing.publish", { title: "Roubo workbench" });
+  // how it reads in the viewer: a title and a line about it
+  await dis(s, "document.describe", { title: "Roubo workbench", description: "A full-size woodworking bench with a leg vise. Size it to your shop, then download the shop drawing and cut list." });
 
   return { chop, armIds };
 }

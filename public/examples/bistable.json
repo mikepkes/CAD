@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 945,
-  "rollbackIndex": 470,
+  "nextId": 952,
+  "rollbackIndex": 477,
   "operations": [
     {
       "opId": "op1",
@@ -7641,6 +7641,93 @@
       ],
       "label": "Joint",
       "at": 1793549439612
+    },
+    {
+      "opId": "op945",
+      "type": "parameter.describe",
+      "params": {
+        "name": "travel",
+        "label": "Push",
+        "unit": "mm",
+        "description": "How far the knob is pushed down; past the middle it snaps to its other rest"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561617555
+    },
+    {
+      "opId": "op946",
+      "type": "parameter.describe",
+      "params": {
+        "name": "span",
+        "label": "Beam span",
+        "unit": "mm",
+        "description": "Length of the curved beams between the frame's walls"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561617603
+    },
+    {
+      "opId": "op947",
+      "type": "parameter.describe",
+      "params": {
+        "name": "arch",
+        "label": "Beam arch",
+        "unit": "× thickness",
+        "description": "How far the beams bow, in beam thicknesses: more arch, a firmer snap"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561617636
+    },
+    {
+      "opId": "op948",
+      "type": "parameter.describe",
+      "params": {
+        "name": "frame",
+        "label": "Frame bars",
+        "unit": "mm",
+        "description": "Width of the frame's bars"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561617671
+    },
+    {
+      "opId": "op949",
+      "type": "parameter.describe",
+      "params": {
+        "name": "material",
+        "label": "Material",
+        "description": "What it's printed in; the thin parts are sized for it"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561617730
+    },
+    {
+      "opId": "op950",
+      "type": "parameter.describe",
+      "params": {
+        "name": "skeleton",
+        "label": "PLA skeleton",
+        "description": "A stiff PLA core in the frame, for a two-material print (saves as a 3MF)"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561617766
+    },
+    {
+      "opId": "op951",
+      "type": "document.describe",
+      "params": {
+        "title": "Bistable switch",
+        "description": "One printed part with two rest positions: push the knob and the curved beams snap through to their mirror shape, and stay there."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561617799
     }
   ],
   "timelineGroups": []

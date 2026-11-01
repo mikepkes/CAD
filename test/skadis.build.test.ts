@@ -29,7 +29,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFeatureBytes } from "../src/core/features";
@@ -341,6 +341,8 @@ export async function buildSkadis(s: CadSession): Promise<Record<string, string>
   if (!hid.ok) throw new Error(hid.error);
 
   await dis(s, "drawing.publish", { title: "SKÅDIS gravity holder" });
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "SKÅDIS gravity holder", "description": "A holder for an IKEA SKÅDIS pegboard: drop something in and its weight shuts the jaws on it; lift it out and they swing open."}, {"jaw": {"label": "Jaw angle", "unit": "°", "description": "0 is open and empty; the load's weight closes the jaws"}, "size": {"label": "Holds up to", "unit": "mm", "description": "The largest thing the jaws open for"}, "hooks": {"label": "Hook spacing", "unit": "mm", "description": "One or two of the board's slot pitches apart"}, "wall": {"label": "Cheek thickness", "unit": "mm"}, "arm": {"label": "Jaw arm width", "unit": "mm"}, "board": {"label": "Show the pegboard", "description": "A piece of the board and a load, for context (not printed)"}});
   return ids;
 }
 

@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 1408,
-  "rollbackIndex": 563,
+  "nextId": 1415,
+  "rollbackIndex": 570,
   "operations": [
     {
       "opId": "op1",
@@ -9301,6 +9301,92 @@
       "createdIds": [],
       "label": "Publish drawing",
       "at": 1793556444818
+    },
+    {
+      "opId": "op1408",
+      "type": "parameter.describe",
+      "params": {
+        "name": "jaw",
+        "label": "Jaw angle",
+        "unit": "°",
+        "description": "0 is open and empty; the load's weight closes the jaws"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561620995
+    },
+    {
+      "opId": "op1409",
+      "type": "parameter.describe",
+      "params": {
+        "name": "size",
+        "label": "Holds up to",
+        "unit": "mm",
+        "description": "The largest thing the jaws open for"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561621026
+    },
+    {
+      "opId": "op1410",
+      "type": "parameter.describe",
+      "params": {
+        "name": "hooks",
+        "label": "Hook spacing",
+        "unit": "mm",
+        "description": "One or two of the board's slot pitches apart"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561621063
+    },
+    {
+      "opId": "op1411",
+      "type": "parameter.describe",
+      "params": {
+        "name": "wall",
+        "label": "Cheek thickness",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561621101
+    },
+    {
+      "opId": "op1412",
+      "type": "parameter.describe",
+      "params": {
+        "name": "arm",
+        "label": "Jaw arm width",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561621143
+    },
+    {
+      "opId": "op1413",
+      "type": "parameter.describe",
+      "params": {
+        "name": "board",
+        "label": "Show the pegboard",
+        "description": "A piece of the board and a load, for context (not printed)"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561621180
+    },
+    {
+      "opId": "op1414",
+      "type": "document.describe",
+      "params": {
+        "title": "SKÅDIS gravity holder",
+        "description": "A holder for an IKEA SKÅDIS pegboard: drop something in and its weight shuts the jaws on it; lift it out and they swing open."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561621215
     }
   ],
   "timelineGroups": [],

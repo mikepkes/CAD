@@ -43,3 +43,22 @@ export class EchoSolver implements ConstraintSolver {
 export function echoSession(): CadSession {
   return new CadSession(createDocument(), createDefaultRegistry(), new EchoSolver());
 }
+
+/**
+ * How an example reads in the customize viewer: its title and a line about it
+ * (document.describe), and each control's label, unit and one-line description
+ * (parameter.describe). Display only — no geometry, no ids — so an example's
+ * snapshot doesn't move. The generators call it last.
+ */
+export async function describeExample(
+  s: CadSession,
+  about: { title: string; description: string },
+  params: Record<string, { label: string; unit?: string; description?: string }>,
+): Promise<void> {
+  for (const [name, d] of Object.entries(params)) {
+    const r = await s.dispatch("parameter.describe", { name, ...d });
+    if (!r.ok) throw new Error(`parameter.describe ${name}: ${r.error}`);
+  }
+  const r = await s.dispatch("document.describe", about);
+  if (!r.ok) throw new Error(`document.describe: ${r.error}`);
+}

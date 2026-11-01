@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 861,
-  "rollbackIndex": 418,
+  "nextId": 869,
+  "rollbackIndex": 426,
   "operations": [
     {
       "opId": "op1",
@@ -6692,6 +6692,106 @@
       ],
       "label": "Joint",
       "at": 1793425566783
+    },
+    {
+      "opId": "op861",
+      "type": "parameter.describe",
+      "params": {
+        "name": "alpha",
+        "label": "Tilt about X",
+        "unit": "°",
+        "description": "The outer ring tilts on its pair of blade pivots"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561615356
+    },
+    {
+      "opId": "op862",
+      "type": "parameter.describe",
+      "params": {
+        "name": "beta",
+        "label": "Tilt about Y",
+        "unit": "°",
+        "description": "The mirror tilts inside the ring on the second pair"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561615382
+    },
+    {
+      "opId": "op863",
+      "type": "parameter.describe",
+      "params": {
+        "name": "L",
+        "label": "Blade length",
+        "unit": "mm",
+        "description": "Longer blades bend further at the same strain"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561615393
+    },
+    {
+      "opId": "op864",
+      "type": "parameter.describe",
+      "params": {
+        "name": "t",
+        "label": "Blade thickness",
+        "unit": "mm",
+        "description": "Thinner blades are softer and bend further"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561615421
+    },
+    {
+      "opId": "op865",
+      "type": "parameter.describe",
+      "params": {
+        "name": "w",
+        "label": "Blade width",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561615454
+    },
+    {
+      "opId": "op866",
+      "type": "parameter.describe",
+      "params": {
+        "name": "range",
+        "label": "Tilt range",
+        "unit": "°",
+        "description": "The largest tilt the gimbal is built for: it sets the clearances"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561615474
+    },
+    {
+      "opId": "op867",
+      "type": "parameter.describe",
+      "params": {
+        "name": "platR",
+        "label": "Mirror radius",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561615492
+    },
+    {
+      "opId": "op868",
+      "type": "document.describe",
+      "params": {
+        "title": "Flexure gimbal",
+        "description": "A two-axis gimbal on cross-blade flexures, like the one under a satellite's fine-steering mirror: tilt the mirror about X and Y."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561615511
     }
   ],
   "timelineGroups": []

@@ -23,7 +23,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFusedBlob } from "../src/core/features";
@@ -199,6 +199,8 @@ export async function buildGimbal(s: CadSession): Promise<void> {
       await dis(s, "joint.create", { ...flex, base: ring, moved: plat, axis: { x: 0, y: 1, z: 0 }, baseOrigin: at, movedOrigin: at, ...(inner++ === 0 ? { value: "beta" } : { closes: true }), name: `Inner ${tag} blade ${blade}` });
     }
   }
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "Flexure gimbal", "description": "A two-axis gimbal on cross-blade flexures, like the one under a satellite's fine-steering mirror: tilt the mirror about X and Y."}, {"alpha": {"label": "Tilt about X", "unit": "°", "description": "The outer ring tilts on its pair of blade pivots"}, "beta": {"label": "Tilt about Y", "unit": "°", "description": "The mirror tilts inside the ring on the second pair"}, "L": {"label": "Blade length", "unit": "mm", "description": "Longer blades bend further at the same strain"}, "t": {"label": "Blade thickness", "unit": "mm", "description": "Thinner blades are softer and bend further"}, "w": {"label": "Blade width", "unit": "mm"}, "range": {"label": "Tilt range", "unit": "°", "description": "The largest tilt the gimbal is built for: it sets the clearances"}, "platR": {"label": "Mirror radius", "unit": "mm"}});
 }
 
 const RAD = Math.PI / 180;

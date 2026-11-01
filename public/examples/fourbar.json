@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 467,
-  "rollbackIndex": 225,
+  "nextId": 473,
+  "rollbackIndex": 231,
   "operations": [
     {
       "opId": "op1",
@@ -3670,6 +3670,81 @@
       ],
       "label": "Joint",
       "at": 1793549653136
+    },
+    {
+      "opId": "op467",
+      "type": "parameter.describe",
+      "params": {
+        "name": "theta",
+        "label": "Crank angle",
+        "unit": "°",
+        "description": "Turn the crank: the coupler and rocker follow, bending the flexures"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561613751
+    },
+    {
+      "opId": "op468",
+      "type": "parameter.describe",
+      "params": {
+        "name": "crank",
+        "label": "Crank",
+        "unit": "mm",
+        "description": "Length of the input link"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561613753
+    },
+    {
+      "opId": "op469",
+      "type": "parameter.describe",
+      "params": {
+        "name": "rocker",
+        "label": "Rocker",
+        "unit": "mm",
+        "description": "Length of the output link"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561613761
+    },
+    {
+      "opId": "op470",
+      "type": "parameter.describe",
+      "params": {
+        "name": "ground",
+        "label": "Ground",
+        "unit": "mm",
+        "description": "Distance between the two ground hinges"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561613765
+    },
+    {
+      "opId": "op471",
+      "type": "parameter.describe",
+      "params": {
+        "name": "material",
+        "label": "Material",
+        "description": "What it's printed in; the thin parts are sized for it"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561613771
+    },
+    {
+      "opId": "op472",
+      "type": "document.describe",
+      "params": {
+        "title": "Compliant four-bar",
+        "description": "Four links joined by thin flexure strips, printed flat as one part. Push the finger pad and the crank turns; the coupler and rocker follow."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561613780
     }
   ],
   "timelineGroups": []

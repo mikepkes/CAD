@@ -7,7 +7,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { evaluateFeatures } from "../src/core/features";
@@ -52,6 +52,8 @@ async function buildScissor(s: CadSession): Promise<void> {
   await dis(s, "joint.template", { pattern: pat, kind: "revolute", base: { role: "self", component: A, port: "center" }, moved: { role: "self", component: B, port: "center" }, axis: AXIS, value: "180 - 2*theta", appliesTo: "first" });
   await dis(s, "joint.template", { pattern: pat, kind: "revolute", base: { role: "prev", component: B, port: "top" }, moved: { role: "self", component: A, port: "bottom" }, axis: AXIS, value: "2*theta - 180", appliesTo: "rest" });
   await dis(s, "joint.template", { pattern: pat, kind: "revolute", base: { role: "prev", component: A, port: "top" }, moved: { role: "self", component: B, port: "bottom" }, axis: AXIS, value: "180 - 2*theta", appliesTo: "rest" });
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "Jointed scissor", "description": "A scissor linkage as a pattern of jointed stages: open it, or add stages."}, {"theta": {"label": "Opening angle", "unit": "°"}, "stages": {"label": "Stages", "description": "How many X-links are stacked"}});
 }
 
 function build(s: CadSession): { bodies: number; topZ: number } {

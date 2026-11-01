@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 73,
-  "rollbackIndex": 28,
+  "nextId": 74,
+  "rollbackIndex": 29,
   "operations": [
     {
       "opId": "op1",
@@ -14,7 +14,9 @@
         "expression": "3",
         "min": 1,
         "max": 8,
-        "step": 1
+        "step": 1,
+        "label": "Stages",
+        "description": "How many X-links are stacked"
       },
       "createdIds": [
         "param2"
@@ -29,7 +31,9 @@
         "name": "openAngle",
         "expression": "45",
         "min": 20,
-        "max": 70
+        "max": 70,
+        "label": "Opening angle",
+        "unit": "°"
       },
       "createdIds": [
         "param4"
@@ -44,7 +48,9 @@
         "name": "linkLength",
         "expression": "60",
         "min": 40,
-        "max": 100
+        "max": 100,
+        "label": "Link length",
+        "unit": "mm"
       },
       "createdIds": [
         "param6"
@@ -59,7 +65,9 @@
         "name": "linkWidth",
         "expression": "6",
         "min": 3,
-        "max": 12
+        "max": 12,
+        "label": "Link width",
+        "unit": "mm"
       },
       "createdIds": [
         "param8"
@@ -74,7 +82,9 @@
         "name": "thickness",
         "expression": "4",
         "min": 2,
-        "max": 10
+        "max": 10,
+        "label": "Thickness",
+        "unit": "mm"
       },
       "createdIds": [
         "param10"
@@ -484,6 +494,17 @@
       ],
       "label": "Pattern body",
       "at": 1792964104520
+    },
+    {
+      "opId": "op73",
+      "type": "document.describe",
+      "params": {
+        "title": "Scissor lift",
+        "description": "A scissor linkage: open it, add stages, or change the links."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561931069
     }
   ],
   "timelineGroups": []

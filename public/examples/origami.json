@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 59,
-  "rollbackIndex": 22,
+  "nextId": 63,
+  "rollbackIndex": 26,
   "operations": [
     {
       "opId": "op1",
@@ -450,6 +450,56 @@
       "createdIds": [],
       "label": "Assign material",
       "at": 1793554152751
+    },
+    {
+      "opId": "op59",
+      "type": "parameter.describe",
+      "params": {
+        "name": "width",
+        "label": "Paper width",
+        "unit": "mm",
+        "description": "210 mm is an A4 sheet"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561644441
+    },
+    {
+      "opId": "op60",
+      "type": "parameter.describe",
+      "params": {
+        "name": "length",
+        "label": "Paper length",
+        "unit": "mm",
+        "description": "297 mm is an A4 sheet"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561644441
+    },
+    {
+      "opId": "op61",
+      "type": "parameter.describe",
+      "params": {
+        "name": "fold",
+        "label": "Fold",
+        "unit": "of 6",
+        "description": "0 is the flat sheet; 6 the finished plane"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561644442
+    },
+    {
+      "opId": "op62",
+      "type": "document.describe",
+      "params": {
+        "title": "Paper airplane",
+        "description": "The classic dart, folded from a flat sheet step by step. Slide through the folds, or change the paper."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561644442
     }
   ],
   "timelineGroups": [],
