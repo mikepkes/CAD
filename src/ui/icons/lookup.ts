@@ -12,6 +12,7 @@ const COMMANDS: Record<string, IconName> = {
   "parameter.add": "parameter-add",
   "parameter.set": "parameter-edit",
   "parameter.setBounds": "parameter-bounds",
+  "parameter.describe": "parameter-edit",
   "parameter.delete": "parameter-delete",
   "intent.add": "intent-add",
   "intent.update": "intent-edit",
@@ -30,6 +31,7 @@ const COMMANDS: Record<string, IconName> = {
   "material.update": "material-edit",
   "material.assign": "material-assign",
   "drawing.publish": "drawing",
+  "document.describe": "parameter-edit",
   // sketches and planes
   "sketch.create": "sketch",
   "plane.create": "plane-offset",
@@ -159,6 +161,7 @@ export function iconForCommand(type: string, params?: Record<string, unknown> | 
 const ACTIONS: Record<string, IconName> = {
   // global
   "view.frame": "view-frame",
+  "help.shortcuts": "keyboard",
   "view.iso": "view-iso",
   "view.front": "view-front",
   "view.top": "view-top",
@@ -177,7 +180,6 @@ const ACTIONS: Record<string, IconName> = {
   "view.section": "section",
   "app.agent": "agent",
   "app.settings": "settings",
-  "app.shortcuts": "keyboard",
   "view.configurations": "configuration",
   "ring.open": "action-ring",
   "intent.open": "command",

@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 63,
-  "rollbackIndex": 22,
+  "nextId": 66,
+  "rollbackIndex": 25,
   "operations": [
     {
       "opId": "op1",
@@ -424,6 +424,41 @@
       ],
       "label": "Joint template",
       "at": 1792963922245
+    },
+    {
+      "opId": "op63",
+      "type": "parameter.describe",
+      "params": {
+        "name": "theta",
+        "label": "Opening angle",
+        "unit": "°"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561646265
+    },
+    {
+      "opId": "op64",
+      "type": "parameter.describe",
+      "params": {
+        "name": "stages",
+        "label": "Stages",
+        "description": "How many X-links are stacked"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561646265
+    },
+    {
+      "opId": "op65",
+      "type": "document.describe",
+      "params": {
+        "title": "Jointed scissor",
+        "description": "A scissor linkage as a pattern of jointed stages: open it, or add stages."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561646266
     }
   ],
   "timelineGroups": []

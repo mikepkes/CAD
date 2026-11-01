@@ -15,7 +15,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { evaluateFeatures, SolidEval } from "../src/core/features";
@@ -82,6 +82,8 @@ async function buildOrigami(s: CadSession): Promise<{ sheet: string; lines: Reco
   // the fold lines are the model's, not the paper's: only the creases folded so far show
   const hid = await s.setHidden([sk]);
   if (!hid.ok) throw new Error(`hide: ${hid.error}`);
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "Paper airplane", "description": "The classic dart, folded from a flat sheet step by step. Slide through the folds, or change the paper."}, {"width": {"label": "Paper width", "unit": "mm", "description": "210 mm is an A4 sheet"}, "length": {"label": "Paper length", "unit": "mm", "description": "297 mm is an A4 sheet"}, "fold": {"label": "Fold", "unit": "of 6", "description": "0 is the flat sheet; 6 the finished plane"}});
   return { sheet, lines };
 }
 

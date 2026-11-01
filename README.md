@@ -49,20 +49,24 @@ in mesh, which the motion study checks. Printable: 5 mm bores on pins, 0.1 mm
 backlash a side.
 
 And **https://mikepkes.github.io/CAD/?mode=customize&example=skadis** — a
-**gravity holder for an IKEA SKÅDIS pegboard**: drop something in and its
-weight shuts the jaws on it; lift it out and they swing open. Two cheeks hang on
-the board from printed hooks sized to its slots (5 × 15 mm, 40 mm apart, in 5 mm
-hardboard). Between them, two jaws hang from pivot pins like pendulums, and a
-U-shaped cradle carries the object on its tray. The object's weight pulls the
-cradle down, and pin-slot joints turn that drop into the jaws swinging their
-pads in. Empty, the jaws swing back out under their own weight, and they pull
-harder the further they are closed. Drag `jaw` to close them on the stand-in
-object (the cradle and the object ride down with it). `size` sets the largest
-object (they close to a third of it), `hooks` sets one or two slot pitches
-between the hooks, and `wall` and `arm` set the cheek and jaw thicknesses.
-There are eleven parts, and each prints without supports. Untick `board` to
-hide the board and the object before you save it for printing. The viewer also
-offers the drawing.
+**gravity holder for an IKEA SKÅDIS pegboard**, after @MatthewGhost_3DPrint's
+gravity-clamping shaver holder: stand a shaver or a toothbrush in it and its own
+weight clamps it between two side pads; lift it out and the pads swing open.
+A flat sandwich lies against the board (back plate, a layer of moving parts,
+cover). In the middle a double-sided rack slides down when the item presses on
+its C-shaped foot, which opens to the front for the cord. Its teeth turn a
+pinion each side (`feature.gear`), and each pinion swings a lower arm. A
+parallel upper arm and the pad hung across both make a parallelogram, so the
+pad stays upright as it comes in. Closing lifts the pads, so empty they fall
+back open: only the item's weight shuts it (anything over about 65 g, with
+solid parts). `drop` is the rack's travel, and the arms follow it through the
+gear ratio. `item` is the width it shuts on, `hooks` is the strip's hook-to-peg
+spacing (one or two slot pitches), `arm` is the arm width, and `lift` slides
+the holder up off its mounting strip. The strip hooks into the board's slots,
+and the holder slides down onto it on a half-dovetail. There are 23 printed
+parts, including printed slotted pins, and each prints without supports. Untick
+`board` to hide the board and the stand-in before you save it for printing. The
+viewer also offers the drawing.
 And **https://mikepkes.github.io/CAD/?mode=customize&example=origami** — a
 **paper airplane folded from a flat sheet**, step by step, on one `fold`
 slider: 0 is a sheet of A4, 1 folds the top corners in, 2 the new edges in
@@ -442,7 +446,7 @@ straight from a URL:
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&example=gimbal         # two-axis flexure gimbal: eight cross-blade flexures, alpha/beta steer the mirror; blade, platform and range sliders
 ?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm) and a Geneva drive, driven by `turn`
-?mode=customize&example=skadis         # SKÅDIS gravity holder: the object's weight swings two pendulum jaws shut; jaw angle, object size, hook spacing, wall and arm sliders
+?mode=customize&example=skadis         # SKÅDIS gravity holder: the item's weight drives a rack and two pinion parallelograms that clamp it; drop, item width, hook spacing, arm and slide-on sliders
 ?mode=customize&example=origami        # a paper airplane folded step by step from a flat sheet on one `fold` slider (0 flat … 6 done); width + length size the paper
 ?mode=customize&model=<url-to.json>    # any VibeCAD model file
 ```

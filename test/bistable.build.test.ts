@@ -12,7 +12,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFusedBlob, GeometryCache } from "../src/core/features";
@@ -202,6 +202,8 @@ async function buildBistable(s: CadSession, opts: { span?: number; arch?: number
       });
     }
   }
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "Bistable switch", "description": "One printed part with two rest positions: push the knob and the curved beams snap through to their mirror shape, and stay there."}, {"travel": {"label": "Push", "unit": "mm", "description": "How far the knob is pushed down; past the middle it snaps to its other rest"}, "span": {"label": "Beam span", "unit": "mm", "description": "Length of the curved beams between the frame's walls"}, "arch": {"label": "Beam arch", "unit": "× thickness", "description": "How far the beams bow, in beam thicknesses: more arch, a firmer snap"}, "frame": {"label": "Frame bars", "unit": "mm", "description": "Width of the frame's bars"}, "material": {"label": "Material", "description": "What it's printed in; the thin parts are sized for it"}, "skeleton": {"label": "PLA skeleton", "description": "A stiff PLA core in the frame, for a two-material print (saves as a 3MF)"}});
 }
 
 const scopeOf = (s: CadSession) => resolveParameters(s.doc.parameters).scope;

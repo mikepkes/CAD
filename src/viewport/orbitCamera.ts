@@ -19,3 +19,14 @@ export function fitDistance(radius: number, fovDeg: number, aspect = 1, margin =
   const half = Math.min(halfV, Math.atan(Math.tan(halfV) * aspect));
   return (radius / Math.sin(half)) * margin;
 }
+
+/** The tangent of the half-angle a framed model may fill in a `width` × `height`
+ *  view with vertical field of view `fovDeg`: the vertical one, narrowed to the
+ *  horizontal one on a portrait screen, and to the part of the view that UI over
+ *  it (`inset`, px from the right and the bottom) leaves uncovered. */
+export function fitTangent(fovDeg: number, width: number, height: number, inset: { right?: number; bottom?: number } = {}): number {
+  const w = Math.max(1, width), h = Math.max(1, height);
+  const tv = Math.tan((fovDeg * Math.PI) / 360);
+  const fv = Math.max(0.2, (h - (inset.bottom ?? 0)) / h), fh = Math.max(0.2, (w - (inset.right ?? 0)) / w);
+  return Math.min(tv * fv, tv * (w / h) * fh);
+}

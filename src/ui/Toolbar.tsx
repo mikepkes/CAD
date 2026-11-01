@@ -6,6 +6,7 @@ import { addPrimitive, addGear } from "./concepts/contextActions";
 import { Icon, iconForAction } from "./icons";
 import { OverflowRow, type OverflowRowItem } from "./kit/OverflowRow";
 import { driveParams } from "../model/motionStudy";
+import { ExamplesMenu } from "./ExamplesMenu";
 
 const OPEN_INPUT = "vibecad-open-input", IMPORT_INPUT = "vibecad-import-input";
 const pick = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.click();
@@ -30,6 +31,7 @@ function fileItems(): OverflowRowItem[] {
   return [
     { key: "new", priority: 5, node: <button className="btn ghost with-icon" title="New document" onClick={() => void ask({ title: "New document", text: "Start a new document? The current one is replaced; unsaved work is autosaved in this browser or app only.", confirmLabel: "New document", danger: true }).then((ok) => { if (ok) S().newDocument(); })}><Icon name="file-new" />New</button> },
     { key: "open", priority: 3, node: <button className="btn ghost with-icon" title="Open a .vibecad.json file" onClick={() => pick(OPEN_INPUT)}><Icon name="folder" />Open</button> },
+    { key: "examples", priority: 3, node: <ExamplesMenu /> },
     { key: "save", priority: 6, node: <button className="btn ghost with-icon" title="Save to a .vibecad.json file" onClick={() => S().saveToFile()}><Icon name="save" />Save</button> },
     { key: "import", priority: 2, node: <button className="btn ghost with-icon" title="Import STEP, BREP, STL, FreeCAD (.FCStd) or Rhino (.3dm) as bodies" onClick={() => pick(IMPORT_INPUT)}><Icon name="import" />Import</button> },
     { key: "export", priority: 6, node: <span className="file-menu"><ExportMenu /></span> },

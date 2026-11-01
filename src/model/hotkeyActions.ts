@@ -50,6 +50,7 @@ function showConfigurations() {
 const ACTIONS: HotkeyAction[] = [
   // ---- global ----
   { id: "view.frame", label: "Frame selection / fit", context: "global", defaultPrimary: "f", run: () => fire("vibecad:frame") },
+  { id: "help.shortcuts", label: "Keyboard shortcuts", context: "global", defaultPrimary: "shift+?", defaultSecondary: "?", run: () => st().setHotkeysOpen(!st().hotkeysOpen) },
   ...(["iso", "front", "top", "right", "back", "left", "bottom"] as const).map((v) => ({
     id: `view.${v}`, label: `View: ${v[0].toUpperCase()}${v.slice(1)}`, context: "global", run: () => window.dispatchEvent(new CustomEvent("vibecad:view", { detail: v })),
   })),
@@ -71,7 +72,6 @@ const ACTIONS: HotkeyAction[] = [
     run: () => { const s = st(); s.setSection(s.section ? null : { plane: "XY", offset: 0, flip: false }); } },
   { id: "app.agent", label: "Agent: describe it to Claude", context: "global", run: () => st().toggleAgent() },
   { id: "app.settings", label: "Settings", context: "global", run: () => st().setSettingsOpen(true) },
-  { id: "app.shortcuts", label: "Keyboard shortcuts", context: "global", defaultPrimary: "shift+?", run: () => st().setHotkeysOpen(true) },
   { id: "view.configurations", label: "Configurations: the design variants table", context: "global", run: () => showConfigurations() },
   {
     id: "motion.study", label: "Motion study (do the joints move through their range without collisions?)", context: "model",

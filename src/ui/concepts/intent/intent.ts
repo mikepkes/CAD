@@ -43,7 +43,7 @@ export const ACTION_ALIASES: Record<string, string[]> = {
   "view.section": ["section", "cut", "cross section", "clip"],
   "app.agent": ["agent", "claude", "ask", "chat"],
   "app.settings": ["settings", "preferences", "api key", "theme"],
-  "app.shortcuts": ["shortcuts", "help", "keys", "hotkeys", "keyboard"],
+  "help.shortcuts": ["shortcuts", "help", "keys", "hotkeys", "keyboard"],
   "view.configurations": ["configurations", "configuration", "config", "variants"],
   "motion.study": ["motion", "motion study", "collisions"],
   "mechanism.sweep": ["sweep"],
@@ -345,11 +345,11 @@ export function remember(recent: RecentCommand[], s: RecentCommand): RecentComma
 }
 
 /** The ids of the common commands offered when nothing is typed (each only while it can run). */
-export const COMMON_ACTIONS = ["view.section", "app.agent", "app.shortcuts", "motion.study"];
+export const COMMON_ACTIONS = ["view.section", "app.agent", "help.shortcuts", "motion.study"];
 const COMMON_DETAIL: Record<string, string> = {
   "view.section": "Clip the model on a plane to see inside",
   "app.agent": "Ask Claude to build or change the model",
-  "app.shortcuts": "Every key, and what the action ring holds",
+  "help.shortcuts": "Every key, and what the action ring holds",
   "motion.study": "Check the joints move through their range without collisions",
 };
 

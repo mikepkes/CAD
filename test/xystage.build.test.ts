@@ -10,7 +10,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFusedBlob } from "../src/core/features";
@@ -113,6 +113,8 @@ async function buildStage(s: CadSession): Promise<void> {
   for (const sx of [-1, 1]) for (const sy of [1, -1]) {
     await dis(s, "joint.create", { kind: "beam", base: carriage, moved: platform, baseOrigin: { x: sx > 0 ? cIn : neg(cIn), y: sy * YB, z: 0 }, movedOrigin: { x: sx * P, y: sy * YB, z: 0 }, beam, name: `Y blade ${sx < 0 ? "left" : "right"} ${sy > 0 ? "top" : "bottom"}` });
   }
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "XY flexure stage", "description": "A one-piece stage: a carriage moves in X on four blades, and a platform moves in Y inside it on four more."}, {"x": {"label": "Move in X", "unit": "mm"}, "y": {"label": "Move in Y", "unit": "mm"}, "blade": {"label": "Blade length", "unit": "mm", "description": "Longer blades give more travel for the same strain"}, "thickness": {"label": "Blade thickness", "unit": "mm"}, "material": {"label": "Material", "description": "What it's printed in; the thin parts are sized for it"}});
 }
 
 const scopeAt = (s: CadSession, set: Record<string, number> = {}) =>

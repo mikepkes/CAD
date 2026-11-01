@@ -10,7 +10,8 @@ export function AgentPanel() {
   const stop = useStore((s) => s.stopAgent);
   const clear = useStore((s) => s.clearAgentChat);
   const toggle = useStore((s) => s.toggleAgent);
-  const openSettings = () => useStore.getState().setSettingsOpen(true);
+  // without a key, Settings opens at the key field
+  const openSettings = () => useStore.getState().setSettingsOpen(true, apiKey ? undefined : "apiKey");
   const [text, setText] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -25,9 +26,9 @@ export function AgentPanel() {
       <div className="agent-head">
         <span>✦ Agent</span>
         <div className="agent-head-btns">
-          <button className="icon-btn" title="Settings" onClick={openSettings}>⚙</button>
-          <button className="icon-btn" title="Clear conversation" onClick={clear} disabled={running}>⌫</button>
-          <button className="icon-btn" title="Close" onClick={toggle}>✕</button>
+          <button className="icon-btn" title="Settings" aria-label="Settings" onClick={openSettings}>⚙</button>
+          <button className="icon-btn" title="Clear conversation" aria-label="Clear conversation" onClick={clear} disabled={running}>⌫</button>
+          <button className="icon-btn" title="Close" aria-label="Close the agent" onClick={toggle}>✕</button>
         </div>
       </div>
       <div className="agent-chat" ref={listRef}>

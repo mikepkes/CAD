@@ -284,6 +284,16 @@ function checkOptions(p: { min?: number; max?: number; step?: number; values?: n
   return names;
 }
 
+/** A parameter's label, description and unit, trimmed; empty ones left out. */
+function describeFields(p: { label?: string; description?: string; unit?: string }): { label?: string; description?: string; unit?: string } {
+  const out: { label?: string; description?: string; unit?: string } = {};
+  for (const k of ["label", "description", "unit"] as const) {
+    const v = p[k] == null ? "" : String(p[k]).trim();
+    if (v) out[k] = v;
+  }
+  return out;
+}
+
 const INTENT_OPS = ["<=", ">=", "<", ">", "=="];
 
 /** One side of an intent: non-empty and a parseable expression (names are checked at evaluation, since metrics are not parameters). */
@@ -316,23 +326,27 @@ export const BUILTINS: CommandDef<any>[] = [
         boolean: { type: "boolean", description: "A yes/no switch: the value is 1 (checked) or 0, shown as a checkbox. Use it in expressions, e.g. a pattern count of `1 + showBoth`. Implies values [0, 1]." },
         hidden: { type: "boolean", description: "An intermediate value other expressions use (e.g. a linkage's joint positions): kept out of the Parameters list unless the user asks to see it." },
         options: { type: "array", items: { type: "string" }, description: "Named choices (an enum), shown as a dropdown of these names. The value is the chosen index 0…n−1 (the expression sets the default); other parameters use it with pick(), e.g. `pick(material, 0.8, 1.1, 1.4)`. Implies values [0 … n−1]." },
+        label: { type: "string", description: "What a person calls it, shown in place of the name in the customize viewer (e.g. 'Length' for L)." },
+        description: { type: "string", description: "One sentence on what it changes, shown under it in the viewer (e.g. 'Overall length of the bench top')." },
+        unit: { type: "string", description: "The unit its value is shown in, e.g. 'mm', '°', 'teeth'. Display only: values stay in the document's units." },
       },
     },
     examples: [
       { params: { name: "width", expression: "60" } },
+      { note: "A slider a person can read: label, unit and a line about it", params: { name: "L", expression: "1700", min: 1200, max: 2400, label: "Length", unit: "mm", description: "Overall length of the bench top" } },
       { note: "A bounded parameter (slider 20–120)", params: { name: "width", expression: "60", min: 20, max: 120 } },
       { note: "An integer count (slider steps by 1)", params: { name: "stages", expression: "3", min: 1, max: 8, step: 1 } },
       { note: "A pick-list parameter", params: { name: "thread", expression: "3", values: [3, 4, 5, 6, 8] } },
       { note: "A checkbox (1 = checked)", params: { name: "showLid", expression: "1", boolean: true } },
       { note: "Named choices (0 = PLA, 1 = PETG, 2 = TPU), defaulting to PETG", params: { name: "material", expression: "1", options: ["PLA", "PETG", "TPU"] } },
     ],
-    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[]; hidden?: boolean }, ctx) {
+    apply(draft, p: { name: string; expression: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[]; hidden?: boolean; label?: string; description?: string; unit?: string }, ctx) {
       if (draft.parameters.some((x) => x.name === p.name)) throw new Error(`Parameter "${p.name}" exists`);
       if (p.boolean && (p.min != null || p.max != null || p.step != null || p.values)) throw new Error("a boolean parameter takes no extents or value list");
       const options = p.options && checkOptions(p);
       const bounds = normalizeBounds(p.boolean ? { values: [0, 1] } : options ? { values: options.map((_, i) => i) } : p);
       const id = ctx.alloc("param");
-      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}), ...(p.boolean ? { boolean: true } : {}), ...(options ? { options } : {}), ...(p.hidden ? { hidden: true } : {}) });
+      draft.parameters.push({ id, name: p.name, expr: p.expression, value: 0, ...bounds, ...(p.step != null && !bounds.values ? { step: p.step } : {}), ...(p.boolean ? { boolean: true } : {}), ...(options ? { options } : {}), ...(p.hidden ? { hidden: true } : {}), ...describeFields(p) });
       return { createdIds: [id], message: `Added parameter ${p.name}` };
     },
   },
@@ -385,6 +399,61 @@ export const BUILTINS: CommandDef<any>[] = [
         if (p.step != null && !bounds.values) param.step = p.step;
       }
       return { message: `Set extents of ${p.name}` };
+    },
+  },
+  {
+    type: "parameter.describe",
+    title: "Describe parameter",
+    summary: "Give a parameter a human label, a unit and a one-line description (what the customize viewer shows).",
+    description:
+      "Sets how a parameter reads to a person: `label` (shown in place of its name, e.g. 'Length' for L), `unit` (shown beside its value, e.g. 'mm') and `description` (one sentence under it). Pass an empty string to clear one; omitted fields keep their value. Display only: nothing is rebuilt.",
+    paramsSchema: {
+      type: "object",
+      required: ["name"],
+      additionalProperties: false,
+      properties: {
+        name: { type: "string" },
+        label: { type: "string", description: "What a person calls it, shown in place of the name in the customize viewer (e.g. 'Length' for L)." },
+        description: { type: "string", description: "One sentence on what it changes, shown under it in the viewer (e.g. 'Overall length of the bench top')." },
+        unit: { type: "string", description: "The unit its value is shown in, e.g. 'mm', '°', 'teeth'. Display only: values stay in the document's units." },
+      },
+    },
+    examples: [{ params: { name: "TT", label: "Top thickness", unit: "mm", description: "How thick the laminated top is" } }],
+    apply(draft, p: { name: string; label?: string; description?: string; unit?: string }) {
+      const param = draft.parameters.find((x) => x.name === p.name);
+      if (!param) throw new Error(`No parameter "${p.name}"`);
+      for (const k of ["label", "description", "unit"] as const) {
+        if (p[k] === undefined) continue;
+        const v = String(p[k]).trim();
+        if (v) param[k] = v; else delete param[k];
+      }
+      return { message: `Described ${p.name}` };
+    },
+  },
+  {
+    type: "document.describe",
+    title: "Describe the design",
+    summary: "Give the design a title and a sentence or two about it (the customize viewer's heading and intro).",
+    description:
+      "Sets the design's `title` (the viewer's heading and the browser tab's title) and `description` (a short intro under the heading in the viewer). Pass an empty string to clear one; omitted fields keep their value.",
+    paramsSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        title: { type: "string", description: "The design's name, e.g. 'Roubo workbench'." },
+        description: { type: "string", description: "A sentence or two for someone customizing it." },
+      },
+    },
+    examples: [{ params: { title: "Roubo workbench", description: "A full-size woodworking bench. Set its size, then download the shop drawing." } }],
+    apply(draft, p: { title?: string; description?: string }) {
+      const about = { ...(draft.about ?? {}) };
+      for (const k of ["title", "description"] as const) {
+        if (p[k] === undefined) continue;
+        const v = String(p[k]).trim();
+        if (v) about[k] = v; else delete about[k];
+      }
+      draft.about = Object.keys(about).length ? about : undefined;
+      return { message: about.title ? `Titled ${about.title}` : "Described the design" };
     },
   },
   {

@@ -98,11 +98,11 @@ export function intentUnit(intent: { lhs: string; unit?: string }): string {
   return intent.unit ?? METRIC_UNITS[intent.lhs.trim()] ?? "";
 }
 
-/** What the Ledger's header calls the document: its name (the file it came from), its drawing's title, its
- *  root component's name when renamed, else "Untitled model". */
-export function documentTitle(doc: { drawing?: { title: string }; rootComponentId: string; components: Record<string, { name: string }> }, name?: string | null): string {
+/** What the Ledger's header calls the document: its own title (document.describe), else its name (the file it
+ *  came from), its drawing's title, its root component's name when renamed, else "Untitled model". */
+export function documentTitle(doc: { about?: { title?: string }; drawing?: { title: string }; rootComponentId: string; components: Record<string, { name: string }> }, name?: string | null): string {
   const root = doc.components[doc.rootComponentId]?.name;
-  return name || doc.drawing?.title || (root && root !== "Root Component" ? root : "Untitled model");
+  return doc.about?.title || name || doc.drawing?.title || (root && root !== "Root Component" ? root : "Untitled model");
 }
 
 /** A metric or parameter value as the "now X" readout prints it (magnitude precision, trailing zeros dropped). */

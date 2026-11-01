@@ -149,7 +149,7 @@ export async function act1(d) {
 
   await d.beat("get-vibecad", async () => {
     await d.api("cursor", false);
-    await d.api("titleCard", { title: "Get VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Always will be"] });
+    await d.api("titleCard", { title: "Get VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)"] });
   });
 
   await d.beat("the-room", async () => {
@@ -197,6 +197,13 @@ export async function act1(d) {
     await d.settle(300);
     await d.key("f"); await d.wait(900);
     const back = await d.run(() => window.__vibecadDemo.backOutline());
+    // Look at frames the face, and the tall outline then reaches up under the panel switches at the top of the
+    // view: pinch out a step (a trackpad pinch is a ctrl+wheel) so every corner is clear of them
+    await d.move(820, 470, 300);
+    await d.page.keyboard.down("Control");
+    for (let i = 0; i < 6; i++) { await d.page.mouse.wheel(0, 40); await d.wait(40); }
+    await d.page.keyboard.up("Control");
+    await d.wait(600);
     await drawOutline(d, back.map((p) => W(S.width / 2, p.y, p.z)));
     await d.page.keyboard.press("Meta+Enter"); await d.settle(300);
     await d.api("view", "iso"); await d.wait(700);

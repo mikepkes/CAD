@@ -6,6 +6,7 @@
 // star's flat edges). test/starbox.build.test.ts and
 // test/starbox.materials.test.ts check it, and the former writes the example:
 //   BUILD_STARBOX=/abs/out npx vitest run test/starbox.build.test.ts
+import { describeExample } from "./helpers";
 import { evaluateFeatures, exportFeatureBlob } from "../src/core/features";
 import { importSTEP, measureVolume } from "replicad";
 import { expandAssembly } from "../src/core/assembly";
@@ -305,6 +306,8 @@ export async function buildStarBox(s: CadSession, opts: { pockets?: boolean; key
   await dis(s, "joint.template", { pattern: pair, kind: "rigid", base: { role: "root", origin: { x: 0, y: 0, z: 0 } }, moved: { role: "self", component: half, port: "seat" }, appliesTo: "first", name: "Bottom" });
   // the same part, flipped onto the first about the star's symmetry axis
   await dis(s, "joint.template", { pattern: pair, kind: "revolute", base: { role: "root", origin: { x: 0, y: 0, z: 0 } }, moved: { role: "self", component: half, port: "flip" }, axis: { x: 0, y: 1, z: 0 }, value: "180", appliesTo: "rest", name: "Top (flipped)" });
+  // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
+  await describeExample(s, {"title": "Star box", "description": "A snap-together star box made of two identical halves: one is flipped over, and its barbed tongues click into the other's pockets."}, {"width": {"label": "Width", "unit": "mm", "description": "Across the star, point to point"}, "height": {"label": "Height", "unit": "mm", "description": "Of the closed box"}, "fullBox": {"label": "Both halves", "description": "Show the second half snapped on"}, "material": {"label": "Material", "description": "What it's printed in; the thin parts are sized for it"}});
 }
 
 /** Tick the fullBox checkbox: show both halves, closed. */

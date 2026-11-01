@@ -21,7 +21,10 @@ describe("build progress", () => {
     const g = new InlineGeometryBackend();
     await g.init({ wasmBinary: wasm });
     const seen: number[] = [];
-    const r = await g.evaluate(s.doc, (f) => seen.push(f));
+    const steps: string[] = [];
+    const r = await g.evaluate(s.doc, (f, step) => { seen.push(f); if (step) steps.push(`${step.phase} ${step.done}/${step.total}`); });
+    // each step is named, so the bar can say what the last tenth is doing (meshing can take seconds)
+    expect(steps).toEqual(["features 0/4", "features 1/4", "features 2/4", "features 3/4", "meshing 0/4", "meshing 1/4", "meshing 2/4", "meshing 3/4"]);
     expect(Object.keys(r.solids)).toHaveLength(4);
     expect(seen.length).toBeGreaterThanOrEqual(8);       // each feature, then each body
     expect(seen[0]).toBe(0);

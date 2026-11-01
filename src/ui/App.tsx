@@ -25,23 +25,8 @@ import { startAssist } from "../model/assistController";
 import { registerAppPanels } from "../model/appPanels";
 import { SideResizer } from "./SideResizer";
 import { BuildProgress } from "./BuildProgress";
-
-function Toast() {
-  const toast = useStore((s) => s.toast);
-  const dismiss = useStore((s) => s.dismissToast);
-  useEffect(() => {
-    if (toast) {
-      const t = setTimeout(dismiss, 4000);
-      return () => clearTimeout(t);
-    }
-  }, [toast, dismiss]);
-  if (!toast) return null;
-  return (
-    <div className={`toast ${toast.kind}`} onClick={dismiss}>
-      {toast.text}
-    </div>
-  );
-}
+import { Toast } from "./Toast";
+import { FirstRun } from "./FirstRun";
 
 /** The window's width, followed. */
 function useWindowWidth(): number {
@@ -79,18 +64,19 @@ export function App() {
 
   return (
     <div className="app">
+      <h1 className="sr-only">VibeCAD</h1>
       <Toolbar />
       {mode === "sketch" && <ConstraintBar />}
       <div className={`workspace${leftOpen ? "" : " left-collapsed"}${rightOpen ? "" : " right-collapsed"}`}
         style={{ "--side-left": `${narrow ? 240 : sideWidth.left}px`, "--side-right": `${narrow ? 240 : sideWidth.right}px` } as CSSProperties}>
-        <aside className={`side left ${leftOpen ? "" : "collapsed"}`} style={{ width: sideWidth.left, marginLeft: leftOpen ? 0 : -sideWidth.left }}>
+        <aside id="side-left" aria-label="Browser, parameters and history" className={`side left ${leftOpen ? "" : "collapsed"}`} style={{ width: sideWidth.left, marginLeft: leftOpen ? 0 : -sideWidth.left }}>
           <BrowserPanel />
           <ParametersPanel />
           <TimelinePanel />
         </aside>
         {leftOpen && <SideResizer side="left" />}
-        <button className={`side-toggle left${leftOpen ? " open" : ""}`} aria-label={leftOpen ? "Collapse the left panel" : "Show the left panel"} title={leftOpen ? "Collapse the left panel" : "Show the left panel"} aria-expanded={leftOpen} onClick={() => setSideOpen("left", !leftOpen)}>
-          {leftOpen ? "‹" : "›"}
+        <button className={`side-toggle left${leftOpen ? " open" : ""}`} aria-controls="side-left" aria-expanded={leftOpen} aria-label={leftOpen ? "Hide the left panel" : "Show the left panel"} title={leftOpen ? "Hide the left panel" : "Show the left panel"} onClick={() => setSideOpen("left", !leftOpen)}>
+          <span aria-hidden="true">{leftOpen ? "‹" : "›"}</span>
         </button>
 
         <main className="center">
@@ -98,6 +84,7 @@ export function App() {
             <Viewport overlays={<>{workbench && <WorkbenchOverlay />}<LensOverlay /></>} />
             <PanelToggles />
             <ViewChips />
+            <FirstRun />
             <Toast />
             <BuildProgress />
             <ExtrudePanel />
@@ -106,11 +93,11 @@ export function App() {
           {workbench && mode === "model" && <div className="center-dock"><HistoryStrip /></div>}
         </main>
 
-        <button className={`side-toggle right${rightOpen ? " open" : ""}`} aria-label={rightOpen ? "Collapse the right panel" : "Show the right panel"} title={rightOpen ? "Collapse the right panel" : "Show the right panel"} aria-expanded={rightOpen} onClick={() => setSideOpen("right", !rightOpen)}>
-          {rightOpen ? "›" : "‹"}
+        <button className={`side-toggle right${rightOpen ? " open" : ""}`} aria-controls="side-right" aria-expanded={rightOpen} aria-label={rightOpen ? "Hide the right panel" : "Show the right panel"} title={rightOpen ? "Hide the right panel" : "Show the right panel"} onClick={() => setSideOpen("right", !rightOpen)}>
+          <span aria-hidden="true">{rightOpen ? "›" : "‹"}</span>
         </button>
         {rightOpen && <SideResizer side="right" />}
-        <aside className={`side right ${rightOpen ? "" : "collapsed"}`} style={{ width: sideWidth.right, marginRight: rightOpen ? 0 : -sideWidth.right }}>
+        <aside id="side-right" aria-label="Inspector and concept panels" className={`side right ${rightOpen ? "" : "collapsed"}`} style={{ width: sideWidth.right, marginRight: rightOpen ? 0 : -sideWidth.right }}>
           <RightPanel />
         </aside>
       </div>

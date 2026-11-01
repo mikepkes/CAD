@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 626,
-  "rollbackIndex": 213,
+  "nextId": 628,
+  "rollbackIndex": 215,
   "operations": [
     {
       "opId": "op1",
@@ -3778,6 +3778,30 @@
       ],
       "label": "Joint",
       "at": 1793546102106
+    },
+    {
+      "opId": "op626",
+      "type": "parameter.describe",
+      "params": {
+        "name": "turn",
+        "label": "Knob",
+        "unit": "°",
+        "description": "Turn the knob: every gear train follows"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793561616757
+    },
+    {
+      "opId": "op627",
+      "type": "document.describe",
+      "params": {
+        "title": "Clockwork",
+        "description": "Every kind of gear VibeCAD makes, all turned by one knob: a planetary stage, spur, helical and herringbone pairs, a rack, bevels, a worm and a Geneva drive."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561616797
     }
   ],
   "timelineGroups": [],

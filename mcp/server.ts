@@ -139,7 +139,8 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
   const documentSummary = () => ({
     units: session.doc.units,
     intents: intentsSummary(),
-    parameters: session.doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value, error: p.error, ...(p.configuredBy ? { configuredBy: p.configuredBy, baseExpr: p.baseExpr } : {}) })),
+    parameters: session.doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value, error: p.error, ...(p.label ? { label: p.label } : {}), ...(p.unit ? { unit: p.unit } : {}), ...(p.description ? { description: p.description } : {}), ...(p.configuredBy ? { configuredBy: p.configuredBy, baseExpr: p.baseExpr } : {}) })),
+    ...(session.doc.about ? { about: session.doc.about } : {}), // the title and intro (document.describe)
     configurations: session.doc.configurations.map((c) => ({ id: c.id, name: c.name, values: c.values, suppress: c.suppress, warnings: c.warnings })),
     activeConfiguration: session.doc.configurations.find((c) => c.id === session.doc.activeConfiguration)?.name ?? null,
     hidden: session.doc.hidden ?? [],

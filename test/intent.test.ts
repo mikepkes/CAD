@@ -175,17 +175,17 @@ describe("intent grammar: resolve", () => {
   it("finds the app's commands by their words: section, agent, settings, help, configuration", () => {
     const app = ctxOf(rows, { actions: [...ACTIONS,
       { id: "view.section", label: "Section: cut the model on a plane" }, { id: "app.agent", label: "Agent: describe it to Claude" },
-      { id: "app.settings", label: "Settings" }, { id: "app.shortcuts", label: "Keyboard shortcuts" },
+      { id: "app.settings", label: "Settings" }, { id: "help.shortcuts", label: "Keyboard shortcuts" },
       { id: "view.configurations", label: "Configurations: the design variants table" }, { id: "motion.study", label: "Motion study" },
     ] });
-    for (const [word, id] of [["section", "view.section"], ["agent", "app.agent"], ["claude", "app.agent"], ["settings", "app.settings"], ["help", "app.shortcuts"],
-      ["shortcuts", "app.shortcuts"], ["configuration", "view.configurations"], ["motion", "motion.study"]] as const) {
+    for (const [word, id] of [["section", "view.section"], ["agent", "app.agent"], ["claude", "app.agent"], ["settings", "app.settings"], ["help", "help.shortcuts"],
+      ["shortcuts", "help.shortcuts"], ["configuration", "view.configurations"], ["motion", "motion.study"]] as const) {
       expect(top(word, app).action, word).toEqual({ type: "hotkey", id });
     }
   });
 
   it("an empty line offers the recent commands, then common ones", () => {
-    const app = ctxOf(rows, { actions: [...ACTIONS, { id: "view.section", label: "Section: cut the model on a plane" }, { id: "app.agent", label: "Agent: describe it to Claude" }, { id: "app.shortcuts", label: "Keyboard shortcuts" }] });
+    const app = ctxOf(rows, { actions: [...ACTIONS, { id: "view.section", label: "Section: cut the model on a plane" }, { id: "app.agent", label: "Agent: describe it to Claude" }, { id: "help.shortcuts", label: "Keyboard shortcuts" }] });
     const fresh = emptySuggestions(app, []);
     expect(fresh.every((s) => s.group === "common")).toBe(true);
     expect(fresh.map((s) => s.label)).toEqual(expect.arrayContaining(["Toggle Pins", "Fit the view", "Section: cut the model on a plane", "Agent: describe it to Claude", "Keyboard shortcuts"]));

@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 306,
-  "rollbackIndex": 109,
+  "nextId": 307,
+  "rollbackIndex": 110,
   "operations": [
     {
       "opId": "op1",
@@ -13,7 +13,10 @@
         "name": "wall",
         "expression": "6",
         "min": 3,
-        "max": 12
+        "max": 12,
+        "label": "Ring wall",
+        "unit": "mm",
+        "description": "How thick each ring is"
       },
       "createdIds": [
         "param2"
@@ -28,7 +31,9 @@
         "name": "gap",
         "expression": "6",
         "min": 3,
-        "max": 12
+        "max": 12,
+        "label": "Gap between rings",
+        "unit": "mm"
       },
       "createdIds": [
         "param4"
@@ -43,7 +48,9 @@
         "name": "ringH",
         "expression": "12",
         "min": 6,
-        "max": 30
+        "max": 30,
+        "label": "Ring height",
+        "unit": "mm"
       },
       "createdIds": [
         "param6"
@@ -62,7 +69,10 @@
           0.4,
           0.5,
           0.6
-        ]
+        ],
+        "label": "Print clearance",
+        "unit": "mm",
+        "description": "The gap at the pivots: more if your printer's fits come out tight"
       },
       "createdIds": [
         "param8"
@@ -77,7 +87,10 @@
         "name": "coneR",
         "expression": "3",
         "min": 2,
-        "max": 5
+        "max": 5,
+        "label": "Pivot size",
+        "unit": "mm",
+        "description": "Radius of the cone pins the rings turn on"
       },
       "createdIds": [
         "param10"
@@ -131,7 +144,10 @@
         "name": "r3i",
         "expression": "21",
         "min": 10,
-        "max": 40
+        "max": 40,
+        "label": "Inner ring bore",
+        "unit": "mm",
+        "description": "Inside radius of the innermost ring"
       },
       "createdIds": [
         "param18"
@@ -1971,6 +1987,17 @@
       ],
       "label": "Joint",
       "at": 1792899513459
+    },
+    {
+      "opId": "op306",
+      "type": "document.describe",
+      "params": {
+        "title": "Gyroscope",
+        "description": "Nested rings on cone pivots, printed in one piece: each ring spins freely inside the next."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793561930845
     }
   ],
   "timelineGroups": []
