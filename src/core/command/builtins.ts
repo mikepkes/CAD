@@ -2099,7 +2099,7 @@ export const BUILTINS: CommandDef<any>[] = [
         shape: p.shape, dims, at: p.at, operation: p.operation ?? "new",
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
-      return { createdIds: [id], message: `${p.shape}` };
+      return { createdIds: [id], message: `Added ${p.name ?? `a ${p.shape}`}` };
     },
   },
   {

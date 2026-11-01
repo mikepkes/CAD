@@ -48,7 +48,7 @@ describe("<RingOverlay/>", () => {
     expect(item("View: Iso").getAttribute("aria-disabled")).toBe("true");
     expect(item("view.frame").getAttribute("aria-disabled")).toBe("true");
     expect(item("View: Top").getAttribute("aria-disabled")).toBe("false");
-    expect(screen.getByText("configure in ⌨")).toBeTruthy();
+    expect(document.querySelector(".ring-hint")!.textContent).toBe("configure in  Shortcuts"); // the keyboard is an icon now (M24)
   });
 
   it("names the top context and follows the stack and the user's overrides", () => {

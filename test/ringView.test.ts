@@ -20,7 +20,9 @@ describe("ring labels", () => {
     expect(shortLabel("Action ring (hold, point, release)")).toBe("Action ring");
     expect(shortLabel("Toggle feature pins (Workbench)")).toBe("Feature pins");
     expect(shortLabel("Undo")).toBe("Undo");
-    expect(shortLabel("Suppress the open feature and everything after")).toBe("Suppress the open f…");
+    expect(shortLabel("Suppress the open feature and everything after")).toBe("Suppress open featu…");
+    expect(shortLabel("Round this face's edges")).toBe("Round edges"); // short enough to read whole (M24)
+    expect(shortLabel("Round the corners behind this face")).toBe("Round corners");
     expect(shortLabel("Suppress the open feature and everything after").length).toBe(20);
   });
 
