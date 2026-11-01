@@ -14,7 +14,7 @@ import { featureRows, type FeatureRow } from "../../model/concepts/featureCatalo
 import { createEditQueue } from "../kit/editQueue";
 import { pushEdit, rowForFace, shouldDelete, namedParam, paramNameProblem, suggestParamName, type CardParam, type PushEdit } from "./workbench/workbench";
 import { useLens, MODES, type LensMode } from "./lens/lens";
-import { cycleFeature, cycleRows, faceEdgeSelector, historyRange, newSolidCentre, nextLensSize, otherShape, parentComponent, stepRollback } from "./contextActions.logic";
+import { cycleFeature, cycleRows, faceCornerSelector, faceEdgeSelector, historyRange, newSolidCentre, nextLensSize, otherShape, parentComponent, stepRollback } from "./contextActions.logic";
 import { ask, askText } from "../kit/askDialog";
 
 const st = () => useStore.getState();
@@ -140,12 +140,12 @@ export async function addGear(): Promise<void> {
 
 /** Round (fillet) or bevel (chamfer) every edge around the selected flat face, then open the new feature's card so
  *  its size can be scrubbed or named. Faces square to an axis only (the edge selector names planes by axis). */
-export async function edgeFace(kind: "fillet" | "chamfer"): Promise<void> {
+export async function edgeFace(kind: "fillet" | "chamfer", which: "outline" | "corners" = "outline"): Promise<void> {
   const f = face();
-  const sel = f ? faceEdgeSelector(f.point, f.normal) : null;
+  const sel = f ? (which === "corners" ? faceCornerSelector(f.point, f.normal) : faceEdgeSelector(f.point, f.normal)) : null;
   if (!f || !sel) return;
   const params = kind === "fillet"
-    ? { radius: "2", edges: sel, body: f.bodyId, requireEffect: true }
+    ? { radius: which === "corners" ? "5" : "2", edges: sel, body: f.bodyId, requireEffect: true }
     : { distance: "1", edges: sel, body: f.bodyId, requireEffect: true };
   const r = await st().dispatch(`feature.${kind}`, params);
   if (r.ok && r.createdIds[0]) {
@@ -195,6 +195,7 @@ export const CONTEXT_ACTIONS: HotkeyAction[] = [
   // ---- face (a face selected in model mode) ----
   { id: "face.fillet", label: "Round this face's edges", context: "face", when: canEdgeFace, run: () => void edgeFace("fillet") },
   { id: "face.chamfer", label: "Chamfer this face's edges", context: "face", when: canEdgeFace, run: () => void edgeFace("chamfer") },
+  { id: "face.roundCorners", label: "Round the corners behind this face", context: "face", when: canEdgeFace, run: () => void edgeFace("fillet", "corners") },
   {
     id: "face.sketch", label: "Sketch on this face", context: "face", defaultPrimary: "s",
     when: () => !!face(),

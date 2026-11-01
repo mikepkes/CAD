@@ -8,7 +8,7 @@ import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
 import { featureRows } from "../src/model/concepts/featureCatalog";
 import { pushTargetOf, pushTo, pushEdit, namedParam, suggestParamName, paramNameProblem } from "../src/ui/concepts/workbench/workbench";
-import { newSolidCentre, faceEdgeSelector } from "../src/ui/concepts/contextActions.logic";
+import { newSolidCentre, faceEdgeSelector, faceCornerSelector } from "../src/ui/concepts/contextActions.logic";
 
 const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
 beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
@@ -86,6 +86,18 @@ describe("rounding a face's edges", () => {
     expect(faceEdgeSelector({ x: 3, y: -20, z: 5 }, { x: 0, y: -1, z: 0 })).toEqual({ inPlane: { plane: "XZ", offset: 20 } });
     expect(faceEdgeSelector({ x: 20, y: 0, z: 5 }, { x: 1, y: 0, z: 0 })).toEqual({ inPlane: { plane: "YZ", offset: 20 } });
     expect(faceEdgeSelector({ x: 0, y: 0, z: 0 }, { x: 0.7, y: 0, z: 0.7 })).toBeNull();
+  });
+
+  it("Round corners picks the edges running back from an axis-aligned face", () => {
+    const top = faceCornerSelector({ x: 3, y: 4, z: 6 }, { x: 0, y: 0, z: 1 })!;
+    expect(top.parallelTo).toBe("Z");
+    expect(top.inBox.max.z).toBeCloseTo(6, 3);
+    expect(top.inBox.min.z).toBeLessThan(-1000);
+    const front = faceCornerSelector({ x: 0, y: -35, z: 3 }, { x: 0, y: -1, z: 0 })!;
+    expect(front.parallelTo).toBe("Y");
+    expect(front.inBox.min.y).toBeCloseTo(-35, 3);
+    expect(front.inBox.max.y).toBeGreaterThan(1000);
+    expect(faceCornerSelector({ x: 0, y: 0, z: 0 }, { x: 0.7, y: 0, z: 0.7 })).toBeNull();
   });
 
   it("fillets exactly the top face's outline of a box", async () => {

@@ -4,9 +4,10 @@ Running notes for the automated tutorial video, newest pass first. Each pass
 records what to keep doing, what broke and how it was fixed, and what is still
 open, so the next pass starts from here rather than from memory.
 
-## Pass 3 (next): notes from reviewing pass 2
+## Pass 3 (2026-11-01): your pass 2 review, and the rename
 
-Hold: no recording until the pass 2 review is finished.
+Recorded once the review notes were in. Each note below was acted on; "What
+changed" says how, and "Still open" what remains.
 
 ### Renamed to VibeCAD
 
@@ -73,7 +74,7 @@ mikepkes.github.io/CAD while the repository is named CAD.
     camera detracts. Spend that time on the gear motions instead, and go
     further into the mechanisms: after the wide shot, move in on two or three
     meshes in turn (worm and wheel, rack and pinion, the bevel pair, the ring
-    gear and its pinion) with the camera still while each turns.
+    gear and its planets) with the camera still while each turns.
 - **Roubo bench: fill the frame, and open the leg vise before the drawing.**
   The bench sat too small in frame (the iso `frameAll` leaves a lot of floor
   around a long, low bench). Next pass:
@@ -135,6 +136,57 @@ mikepkes.github.io/CAD while the repository is named CAD.
   following `d.cut` (`closeDrawing()` with `newDocument`). Check every clip's
   last frames for the same pattern: nothing should change on screen after a
   clip's final shot.
+
+### What changed
+
+- **Demo API for camera work and motion** (`src/demo/demo.tsx`):
+  - `aim({ dir, box, ms, margin })` flies the camera to look at a box (or
+    everything) from a direction, over a chosen time;
+  - `componentBox(names)` is the world box of named components;
+  - `poseSweep(name, from, to, ms)` drives a parameter by moving the built
+    parts (`SceneManager.beginAnimation(…, live)`), never rebuilding:
+    0.1 ms a pose on the clockwork, so gears and the vise move smoothly at
+    real speed; sweeps chain, `poseEnd()` returns to the built model;
+  - `sideWidth(side, px, ms)` eases a side panel's width.
+- **Director**: `d.ring(label)` uses the action ring for real (hold Space,
+  glide to the slot, release; it always lets go of Space, even on an
+  error); `d.pick(label)` marks a moment for the intro montage.
+- **Edit**: the montage is a third of a second from each of Act 3's picks
+  (11), cut before the cold open, with its own VO line.
+- **Act 1**: the cold open stops side-on to the stand's profile, widens the
+  Parameters panel, drags phone 9 → 15 → 9 and narrows it again; the block
+  starts from the model ring (Add a box) and the back plate's sketch from
+  the face ring; turn-the-dials widens the panel too; New no longer brings
+  the origin planes back.
+- **Act 2**: soften uses the new **Round corners** (a 15 mm fillet on the
+  base's four corners), and zebra comes on aimed at a rounded corner with
+  a slow orbit; make-it-yours puts Round edges on the face ring's SW slot,
+  closes the editor and uses it on the base's top.
+- **Act 3**: the gyroscope turns square to the cut and moves in on a cone
+  pivot; the clockwork has no turntable, a still wide shot, then the
+  planetary set and the worm and wheel; the Roubo is framed long-ways, its
+  leg vise opens and closes in close-up, and the shop drawing closes in the
+  cut (no bench flash).
+- **App**: Round corners on a face card (and `face.roundCorners`): rounds
+  the edges running back from an axis-aligned face, e.g. a plate's corners.
+
+### What broke this pass, and the fix
+
+| Problem | Cause | Fix |
+|---|---|---|
+| Act 2's ring step found no Round slot, and Export failed after it | The click on the back plate's thin top used the stand's default size, but the design space had changed width and depth, so no face was selected; the helper then left Space held, the ring open over the menu | Positions come from the stand's actual bounds; `d.ring` releases Space and presses Escape on any error |
+| The zebra close-up aimed past the corner | Same: the default-size corner | Same: actual bounds |
+| The worm's montage pick landed in the cut after the clip | Picked after the last sweep | Pick mid-sweep |
+| Vise close-up too tight, bench clipped at the right | Margins | Vise 1.2, bench 0.7 |
+
+### Still open after pass 3
+
+- The face ring opens over the face card in Act 1 (true to the app, but
+  busy); the card could step aside while the ring is open.
+- The zebra loupe shares the frame with the lens settings popover.
+- Adding `phone` and the lip's dimension are still done by command
+  (PUPPET), and the parameter sweeps in the montage clips still rebuild.
+- The voiceover, and the release before the final cut.
 
 ## Pass 2 (2026-10-31): review fixes and new features
 

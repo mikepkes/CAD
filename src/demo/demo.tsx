@@ -15,6 +15,9 @@ import { useRing } from "../model/ring";
 import { useDialog } from "../ui/kit/askDialog";
 import { useLens } from "../ui/concepts/lens/lens";
 import { getActiveScene } from "../viewport/sceneRef";
+import { buildBodies } from "../viewport/turntableRecorder";
+import { resolveComponentWorld } from "../core/recompute";
+import { resolveParameters } from "../core/parameters";
 import { resolveSketchPlane } from "../geometry/plane";
 import { setAgentClientFactory } from "../model/agent";
 import { replayClient, recordingClient, type AgentCache } from "./agentReplay";
@@ -88,6 +91,9 @@ const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 const turn = { rate: 0, target: 0, raf: 0 };
 
 /** The director's handle on the app. Every method is plain data in, plain data out (it crosses Playwright). */
+/** The pose sweeps' running state: which document's parts are posed, and the parameter values they're posed at. */
+let pose: { doc: unknown; scope: Record<string, number> } | null = null;
+
 const api = {
   // ---- waiting ----
   /** Resolves when the model has finished rebuilding, the camera has stopped, and nothing has changed for `quietMs`, plus two painted frames. */
@@ -178,9 +184,73 @@ const api = {
   },
   view(name: string) { window.dispatchEvent(new CustomEvent("vibecad:view", { detail: name })); },
   frameAll() { window.dispatchEvent(new CustomEvent("vibecad:frame")); },
+  /** The world box of the bodies in the named components (and their sub-components), at the built pose. */
+  componentBox(names: string[]) {
+    const { session, solids } = useStore.getState(), doc = session.doc;
+    const ids = new Set<string>();
+    const add = (id: string) => { if (ids.has(id)) return; ids.add(id); for (const c of doc.components[id]?.children ?? []) add(c); };
+    for (const c of Object.values(doc.components)) if (names.includes(c.name)) add(c.id);
+    const lo = { x: Infinity, y: Infinity, z: Infinity }, hi = { x: -Infinity, y: -Infinity, z: -Infinity };
+    for (const b of Object.values(solids)) {
+      const cid = (b.sketchId ? doc.sketches[b.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
+      if (!b.mesh || !b.bounds || !ids.has(cid)) continue;
+      for (const k of ["x", "y", "z"] as const) { lo[k] = Math.min(lo[k], b.bounds.min[k]); hi[k] = Math.max(hi[k], b.bounds.max[k]); }
+    }
+    return lo.x <= hi.x ? { min: lo, max: hi } : null;
+  },
+  /** Fly the camera (over `ms`) to look along -`dir` at a box (or every body), filling the view with `margin` to spare. */
+  aim(opts: { dir: [number, number, number]; box?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | null; ms?: number; margin?: number }) {
+    const all = api.bounds() as { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }[];
+    const box = opts.box ?? all.reduce((a, b) => ({
+      min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y), z: Math.min(a.min.z, b.min.z) },
+      max: { x: Math.max(a.max.x, b.max.x), y: Math.max(a.max.y, b.max.y), z: Math.max(a.max.z, b.max.z) },
+    }));
+    const c = { x: (box.min.x + box.max.x) / 2, y: (box.min.y + box.max.y) / 2, z: (box.min.z + box.max.z) / 2 };
+    const r = Math.hypot(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) / 2;
+    const [x, y, z] = opts.dir;
+    getActiveScene()?.aim({ x, y, z }, c, r, (opts.ms ?? 1500) / 1000, opts.margin ?? 1.15);
+    return new Promise<void>((done) => setTimeout(done, (opts.ms ?? 1500) + 50));
+  },
+  /** Drive a parameter from `from` to `to` over `ms` by moving the built parts (as the motion study and the
+   *  turntable recorder do), not by rebuilding each step, so a mechanism moves smoothly at real speed. Joints only:
+   *  geometry that depends on the parameter doesn't change. The parts stay posed (sweeps chain) until `poseEnd`. */
+  poseSweep(name: string, from: number, to: number, ms: number, opts: { ease?: boolean } = {}): Promise<void> {
+    const scene = getActiveScene(), st = useStore.getState(), doc = st.session.doc;
+    if (!scene) return Promise.resolve();
+    if (!pose || pose.doc !== doc) {
+      pose = { doc, scope: { ...resolveParameters(doc.parameters).scope } };
+      scene.beginAnimation(buildBodies(doc, st.solids as never), resolveComponentWorld(doc, pose.scope), true);
+    }
+    const p = pose;
+    const at = (v: number) => { p.scope[name] = v; scene.setAnimationPose(resolveComponentWorld(doc, p.scope)); };
+    at(from); // before the next frame draws, so a chained sweep never shows the built pose
+    const t0 = performance.now();
+    return new Promise((done) => {
+      const tick = () => {
+        const k = Math.min(1, (performance.now() - t0) / ms), e = opts.ease === false ? k : k * k * (3 - 2 * k);
+        at(from + (to - from) * e);
+        if (k < 1) requestAnimationFrame(tick); else done();
+      };
+      requestAnimationFrame(tick);
+    });
+  },
+  /** Put the parts back to the built model after `poseSweep`s. */
+  poseEnd() { pose = null; getActiveScene()?.endAnimation(); },
+  /** Ease a side panel to `px` wide over `ms` (as dragging its edge would), e.g. to widen Parameters while values are edited. */
+  sideWidth(side: "left" | "right", px: number, ms = 600): Promise<void> {
+    const from = useUi.getState().sideWidth[side], t0 = performance.now();
+    return new Promise((done) => {
+      const tick = () => {
+        const k = Math.min(1, (performance.now() - t0) / ms), e = k * k * (3 - 2 * k);
+        useUi.getState().setSideWidth(side, from + (px - from) * e, k === 1);
+        if (k < 1) requestAnimationFrame(tick); else done();
+      };
+      requestAnimationFrame(tick);
+    });
+  },
   // ---- documents ----
-  async openText(text: string, name = "model.vibecad.json") { await useStore.getState().openFile(new File([text], name)); await api.settle(); },
-  async newDocument() { await useStore.getState().newDocument(); await api.settle(); },
+  async openText(text: string, name = "model.vibecad.json") { api.poseEnd(); await useStore.getState().openFile(new File([text], name)); await api.settle(); },
+  async newDocument() { api.poseEnd(); await useStore.getState().newDocument(); await api.settle(); },
   documentText() { return JSON.stringify(useStore.getState().session.doc); },
   // ---- the agent ----
   mockAgent(cache: AgentCache | null) {

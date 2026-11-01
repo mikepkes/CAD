@@ -40,7 +40,7 @@ export interface TurntableOpts {
 
 /** Resolve the store's raw solids into renderable bodies (material + wood frame +
  *  owning component), the same way the live viewport does. */
-function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEvalLike>): { solid: SolidView; componentId: string }[] {
+export function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEvalLike>): { solid: SolidView; componentId: string }[] {
   const out: { solid: SolidView; componentId: string }[] = [];
   const hidden = hiddenIds(doc);
   for (const sol of Object.values(solidsMap)) {

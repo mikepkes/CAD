@@ -84,3 +84,23 @@ describe("the tutorial's phone stand", () => {
     expect(b[0].volume! / v0).toBeCloseTo(120 / 90, 2); // every part is extruded across the full width
   });
 });
+
+describe("rounding the stand's corners (the zebra shot)", () => {
+  it("Round corners on the base's top face rounds only its four vertical corners, generously", async () => {
+    const { faceCornerSelector } = await import("../src/ui/concepts/contextActions.logic");
+    const { s } = await build(false);
+    const before = bodies(s)[0];
+    const edges = faceCornerSelector({ x: 0, y: -STAND.depth / 2 + 4, z: STAND.base }, { x: 0, y: 0, z: 1 });
+    const r = await s.dispatch("feature.fillet", { radius: "15", edges, body: before.featureId, requireEffect: true });
+    expect(r.ok).toBe(true);
+    const after = bodies(s);
+    expect(after.length).toBe(1);
+    // the base's footprint keeps its extents, the plate and lip are untouched, and material came off the corners
+    expect(after[0].bounds!.max.z).toBeCloseTo(STAND.base + STAND.height, 3);
+    expect(after[0].bounds!.min.x).toBeCloseTo(-STAND.width / 2, 3);
+    const vol = (b: typeof before) => { const m = b.mesh!; let v = 0; for (let i = 0; i < m.indices.length; i += 3) { const [a, b2, c] = [0, 1, 2].map((k) => m.indices[i + k] * 3); const p = (j: number) => [m.positions[j], m.positions[j + 1], m.positions[j + 2]]; const [A, B, C] = [p(a), p(b2), p(c)]; v += (A[0] * (B[1] * C[2] - B[2] * C[1]) - A[1] * (B[0] * C[2] - B[2] * C[0]) + A[2] * (B[0] * C[1] - B[1] * C[0])) / 6; } return Math.abs(v); };
+    const removed = vol(before) - vol(after[0]);
+    const corners = 4 * (1 - Math.PI / 4) * 15 * 15 * STAND.base; // four corner cut-offs, base-high
+    expect(Math.abs(removed / corners - 1)).toBeLessThan(0.02); // within the mesh's faceting
+  }, 60000);
+});

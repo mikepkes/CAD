@@ -45,6 +45,8 @@ async function sweep(d, name, values, ms = 3000) {
   await run();
   if (Date.now() - t0 > ms * 1.6) d.timing.fast.push({ label: `rebuilding ${name}`, start, end: d.now() });
 }
+/** The gyroscope's +X pivot: the middle ring's cone pin, from its root to its point in the frame ring's socket. */
+const GYRO_PIVOT = { min: { x: 36, y: -3, z: -7 }, max: { x: 52, y: 3, z: 7 } };
 const range = (a, b, n) => Array.from({ length: n }, (_, i) => +(a + ((b - a) * i) / (n - 1)).toFixed(3));
 const there = (a, b, n) => [...range(a, b, n), ...range(b, a, n).slice(1)];
 
@@ -61,7 +63,7 @@ export async function act3(d) {
     await d.beat(id, narration, async () => { await d.lower(title, sub); await act(); }, { minMs: 6500 });
   };
 
-  await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a section view, then a motion study", "A gyroscope that prints in one piece, already assembled. Cut it open to see the pins and clearances inside, then let the motion study turn every joint through a full circle and check that nothing collides.", async () => {
+  await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a section view, then a motion study", "A gyroscope that prints in one piece, already assembled. Cut it open and turn square to the cut: each ring hangs on cone pins that come to a point inside a socket, with just enough clearance to spin. Then the motion study turns every joint through a full circle and checks that nothing collides.", async () => {
     // the section: tick Section in the toolbar, cut on the vertical XZ plane through the middle
     await d.api("cursor", true);
     const sec = await d.rect(".grid-controls label", "Section");
@@ -72,9 +74,12 @@ export async function act3(d) {
     await plane.selectOption("XZ");
     await d.settle(300);
     await d.api("cursor", false);
-    await d.api("turntable", 10);
-    await d.wait(2600);
-    await d.api("turntable", null);
+    // square to the cut face, then in on a pivot: the middle ring's cone pin, pointing into the frame ring's socket
+    await d.api("aim", { dir: [0, 1, 0.0001], ms: 2000, margin: 1.05 });
+    await d.wait(900);
+    await d.api("aim", { dir: [0, 1, 0.0001], box: GYRO_PIVOT, ms: 2200, margin: 1.35 });
+    await d.wait(400); d.pick("gyroscope bearing"); await d.wait(2400);
+    await d.api("aim", { dir: [0.55, 1, 0.6], ms: 1800, margin: 1.0 });
     await d.fast("motion study", async () => {
       await d.run(async () => { await window.__vibecadDemo.store.getState().runMotionStudy(); });
       await d.page.waitForFunction(() => !["running", "pending"].includes(window.__vibecadDemo.store.getState().motionStatus), null, { timeout: 180000 });
@@ -82,17 +87,23 @@ export async function act3(d) {
     await d.wait(1200);
   });
   if (hasExample("clockwork")) {
-    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm", "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train.", async () => {
-      // the driving parameter: the first bounded one (the clockwork's turn)
-      const drive = await d.run(() => window.__vibecadDemo.store.getState().session.doc.parameters.find((p) => p.min != null && p.max != null));
-      if (!drive) throw new Error("the clockwork has no bounded drive parameter");
-      await d.api("turntable", 6);
-      await sweep(d, drive.name, range(drive.min, Math.min(drive.max, drive.min + 360), 40), 6000);
-      await d.api("turntable", null);
+    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm", "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train. The planets roll inside the ring gear, and the worm creeps its wheel round at a fraction of the speed.", async () => {
+      // no turntable: the camera holds still and only the gears move (posed from the turn parameter, not rebuilt)
+      await d.api("aim", { dir: [0.2, -0.5, 1], ms: 1200, margin: 0.8 });
+      await d.api("poseSweep", "turn", 0, 360, 5200, { ease: false });
+      d.pick("clockwork");
+      await d.api("poseSweep", "turn", 360, 540, 1800, { ease: false });
+      await d.api("aim", { dir: [0.15, -0.35, 1], box: await d.api("componentBox", ["Ring", "Planet 1", "Planet 2", "Planet 3", "Carrier"]), ms: 1400, margin: 0.85 });
+      await d.api("poseSweep", "turn", 540, 900, 4000, { ease: false });
+      d.pick("planetary");
+      await d.api("aim", { dir: [0.5, -0.6, 0.75], box: await d.api("componentBox", ["Cross shaft", "Wheel"]), ms: 1600, margin: 0.9 });
+      await d.api("poseSweep", "turn", 900, 1620, 2500, { ease: false });
+      d.pick("worm");
+      await d.api("poseSweep", "turn", 1620, 2340, 2500, { ease: false });
     });
   } else d.note("no clockwork example yet: gears clip skipped");
-  await clip("scissor-jointed", "scissor-jointed", "Jointed scissor lift", "the stage count is a slider, and it still moves", "A scissor lift where even the number of stages is a slider, patterned as a jointed assembly that still moves.", async () => { await sweep(d, "stages", [3, 4, 5, 4, 3], 2600); await sweep(d, "theta", there(40, 22, 6), 2600); });
-  await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", "A box that snaps together, with every snap sized for the material you print it in.", () => sweep(d, "width", [64, 76, 88, 76, 64], 3000));
+  await clip("scissor-jointed", "scissor-jointed", "Jointed scissor lift", "the stage count is a slider, and it still moves", "A scissor lift where even the number of stages is a slider, patterned as a jointed assembly that still moves.", async () => { await sweep(d, "stages", [3, 4, 5, 4, 3], 2600); d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600); });
+  await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", "A box that snaps together, with every snap sized for the material you print it in.", async () => { await sweep(d, "width", [64, 76], 900); d.pick("star box"); await sweep(d, "width", [88, 76, 64], 2100); });
 
   // the bistable switch: ask Claude, which opens the force analysis itself (set_panel / run_action), sweeps it, and puts the lens on strain
   await d.cut(async () => {
@@ -111,6 +122,7 @@ export async function act3(d) {
     await d.page.waitForSelector("[data-testid=rest-marker]", { timeout: 60000 }).catch(() => d.note("no rest markers"));
     await d.page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Sweep travel"), null, { timeout: 60000 }).catch(() => d.note("sweep did not finish"));
     await d.api("cursor", false);
+    await d.wait(300); d.pick("force analysis");
     await d.wait(1200);
   }, { minMs: 12000 });
   await d.cut(async () => {
@@ -118,19 +130,29 @@ export async function act3(d) {
     await d.clickEl(".side-toggle.right");
   });
 
-  await clip("gimbal", "gimbal", "Flexure gimbal", "steers a mirror on eight blades", "A two-axis flexure gimbal, the kind satellites use to steer a mirror.", async () => { await sweep(d, "alpha", there(-8, 8, 6), 2400); await sweep(d, "beta", there(-8, 8, 6), 2400); });
-  await clip("roubo", "roubo", "Roubo workbench", "and the shop drawing to build it from", "A full-size woodworking bench, resized from one number, with the shop drawing and cut list to build it from.", async () => {
+  await clip("gimbal", "gimbal", "Flexure gimbal", "steers a mirror on eight blades", "A two-axis flexure gimbal, the kind satellites use to steer a mirror.", async () => { await sweep(d, "alpha", there(-8, 8, 6), 2400); d.pick("gimbal"); await sweep(d, "beta", there(-8, 8, 6), 2400); });
+  await clip("roubo", "roubo", "Roubo workbench", "the leg vise, and the shop drawing to build it from", "A full-size woodworking bench, resized from one number. Its leg vise opens on a slider joint, and the shop drawing and cut list come straight from the model.", async () => {
+    await d.api("aim", { dir: [0.45, -1, 0.5], ms: 1000, margin: 0.7 });
     await sweep(d, "L", there(1700, 2100, 4), 2400);
+    // in on the leg vise while it opens and closes (posed, not rebuilt)
+    await d.api("aim", { dir: [-0.45, -1, 0.4], box: await d.api("componentBox", ["Vise chop", "Leg FL"]), ms: 1600, margin: 1.2 });
+    await d.api("poseSweep", "viseGap", 60, 170, 2200);
+    d.pick("leg vise");
+    await d.api("poseSweep", "viseGap", 170, 60, 1800);
+    await d.api("poseEnd");
+    await d.api("aim", { dir: [0.45, -1, 0.5], ms: 1000, margin: 0.7 });
     await d.api("cursor", true);
     await d.clickEl("button", "Export ▾"); await d.wait(400);
     await d.clickEl("[role=menuitem]", "Shop drawing");
     await d.fast("drawing the views", () => d.page.waitForSelector(".drawing-sheet svg", { timeout: 60000 }));
     await d.api("cursor", false);
+    d.pick("shop drawing");
     await d.wait(3000);
-    await d.key("Escape");
-  }, );
+    // the drawing stays up to the end of the clip; it closes in the cut, so the bench never flashes back
+  });
 
   await d.cut(async () => {
+    await d.run(() => window.__vibecadDemo.store.getState().closeDrawing());
     await d.api("newDocument");
     await d.run((c) => { const D = window.__vibecadDemo; D.mockAgent(c); D.view("iso"); }, agentCache);
     await d.settle(400);
@@ -147,7 +169,8 @@ export async function act3(d) {
       await d.settle(400);
     });
     await d.api("frameAll");
-    await d.wait(2000);
+    await d.wait(1200); d.pick("agent build");
+    await d.wait(800);
   }, { minMs: 9000 });
 
   await d.beat("outro", "That's VibeCAD. Free, open source, in your browser or on your desktop. Thanks for watching.", async () => {

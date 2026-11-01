@@ -208,6 +208,7 @@ export class SceneManager {
   // grouped per component and MOVED by a matrix each frame, instead of rebuilding
   // geometry. Only joint transforms change, so this needs no OCC rebuild. ----
   private recording = false;
+  private animating = false;
   private animGroups = new Map<string, THREE.Group>();         // componentId -> group of its bodies
   private animBuildInv = new Map<string, THREE.Matrix4>();     // inverse of each component's build-pose world
   private animWood: { mat: THREE.Material; axis: THREE.Vector3; pith: THREE.Vector3; cid: string }[] = [];
@@ -1001,9 +1002,26 @@ export class SceneManager {
     from: { off: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; zoom: number };
     to: { off: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; zoom: number };
     onDone?: () => void;
+    dur?: number;
   }) {
     this.controls.enabled = false;
-    this.tween = { t: 0, dur: 0.5, from: spec.from, to: spec.to, onDone: spec.onDone };
+    this.tween = { t: 0, dur: spec.dur ?? 0.5, from: spec.from, to: spec.to, onDone: spec.onDone };
+  }
+
+  /** Turn and move (animated over `seconds`) to look along `-dir` at `center`, far enough that a sphere of
+   *  `radius` fills the view with `margin` to spare. Model mode, perspective camera (the tutorial video's shots). */
+  aim(dir: { x: number; y: number; z: number }, center: { x: number; y: number; z: number }, radius: number, seconds = 0.5, margin = 1.15) {
+    if (this.lastData?.mode === "sketch") return;
+    const d = new THREE.Vector3(dir.x, dir.y, dir.z);
+    if (d.lengthSq() < 1e-12) return;
+    const pc = this.perspCam;
+    const dist = (Math.max(radius, 1) * margin) / Math.tan(((pc.fov * Math.PI) / 180) / 2);
+    const up = Math.abs(d.clone().normalize().z) > 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+    this.beginTween({
+      from: { off: this.camOff(), target: this.controls.target.clone(), up: this.camera.up.clone(), zoom: pc.zoom },
+      to: { off: d.normalize().multiplyScalar(dist), target: new THREE.Vector3(center.x, center.y, center.z), up, zoom: pc.zoom },
+      dur: seconds,
+    });
   }
 
   // ---- rendering the sketch ----
@@ -1221,9 +1239,10 @@ export class SceneManager {
   /** Begin animation: build `bodies` into per-component groups (world-baked at the
    *  build pose), remembering each component's build-pose world so a later frame
    *  can MOVE the component by a delta matrix instead of rebuilding geometry. */
-  beginAnimation(bodies: { solid: SolidView; componentId: string }[], buildWorld: Map<string, Rigid>) {
+  beginAnimation(bodies: { solid: SolidView; componentId: string }[], buildWorld: Map<string, Rigid>, live = false) {
     this.endAnimation();
-    this.recording = true;
+    this.animating = true;
+    this.recording = !live; // live: the normal loop keeps rendering (and the camera keeps moving) while poses change
     this.clearGroup(this.solidsGroup);
     this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = [];
     this.solidsGroup.visible = true;
@@ -1304,7 +1323,8 @@ export class SceneManager {
 
   /** End animation and restore the normal solids view. */
   endAnimation() {
-    if (!this.recording) return;
+    if (!this.animating) return;
+    this.animating = false;
     this.recording = false;
     this.clearGroup(this.solidsGroup);
     this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = [];

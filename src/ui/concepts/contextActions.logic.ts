@@ -88,3 +88,14 @@ export function faceEdgeSelector(point: V3, normal: V3): { inPlane: { plane: "XY
   if (Math.abs(normal.x) > 0.999) return { inPlane: { plane: "YZ", offset: r(point.x) } };
   return null;
 }
+
+/** The edges a face's "Round corners" rounds: those running straight back from the face (parallel to its normal,
+ *  entirely on the body's side of it), e.g. a plate's top face → its vertical corner edges. Axis-aligned faces only. */
+export function faceCornerSelector(point: V3, normal: V3): { parallelTo: "X" | "Y" | "Z"; inBox: { min: V3; max: V3 } } | null {
+  const far = 1e6, eps = 1e-4;
+  const axis = Math.abs(normal.z) > 0.999 ? "z" : Math.abs(normal.y) > 0.999 ? "y" : Math.abs(normal.x) > 0.999 ? "x" : null;
+  if (!axis) return null;
+  const min = { x: -far, y: -far, z: -far }, max = { x: far, y: far, z: far };
+  if (normal[axis] > 0) max[axis] = point[axis] + eps; else min[axis] = point[axis] - eps;
+  return { parallelTo: axis.toUpperCase() as "X" | "Y" | "Z", inBox: { min, max } };
+}
