@@ -11,6 +11,10 @@
 .demo-title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(14, 15, 18, 0.94); color: #f3f5f8; text-align: center; animation: demo-fade-in 300ms ease-out; }
 .demo-title h1 { margin: 0; font-size: 54px; font-weight: 700; letter-spacing: -0.01em; }
 .demo-title p { margin: 0; font-size: 22px; color: #b9c0cc; }
+.demo-title.hero { background: #0e0f12; gap: 22px; }
+.demo-title.hero h1 { font-size: 120px; letter-spacing: -0.02em; }
+.demo-title.hero h1::first-letter { color: var(--k-accent, #f0a44b); }
+.demo-title.hero p { font-size: 30px; }
 .demo-title .demo-chips { display: flex; gap: 12px; margin-top: 8px; }
 .demo-title .demo-chips span { padding: 8px 16px; border-radius: 999px; border: 1px solid var(--k-accent, #f0a44b); color: var(--k-accent, #f0a44b); font-size: 18px; font-weight: 600; }
 @keyframes demo-fade-in { from { opacity: 0; } to { opacity: 1; } }

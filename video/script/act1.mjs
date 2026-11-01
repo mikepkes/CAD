@@ -24,8 +24,13 @@ export async function preroll(d) {
     if (D.store.getState().showPlanes) D.store.getState().toggleShowPlanes(); // PUPPET: no origin planes in the video (nothing is sketched on them)
     D.view("iso");
   });
+  await d.api("cursor", false);
+  await d.api("titleCard", TITLE); // up before the take starts, so the montage cuts straight to it
   await d.settle(600);
 }
+
+/** The title that follows the montage. */
+const TITLE = { title: "VibeCAD", subtitle: "Parametric CAD in your browser. Drag it, type it, or just ask.", hero: true };
 
 /** Side-on to the stand's profile, a little from the front and above: the lip and the phone gap face the camera. */
 const STAND_VIEW = [1, -0.45, 0.4];
@@ -118,6 +123,12 @@ async function pickBehind(d, world, want) {
 export async function act1(d) {
   const S = await d.run(() => window.__vibecadDemo.STAND);
 
+  await d.beat("title", "", async () => {
+    await d.api("titleCard", TITLE);
+    await d.wait(2600);
+    await d.api("titleCard", null);
+  });
+
   await d.beat("cold-open", "This is a phone stand made in VibeCAD. Drag one number, the phone's thickness, and the whole stand adapts. In the next four minutes you'll build it from a blank page.", async () => {
     await d.api("cursor", false);
     await d.api("turntable", 12); // degrees a second: a slow, readable turn (pass 1's 3D-mouse drift ran at about 450°/s)
@@ -138,7 +149,7 @@ export async function act1(d) {
 
   await d.beat("get-vibecad", "VibeCAD runs in your browser at mikepkes dot github dot io slash CAD, or as a desktop app from the project's GitHub releases. It's free, it's open source under the MIT licence, and it will stay that way.", async () => {
     await d.api("cursor", false);
-    await d.api("titleCard", { title: "VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Always will be"] });
+    await d.api("titleCard", { title: "Get VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Always will be"] });
   });
 
   await d.beat("the-room", "Start a new document. Four places matter: the model in the middle, its history along the bottom, its numbers on the left, and two shortcuts. Command K runs anything you can type, and Space opens the action ring.", async () => {

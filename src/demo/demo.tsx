@@ -24,7 +24,7 @@ import { replayClient, recordingClient, type AgentCache } from "./agentReplay";
 import * as stand from "./stand";
 import "./demo.css";
 
-interface TitleCard { title: string; subtitle?: string; chips?: string[] }
+interface TitleCard { title: string; subtitle?: string; chips?: string[]; /** The opening title: bigger, on an opaque ground. */ hero?: boolean }
 interface LowerThird { title: string; sub?: string }
 
 const useDemo = create<{
@@ -48,7 +48,7 @@ function Layer() {
   return (
     <div className="demo-layer">
       {title && (
-        <div className="demo-title">
+        <div className={`demo-title${title.hero ? " hero" : ""}`}>
           <h1>{title.title}</h1>
           {title.subtitle && <p>{title.subtitle}</p>}
           {title.chips && <div className="demo-chips">{title.chips.map((c) => <span key={c}>{c}</span>)}</div>}

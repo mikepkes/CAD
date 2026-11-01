@@ -19,6 +19,11 @@ open, so the next pass starts from here rather than from memory.
   - **Tests:** `test/clockwork.build.test.ts` checks the dwell and the step values, that the slot points at the pin through a step, and that the drive is clear at crank 140°, 165°, 195° and 220°.
   - **Act 3:** the clockwork clip ends on a close-up of three steps.
 - **"The URL on the burnt-in subtitles is spelled out."** The narration says "mikepkes dot github dot io slash CAD" so the voice reads it right. The captions now write it out as `mikepkes.github.io/CAD` (`written()` in `video/edit.mjs`, applied after chunking so the dots don't split sentences). It only matches words ending in a real domain, so "a dot on the plate" is left alone. The cue sheet keeps the spoken form.
+- **"We should probably have a title screen right after the montage."**
+  - **The title:** a silent *title* beat opens Act 1. It shows a large "VibeCAD" with an accent V and "Parametric CAD in your browser. Drag it, type it, or just ask." on an opaque ground, held for 2.6 s.
+  - **No flash of the model:** the card goes up in the preroll, before the take starts, so the montage cuts straight to it.
+  - **Edit:** silent beats get no cue or caption.
+  - **Get VibeCAD:** the later download card is retitled "Get VibeCAD", so it doesn't repeat the title.
 - **"The montage should only have one shot of each model."** It now has 8 shots, one per model: gyroscope, clockwork, scissor lift, star box, force analysis, gimbal, leg vise, lamp shade. Dropped: planetary, worm, Geneva, shop drawing, agent build. The caption is now "Sections, gears, mechanisms, forces, and parts built just by asking."
 
 ## Pass 4 (2026-11-01): your pass 3 review
