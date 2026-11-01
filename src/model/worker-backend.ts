@@ -20,13 +20,16 @@ export class WorkerGeometryBackend implements GeometryBackend {
   private readyResolve: (() => void) | null = null;
   private seq = 1;
   private pending = new Map<number, (r: GeometryResponse) => void>();
+  private progress = new Map<number, (fraction: number) => void>();
 
   constructor() {
     this.worker = new Worker(new URL("./geometry.worker.ts", import.meta.url), { type: "module" });
     this.worker.onmessage = (e: MessageEvent) => {
       const msg = e.data as { kind: "ready" } | GeometryResponse;
       if (msg.kind === "ready") { this.isReady = true; this.readyResolve?.(); return; }
+      if (msg.kind === "progress") { this.progress.get(msg.id)?.(msg.fraction); return; }
       const resolve = this.pending.get(msg.id);
+      this.progress.delete(msg.id);
       if (resolve) { this.pending.delete(msg.id); resolve(msg); }
     };
   }
@@ -40,16 +43,17 @@ export class WorkerGeometryBackend implements GeometryBackend {
   }
   ready(): boolean { return this.isReady; }
 
-  private send(req: GeometryRequestInit): Promise<GeometryResponse> {
+  private send(req: GeometryRequestInit, onProgress?: (fraction: number) => void): Promise<GeometryResponse> {
     const id = this.seq++;
+    if (onProgress) this.progress.set(id, onProgress);
     return new Promise((resolve) => {
       this.pending.set(id, resolve);
       this.worker.postMessage({ ...req, id } as GeometryRequest);
     });
   }
 
-  async evaluate(doc: CadDocument): Promise<EvaluateResult> {
-    const r = await this.send({ kind: "evaluate", doc });
+  async evaluate(doc: CadDocument, onProgress?: (fraction: number) => void): Promise<EvaluateResult> {
+    const r = await this.send({ kind: "evaluate", doc }, onProgress);
     if (r.kind === "evaluate") return { solids: r.solids, facePlanes: r.facePlanes };
     throw new Error(r.kind === "error" ? r.message : "evaluate failed");
   }

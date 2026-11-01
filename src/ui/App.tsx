@@ -24,6 +24,7 @@ import { PickMenu } from "./PickMenu";
 import { startAssist } from "../model/assistController";
 import { registerAppPanels } from "../model/appPanels";
 import { SideResizer } from "./SideResizer";
+import { BuildProgress } from "./BuildProgress";
 
 function Toast() {
   const toast = useStore((s) => s.toast);
@@ -79,6 +80,7 @@ export function App() {
             <Viewport overlays={<>{workbench && <WorkbenchOverlay />}<LensOverlay /></>} />
             <PanelToggles />
             <Toast />
+            <BuildProgress />
             <ExtrudePanel />
             <AgentPanel />
           </div>

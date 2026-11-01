@@ -9,7 +9,7 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D, kernelErrorMessage } from "../occ/kernel";
-import { evaluateFeatures, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
+import { evaluateFeatures, withBuildProgress, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
 import { meshesTo3mf } from "../export/threemf";
 import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
@@ -44,8 +44,9 @@ export interface GeometryBackend {
   init(opts: KernelInitOptions): Promise<void>;
   /** True once the kernel is loaded and jobs will produce geometry. */
   ready(): boolean;
-  /** Evaluate every feature into display meshes, plus re-resolved face-sketch planes. */
-  evaluate(doc: CadDocument): Promise<EvaluateResult>;
+  /** Evaluate every feature into display meshes, plus re-resolved face-sketch planes;
+   *  `onProgress` hears how far it has got (0…1) as it goes. */
+  evaluate(doc: CadDocument, onProgress?: (fraction: number) => void): Promise<EvaluateResult>;
   /** World-space B-rep edges of one feature's solid (for projection into a sketch). */
   edges(doc: CadDocument, featureId: string): Promise<Edge3D[]>;
   /** STL/STEP bytes for one feature's solid, or (featureId null) the whole model
@@ -175,7 +176,9 @@ export type GeometryResponse =
   | { id: number; kind: "distance"; distance: number }
   | { id: number; kind: "analyze"; bodies: BodyAnalysisResult[] }
   | { id: number; kind: "drawing"; svg: string; parts: CutPart[] }
-  | { id: number; kind: "error"; message: string };
+  | { id: number; kind: "error"; message: string }
+  /** Not an answer: how far a running job has got (0…1), sent while it works. */
+  | { id: number; kind: "progress"; fraction: number };
 
 /** GeometryRequest without the id field, distributing over the union. */
 export type GeometryRequestInit = GeometryRequest extends infer T ? (T extends { id: number } ? Omit<T, "id"> : never) : never;
@@ -200,11 +203,11 @@ export function meshTransferables(solids: Record<string, SolidEval>): ArrayBuffe
  * `parentPort` — just a request in, a response plus its transfer list out. The
  * kernel must already be initialized in whatever realm this runs in.
  */
-export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache): Promise<{ res: GeometryResponse; transfer: ArrayBuffer[] }> {
+export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache, onProgress?: (fraction: number) => void): Promise<{ res: GeometryResponse; transfer: ArrayBuffer[] }> {
   try {
     const scope = scopeOf(req.doc);
     if (req.kind === "evaluate") {
-      const solids = evaluateForRender(req.doc, scope, cache);
+      const solids = withBuildProgress(onProgress, () => evaluateForRender(req.doc, scope, cache));
       return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(req.doc) }, transfer: meshTransferables(solids) };
     }
     if (req.kind === "edges") {
@@ -250,8 +253,8 @@ export class InlineGeometryBackend implements GeometryBackend {
     this.isReady = isKernelReady();
   }
   ready(): boolean { return this.isReady; }
-  async evaluate(doc: CadDocument): Promise<EvaluateResult> {
-    const solids = evaluateForRender(doc, scopeOf(doc), this.cache);
+  async evaluate(doc: CadDocument, onProgress?: (fraction: number) => void): Promise<EvaluateResult> {
+    const solids = withBuildProgress(onProgress, () => evaluateForRender(doc, scopeOf(doc), this.cache));
     return { solids, facePlanes: collectFacePlanes(doc) };
   }
   async edges(doc: CadDocument, featureId: string): Promise<Edge3D[]> {
