@@ -67,13 +67,15 @@ export async function act3(d) {
   await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a section view, then a motion study", async () => {
     // the section: tick Section in the toolbar, cut on the vertical XZ plane through the middle
     await d.api("cursor", true);
-    const sec = await d.rect(".grid-controls label", "Section");
+    const at = await d.toolbar("section");
+    const sec = await d.rect(`${at} .grid-controls label`, "Section");
     await d.click(sec.x + 10, sec.cy);
     await d.settle(300);
-    const plane = d.page.locator(".grid-controls select[title='Section plane']"), pb = await plane.boundingBox();
+    const plane = d.page.locator(`${at} .grid-controls select[title='Section plane']`), pb = await plane.boundingBox();
     await d.move(pb.x + pb.width / 2, pb.y + pb.height / 2);
     await plane.selectOption("XZ");
     await d.settle(300);
+    if (at.includes("menu")) { await d.key("Escape"); await d.settle(200); } // close the more menu over the view
     await d.api("cursor", false);
     // square to the cut face, then in on a pivot: the middle ring's cone pin, pointing into the frame ring's socket
     await d.api("aim", { dir: [0, 1, 0.0001], ms: 2000, margin: 1.05 });
@@ -105,6 +107,50 @@ export async function act3(d) {
       await d.api("poseSweep", "turn", 3204, 4068, 3000, { ease: false });
     });
   } else d.note("no clockwork example yet: gears clip skipped");
+  if (hasExample("walker")) {
+    await clip("walker", "walker", "Jansen wind walker", "one crank, twelve legs, overlapping strides", async () => {
+      // posed from the crank angle: the legs' joint positions are parameters that follow `t`
+      await d.api("aim", { dir: [0.35, -1, 0.3], ms: 1000, margin: 0.85 });
+      await d.api("poseSweep", "t", 0, 360, 3600, { ease: false });
+      d.pick("walker");
+      await d.api("poseSweep", "t", 360, 540, 1800, { ease: false });
+      await d.api("aim", { dir: [0.9, -0.6, 0.15], ms: 1500, margin: 0.8 });
+      await d.api("poseSweep", "t", 540, 900, 3000, { ease: false });
+      await d.api("poseEnd");
+    });
+  } else d.note("no walker example yet: walker clip skipped");
+  await clip("skadis", "skadis", "SKÅDIS gravity holder", "the load's own weight closes the grip", async () => {
+    await d.api("aim", { dir: [0.25, -1, 0.35], ms: 1000, margin: 0.9 });
+    await d.api("poseSweep", "drop", 0, 6.4, 2600);
+    d.pick("skadis holder");
+    await d.wait(900);
+    await d.api("poseSweep", "drop", 6.4, 0, 1800);
+    // closer, from below the front: the pinions and parallelogram arms on the cheeks
+    await d.api("aim", { dir: [0.6, -1, -0.35], box: await d.api("componentBox", ["Lower arm, right", "Upper arm, right", "Pad, right", "Lower arm, left", "Upper arm, left", "Pad, left", "Rack"]), ms: 1400, margin: 1.15 });
+    await d.api("poseSweep", "drop", 0, 6.4, 2400);
+    await d.wait(700);
+    await d.api("poseEnd");
+  });
+  await clip("handlebar", "handlebar", "Bike handlebar", "a 3D sweep with a tapering section, a wrapped hex grip", async () => {
+    await d.api("aim", { dir: [0.3, -1, 0.55], ms: 1000, margin: 0.8 });
+    await d.api("turntable", 10);
+    await d.wait(2600);
+    await d.api("turntable", null);
+    await d.api("aim", { dir: [0.6, -0.8, 0.5], box: await d.api("componentBox", ["Grip R", "Collar R", "End plug R"]), ms: 1800, margin: 1.1 });
+    await d.wait(500); d.pick("handlebar grip");
+    await d.wait(1600);
+    await d.api("aim", { dir: [0.2, -0.7, 0.9], box: await d.api("componentBox", ["Stem", "Faceplate", "Faceplate bolts", "Top cap"]), ms: 1600, margin: 1.2 });
+    await d.wait(1200);
+  });
+  await clip("origami", "origami", "Paper airplane", "a flat sheet to a finished dart, fold by fold", async () => {
+    await d.api("poseSweep", "fold", 6, 0, 1); // start flat
+    await d.api("aim", { dir: [0.4, -0.8, 0.9], ms: 900, margin: 0.75 });
+    d.pick("origami folds", { len: 2.2, speed: 3 }); // the whole fold, sped up: the montage's longer shot
+    await d.api("poseSweep", "fold", 0, 6, 6600, { ease: false });
+    await d.api("aim", { dir: [0.8, -0.5, 0.45], ms: 1500, margin: 0.85 });
+    await d.wait(800);
+    await d.api("poseEnd");
+  });
   await clip("scissor-jointed", "scissor-jointed", "Jointed scissor lift", "the stage count is a slider, and it still moves", async () => { await sweep(d, "stages", [3, 4, 5, 4, 3], 2600); d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600); });
   await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", async () => { await sweep(d, "width", [64, 76], 900); d.pick("star box"); await sweep(d, "width", [88, 76, 64], 2100); });
 
@@ -117,7 +163,7 @@ export async function act3(d) {
   await d.beat("bistable-forces", async () => {
     await d.lower("Bistable switch", "Claude opens the force analysis for you");
     await d.api("cursor", true);
-    await d.clickEl("button", "Agent");
+    await d.clickEl(`${await d.toolbar("agent")} button`, "Agent");
     await d.clickEl(".agent-input textarea");
     await d.type(forcesCache.prompt, 40);
     await d.key("Enter");
@@ -180,7 +226,7 @@ export async function act3(d) {
   await d.beat("agent", async () => {
     await d.lower("Ask Claude", "it builds with the same commands you do");
     await d.api("cursor", true);
-    await d.clickEl("button", "Agent");
+    await d.clickEl(`${await d.toolbar("agent")} button`, "Agent");
     const ask = async (text, label) => {
       await d.clickEl(".agent-input textarea");
       await d.type(text, 40);

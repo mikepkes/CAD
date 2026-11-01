@@ -20,7 +20,7 @@ const root = join(new URL(".", import.meta.url).pathname, "takes", run);
 // must not happen inside a take (pass 2 lost its first second to one). Load the app and every example once.
 if (!dry) {
   const warm = await Director.open({ url, takeDir: join(root, "warmup"), record: false, headless: true });
-  for (const name of ["gyroscope", "clockwork", "bistable", "roubo"]) {
+  for (const name of ["gyroscope", "clockwork", "walker", "skadis", "handlebar", "origami", "bistable", "roubo"]) {
     await warm.run(async (n) => { const r = await fetch(`/examples/${n}.json`); if (r.ok) await window.__vibecadDemo.openText(await r.text(), `${n}.vibecad.json`); }, name).catch(() => {});
   }
   await warm.close();

@@ -58,6 +58,14 @@ export const LINES = {
       "A gyroscope that prints in one piece, already assembled. Cut it open and turn square to the cut: each ring hangs on cone pins that come to a point inside a socket, with just enough clearance to spin. Then the motion study turns every joint through a full circle and checks that nothing collides.",
     clockwork:
       "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train. The planets roll inside the ring gear, and the worm creeps its wheel round at a fraction of the speed. And a Geneva drive turns steady motion into steps: the pin catches a slot, flicks the star a quarter turn, and the locking disc holds it still until the next.",
+    walker:
+      "A wind walker in the spirit of Theo Jansen's beach animals. One crank turns twelve legs of eleven bars each, sixty degrees apart, so some feet are always gliding along the ground while the rest lift and swing forward.",
+    skadis:
+      "A pegboard holder that grips by weight. Set something in it, and its weight pushes a rack down between two pinions, swinging the side pads in to clamp it. The heavier it is, the harder it holds, and every part prints, pins included.",
+    handlebar:
+      "Organic surfaces: a mountain-bike cockpit. The bar is one sweep along a 3D curve, tapering from the stem clamp to the grips, and the rubber grips wear a hex pattern wrapped round their wings.",
+    origami:
+      "And paper. One slider takes a flat sheet through every fold to a finished dart, each layer kept a paper's thickness from the next, white on one side and red on the other.",
     "scissor-jointed":
       "A scissor lift where even the number of stages is a slider, patterned as a jointed assembly that still moves.",
     starbox:

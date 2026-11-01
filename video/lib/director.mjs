@@ -158,7 +158,8 @@ export class Director {
   }
   note(text) { this.timing.notes.push({ t: this.now(), text }); }
   /** Mark this moment for the intro montage: the edit cuts a fraction of a second from here into the cold open. */
-  pick(label) { this.timing.picks.push({ t: this.now(), label }); }
+  /** Mark a moment for the intro montage: a third of a second from here, or `len` seconds played `speed` times fast. */
+  pick(label, { len, speed } = {}) { this.timing.picks.push({ t: this.now(), label, ...(len ? { len } : {}), ...(speed ? { speed } : {}) }); }
   async lower(title, sub) { await this.api("lowerThird", title ? { title, sub } : null); }
 
   // ---- input ----
@@ -180,6 +181,18 @@ export class Director {
     await sleep(70);
     await this.page.mouse.up({ button });
     await sleep(150);
+  }
+  /** The selector for toolbar item `key` (its `data-ovf`) where it can be clicked: on the bar, or, when the bar is
+   *  too narrow for it, in the "more" menu, which this opens. */
+  async toolbar(key) {
+    const onBar = `.k-ovf-item[data-ovf="${key}"]:not([hidden])`;
+    if (await this.page.locator(onBar).count()) return onBar;
+    const inMenu = `.k-ovf-menu-item[data-ovf="${key}"]`;
+    if (!(await this.page.locator(inMenu).count())) {
+      await this.clickEl(`.k-ovf:has(> .k-ovf-item[data-ovf="${key}"]) > .k-ovf-more .k-ovf-more-btn`);
+      await sleep(350);
+    }
+    return inMenu;
   }
   async clickEl(selector, text, opts) { const r = await this.rect(selector, text); await this.click(r.cx, r.cy, opts); return r; }
   async clickWorld(p, opts) { const s = await this.world(p); await this.click(s.x, s.y, opts); return s; }

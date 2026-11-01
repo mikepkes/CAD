@@ -95,7 +95,7 @@ const turn = { rate: 0, target: 0, raf: 0 };
 
 /** The director's handle on the app. Every method is plain data in, plain data out (it crosses Playwright). */
 /** The pose sweeps' running state: which document's parts are posed, and the parameter values they're posed at. */
-let pose: { doc: unknown; scope: Record<string, number>; sheets: { id: string; seq: NonNullable<NonNullable<SolidEval["sheet"]>["sequence"]>; progress: string; last?: number }[] } | null = null;
+let pose: { doc: unknown; scope: Record<string, number>; overrides: Record<string, string>; sheets: { id: string; seq: NonNullable<NonNullable<SolidEval["sheet"]>["sequence"]>; progress: string; last?: number }[] } | null = null;
 
 const api = {
   // ---- waiting ----
@@ -227,12 +227,14 @@ const api = {
         const f = doc.features[sol.featureId], seq = sol.sheet?.sequence;
         return f?.kind === "sheet" && f.progressExpr && seq && sol.mesh ? [{ id: sol.featureId, seq, progress: f.progressExpr }] : [];
       });
-      pose = { doc, scope: { ...resolveParameters(doc.parameters).scope }, sheets };
+      pose = { doc, scope: { ...resolveParameters(doc.parameters).scope }, overrides: {}, sheets };
       scene.beginAnimation(buildBodies(doc, st.solids as never), resolveComponentWorld(doc, pose.scope), true);
     }
     const p = pose;
+    // re-solved each step, so parameters that follow this one (a linkage's joint positions) follow it too
     const at = (v: number) => {
-      p.scope[name] = v;
+      p.overrides[name] = String(v);
+      p.scope = resolveParameters(doc.parameters.map((q) => (p.overrides[q.name] != null ? { ...q, expr: p.overrides[q.name] } : q))).scope;
       scene.setAnimationPose(resolveComponentWorld(doc, p.scope));
       for (const sh of p.sheets) {
         let k: number;
