@@ -4,6 +4,38 @@ Running notes for the automated tutorial video, newest pass first. Each pass
 records what to keep doing, what broke and how it was fixed, and what is still
 open, so the next pass starts from here rather than from memory.
 
+## Pass 4 (2026-11-01): your pass 3 review
+
+### Your review of pass 3, and what changed
+
+- **The model blinked out while a side panel was resized.** Fixed in the
+  app (a resize now redraws at once); see "From reviewing pass 3" below.
+- **The pin on the block jumped about while its size was dragged.** Fixed in
+  the app (stable face, true centre, no side-flipping near the middle).
+- **The coaster wasn't impressive, and the agent should take a refinement.**
+  The agent beat is now a two-prompt conversation (`video/mock/agent-vase.json`,
+  which replaces the coaster):
+  1. "Design a twisted vase…": three parameters, six hexagon sections up the
+     height (each 18° on from the one below, sized from `width`), a loft
+     through them and a shell with an open top;
+  2. "Now turn it into a lamp shade…": three vertical planes 60° apart, a
+     3 × 7 grid of round windows on each, cut through both walls, then a white
+     PETG material.
+  The cache was made by running every tool call in a fresh document, so the
+  ids it refers to are the ones the app creates; every sketch and feature is
+  named, so organizational assist never renames one mid-replay (a rename uses
+  up an id and would shift the rest). `AgentCache.followUps` holds the
+  refinement prompts; the script types each after the previous run ends.
+  The vase and the lamp shade are both montage picks.
+
+### What broke this pass, and the fix
+
+| Problem | Cause | Fix |
+|---|---|---|
+| The lamp shade stayed lavender after "make it in white PETG" | A loft has no single sketch, so the viewport found no component for it and ignored the document-wide (root) material | App: `materialForComponent` falls back to the root component (also fixes 3MF export and the cut list) |
+| The last sketch's dimension and a DOF count stayed on screen after the agent finished | The agent's feature commands switched to model mode but left the sketch open | App: a feature from the agent closes the open sketch, as finishing one does |
+| The loft twisted much less than designed | Hexagons repeat every 60°: steps of 30° or more between sections made the loft match the nearer corners and twist back | Six sections 18° apart |
+
 ## Pass 3 (2026-11-01): your pass 2 review, and the rename
 
 Recorded once the review notes were in. Each note below was acted on; "What
@@ -178,6 +210,26 @@ mikepkes.github.io/CAD while the repository is named CAD.
 | The zebra close-up aimed past the corner | Same: the default-size corner | Same: actual bounds |
 | The worm's montage pick landed in the cut after the clip | Picked after the last sweep | Pick mid-sweep |
 | Vise close-up too tight, bench clipped at the right | Margins | Vise 1.2, bench 0.7 |
+
+### From reviewing pass 3
+
+- **The model blinked out whenever a side panel was resized** (several
+  times in the cut, wherever the Parameters panel widened or narrowed).
+  Resizing the canvas clears it, and nothing drew again until the next
+  animation frame, so the browser could paint it blank. Fixed in the app:
+  `SceneManager.onResize` redraws at once. `video/checks/resizeFlicker.mjs`
+  measures it: 232 of 240 frames blank during a resize before, 0 after.
+
+- **The feature pin on the block jumped about while its size was dragged.**
+  Three causes, all in the app: the pin sat on the largest face, which
+  switched between top and sides as the box changed shape; it sat on the
+  centre of the triangle nearest the face's centre, which hopped between the
+  face's two triangles; and its leader pointed away from the viewport
+  centre, flipping sides whenever the anchor crossed the middle. Now it
+  prefers the largest upward-facing face, sits on the face's true centre,
+  and keeps to the north-east within 60 px of the middle.
+  `video/checks/pinJitter.mjs` drags a box's number as Act 1 does: the
+  largest jump between frames was 126 px, now 0.5 px.
 
 ### Still open after pass 3
 
