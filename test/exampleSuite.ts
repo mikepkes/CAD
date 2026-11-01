@@ -18,8 +18,8 @@
 // own (test/examples.<name>.test.ts), so in a kernel of its own: OCC keeps some
 // memory from every boolean (tens of MB for a pair of helical gears), and a gear
 // train's collision sweep, sharing the kernel with every other example, ran it
-// out of memory. A file with the same bytes as one already listed (an old copy
-// under examples/) is checked once.
+// out of memory. A file holding the same model as one already listed (an old copy
+// under examples/, maybe without the titles and labels) is checked once.
 //
 // The default run sweeps each drive at three of its six samples (its ends and
 // one in between; a bare revolute drive every 90°, not 30°), and leaves a
@@ -43,9 +43,15 @@ import type { CadDocument } from "../src/core/document";
 
 const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
 
-// public/examples/ first: it is what the app serves, so a byte-identical copy under examples/ is the one dropped
+// public/examples/ first: it is what the app serves, so an old copy of the same model under examples/ is the one dropped
 const DIRS = ["../public/examples/", "../examples/"];
-const digest = (url: URL) => createHash("sha256").update(readFileSync(url)).digest("hex");
+/** The model a file holds: its recipe without the display-only commands (titles, labels), which build nothing. */
+const DISPLAY_ONLY = new Set(["document.describe", "parameter.describe"]);
+const digest = (url: URL) => {
+  const d = JSON.parse(readFileSync(url, "utf8")) as { operations: { type: string; params: unknown; suppressed?: boolean }[]; hidden?: string[] };
+  const model = { ops: d.operations.filter((o) => !DISPLAY_ONLY.has(o.type)).map((o) => [o.type, o.params, !!o.suppressed]), hidden: d.hidden ?? [] };
+  return createHash("sha256").update(JSON.stringify(model)).digest("hex");
+};
 export const EXAMPLES = DIRS.flatMap((d) => {
   const dir = new URL(d, import.meta.url);
   return readdirSync(dir).filter((f) => f.endsWith(".json")).sort().map((f) => ({ name: `${d.replace("../", "")}${f}`, url: new URL(f, dir) }));
