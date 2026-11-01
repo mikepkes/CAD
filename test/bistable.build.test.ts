@@ -20,7 +20,7 @@ import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
 import { flexureEquilibria, flexureSweep } from "../src/sim/flexure";
 import { materialForComponent } from "../src/core/document";
-import { HINGE_MATERIALS as MATERIALS, DEFAULT_HINGE_MATERIAL as DEFAULT_MATERIAL, num, pickBy } from "./flexure-materials";
+import { HINGE_MATERIALS as MATERIALS, DEFAULT_HINGE_MATERIAL as DEFAULT_MATERIAL, num, pickBy, printedMaterial } from "./flexure-materials";
 import { InlineGeometryBackend } from "../src/core/geometry/backend";
 import { readStoredZip, modelObjects, openEdges } from "./threemf-read";
 import type { CadSession } from "../src/core/command/session";
@@ -115,7 +115,7 @@ async function buildBistable(s: CadSession, opts: { span?: number; arch?: number
   await dis(s, "parameter.add", { name: "thickness", expression: THICKNESS });
   await dis(s, "parameter.add", { name: "rise", expression: "arch * thickness" });
   const mats: string[] = [];
-  for (const m of MATERIALS) mats.push((await dis(s, "material.create", { name: m.name, kind: "plastic", finish: m.finish, color: m.color, youngsModulus: m.E, allowableStrain: m.strain }))[0]);
+  for (const m of MATERIALS) mats.push((await dis(s, "material.create", printedMaterial(m)))[0]);
   const part = async (name: string) => { const c = (await dis(s, "component.create", { name }))[0]; await dis(s, "material.assign", { component: c, materials: mats, by: "material" }); return c; };
   const frame = await part("Frame"), shuttle = await part("Shuttle");
   // where the frame bends: the walls' middles (holding the beam roots) and the

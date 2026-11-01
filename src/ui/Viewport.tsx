@@ -10,7 +10,7 @@ import { resolveParameters } from "../core/parameters";
 import { hiddenIds, bodyVisible, sketchVisible } from "../core/visibility";
 import { compileExpr } from "../math/expr";
 import { materialForComponent } from "../core/document";
-import { woodFrameFromBounds } from "../viewport/material";
+import { materialSpec, woodFrameFromBounds } from "../viewport/material";
 import { ghostSolidViews, useGhost } from "../model/concepts/ghostVariant";
 import { ContextMenu } from "./ContextMenu";
 
@@ -82,7 +82,7 @@ function buildView(s: AppState): ViewData {
       // instance bodies keep their source sketch id, so this resolves for them too).
       const comp = sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined;
       const mat = materialForComponent(doc, comp);
-      const material = mat ? { kind: mat.kind, species: mat.species, finish: mat.finish, color: mat.color, roughness: mat.roughness, metalness: mat.metalness, ringScale: mat.ringScale, grainContrast: mat.grainContrast, poreStrength: mat.poreStrength } : undefined;
+      const material = mat ? materialSpec(mat) : undefined;
       const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;
       return {
         id: sol.featureId,

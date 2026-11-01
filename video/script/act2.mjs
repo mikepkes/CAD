@@ -72,8 +72,42 @@ export async function act2(d) {
     await d.wait(1500);
   });
 
-  await d.beat("will-it-print", "Will it print? Bring up the lens and switch it to overhangs: red would need supports. Then zebra stripes: on the rounded corner they bend smoothly through the curve and on into the flat faces, with no kinks.", async () => {
+  await d.beat("materials", "Materials are one click, each drawn as it really looks: polished brass, walnut, grip rubber. Or as it will print: PLA, with its layer lines. Print it on its side instead, and the layers turn with it. Across the layers is a print's weak direction, and the strength studies take it into account.", async () => {
     await toggle(d, "Space"); await toggle(d, "Ledger");
+    await toggle(d, "Materials"); await d.settle(300);
+    await d.api("sideWidth", "right", 400, 500);
+    const preset = async (name) => {
+      const el = d.page.locator(".mats-preset", { hasText: name }).first();
+      await el.scrollIntoViewIfNeeded();
+      await d.clickEl(".mats-preset", name);
+      await d.settle(400);
+    };
+    await d.api("aim", { dir: [1, -0.8, 0.5], ms: 1000, margin: 0.95 });
+    await preset("Polished brass"); await d.api("turntable", 10); await d.wait(1500); await d.api("turntable", null); await d.shot("brass");
+    await preset("Walnut"); await d.wait(1300); await d.shot("walnut");
+    await preset("Grip rubber"); await d.wait(1300); await d.shot("rubber");
+    await preset("PLA"); await d.wait(500);
+    // close on the slanted back, where the layers show as lines up its face
+    const b = (await d.api("bounds"))[0];
+    // about 20 mm of the slanted back's face, mid-width (not the side profile, where layers along X can't show):
+    // close enough that 0.2 mm layers are drawn
+    const cx = (b.min.x + b.max.x) / 2, cy = b.min.y + (b.max.y - b.min.y) * 0.62, cz = b.min.z + (b.max.z - b.min.z) * 0.55;
+    await d.api("aim", { dir: [0.3, -1, 0.6], box: { min: { x: cx - 8, y: cy - 8, z: cz - 8 }, max: { x: cx + 8, y: cy + 8, z: cz + 8 } }, ms: 1400, margin: 0.6 });
+    await d.wait(1600); await d.shot("pla-flat");
+    await d.clickEl("button[aria-label='Edit PLA']"); await d.wait(500);
+    await d.clickEl("[aria-label='Print direction'] button", "=X");
+    // on its side the layers cross this face at their true 0.2 mm (flat, the slope spread them out): push in to show them
+    await d.api("aim", { dir: [0.3, -1, 0.6], box: { min: { x: cx - 8, y: cy - 8, z: cz - 8 }, max: { x: cx + 8, y: cy + 8, z: cz + 8 } }, ms: 1200, margin: 0.38 });
+    await d.settle(400); await d.wait(1600); await d.shot("pla-side");
+    await d.clickEl("[aria-label='Print direction'] button", "=Z");
+    await d.api("aim", { dir: [0.3, -1, 0.6], box: { min: { x: cx - 8, y: cy - 8, z: cz - 8 }, max: { x: cx + 8, y: cy + 8, z: cz + 8 } }, ms: 900, margin: 0.6 });
+    await d.settle(400); await d.wait(700);
+    await toggle(d, "Materials");
+    await d.api("sideWidth", "right", 272, 400);
+    await d.api("aim", { dir: [1, -1, 0.7], ms: 900, margin: 1.0 });
+  }, { lower: { title: "Materials", sub: "metal, wood, rubber, and prints with their layer lines" } });
+
+  await d.beat("will-it-print", "Will it print? Bring up the lens and switch it to overhangs: red would need supports. Then zebra stripes: on the rounded corner they bend smoothly through the curve and on into the flat faces, with no kinks.", async () => {
     await toggle(d, "Lens"); await d.settle(400);
     await d.move(820, 420, 500);
     await d.key("5"); await d.settle(400); await d.wait(1800);

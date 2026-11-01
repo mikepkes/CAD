@@ -59,7 +59,7 @@ export interface Density {
 /**
  * The one density every mass estimate uses: a density field on the material when
  * it has one (`density`, or `mechanical.density`), else a guess from its kind
- * (wood 0.7, plastic 1.2, metal 2.7), else aluminium. The source says which.
+ * (wood 0.7, plastic 1.2, rubber 1.15, metal 2.7), else aluminium. The source says which.
  */
 export function densityOf(m: Material | undefined): Density {
   const direct = (m as { density?: unknown } | undefined)?.density;
@@ -68,7 +68,8 @@ export function densityOf(m: Material | undefined): Density {
   if (typeof mech === "number" && mech > 0) return { density: mech, source: `${m!.name} (${mech} g/cm³)` };
   switch (m?.kind) {
     case "wood": return { density: 0.7, source: `${m.name} (wood, 0.7 g/cm³ assumed)` };
-    case "plastic": return { density: 1.2, source: `${m.name} (plastic, 1.2 g/cm³ assumed)` };
+    case "plastic": case "printed": return { density: 1.2, source: `${m.name} (plastic, 1.2 g/cm³ assumed)` };
+    case "rubber": return { density: 1.15, source: `${m.name} (rubber, 1.15 g/cm³ assumed)` };
     case "metal": case "painted": return { density: DEFAULT_DENSITY, source: `${m.name} (metal, ${DEFAULT_DENSITY} g/cm³ assumed)` };
     default: return { density: DEFAULT_DENSITY, source: `no material: aluminium ${DEFAULT_DENSITY} g/cm³ assumed` };
   }

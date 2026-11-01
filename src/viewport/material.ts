@@ -6,20 +6,28 @@
 // and each board, cut from its own virtual log, reads as a separate piece.
 //
 // Everything is driven by a species preset plus overridable parameters, and the
-// same factory handles metal (PBR + optional brushed anisotropy) and plastic
-// (matte/satin/gloss), so the system generalizes beyond wood.
+// same factory handles the physically based kinds (metal, plastic, painted,
+// rubber, printed), which share one surface layer: micro-roughness, procedural
+// textures, brushing and printed layer lines.
 import * as THREE from "three";
 
+export type MaterialAxis = "x" | "y" | "z";
+
 export interface MaterialSpec {
-  kind: "wood" | "metal" | "plastic" | "painted";
+  kind: "wood" | "metal" | "plastic" | "painted" | "rubber" | "printed";
   species?: string;      // wood: a SPECIES key
-  finish?: string;       // metal/plastic: polished | brushed | satin | matte | gloss
+  finish?: string;       // metal/plastic: polished | brushed | satin | matte | gloss (printed: matte | satin | silk)
   color?: string;        // base/tint override (hex)
   roughness?: number;
   metalness?: number;
   ringScale?: number;    // wood: growth-ring spacing (mm)
   grainContrast?: number;// wood: latewood darkness
   poreStrength?: number; // wood: open-grain pores
+  texture?: string;      // none | stipple | dimples | knurl | ribs
+  textureScale?: number; // texture pitch (mm)
+  textureAxis?: MaterialAxis; // ribs: the axis they run across; brushed metal: the brushing direction
+  layerHeight?: number;  // printed: layer height (mm)
+  printAxis?: MaterialAxis;   // printed: the build direction the layers stack along
 }
 
 /** Per-body wood frame: grain runs along `axis`; rings centre on the line through
@@ -249,50 +257,185 @@ function makeWood(spec: MaterialSpec, frame?: WoodFrame): THREE.Material {
   return mat;
 }
 
+// ---- the surface layer every non-wood material shares ------------------------
+// Fine roughness variation (no real surface is CG-flat), procedural textures and
+// printed layer lines, all as a height field turned into a bumped normal in the
+// fragment shader. Patterns live in the body's own coordinates, so they stay on
+// the part as it moves. Each pattern fades out as it gets finer than a couple
+// of pixels, so it never shimmers; layer lines leave a faint sheen behind.
+const SURFACE_GLSL = /* glsl */`
+uniform int uTex; uniform float uTexScale; uniform float uTexDepth; uniform vec3 uTexAxis;
+uniform float uLayer; uniform vec3 uLayerAxis; uniform float uMicro; uniform float uBrush;
+varying vec3 vLPos; varying vec3 vLN;
+varying vec3 vLayerV;                              // the build direction in view space
+struct Surf { float h; float rough; float slope; float ao; };  // slope: d(height)/d(distance along the build direction), exact, for layer lines too fine to difference
+float tri(float x){ return abs(fract(x) - 0.5) * 2.0; }
+// a 2D pattern on a plane (u, v in pitches): 2 dimples, 3 knurl
+float pat2(vec2 uv){
+  if (uTex == 2) { uv.x += 0.5 * mod(floor(uv.y), 2.0); vec2 f = fract(uv) - 0.5; return -smoothstep(0.36, 0.16, length(f)); }
+  return min(tri(uv.x + uv.y), tri(uv.x - uv.y)) - 0.5;
+}
+// triplanar: the pattern on each axis plane, blended by the normal, so a face shows a regular grid whichever way it faces
+float triplanar(vec3 p){
+  vec3 w = pow(abs(normalize(vLN)), vec3(4.0)); w /= (w.x + w.y + w.z);
+  return w.x * pat2(p.yz) + w.y * pat2(p.xz) + w.z * pat2(p.xy);
+}
+Surf surface(vec3 p){
+  Surf S; S.h = 0.0; S.slope = 0.0; S.ao = 1.0; S.rough = uMicro * fbm(p * 0.07) + uMicro * 0.5 * fbm(p * 0.6);
+  float px = length(fwidth(p));                      // mm per pixel here
+  if (uTex > 0) {
+    float aa = 1.0 - smoothstep(0.25, 0.6, px / uTexScale);
+    float h = 0.0;
+    if (uTex == 1) h = fbm(p / uTexScale);
+    else if (uTex == 4) h = smoothstep(0.15, 0.55, tri(dot(p, uTexAxis) / uTexScale));
+    else h = triplanar(p / uTexScale);
+    S.h += uTexDepth * h * aa;
+    S.rough += 0.08 * h * aa;
+  }
+  if (uBrush > 0.0) {                                // brushed: fine streaks along the brushing direction
+    float al = dot(p, uTexAxis); vec3 ac = p - al * uTexAxis;
+    float fine = 1.0 - smoothstep(0.03, 0.12, px);   // the lines are finer than a pixel at most zooms
+    float n = fbm(ac * 1.5 + uTexAxis * al * 0.02) * 0.5 + fbm(ac * 9.0 + uTexAxis * al * 0.05) * 0.5 * fine;
+    S.rough += uBrush * (0.06 + 0.07 * n);
+    S.h += 0.0015 * n * fine;
+  }
+  if (uLayer > 0.0) {                                // printed layer lines: one smooth ridge per layer
+    float x = dot(p, uLayerAxis) / uLayer;
+    float fw = fwidth(x);
+    float aa = 1.0 - smoothstep(0.2, 0.4, fw);       // a sinusoid aliases only near 2 pixels a layer: drawn down to 2.5
+    float c = cos(6.2831853 * x);
+    // a sinusoid (no harmonics finer than a layer to alias), sharpened toward a bead only when a layer spans many pixels
+    float sharp = 1.0 - smoothstep(0.03, 0.08, fw);
+    float d = -sin(6.2831853 * x) * mix(1.0, 1.6 * (0.6 + 0.4 * c), sharp);
+    S.slope = 0.075 * 6.2831853 * d * aa;              // the ridge's slope, exact (no pixel differencing)
+    S.rough += 0.06 * (0.5 - 0.5 * c) * aa * aa + 0.04 * (1.0 - aa);
+    S.ao = 1.0 - 0.14 * (0.5 - 0.5 * c) * aa;       // the valley between beads sits a little in shadow
+  }
+  return S;
+}`;
+
+type Axis = MaterialAxis | undefined;
+const axisVec = (a: Axis, fallback: MaterialAxis) => { const k = a ?? fallback; return new THREE.Vector3(k === "x" ? 1 : 0, k === "y" ? 1 : 0, k === "z" ? 1 : 0); };
+const TEXTURES: Record<string, number> = { none: 0, stipple: 1, dimples: 2, knurl: 3, ribs: 4 };
+
+interface SurfaceOpts { texture?: string; textureScale?: number; textureDepth?: number; textureAxis?: Axis; micro?: number; brush?: number; layer?: number; layerAxis?: Axis }
+
+/** Give a PBR material the shared surface layer: micro-roughness, a texture, brushing, layer lines. */
+function withSurface<M extends THREE.MeshStandardMaterial>(mat: M, o: SurfaceOpts): M {
+  const tex = TEXTURES[o.texture ?? "none"] ?? 0;
+  const scale = o.textureScale ?? 1.5;
+  const uniforms = {
+    uTex: { value: tex },
+    uTexScale: { value: scale },
+    uTexDepth: { value: o.textureDepth ?? scale * (tex === 1 ? 0.06 : 0.16) },
+    uTexAxis: { value: axisVec(o.textureAxis, "z") },
+    uLayer: { value: o.layer ?? 0 },
+    uLayerAxis: { value: axisVec(o.layerAxis, "z") },
+    uMicro: { value: o.micro ?? 0.05 },
+    uBrush: { value: o.brush ?? 0 },
+  };
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vLPos; varying vec3 vLN; varying vec3 vLayerV; uniform vec3 uLayerAxis;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvLPos = transformed; vLN = objectNormal; vLayerV = normalMatrix * uLayerAxis;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\n" + NOISE_GLSL + "\n" + SURFACE_GLSL + "\nSurf gSurf;")
+      .replace("#include <map_fragment>", /* glsl */`
+        #include <map_fragment>
+        gSurf = surface(vLPos);
+        diffuseColor.rgb *= gSurf.ao;
+      `)
+      .replace("#include <roughnessmap_fragment>", /* glsl */`
+        float roughnessFactor = clamp(roughness + gSurf.rough, 0.03, 1.0);
+      `)
+      .replace("#include <normal_fragment_maps>", /* glsl */`
+        #include <normal_fragment_maps>
+        {
+          // bump from the height field (mm), in view space: Mikkelsen's surface-gradient form
+          vec3 pos = -vViewPosition;
+          vec3 dpx = dFdx(pos), dpy = dFdy(pos);
+          float dhx = dFdx(gSurf.h), dhy = dFdy(gSurf.h);
+          vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
+          float det = dot(dpx, r1);
+          vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
+          normal = normalize(abs(det) * normal - grad);
+          // the exact gradient: into view space (gradients transform by the normal matrix), along the surface
+          vec3 g = normalize(vLayerV) * gSurf.slope;
+          normal = normalize(normal - (g - normal * dot(normal, g)));
+        }
+      `);
+  };
+  mat.customProgramCacheKey = () => "surface";
+  mat.userData.surfaceUniforms = uniforms;
+  return mat;
+}
+
 function makeMetal(spec: MaterialSpec): THREE.Material {
   const finish = spec.finish ?? "satin";
-  const rough = spec.roughness ?? (finish === "polished" ? 0.12 : finish === "brushed" ? 0.4 : 0.3);
-  const mat = new THREE.MeshStandardMaterial({
-    color: lin(spec.color ?? "#b7bbc0"),
+  const rough = spec.roughness ?? ({ polished: 0.07, gloss: 0.07, brushed: 0.26, satin: 0.22, matte: 0.42 } as Record<string, number>)[finish] ?? 0.22;
+  const cast = rough >= 0.45; // cast iron and the like: a matte, slightly uneven casting
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: lin(spec.color ?? "#c4c8cc"),
     metalness: spec.metalness ?? 1.0,   // real metals are fully metallic; roughness sets the look
     roughness: rough,
     side: THREE.DoubleSide,
-    envMapIntensity: 1.25,
   });
-  // Cast-iron microstructure: subtle pitted roughness + bump for the rougher metals,
-  // so cast iron reads as a matte, slightly uneven casting rather than flat plastic.
-  if (rough >= 0.45) {
-    const u = { uCast: { value: 1 } };
-    mat.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, u);
-      shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vWPosM;")
-        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvWPosM=(modelMatrix*vec4(transformed,1.0)).xyz;");
-      shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", "#include <common>\n" + NOISE_GLSL + "\nvarying vec3 vWPosM;")
-        .replace("#include <roughnessmap_fragment>", "float roughnessFactor = clamp(roughness + 0.12*fbm(vWPosM*0.22) + 0.06*fbm(vWPosM*1.4), 0.2, 1.0);")
-        .replace("#include <normal_fragment_maps>", /* glsl */`
-          #include <normal_fragment_maps>
-          { float h = 0.5*fbm(vWPosM*0.35) + 0.25*fbm(vWPosM*1.6);
-            vec3 dpx=dFdx(vWPosM), dpy=dFdy(vWPosM); float dhx=dFdx(h), dhy=dFdy(h);
-            vec3 nn=normalize(normal); vec3 r1=cross(dpy,nn), r2=cross(nn,dpx); float det=dot(dpx,r1);
-            vec3 g=(r1*dhx+r2*dhy)/max(abs(det),1e-6); normal=normalize(nn - 0.07*g); }
-        `);
-    };
-    mat.customProgramCacheKey = () => "castmetal";
-  }
-  return mat;
+  return withSurface(mat, {
+    texture: spec.texture ?? (cast ? "stipple" : "none"), textureScale: spec.textureScale ?? (cast ? 3 : undefined), textureDepth: cast && !spec.texture ? 0.05 : undefined,
+    textureAxis: spec.textureAxis, micro: cast ? 0.12 : finish === "polished" ? 0.015 : 0.025, brush: finish === "brushed" ? 1 : 0,
+  });
 }
 
 function makePlastic(spec: MaterialSpec): THREE.Material {
   const finish = spec.finish ?? "satin";
-  const rough = spec.roughness ?? (finish === "gloss" ? 0.15 : finish === "matte" ? 0.8 : 0.45);
-  return new THREE.MeshStandardMaterial({
+  const rough = spec.roughness ?? ({ gloss: 0.14, polished: 0.1, satin: 0.42, matte: 0.72 } as Record<string, number>)[finish] ?? 0.42;
+  const mat = new THREE.MeshPhysicalMaterial({
     color: lin(spec.color ?? "#2f6f4f"),
     metalness: spec.metalness ?? 0.0,
     roughness: rough,
+    clearcoat: finish === "gloss" ? 0.35 : 0,
+    clearcoatRoughness: 0.08,
+    sheen: finish === "matte" ? 0.25 : 0,
+    sheenRoughness: 0.7,
     side: THREE.DoubleSide,
   });
+  return withSurface(mat, { texture: spec.texture, textureScale: spec.textureScale, textureAxis: spec.textureAxis, micro: 0.04 });
+}
+
+function makePainted(spec: MaterialSpec): THREE.Material {
+  // a satin base under a glossy clear coat: the two highlights are what reads as paint
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: lin(spec.color ?? "#2f343c"), metalness: 0, roughness: spec.roughness ?? 0.5,
+    clearcoat: spec.finish === "matte" ? 0.15 : 0.8, clearcoatRoughness: spec.finish === "matte" ? 0.5 : 0.1,
+    side: THREE.DoubleSide,
+  });
+  return withSurface(mat, { texture: spec.texture, textureScale: spec.textureScale, textureAxis: spec.textureAxis, micro: 0.04 });
+}
+
+function makeRubber(spec: MaterialSpec): THREE.Material {
+  // rubber: a dark, rough, low-specular body with a soft sheen at grazing angles
+  // (the velvety rim you see on a tyre or a grip) and a fine moulded stipple
+  const base = lin(spec.color ?? "#232427");
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: base, metalness: 0, roughness: spec.roughness ?? 0.8,
+    specularIntensity: 0.4, ior: 1.52,
+    sheen: 1, sheenRoughness: 0.5, sheenColor: base.clone().multiplyScalar(2.2).addScalar(0.06),
+    side: THREE.DoubleSide,
+  });
+  return withSurface(mat, { texture: spec.texture ?? "stipple", textureScale: spec.textureScale ?? (spec.texture && spec.texture !== "stipple" ? 2 : 0.35), textureDepth: !spec.texture || spec.texture === "stipple" ? 0.025 : undefined, textureAxis: spec.textureAxis, micro: 0.08 });
+}
+
+function makePrinted(spec: MaterialSpec): THREE.Material {
+  // an FDM print: the plastic plus its layer lines, stacked along the build direction
+  const finish = spec.finish ?? "satin";
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: lin(spec.color ?? "#e8e4dc"), metalness: 0,
+    roughness: spec.roughness ?? ({ matte: 0.62, satin: 0.4, silk: 0.22 } as Record<string, number>)[finish] ?? 0.4,
+    sheen: finish === "silk" ? 0.6 : 0.15, sheenRoughness: 0.35, sheenColor: new THREE.Color(1, 1, 1),
+    side: THREE.DoubleSide,
+  });
+  return withSurface(mat, { texture: spec.texture, textureScale: spec.textureScale, textureAxis: spec.textureAxis, micro: 0.04, layer: spec.layerHeight ?? 0.2, layerAxis: spec.printAxis });
 }
 
 function hash01(s: string): number {
@@ -326,13 +469,24 @@ export function woodFrameFromBounds(b: { min: { x: number; y: number; z: number 
   return { axis, pith };
 }
 
+/** The render spec of a document material: its appearance fields, nothing else. */
+export function materialSpec(m: MaterialSpec & { name?: string }): MaterialSpec {
+  const out: MaterialSpec = { kind: m.kind };
+  for (const k of ["species", "finish", "color", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength", "texture", "textureScale", "textureAxis", "layerHeight", "printAxis"] as const) {
+    if (m[k] !== undefined) (out as unknown as Record<string, unknown>)[k] = m[k];
+  }
+  return out;
+}
+
 /** Build a three.js material for a spec (+ per-body wood frame). */
 export function createMaterial(spec: MaterialSpec, frame?: WoodFrame): THREE.Material {
   switch (spec.kind) {
     case "wood": return makeWood(spec, frame);
     case "metal": return makeMetal(spec);
     case "plastic": return makePlastic(spec);
-    case "painted": return makePlastic({ ...spec, finish: spec.finish ?? "satin", metalness: 0 });
+    case "painted": return makePainted(spec);
+    case "rubber": return makeRubber(spec);
+    case "printed": return makePrinted(spec);
     default: return makePlastic(spec);
   }
 }

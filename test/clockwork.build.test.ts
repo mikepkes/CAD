@@ -124,9 +124,9 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   await dis(s, "parameter.add", { name: "turn", expression: "0", min: -RANGE, max: RANGE, step: 1 });
 
   const mat = async (name: string, kind: string, color: string, finish?: string) => (await dis(s, "material.create", { name, kind, color, ...(finish ? { finish } : {}) }))[0];
-  const brass = await mat("Brass", "metal", "#c9a54a", "polished");
-  const bronze = await mat("Bronze", "metal", "#b0703a", "satin");
-  const steel = await mat("Steel", "metal", "#a9aeb5", "brushed");
+  const brass = await mat("Brass", "metal", "#e3c46e", "polished");
+  const bronze = await mat("Bronze", "metal", "#caa07c", "satin");
+  const steel = await mat("Steel", "metal", "#c9cdd2", "brushed");
   const slate = await mat("Base, painted", "painted", "#2f343c");
   const part = async (name: string, material: string, parent?: string) => {
     const c = (await dis(s, "component.create", { name, ...(parent ? { parent } : {}) }))[0];
@@ -282,6 +282,10 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   await joint(wheelC, at(JC), up, dial, "Wheel");
   await joint(crankC, at(S5), up, crank, "Geneva crank");
   await joint(starC, at(STAR), up, star, "Geneva star");
+  // the cut parts' sketches would draw as loose circles over them
+  const cuts = Object.values(s.doc.sketches).filter((k) => ["Locking disc", "Locking disc relief", "Star", "Star slots", "Star locking arcs"].includes(k.name)).map((k) => k.id);
+  const hid = await s.setVisibility(cuts, false);
+  if (!hid.ok) throw new Error(hid.error);
   return ids;
 }
 

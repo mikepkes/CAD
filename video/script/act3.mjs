@@ -127,8 +127,25 @@ export async function act3(d) {
     await d.wait(300); d.pick("force analysis");
     await d.wait(1200);
   }, { minMs: 12000 });
+  await d.beat("print-direction", "It's a print, and prints are weakest across their layers. Flat on the bed, the blades bend along their layers. Stand it on its end, and every blade is pulled across them: the same strain is now a bigger share of a lower limit.", async () => {
+    await d.lower("Print direction", "the strain study knows a print is weaker across its layers");
+    await d.api("cursor", true);
+    await d.run(() => { const st = window.__vibecadDemo.store.getState(); st.agentOpen && st.toggleAgent(); });
+    await d.clickEl(".k-panel-toggle button", "Materials"); await d.settle(300);
+    await d.clickEl("button[aria-label^='Edit TPU 68D']"); await d.wait(600);
+    await d.clickEl("[aria-label='Print direction'] button", "=X");
+    await d.settle(500); await d.wait(900);
+    await d.clickEl(".k-tabs button", "Mechanism"); await d.settle(400);
+    await d.wait(2600);
+    await d.clickEl(".k-tabs button", "Materials"); await d.wait(300);
+    await d.clickEl("[aria-label='Print direction'] button", "=Z");
+    await d.settle(400);
+    await d.clickEl(".k-tabs button", "Mechanism"); await d.settle(300);
+    await d.api("cursor", false);
+    await d.wait(1600);
+  }, { minMs: 9000 });
   await d.cut(async () => {
-    await d.run(() => { const D = window.__vibecadDemo; D.ui.getState().togglePanel("lens", false); D.ui.getState().togglePanel("mechanism", false); D.store.getState().agentOpen && D.store.getState().toggleAgent(); });
+    await d.run(() => { const D = window.__vibecadDemo; D.ui.getState().togglePanel("lens", false); D.ui.getState().togglePanel("mechanism", false); D.ui.getState().togglePanel("materials", false); D.store.getState().agentOpen && D.store.getState().toggleAgent(); });
     await d.clickEl(".side-toggle.right");
   });
 

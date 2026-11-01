@@ -12,7 +12,7 @@
 //   suppress <feature> | unsuppress [<feature>]   suppress / unsuppress
 //   undo | redo
 //   measure <feature> | <feature>                 open the feature's card
-//   ledger|space|lens|workbench                   toggle a concept panel
+//   ledger|space|lens|workbench|materials         toggle a concept panel
 //   <lhs> <=|>=|==|<|> <rhs>                      add a design intent
 //   <hotkey action label>                         run that action
 
@@ -24,7 +24,7 @@ import { quantize, formatValue } from "../../kit/numberMath";
 
 export const VIEWS = ["iso", "front", "top", "right", "back", "left", "bottom"] as const;
 export type ViewName = (typeof VIEWS)[number];
-export const PANELS: ConceptPanel[] = ["workbench", "ledger", "space", "lens"];
+export const PANELS: ConceptPanel[] = ["workbench", "ledger", "space", "lens", "materials"];
 
 export interface ParamInfo { name: string; value: number; min?: number; max?: number; step?: number }
 

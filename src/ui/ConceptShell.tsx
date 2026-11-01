@@ -13,6 +13,7 @@ import { RingOverlay } from "./concepts/ring";
 import { MechanismPanel } from "./concepts/mechanism";
 import { useStore } from "../model/store";
 import { hasFlexures } from "../sim/flexure";
+import { MaterialsPanel } from "./concepts/materials";
 
 /** Switches for the concept surfaces, at the top-right of the viewport; also
  *  mounts the action ring once (it renders into document.body while open). */
@@ -27,6 +28,7 @@ export function PanelToggles() {
         <Button size="sm" on={panels.lens} title="Analysis under a draggable lens" onClick={() => toggle("lens")}>Lens</Button>
         <Button size="sm" on={panels.ledger} title="The model read back as sentences, with design intents" onClick={() => toggle("ledger")}>Ledger</Button>
         <Button size="sm" on={panels.space} title="Two parameters on a map, intents as frontiers" onClick={() => toggle("space")}>Space</Button>
+        <Button size="sm" on={!!panels.materials} title="Materials: metals, plastics, prints, rubber, wood; apply them to parts" onClick={() => toggle("materials")}>Materials</Button>
         {(compliant || panels.mechanism) && <Button size="sm" on={!!panels.mechanism} title="The compliant mechanism: force against travel, its rest positions, the strain in each flexure" onClick={() => toggle("mechanism")}>Mechanism</Button>}
         <IntentButton size="sm" />
       </div>
@@ -45,6 +47,7 @@ export function RightPanel() {
     ...(panels.ledger ? [{ key: "ledger" as const, label: "Ledger" }] : []),
     ...(panels.space ? [{ key: "space" as const, label: "Space" }] : []),
     ...(panels.mechanism ? [{ key: "mechanism" as const, label: "Mechanism" }] : []),
+    ...(panels.materials ? [{ key: "materials" as const, label: "Materials" }] : []),
   ];
   return (
     <>
@@ -53,7 +56,7 @@ export function RightPanel() {
           <Pills ariaLabel="Right panel" value={tab} options={options} onChange={setTab} />
         </div>
       )}
-      {tab === "ledger" && panels.ledger ? <LedgerPanel /> : tab === "space" && panels.space ? <DesignSpacePanel /> : tab === "mechanism" && panels.mechanism ? <MechanismPanel /> : <InspectorPanel />}
+      {tab === "ledger" && panels.ledger ? <LedgerPanel /> : tab === "space" && panels.space ? <DesignSpacePanel /> : tab === "mechanism" && panels.mechanism ? <MechanismPanel /> : tab === "materials" && panels.materials ? <MaterialsPanel /> : <InspectorPanel />}
     </>
   );
 }
