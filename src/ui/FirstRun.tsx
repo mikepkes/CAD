@@ -8,7 +8,11 @@ import { addPrimitive } from "./concepts/contextActions";
 import { ExamplesMenu } from "./ExamplesMenu";
 
 export const WELCOME_LS = "vibecad.welcome.dismissed";
-const dismissedBefore = () => { try { return localStorage.getItem(WELCOME_LS) === "1"; } catch { return false; } };
+// dismissed before, or the tutorial video's demo mode (?demo), which starts from an empty document on purpose
+const dismissedBefore = () => {
+  if (typeof location !== "undefined" && new URLSearchParams(location.search).has("demo")) return true;
+  try { return localStorage.getItem(WELCOME_LS) === "1"; } catch { return false; }
+};
 
 export function FirstRun() {
   const empty = useStore((s) => s.session.doc.operations.length === 0);
