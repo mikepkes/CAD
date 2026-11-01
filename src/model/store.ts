@@ -31,7 +31,7 @@ import type { SolidEval, BuildStep } from "../core/features";
 import { GeometryBackend, InlineGeometryBackend, TopologyOpts, ExportFormat, EvaluateResult } from "../core/geometry/backend";
 import { hasFlexures } from "../sim/flexure";
 import { WorkerGeometryBackend } from "./worker-backend";
-import { runMotionStudy, driveParams, MotionStatus, MotionResult } from "./motionStudy";
+import { runMotionStudy, driveParams, motionKey, MotionStatus, MotionResult } from "./motionStudy";
 import { meshesToStlBinary } from "../core/export/stl";
 import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
@@ -52,12 +52,16 @@ function createGeometryBackend(): GeometryBackend {
 }
 let geometry = createGeometryBackend();
 /** Tests only: put a stand-in geometry backend behind the store. */
-export function __setGeometryBackend(g: GeometryBackend): void { geometry = g; }
+export function __setGeometryBackend(g: GeometryBackend, study?: GeometryBackend): void { geometry = g; if (study) { studyGeometry = study; studyReady = false; } }
 // A second backend dedicated to the motion study, so its 360° sweep runs in
 // parallel with (and never blocks) the live preview on the main backend.
-const studyGeometry = createGeometryBackend();
+let studyGeometry = createGeometryBackend();
 let studyReady = false;
 let motionToken = 0; // bumped to cancel/supersede an in-flight study
+/** Motion verdicts by parameter values (motionKey): a value checked before answers at once. */
+const motionCache = new Map<string, MotionResult>();
+/** How long the last full study of each design took (ms): the first estimate of the next. */
+const motionLastMs = new Map<string, number>();
 let rebuildInFlight: Promise<void> | null = null; // the running preview evaluate (its whole coalesced loop)
 let rebuildDirty = false;    // a newer rebuild was requested while one ran
 let buildToken = 0;          // the latest build started: measurements of an older one are stale
@@ -182,6 +186,12 @@ export interface AppState {
   motionStatus: MotionStatus;
   motionProgress: number; // 0..1 while running
   motionResult: MotionResult | null;
+  /** The verdict before the last edit, shown (as "before your change") until the new one is in. */
+  motionPrevious: MotionResult | null;
+  /** While running: the coarse pass came through clear ({ checked } poses of { total }), the rest is being checked. */
+  motionCoarse: { checked: number; total: number } | null;
+  /** While running: about how many seconds are left (null until there's something to go on). */
+  motionEta: number | null;
   hasMotionStudy: boolean; // the model has driven joints to sweep
   runMotionStudy: () => Promise<void>;
   cancelMotionStudy: () => void;
@@ -691,6 +701,9 @@ export const useStore = create<AppState>((set, get) => {
     motionStatus: "idle",
     motionProgress: 0,
     motionResult: null,
+    motionPrevious: null,
+    motionCoarse: null,
+    motionEta: null,
     hasMotionStudy: false,
     kernelLoading: false,
     toast: null,
@@ -1173,24 +1186,39 @@ export const useStore = create<AppState>((set, get) => {
     },
     runMotionStudy: async () => {
       const doc = get().session.doc;
-      if (!driveParams(doc).length) { set({ hasMotionStudy: false, motionStatus: "idle", motionResult: null }); return; }
+      if (!driveParams(doc).length) { set({ hasMotionStudy: false, motionStatus: "idle", motionResult: null, motionPrevious: null }); return; }
       const token = ++motionToken; // supersede any in-flight study
-      set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null });
+      // a set of values checked before answers at once
+      const key = motionKey(doc);
+      const known = motionCache.get(key);
+      if (known) { set({ hasMotionStudy: true, motionStatus: known.status, motionResult: known, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null }); return; }
+      const lastMs = motionLastMs.get(doc.id);
+      set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null, motionCoarse: null, motionEta: lastMs != null ? Math.round(lastMs / 1000) : null });
+      const started = performance.now();
       try {
         if (!studyReady) { await studyGeometry.init({ wasmUrl: occWasmUrl }); studyReady = studyGeometry.ready(); }
         const res = await runMotionStudy(studyGeometry, doc, {
           steps: 8,
-          onProgress: (f) => { if (token === motionToken) set({ motionProgress: f }); },
+          coarse: 4,
+          onProgress: (f) => {
+            if (token !== motionToken) return;
+            const ms = performance.now() - started;
+            set({ motionProgress: f, motionEta: f > 0 ? Math.max(1, Math.round((ms / f) * (1 - f) / 1000)) : get().motionEta });
+          },
+          onCoarseClear: (checked, total) => { if (token === motionToken) set({ motionCoarse: { checked, total } }); },
           cancelled: () => token !== motionToken,
         });
         if (token !== motionToken) return;            // superseded by a newer run
         if (!res) { set({ motionStatus: "idle" }); return; } // cancelled
-        set({ motionStatus: res.status, motionResult: res, motionProgress: 1 });
+        motionCache.set(key, res);
+        motionLastMs.set(doc.id, performance.now() - started);
+        set({ motionStatus: res.status, motionResult: res, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null });
       } catch (e) {
-        if (token === motionToken) set({ motionStatus: "fail", motionResult: { status: "fail", reason: (e as Error).message, worstOverlap: 0 }, motionProgress: 1 });
+        if (token === motionToken) set({ motionStatus: "fail", motionResult: { status: "fail", reason: (e as Error).message, worstOverlap: 0 }, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null });
       }
     },
-    cancelMotionStudy: () => { motionToken++; set({ motionStatus: "idle", motionProgress: 0 }); },
+    // an edit: the verdict so far becomes "before your change" until the new one is in
+    cancelMotionStudy: () => { motionToken++; set((s) => ({ motionStatus: "idle", motionProgress: 0, motionCoarse: null, motionEta: null, motionPrevious: s.motionResult ?? s.motionPrevious, motionResult: null })); },
     extrudeSketch: async (sketchId, distanceExpr, opts) => {
       if (distanceExpr != null && !opts?.toFace) {
         const problem = expressionProblem(distanceExpr, get().session.doc.parameters.map((p) => p.name));

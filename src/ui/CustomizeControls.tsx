@@ -8,6 +8,7 @@ import { snapToStep } from "../core/parameters";
 import { flexureEquilibria, flexureState, flexureSweep, hasFlexures, isAngularDrive, type EquilibriumStudy } from "../sim/flexure";
 import { drivesOf } from "../model/concepts/mechanism";
 import { printFormat, useStore } from "../model/store";
+import { motionVerdict } from "../model/motionStudy";
 import { buildPercent, buildStepText } from "./BuildProgress";
 import type { CadDocument, Parameter } from "../core/document";
 import { EXAMPLES, customizeLink, exampleTitle } from "../model/examples";
@@ -130,26 +131,48 @@ export function Control({ name, value, expr, label: shown, unit, description, mi
   );
 }
 
-/** Pass / fail / progress for the current configuration's motion study. */
+/** "about 40 s left", "about 2 min left". */
+export function etaText(seconds: number | null): string {
+  if (seconds == null) return "estimating time";
+  if (seconds < 60) return `about ${Math.max(1, Math.round(seconds / 5) * 5 || 1)} s left`;
+  return `about ${Math.round(seconds / 60)} min left`;
+}
+
+/** The motion study's verdict for the current values, as it goes: an estimate of
+ *  the time left, the coarse pass's result while the rest runs, and the last
+ *  verdict ("before your change") until the new one is in. Worded by the kind of
+ *  motion checked. Screen readers hear the verdicts, not every percent. */
 export function MotionBadge() {
   const status = useStore((s) => s.motionStatus);
   const progress = useStore((s) => s.motionProgress);
   const result = useStore((s) => s.motionResult);
+  const previous = useStore((s) => s.motionPrevious);
+  const coarse = useStore((s) => s.motionCoarse);
+  const eta = useStore((s) => s.motionEta);
   const has = useStore((s) => s.hasMotionStudy);
+  const doc = useStore((s) => s.session.doc);
   if (!has) return null;
   const pct = Math.round(progress * 100);
   const cls = status === "pass" ? "pass" : status === "fail" ? "fail" : status === "running" ? "running" : "idle";
   const label =
-    status === "running" ? `Checking motion… ${pct}%` :
-    status === "pass" ? "Rotates freely — passes" :
-    status === "fail" ? (result?.reason ?? "Does not clear — fails") :
-    "Not checked";
+    status === "running" ? (coarse ? `Clear at ${coarse.checked} of ${coarse.total} positions · checking the rest` : "Checking the motion") :
+    status === "pass" || status === "fail" ? motionVerdict(doc, result!) :
+    previous ? "Will check again when you stop" : "Not checked yet";
   const icon = status === "pass" ? "✓" : status === "fail" ? "✕" : status === "running" ? "◍" : "○";
+  // what a screen reader is told: the verdicts, and that a check started (not each percent)
+  const spoken = status === "running" ? "Checking the motion" : status === "pass" || status === "fail" ? `Motion check: ${motionVerdict(doc, result!)}` : "";
   return (
     <div className={`cz-badge ${cls}`} title="Motion study: can the mechanism move through its full range without parts colliding?">
-      <span className="cz-badge-icon">{icon}</span>
-      <span className="cz-badge-text">{label}</span>
-      {status === "running" && <span className="cz-badge-bar"><span style={{ width: `${pct}%` }} /></span>}
+      <span className="cz-badge-icon" aria-hidden="true">{icon}</span>
+      <span className="cz-badge-body">
+        <span className="cz-badge-text">{label}</span>
+        {status === "running" && <span className="cz-badge-eta">{pct}% · {etaText(eta)}</span>}
+        {(status === "running" || status === "idle") && previous && (
+          <span className={`cz-badge-prev ${previous.status}`}>Before your change: {previous.status === "pass" ? "✓" : "✕"} {motionVerdict(doc, previous)}</span>
+        )}
+      </span>
+      {status === "running" && <span className="cz-badge-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>}
+      <span className="sr-only" role="status" aria-live="polite">{spoken}</span>
     </div>
   );
 }

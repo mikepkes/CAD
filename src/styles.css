@@ -1519,12 +1519,20 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .cz-badge {
   position: absolute; top: 14px; left: 14px; z-index: 6;
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  padding: 8px 14px; border-radius: 18px; font-size: 12.5px; font-weight: 600;
   border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   background: color-mix(in srgb, var(--panel) 82%, transparent); color: var(--text);
   max-width: min(78vw, 460px);
 }
-.cz-badge .cz-badge-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cz-badge-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cz-badge .cz-badge-text { overflow-wrap: anywhere; }
+.cz-badge-eta { font-size: 11px; font-weight: 500; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+/* the verdict before the last edit, until the new one is in */
+.cz-badge-prev { font-size: 11px; font-weight: 500; color: var(--text-dim); }
+.cz-badge-prev.pass { color: color-mix(in srgb, var(--ok) 75%, var(--text-dim)); }
+.cz-badge-prev.fail { color: color-mix(in srgb, var(--fail) 75%, var(--text-dim)); }
+/* read by screen readers, not shown */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .cz-badge-icon { font-size: 14px; line-height: 1; }
 .cz-badge.pass { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
 .cz-badge.fail { color: var(--fail); border-color: color-mix(in srgb, var(--fail) 40%, var(--line)); }
