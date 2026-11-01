@@ -22,6 +22,11 @@ describe("pin placement", () => {
     expect(quadrantDir({ x: 100, y: 500 }, bounds)).toBe("sw");
     expect(quadrantDir({ x: 700, y: 500 }, bounds)).toBe("se");
   });
+  it("keeps a pin to the north-east near the middle, so it doesn't flip as its anchor drifts across", () => {
+    for (const dx of [-50, -10, 0, 10, 50]) for (const dy of [-50, 0, 50]) {
+      expect(quadrantDir({ x: bounds.w / 2 + dx, y: bounds.h / 2 + dy }, bounds)).toBe("ne");
+    }
+  });
   it("skips hidden anchors and keeps pins inside the viewport", () => {
     const row = { featureId: "a" } as FeatureRow;
     const pins = placePins([

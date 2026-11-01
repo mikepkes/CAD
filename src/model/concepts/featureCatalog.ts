@@ -248,32 +248,59 @@ export function nameFromTimeline(timeline: OperationRecord[], id: string): strin
 
 type P3 = { x: number; y: number; z: number };
 
-/** A point on the largest face `featureId` made in `mesh` (faces are named "<feature id>:<face>"): the centre of that
- *  face's triangle nearest its area-weighted centre, so it lies on the surface even for an L-shaped face. Null when
- *  the mesh names no face for the feature. */
+/** Whether `p` lies on triangle `t` (within a hair of its plane, and inside its edges). */
+function onTriangle(p: P3, [a, b, c]: [P3, P3, P3]): boolean {
+  const v0 = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }, v1 = { x: c.x - a.x, y: c.y - a.y, z: c.z - a.z }, v2 = { x: p.x - a.x, y: p.y - a.y, z: p.z - a.z };
+  const dot = (u: P3, v: P3) => u.x * v.x + u.y * v.y + u.z * v.z;
+  const d00 = dot(v0, v0), d01 = dot(v0, v1), d11 = dot(v1, v1), d20 = dot(v2, v0), d21 = dot(v2, v1);
+  const den = d00 * d11 - d01 * d01;
+  if (Math.abs(den) < 1e-12) return false;
+  const v = (d11 * d20 - d01 * d21) / den, w = (d00 * d21 - d01 * d20) / den, eps = 1e-6;
+  if (v < -eps || w < -eps || v + w > 1 + eps) return false;
+  const q = { x: a.x + v * v0.x + w * v1.x - p.x, y: a.y + v * v0.y + w * v1.y - p.y, z: a.z + v * v0.z + w * v1.z - p.z };
+  return Math.hypot(q.x, q.y, q.z) < 1e-3 * Math.max(1, Math.sqrt(d00), Math.sqrt(d11));
+}
+
+/** A face "looks up" when its normal's z is at least this: tilted back at least about 17° from vertical, so a
+ *  leaning plate counts and a wall doesn't. */
+const UP_FACING = 0.3;
+
+/** A point on the largest upward-facing face `featureId` made in `mesh` (else its largest face; faces are named
+ *  "<feature id>:<face>"): the centre of that face's triangle nearest its area-weighted centre, so it lies on the
+ *  surface even for an L-shaped face. Null when the mesh names no face for the feature. */
+
 export function faceAnchor(mesh: { positions: Float32Array; indices: Uint32Array; faceRanges?: number[]; faceNames?: string[] } | undefined, featureId: string): P3 | null {
   if (!mesh?.faceRanges || !mesh.faceNames) return null;
   const P = mesh.positions, I = mesh.indices, prefix = `${featureId}:`;
-  let best: { area: number; tris: { c: P3; a: number }[] } | null = null;
+  const faces: { area: number; up: number; tris: { c: P3; a: number; tri: [P3, P3, P3] }[] }[] = [];
   mesh.faceNames.forEach((name, k) => {
     if (!name.startsWith(prefix)) return;
     const start = mesh.faceRanges![2 * k], count = mesh.faceRanges![2 * k + 1];
-    const tris: { c: P3; a: number }[] = [];
-    let area = 0;
+    const tris: { c: P3; a: number; tri: [P3, P3, P3] }[] = [];
+    let area = 0, nx = 0, ny = 0, nz = 0;
     for (let i = start; i + 2 < start + count && i + 2 < I.length; i += 3) {
       const a = I[i] * 3, b = I[i + 1] * 3, c = I[i + 2] * 3;
       const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
       const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
-      const t = 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
-      tris.push({ c: { x: (P[a] + P[b] + P[c]) / 3, y: (P[a + 1] + P[b + 1] + P[c + 1]) / 3, z: (P[a + 2] + P[b + 2] + P[c + 2]) / 3 }, a: t });
-      area += t;
+      const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+      const t = 0.5 * Math.hypot(cx, cy, cz);
+      const pt = (j: number): P3 => ({ x: P[j], y: P[j + 1], z: P[j + 2] });
+      tris.push({ c: { x: (P[a] + P[b] + P[c]) / 3, y: (P[a + 1] + P[b + 1] + P[c + 1]) / 3, z: (P[a + 2] + P[b + 2] + P[c + 2]) / 3 }, a: t, tri: [pt(a), pt(b), pt(c)] });
+      area += t; nx += cx; ny += cy; nz += cz;
     }
-    if (tris.length && (!best || area > best.area)) best = { area, tris };
+    if (tris.length) faces.push({ area, up: nz / (Math.hypot(nx, ny, nz) || 1), tris });
   });
+  // The largest face that looks up, else the largest: a box's pin stays on its top while it's resized, instead of
+  // jumping between whichever side is biggest at the moment.
+  const largest = (list: typeof faces) => list.reduce<(typeof faces)[number] | null>((b, f) => (!b || f.area > b.area ? f : b), null);
+  const best = largest(faces.filter((f) => f.up >= UP_FACING)) ?? largest(faces);
   if (!best) return null;
-  const { area, tris } = best as { area: number; tris: { c: P3; a: number }[] };
+  const { area, tris } = best;
   const m = tris.reduce((s, t) => ({ x: s.x + t.c.x * t.a, y: s.y + t.c.y * t.a, z: s.z + t.c.z * t.a }), { x: 0, y: 0, z: 0 });
   const g = { x: m.x / area, y: m.y / area, z: m.z / area };
+  // the centre itself when it lies on the face (any convex face): it moves smoothly as the face is resized, where the
+  // nearest triangle's centre would hop between triangles
+  if (tris.some((t) => t.tri && onTriangle(g, t.tri))) return g;
   return tris.reduce((b, t) => (Math.hypot(t.c.x - g.x, t.c.y - g.y, t.c.z - g.z) < Math.hypot(b.x - g.x, b.y - g.y, b.z - g.z) ? t.c : b), tris[0].c);
 }
 

@@ -879,15 +879,16 @@ export interface CadDocument {
 }
 
 /** The material that applies to `componentId`: its own, else the nearest ancestor's
- *  (root may hold the document default). Undefined → the viewport's plain default.
+ *  (root may hold the document default). No component (a body with no single sketch:
+ *  a loft, a primitive) means the root's. Undefined → the viewport's plain default.
  *  A material picked by a parameter reads it from `scope` when given (e.g. a
  *  study's overrides), else from the document's last evaluation. */
 export function materialForComponent(doc: CadDocument, componentId: string | undefined, scope?: Record<string, number>): Material | undefined {
-  let id = componentId;
+  let id: string | undefined = componentId ?? doc.rootComponentId;
   const seen = new Set<string>();
   while (id && !seen.has(id)) {
     seen.add(id);
-    const c = doc.components[id];
+    const c: Component | undefined = doc.components[id];
     if (!c) break;
     if (c.materialChoice) {
       const v = scope?.[c.materialChoice.by] ?? doc.parameters.find((p) => p.name === c.materialChoice!.by)?.value ?? 0;
