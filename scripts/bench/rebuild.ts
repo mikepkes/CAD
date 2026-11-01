@@ -85,7 +85,7 @@ async function main() {
   let meshesMs = 0, shown: Record<string, SolidEval> = {};
   const first = await backend.evaluate(s.doc, undefined, (r) => { meshesMs = performance.now() - t; shown = r.solids; });
   const coldMs = performance.now() - t;
-  const stats = meshStats(shown);
+  const stats = meshStats(Object.keys(shown).length ? shown : first.solids); // (a backend without staging answers once)
   const errors = Object.values(first.solids).filter((r) => r.error).map((r) => `${r.name}: ${r.error}`);
 
   const warm: number[] = [];

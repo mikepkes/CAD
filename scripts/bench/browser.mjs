@@ -42,6 +42,8 @@ async function benchExample(browser, file) {
   const page = await context.newPage();
   await page.addInitScript((doc) => { try { localStorage.setItem("vibecad.autosave.v1", doc); } catch { /* ignore */ } }, text);
   await page.goto(url, { waitUntil: "commit" });
+  await page.waitForFunction(() => !!window.__vibecad?.getState().kernelReady, null, { timeout: 300000, polling: 20 });
+  const kernelReadyMs = await page.evaluate(() => performance.now());
   await waitBuilt(page);
   const load = await page.evaluate(() => {
     const nav = performance.getEntriesByType("navigation")[0];
@@ -140,7 +142,7 @@ async function benchExample(browser, file) {
   await context.close();
   return {
     example: file.replace(/\.json$/, ""),
-    firstModelMs: r1(load.firstModelMs), fcpMs: r1(load.fcpMs),
+    firstModelMs: r1(load.firstModelMs), kernelReadyMs: r1(kernelReadyMs), fcpMs: r1(load.fcpMs),
     updateMs: r1(median(update)),
     frameMs: r1(median(orbit.times)), frameP95Ms: r1([...orbit.times].sort((a, b) => a - b)[Math.floor(orbit.times.length * 0.95)]),
     renderMs: orbit.renders.length ? Math.round(median(orbit.renders) * 100) / 100 : null,
@@ -157,7 +159,7 @@ try {
     try {
       const row = await benchExample(browser, f);
       rows.push(row);
-      console.error(`${row.example}: first model ${row.firstModelMs} update ${row.updateMs} frame ${row.frameMs} (p95 ${row.frameP95Ms}, render ${row.renderMs}) calls ${row.drawCalls} programs ${row.programs} idle ${row.idleFps} fps edit ${row.editMs} (${row.slider}) pose ${row.poseMs} (${row.poseSlider})`);
+      console.error(`${row.example}: first model ${row.firstModelMs} (kernel ${row.kernelReadyMs}, fcp ${row.fcpMs}) update ${row.updateMs} frame ${row.frameMs} (p95 ${row.frameP95Ms}, render ${row.renderMs}) calls ${row.drawCalls} programs ${row.programs} idle ${row.idleFps} fps edit ${row.editMs} (${row.slider}) pose ${row.poseMs} (${row.poseSlider})`);
     } catch (e) {
       console.error(`${f}: ${e.message}`);
       rows.push({ example: f.replace(/\.json$/, ""), error: String(e.message).slice(0, 200) });
@@ -166,7 +168,7 @@ try {
 } finally {
   await browser.close();
 }
-const cols = ["example", "firstModelMs", "updateMs", "frameMs", "renderMs", "drawCalls", "programs", "idleFps", "editMs", "slider", "poseMs", "poseSlider", "bodies"];
+const cols = ["example", "firstModelMs", "kernelReadyMs", "fcpMs", "updateMs", "frameMs", "renderMs", "drawCalls", "programs", "idleFps", "editMs", "slider", "poseMs", "poseSlider", "bodies"];
 console.log(`| ${cols.join(" | ")} |`);
 console.log(`|${cols.map(() => "---").join("|")}|`);
 for (const r of rows) console.log(`| ${cols.map((c) => r[c] ?? "").join(" | ")} |`);

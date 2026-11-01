@@ -1327,6 +1327,9 @@ export const useStore = create<AppState>((set, get) => {
 
     initApp: async () => {
       mcpActions.initMcp();
+      // the kernel (23 MB of wasm to fetch and compile) starts loading now, alongside the
+      // saved document's recompute, not after it — the first rebuild finds it ready sooner
+      void get().ensureKernel();
       // a 3D mouse: the desktop's native reader, or a browser device paired before
       void import("./spaceMouseInput").then((m) => m.autoConnectSpaceMouse()).catch(() => { /* no device support here */ });
       let saved: string | null = null;

@@ -121,9 +121,13 @@ function measuredRows(solids: Record<string, SolidEval>): Record<string, SolidEv
 }
 
 /** Let the event loop run (so a worker can hear a newer request between two measurements). */
-const breathe = () => new Promise<void>((r) => setTimeout(r, 0));
+const breathe = (ms = 0) => new Promise<void>((r) => setTimeout(r, ms));
 /** How long to measure before breathing (ms). */
 const MEASURE_SLICE_MS = 12;
+/** How long the model stays unchanged before its measuring starts (ms): a slider drag sends a
+ *  value every few tens of ms, and one body's box can take hundreds (a gear) — measuring a
+ *  pose that is about to be superseded would only make the next pose wait for it. */
+const MEASURE_SETTLE_MS = 150;
 
 /** A pose of `doc` for a collision check: parameter expressions overridden and
  *  sketches re-placed in their components' frames for those values, with their
@@ -256,6 +260,7 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       const shown = staged.render();
       channel.emit({ id: req.id, kind: "evaluate", solids: shown, facePlanes: collectFacePlanes(req.doc) }, meshTransferables(shown));
       let complete = true;
+      if (staged.pending) await breathe(MEASURE_SETTLE_MS);
       while (staged.pending) {
         if (channel.stale?.()) { staged.dispose(); complete = false; break; }
         const t = performance.now();
