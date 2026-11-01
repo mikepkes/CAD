@@ -96,6 +96,28 @@ describe("Pins", () => {
     expect(screen.queryByRole("button", { name: /Feature 3/ })).toBeNull();
   });
 
+  it("merges other components' badges that overlap into one chip that lists them", async () => {
+    const t = realSession();
+    const ids: string[] = [];
+    for (const name of ["Wheel handle 1", "Wheel handle 2"]) {
+      const comp = await t.dispatch("component.create", { name });
+      const sk = await t.dispatch("sketch.create", { plane: "XY", component: comp.createdIds[0] });
+      await t.dispatch("sketch.addRectangle", { sketch: sk.createdIds[0], corner: { x: 0, y: 0 }, opposite: { x: 4, y: 4 } });
+      ids.push((await t.dispatch("feature.extrude", { sketch: sk.createdIds[0], distance: "4" })).createdIds[0]);
+    }
+    const near = (id: string, dx: number) => ({ featureId: id, name: id, sketchId: "", distance: 4, bounds: { min: { x: dx, y: 0, z: 0 }, max: { x: dx + 4, y: 4, z: 4 } } });
+    useStore.setState({ session: t, rev: 2, solids: { [ids[0]]: near(ids[0], 0), [ids[1]]: near(ids[1], 1) } as never, activeComponentId: t.doc.rootComponentId });
+    fake.scene = fakeScene();
+    render(<Pins />);
+    expect(screen.queryByRole("button", { name: /Activate Wheel handle 1/ })).toBeNull();
+    const chip = screen.getByRole("button", { name: /2 components: Wheel handle 1, Wheel handle 2/ });
+    expect(chip.textContent).toBe("Wheel handle · 2 ▾");
+    await userEvent.click(chip);
+    const menu = screen.getByRole("menu", { name: "Choose a component" });
+    await userEvent.click(within(menu).getByRole("button", { name: /Wheel handle 2/ }));
+    expect(a.activateComponent).toHaveBeenCalledWith(t.doc.sketches[t.doc.features[ids[1]]?.sketchId ?? ""]?.componentId ?? expect.any(String));
+  });
+
   it("opens a feature on click, reports hover, and shows states", async () => {
     fake.scene = fakeScene();
     const { container } = render(<Pins />);

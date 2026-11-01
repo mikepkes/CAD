@@ -118,6 +118,48 @@ export function componentLabel(name: string, count: number): string {
   return `${name} · ${count}`;
 }
 
+/** A component badge's box on screen, estimated from its label (the kit's chip: ~6.6 px a character, 22 px of padding, 24 high). */
+export function badgeBox(label: string): Box {
+  return { w: 22 + label.length * 6.6, h: 24 };
+}
+
+/** Merge component badges whose boxes overlap (or come within `margin` px) into one chip, as feature pins merge.
+ *  A merged chip sits at its members' mean and reads `labelOf(members)`; merging repeats until no two chips
+ *  touch, since a merged chip is wider and may now reach a neighbour. */
+export function clusterBadges<T extends { pos: Pt; label: string }>(items: T[], margin = 4, labelOf: (members: T[]) => string = (ms) => (ms.length === 1 ? ms[0].label : `${ms[0].label} +${ms.length - 1} ▾`)): { pos: Pt; members: T[] }[] {
+  const touches = (a: { pos: Pt; label: string }, b: { pos: Pt; label: string }) => {
+    const A = badgeBox(a.label), B = badgeBox(b.label);
+    return Math.abs(a.pos.x - b.pos.x) < (A.w + B.w) / 2 + margin && Math.abs(a.pos.y - b.pos.y) < (A.h + B.h) / 2 + margin;
+  };
+  const mean = (ms: T[]): Pt => ({ x: ms.reduce((a, m) => a + m.pos.x, 0) / ms.length, y: ms.reduce((a, m) => a + m.pos.y, 0) / ms.length });
+  let clusters = items.map((it) => ({ pos: { ...it.pos }, members: [it] }));
+  for (let pass = 0; pass < 8; pass++) {
+    const out: { pos: Pt; members: T[] }[] = [];
+    for (const c of clusters) {
+      const me = { pos: c.pos, label: labelOf(c.members) };
+      const near = out.find((o) => touches({ pos: o.pos, label: labelOf(o.members) }, me));
+      if (near) { near.members.push(...c.members); near.pos = mean(near.members); } else out.push({ pos: c.pos, members: [...c.members] });
+    }
+    const done = out.length === clusters.length;
+    clusters = out;
+    if (done) break;
+  }
+  return clusters;
+}
+
+/** A merged badge's text: the members' shared name and how many ("Wheel handle · 3"), else the first and the rest ("Top +2"). */
+export function badgeClusterLabel(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  const words = names.map((n) => n.trim().split(/\s+/));
+  const shared: string[] = [];
+  for (let i = 0; i < words[0].length; i++) {
+    const w = words[0][i];
+    if (words.every((ws) => ws[i] === w)) shared.push(w); else break;
+  }
+  const stem = shared.join(" ").replace(/[\s#·-]*$/, "");
+  return stem ? `${stem} · ${names.length}` : `${names[0]} +${names.length - 1}`;
+}
+
 export interface ComponentGroup { componentId: string; rows: FeatureRow[]; centre: Vec3 | null }
 
 /** Rows of every component but the active one, each with the world centre of its bodies' bounds (null when nothing is built). */
