@@ -64,20 +64,22 @@ async function benchExample(browser, file) {
     return times;
   }, 5);
 
-  // orbit: rotate the camera about Z over ~90 frames, timing each rAF
+  // orbit: rotate the camera about Z over ~90 frames, timing each rAF and the CPU time inside renderer.render
   const orbit = await page.evaluate(() => new Promise((resolve) => {
     const scene = window.__scene;
     const cam = scene.camera, ctl = scene.controls;
     const r = Math.hypot(cam.position.x - ctl.target.x, cam.position.y - ctl.target.y);
     const z = cam.position.z, a0 = Math.atan2(cam.position.y - ctl.target.y, cam.position.x - ctl.target.x);
-    const times = []; let last = performance.now(), i = 0; let calls = 0, tris = 0, programs = 0;
+    const times = [], renders = []; let last = performance.now(), i = 0; let calls = 0, tris = 0, programs = 0;
+    const renderer = scene.renderer, origRender = renderer.render.bind(renderer);
+    renderer.render = (...args) => { const t = performance.now(); origRender(...args); renders.push(performance.now() - t); };
     const step = () => {
       const a = a0 + (i / 90) * Math.PI;
       cam.position.set(ctl.target.x + r * Math.cos(a), ctl.target.y + r * Math.sin(a), z);
       cam.lookAt(ctl.target);
       const now = performance.now(); times.push(now - last); last = now;
       const info = scene.renderer.info; calls = info.render.calls; tris = info.render.triangles; programs = info.programs?.length ?? 0;
-      if (++i < 90) requestAnimationFrame(step); else resolve({ times: times.slice(5), calls, triangles: tris, programs });
+      if (++i < 90) requestAnimationFrame(step); else { renderer.render = origRender; resolve({ times: times.slice(5), renders: renders.slice(5), calls, triangles: tris, programs }); }
     };
     requestAnimationFrame(step);
   }));
@@ -141,6 +143,7 @@ async function benchExample(browser, file) {
     firstModelMs: r1(load.firstModelMs), fcpMs: r1(load.fcpMs),
     updateMs: r1(median(update)),
     frameMs: r1(median(orbit.times)), frameP95Ms: r1([...orbit.times].sort((a, b) => a - b)[Math.floor(orbit.times.length * 0.95)]),
+    renderMs: orbit.renders.length ? Math.round(median(orbit.renders) * 100) / 100 : null,
     drawCalls: orbit.calls, triangles: orbit.triangles, programs: orbit.programs, idleFps: idleFrames,
     editMs: geomEdit?.ms ?? null, slider: geomEdit?.name ?? null, poseMs: poseEdit?.ms ?? null, poseSlider: poseEdit?.name ?? null,
     bodies,
@@ -154,7 +157,7 @@ try {
     try {
       const row = await benchExample(browser, f);
       rows.push(row);
-      console.error(`${row.example}: first model ${row.firstModelMs} update ${row.updateMs} frame ${row.frameMs} (p95 ${row.frameP95Ms}) calls ${row.drawCalls} programs ${row.programs} idle ${row.idleFps} fps edit ${row.editMs} (${row.slider}) pose ${row.poseMs} (${row.poseSlider})`);
+      console.error(`${row.example}: first model ${row.firstModelMs} update ${row.updateMs} frame ${row.frameMs} (p95 ${row.frameP95Ms}, render ${row.renderMs}) calls ${row.drawCalls} programs ${row.programs} idle ${row.idleFps} fps edit ${row.editMs} (${row.slider}) pose ${row.poseMs} (${row.poseSlider})`);
     } catch (e) {
       console.error(`${f}: ${e.message}`);
       rows.push({ example: f.replace(/\.json$/, ""), error: String(e.message).slice(0, 200) });
@@ -163,7 +166,7 @@ try {
 } finally {
   await browser.close();
 }
-const cols = ["example", "firstModelMs", "updateMs", "frameMs", "frameP95Ms", "drawCalls", "programs", "idleFps", "editMs", "slider", "poseMs", "poseSlider", "bodies"];
+const cols = ["example", "firstModelMs", "updateMs", "frameMs", "renderMs", "drawCalls", "programs", "idleFps", "editMs", "slider", "poseMs", "poseSlider", "bodies"];
 console.log(`| ${cols.join(" | ")} |`);
 console.log(`|${cols.map(() => "---").join("|")}|`);
 for (const r of rows) console.log(`| ${cols.map((c) => r[c] ?? "").join(" | ")} |`);

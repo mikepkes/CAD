@@ -32,6 +32,8 @@ export interface HandleHost {
   rayFrom(clientX: number, clientY: number): { origin: THREE.Vector3; dir: THREE.Vector3 };
   /** Approximate world size of `px` screen pixels (for screen-ish arrowheads). */
   pixelToWorld(px: number): number;
+  /** The handles changed: draw a frame. */
+  invalidate?(): void;
 }
 
 const V = (p: { x: number; y: number; z: number }) => new THREE.Vector3(p.x, p.y, p.z);
@@ -62,6 +64,7 @@ export class HandleManager {
   get dragging() { return this.dragState !== null; }
 
   private rebuild() {
+    this.host.invalidate?.();
     for (const c of [...this.group.children]) {
       this.group.remove(c);
       (c as THREE.Mesh).geometry?.dispose?.();
