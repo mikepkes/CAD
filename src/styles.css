@@ -1165,7 +1165,8 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .first-run-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .first-run-actions .btn { margin: 0; }
 .first-run kbd { font: 11px var(--k-mono); padding: 0 5px; border: 1px solid var(--field-line); border-radius: 4px; margin-left: 4px; }
-.examples-list { max-height: min(420px, 70vh); overflow-y: auto; }
+.examples-list { max-height: min(420px, 60vh); overflow-y: auto; }
+.export-menu > .btn { white-space: nowrap; }
 
 /* ---------- Toast ---------- */
 /* the live region it appears in: always present (so it's announced), never in the way */
