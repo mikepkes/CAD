@@ -74,6 +74,30 @@ mikepkes.github.io/CAD while the repository is named CAD.
     further into the mechanisms: after the wide shot, move in on two or three
     meshes in turn (worm and wheel, rack and pinion, the bevel pair, the ring
     gear and its pinion) with the camera still while each turns.
+- **Roubo bench: fill the frame, and open the leg vise before the drawing.**
+  The bench sat too small in frame (the iso `frameAll` leaves a lot of floor
+  around a long, low bench). Next pass:
+  - frame it tighter: a three-quarter front view that puts the bench's length
+    across the frame, so it fills most of the viewport;
+  - before switching to the shop drawing, a quick animation of the leg vise
+    opening: sweep the `viseGap` parameter (0–170 mm), which drives the vise
+    chop's slider joint and the crisscross arms with it, ideally moving in on
+    the vise while it opens; then out and on to the drawing;
+  - as with the gears, drive it as a pose rather than a rebuild per step, so
+    it moves smoothly at real speed.
+- **Zebra stripes need a curved surface to show off.** In Act 2's
+  will-it-print beat the zebra view (key 5) landed on the stand's flat faces,
+  where the stripes are just straight bands and show nothing. The only fillet
+  is the small round on the base's front edges (the soften beat). Next pass:
+  - give the phone holder an aggressive fillet on a corner (a large radius,
+    e.g. the outside corner where the back plate rises from the base, or the
+    back plate's top corners), either in the soften beat or as its own short
+    step, so a real curved surface is on screen;
+  - aim the camera at that fillet when zebra comes on, with a slow move
+    (orbit a few degrees) so the stripes visibly sweep and bend through the
+    curve, which is what shows the surfaces flow into each other;
+  - check the fillet still builds across the phone-thickness range and keeps
+    the mass rule in Act 2 passing (it removes material, so it should).
 - **A flash of the bench before "just describe it".** Cause: the Roubo clip
   ends with `d.key("Escape")` inside the recorded beat (`act3.mjs`), which
   closes the shop drawing and shows the bench again for the rest of the beat
