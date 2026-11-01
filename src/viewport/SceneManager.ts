@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { sampleSpline, splineCurvatureComb } from "../core/geometry/spline";
 import { SpaceMouseState, SpaceMouseSettings, NavigationDelta, IDLE, DEFAULT_SETTINGS, navigationDelta, isIdle } from "./spaceMouse";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { studioEnvironmentScene } from "./studioEnvironment";
 import { PLANES, WorkPlane, to3d } from "../geometry/plane";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchEllipse, SketchLine, SketchPoint } from "../sketch/types";
 import { isDimension } from "../sketch/types";
@@ -263,8 +263,9 @@ export class SceneManager {
     this.controls.target.set(0, 0, 0);
 
     // lights
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.45));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    // most of the light is the studio environment below; a little ambient keeps shadowed plastic from going black
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
     dir.position.set(1, -1, 2);
     this.scene.add(dir);
 
@@ -272,8 +273,8 @@ export class SceneManager {
     // without a reflection probe, metalness renders near-black.
     try {
       const pmrem = new THREE.PMREMGenerator(this.renderer);
-      this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-      this.scene.environmentIntensity = 0.9;
+      this.scene.environment = pmrem.fromScene(studioEnvironmentScene(), 0.02).texture;
+      this.scene.environmentIntensity = 1.0;
       pmrem.dispose();
     } catch { /* headless / no-WebGL: skip */ }
 

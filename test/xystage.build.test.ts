@@ -18,7 +18,7 @@ import { placeComponentSketches, resolveComponentWorld } from "../src/core/recom
 import { resolveParameters } from "../src/core/parameters";
 import { flexureState, flexureSweep } from "../src/sim/flexure";
 import { applyPoint } from "../src/math/transform";
-import { HINGE_MATERIALS as MATERIALS, DEFAULT_HINGE_MATERIAL as DEFAULT_MATERIAL, num } from "./flexure-materials";
+import { HINGE_MATERIALS as MATERIALS, DEFAULT_HINGE_MATERIAL as DEFAULT_MATERIAL, num, printedMaterial } from "./flexure-materials";
 import type { CadSession } from "../src/core/command/session";
 
 const OUT = process.env.BUILD_XYSTAGE || "";
@@ -78,7 +78,7 @@ async function buildStage(s: CadSession): Promise<void> {
   for (const [name, p] of Object.entries(SLIDERS)) await dis(s, "parameter.add", { name, expression: String(p.value), min: p.range[0], max: p.range[1], step: p.step });
   await dis(s, "parameter.add", { name: "material", expression: String(DEFAULT_MATERIAL), options: MATERIALS.map((m) => m.name) });
   const mats: string[] = [];
-  for (const m of MATERIALS) mats.push((await dis(s, "material.create", { name: m.name, kind: "plastic", finish: m.finish, color: m.color, youngsModulus: m.E, allowableStrain: m.strain }))[0]);
+  for (const m of MATERIALS) mats.push((await dis(s, "material.create", printedMaterial(m)))[0]);
   const part = async (name: string) => { const c = (await dis(s, "component.create", { name }))[0]; await dis(s, "material.assign", { component: c, materials: mats, by: "material" }); return c; };
   const frame = await part("Frame"), carriage = await part("X carriage"), platform = await part("Platform");
 

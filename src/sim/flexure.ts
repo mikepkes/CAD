@@ -9,7 +9,7 @@
 // rotation off that pose and reports strain, stored energy and the effort the
 // drive needs, dU/d(drive).
 
-import type { CadDocument, FlexureSection, Joint, MechanicalProps } from "../core/document";
+import type { CadDocument, FlexureSection, Joint, Material, MechanicalProps } from "../core/document";
 import { materialForComponent } from "../core/document";
 import { resolveComponentWorld, setEnergySettler } from "../core/recompute";
 import { compileExpr, type Scope } from "../math/expr";
@@ -188,10 +188,45 @@ export function solveBeamElement(j: Joint, E: number, end: { dx: number; dy: num
   return flip > 0 ? sol : { ...sol, reaction: { fx: -sol.reaction.fx, fy: sol.reaction.fy, m: -sol.reaction.m }, nodes: sol.nodes.map((q) => ({ x: -q.x, y: q.y })) };
 }
 
+function materialOf(doc: CadDocument, j: Joint, scope: Record<string, number>): Material | undefined {
+  if (j.beam) return j.beam.material ? doc.materials[j.beam.material] : materialForComponent(doc, j.base, scope);
+  return j.flexure!.material ? doc.materials[j.flexure!.material] : materialForComponent(doc, j.moved, scope);
+}
+
 function propsOf(doc: CadDocument, j: Joint, scope: Record<string, number>): MechanicalProps | undefined {
-  if (j.beam) return (j.beam.material ? doc.materials[j.beam.material] : materialForComponent(doc, j.base, scope))?.mechanical;
-  const m = j.flexure!.material ? doc.materials[j.flexure!.material] : materialForComponent(doc, j.moved, scope);
-  return m?.mechanical;
+  return materialOf(doc, j, scope)?.mechanical;
+}
+
+/**
+ * How much of a flexure's bending strain pulls across a print's layers (0…1):
+ * cos² of the angle between the strip's length (the direction its outer fibres
+ * stretch) and the build direction. A beam's strip runs along its rest chord in
+ * the base's XY plane. A hinge only says the axis it bends about, so its strip
+ * may lie anywhere across that axis: it is taken at its worst, the share of the
+ * build direction that lies across the hinge axis (a print with its layers
+ * stacked along the hinge axis is pulled only along its layers).
+ */
+export function acrossLayers(j: Joint, printAxis: "x" | "y" | "z"): number {
+  const a = { x: printAxis === "x" ? 1 : 0, y: printAxis === "y" ? 1 : 0, z: printAxis === "z" ? 1 : 0 };
+  if (j.beam) {
+    const d = unit({ x: j.movedOrigin.x - j.baseOrigin.x, y: j.movedOrigin.y - j.baseOrigin.y, z: 0 });
+    const c = d.x * a.x + d.y * a.y;
+    return c * c;
+  }
+  const n = unit(j.axis);
+  const c = n.x * a.x + n.y * a.y + n.z * a.z;
+  return 1 - c * c;
+}
+
+/** A flexure's allowable strain: the material's, cut toward `layerFactor` of it by
+ *  the share of the strain pulling across a print's layers (interpolated in
+ *  compliance, 1/ε, the usual way for an orthotropic limit). */
+export function allowableFor(j: Joint, m: Material | undefined): number | undefined {
+  const mech = m?.mechanical;
+  if (!mech) return undefined;
+  if (m!.kind !== "printed" || mech.layerFactor == null || mech.layerFactor >= 1) return mech.allowableStrain;
+  const c2 = acrossLayers(j, m!.printAxis ?? "z");
+  return mech.allowableStrain / (c2 / mech.layerFactor + (1 - c2));
 }
 
 // ---- settling free axes: force-driven equilibrium -------------------------
@@ -341,17 +376,18 @@ export function flexureState(doc: CadDocument, overrides: Record<string, string>
   let energy = 0, utilisation = 0;
   let error = Object.values(doc.joints).find((j) => j.error)?.error;
   for (const j of flexureJoints(doc)) {
-    const props = propsOf(doc, j, scope);
+    const mat = materialOf(doc, j, scope), props = mat?.mechanical;
     const angle = j.valueValue;
     const strain = flexureStrain(j.flexure!, angle);
     if (!props) { error ??= `flexure "${j.name}" has no material stiffness`; flexures.push({ joint: j.id, name: j.name, angle, strain, moment: NaN }); continue; }
     const k = flexureStiffness(props.E, j.flexure!);
+    const allowable = allowableFor(j, mat)!;
     energy += 0.5 * k * (angle * RAD) ** 2;
-    utilisation = Math.max(utilisation, strain / props.allowableStrain);
-    flexures.push({ joint: j.id, name: j.name, angle, strain, allowable: props.allowableStrain, moment: k * angle * RAD });
+    utilisation = Math.max(utilisation, strain / allowable);
+    flexures.push({ joint: j.id, name: j.name, angle, strain, allowable, moment: k * angle * RAD });
   }
   for (const j of activeBeams(doc, scope)) {
-    const props = propsOf(doc, j, scope);
+    const mat = materialOf(doc, j, scope), props = mat?.mechanical;
     const end = beamEnd(j, world);
     if (opts.solveBeams === false) { beams.push({ joint: j.id, end }); continue; }
     if (!props) { error ??= `beam "${j.name}" has no material stiffness`; flexures.push({ joint: j.id, name: j.name, beam: true, angle: end.dth / RAD, strain: NaN, moment: NaN }); continue; }
@@ -359,8 +395,9 @@ export function flexureState(doc: CadDocument, overrides: Record<string, string>
     beams.push({ joint: j.id, end, reaction: b.reaction });
     if (!Number.isFinite(b.energy)) error ??= `beam "${j.name}" did not converge`;
     energy += Number.isFinite(b.energy) ? b.energy : 0;
-    utilisation = Math.max(utilisation, b.strain / props.allowableStrain);
-    flexures.push({ joint: j.id, name: j.name, beam: true, angle: end.dth / RAD, strain: b.strain, allowable: props.allowableStrain, moment: NaN });
+    const allowable = allowableFor(j, mat)!;
+    utilisation = Math.max(utilisation, b.strain / allowable);
+    flexures.push({ joint: j.id, name: j.name, beam: true, angle: end.dth / RAD, strain: b.strain, allowable, moment: NaN });
   }
   return { flexures, energy, utilisation: flexures.every((f) => f.allowable) ? utilisation : NaN, beams, ...(error ? { error } : {}) };
 }

@@ -21,6 +21,8 @@ import { gearOutline, GearType } from "../geometry/gear";
 import { GEAR_DIMS, GEAR_LABEL, checkGear, checkMesh, gearMeshExprs } from "../gears";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
+/** A material's appearance fields, as material.create and material.update take them. */
+const MATERIAL_FIELDS = ["species", "finish", "color", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength", "texture", "textureScale", "textureAxis", "layerHeight", "printAxis"] as const;
 
 // A point given either as coordinates (creates a new point) or a ref to an
 // existing point id (reuses it — which is how coincidence is expressed).
@@ -870,9 +872,15 @@ export const BUILTINS: CommandDef<any>[] = [
       additionalProperties: false,
       properties: {
         name: { type: "string" },
-        kind: { type: "string", enum: ["wood", "metal", "plastic", "painted"] },
+        kind: { type: "string", enum: ["wood", "metal", "plastic", "painted", "rubber", "printed"], description: "printed: an FDM print, drawn with layer lines and weaker across them." },
         species: { type: "string", description: "wood species preset key." },
-        finish: { type: "string", description: "metal/plastic: polished|brushed|satin|matte|gloss." },
+        finish: { type: "string", description: "metal/plastic: polished|brushed|satin|matte|gloss; printed: matte|satin|silk." },
+        texture: { type: "string", enum: ["none", "stipple", "dimples", "knurl", "ribs"], description: "A procedural surface texture (drawn, not modelled)." },
+        textureScale: { type: "number", exclusiveMinimum: 0, description: "Texture pitch (mm)." },
+        textureAxis: { type: "string", enum: ["x", "y", "z"], description: "ribs: the axis they run across; brushed metal: the brushing direction." },
+        layerHeight: { type: "number", exclusiveMinimum: 0, description: "printed: layer height (mm), default 0.2." },
+        printAxis: { type: "string", enum: ["x", "y", "z"], description: "printed: the build direction (layers stack along it), default z." },
+        layerFactor: { type: "number", exclusiveMinimum: 0, maximum: 1, description: "printed: the share of allowableStrain left when pulled across the layers (e.g. 0.5)." },
         color: { type: "string", description: "base/tint hex override, e.g. \"#8a6b3f\"." },
         roughness: { type: "number", minimum: 0, maximum: 1 },
         metalness: { type: "number", minimum: 0, maximum: 1 },
@@ -887,17 +895,67 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "White oak", params: { name: "Oak", kind: "wood", species: "white-oak" } },
       { note: "A flexible print (Bambu TPU for AMS, printed flat)", params: { name: "TPU", kind: "plastic", finish: "matte", youngsModulus: 1190, allowableStrain: 0.08 } },
       { note: "A steel screw", params: { name: "Steel", kind: "metal", finish: "satin", color: "#8a8f96" } },
+      { note: "A rubber grip", params: { name: "Grip rubber", kind: "rubber", texture: "knurl", textureScale: 2 } },
+      { note: "PLA printed on its side (layers stack along X)", params: { name: "PLA, on its side", kind: "printed", color: "#e8e4dc", printAxis: "x", youngsModulus: 3500, allowableStrain: 0.02, layerFactor: 0.5 } },
     ],
     apply(draft, p: { name: string; kind: Material["kind"]; [k: string]: unknown }, ctx) {
       const id = ctx.alloc("mat");
       const m: Material = { id, name: p.name, kind: p.kind };
-      for (const k of ["species", "finish", "color", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength"] as const) {
+      for (const k of MATERIAL_FIELDS) {
         if (p[k] !== undefined) (m as unknown as Record<string, unknown>)[k] = p[k];
       }
       if ((p.youngsModulus === undefined) !== (p.allowableStrain === undefined)) throw new Error("mechanical properties need both youngsModulus and allowableStrain");
-      if (p.youngsModulus !== undefined) m.mechanical = { E: p.youngsModulus as number, allowableStrain: p.allowableStrain as number };
+      if (p.layerFactor !== undefined && p.youngsModulus === undefined) throw new Error("layerFactor needs youngsModulus and allowableStrain");
+      if (p.youngsModulus !== undefined) m.mechanical = { E: p.youngsModulus as number, allowableStrain: p.allowableStrain as number, ...(p.layerFactor !== undefined ? { layerFactor: p.layerFactor as number } : {}) };
       draft.materials[id] = m;
       return { createdIds: [id], message: `Material ${p.name}` };
+    },
+  },
+  {
+    type: "material.update",
+    title: "Edit material",
+    summary: "Change a material's name, kind, appearance or mechanical properties.",
+    description: "Sets the given fields of `material` (the others keep their values); every part using it changes with it. Takes the same fields as material.create. youngsModulus, allowableStrain and layerFactor update the mechanical properties.",
+    paramsSchema: {
+      type: "object",
+      required: ["material"],
+      additionalProperties: false,
+      properties: {
+        material: { type: "string" },
+        name: { type: "string" },
+        kind: { type: "string", enum: ["wood", "metal", "plastic", "painted", "rubber", "printed"] },
+        species: { type: "string" },
+        finish: { type: "string" },
+        color: { type: "string" },
+        roughness: { type: "number", minimum: 0, maximum: 1 },
+        metalness: { type: "number", minimum: 0, maximum: 1 },
+        ringScale: { type: "number", exclusiveMinimum: 0 },
+        grainContrast: { type: "number", minimum: 0, maximum: 1 },
+        poreStrength: { type: "number", minimum: 0, maximum: 1 },
+        texture: { type: "string", enum: ["none", "stipple", "dimples", "knurl", "ribs"] },
+        textureScale: { type: "number", exclusiveMinimum: 0 },
+        textureAxis: { type: "string", enum: ["x", "y", "z"] },
+        layerHeight: { type: "number", exclusiveMinimum: 0 },
+        printAxis: { type: "string", enum: ["x", "y", "z"] },
+        youngsModulus: { type: "number", exclusiveMinimum: 0 },
+        allowableStrain: { type: "number", exclusiveMinimum: 0 },
+        layerFactor: { type: "number", exclusiveMinimum: 0, maximum: 1 },
+      },
+    },
+    examples: [{ note: "Print the part on its side", params: { material: "mat12", printAxis: "x" } }],
+    apply(draft, p: { material: string; [k: string]: unknown }) {
+      const m = draft.materials[p.material];
+      if (!m) throw new Error(`no material "${p.material}"`);
+      if (typeof p.name === "string") m.name = p.name;
+      if (typeof p.kind === "string") m.kind = p.kind as Material["kind"];
+      for (const k of MATERIAL_FIELDS) if (p[k] !== undefined) (m as unknown as Record<string, unknown>)[k] = p[k];
+      const E = (p.youngsModulus as number | undefined) ?? m.mechanical?.E, allow = (p.allowableStrain as number | undefined) ?? m.mechanical?.allowableStrain;
+      if (p.youngsModulus !== undefined || p.allowableStrain !== undefined || p.layerFactor !== undefined) {
+        if (E === undefined || allow === undefined) throw new Error("mechanical properties need both youngsModulus and allowableStrain");
+        const layerFactor = (p.layerFactor as number | undefined) ?? m.mechanical?.layerFactor;
+        m.mechanical = { E, allowableStrain: allow, ...(layerFactor !== undefined ? { layerFactor } : {}) };
+      }
+      return { message: `Material ${m.name}` };
     },
   },
   {

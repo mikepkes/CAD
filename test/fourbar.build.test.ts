@@ -18,7 +18,7 @@ import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
 import { flexureSweep, flexureStiffness, flexureState } from "../src/sim/flexure";
 import { materialForComponent } from "../src/core/document";
-import { HINGE_MATERIALS as MATERIALS, DEFAULT_HINGE_MATERIAL as DEFAULT_MATERIAL, type HingeMaterial } from "./flexure-materials";
+import { HINGE_MATERIALS as MATERIALS, DEFAULT_HINGE_MATERIAL as DEFAULT_MATERIAL, type HingeMaterial, printedMaterial } from "./flexure-materials";
 import type { CadSession } from "../src/core/command/session";
 
 const OUT = process.env.BUILD_FOURBAR || "";
@@ -89,7 +89,7 @@ async function buildFourBar(s: CadSession): Promise<void> {
   await dis(s, "parameter.add", { name: "hingeT", expression: pick((m) => m.t) }); // strip thickness (bends this way)
   await dis(s, "parameter.add", { name: "hingeL", expression: pick((m) => m.L) }); // strip length
   const mats: string[] = [];
-  for (const m of MATERIALS) mats.push((await dis(s, "material.create", { name: m.name, kind: "plastic", finish: m.finish, color: m.color, youngsModulus: m.E, allowableStrain: m.strain }))[0]);
+  for (const m of MATERIALS) mats.push((await dis(s, "material.create", printedMaterial(m)))[0]);
   const link = async (name: string) => { const c = (await dis(s, "component.create", { name }))[0]; await dis(s, "material.assign", { component: c, materials: mats, by: "material" }); return c; };
   const ground = await link("Ground"), crank = await link("Crank"), coupler = await link("Coupler"), rocker = await link("Rocker");
   const lever = "(0.525*crank)", pointer = "(0.6*rocker)"; // where the finger lever and the pointer leave their links

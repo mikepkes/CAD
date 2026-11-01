@@ -16,7 +16,7 @@ export interface CutPart {
   part: string;        // grouped part name (instance suffixes stripped)
   qty: number;
   material: string;
-  kind: string;        // wood | metal | plastic | painted | —
+  kind: string;        // wood | metal | plastic | painted | rubber | printed | —
   thickness: number;   // mm, smallest dimension
   width: number;       // mm, middle dimension
   length: number;      // mm, largest dimension

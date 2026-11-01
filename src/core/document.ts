@@ -769,14 +769,30 @@ export interface ComponentPattern {
 
 /** An appearance assigned to components/bodies. Wood is procedural (species +
  *  params); metal/plastic are PBR. Rendering turns this into a three.js material. */
+export type MaterialKind = "wood" | "metal" | "plastic" | "painted" | "rubber" | "printed";
+/** A procedural surface texture drawn in the shader (no geometry): stipple (fine grain),
+ *  dimples, knurl (diamonds), ribs (rings across `textureAxis`). */
+export type SurfaceTexture = "none" | "stipple" | "dimples" | "knurl" | "ribs";
+export type MaterialAxis = "x" | "y" | "z";
+export const MATERIAL_KINDS: MaterialKind[] = ["metal", "plastic", "printed", "rubber", "painted", "wood"];
+export const SURFACE_TEXTURES: SurfaceTexture[] = ["none", "stipple", "dimples", "knurl", "ribs"];
+
 export interface Material {
   id: string;
   name: string;
-  kind: "wood" | "metal" | "plastic" | "painted";
+  /** printed: an FDM print, drawn with its layer lines and weaker across them. */
+  kind: MaterialKind;
   /** wood: species preset key (e.g. "white-oak", "walnut"). */
   species?: string;
-  /** metal/plastic: finish preset (polished | brushed | satin | matte | gloss). */
+  /** metal/plastic: finish preset (polished | brushed | satin | matte | gloss; printed also silk). */
   finish?: string;
+  /** Surface texture, its pitch (mm) and, for ribs and brushing, the axis it runs across. */
+  texture?: SurfaceTexture;
+  textureScale?: number;
+  textureAxis?: MaterialAxis;
+  /** printed: layer height (mm) and the build direction (the axis the layers stack along, in model space). */
+  layerHeight?: number;
+  printAxis?: MaterialAxis;
   /** base/tint colour override (hex). */
   color?: string;
   roughness?: number;
@@ -794,6 +810,9 @@ export interface MechanicalProps {
   E: number;
   /** Peak strain a flexure may see in service (fraction, e.g. 0.08 = 8%). */
   allowableStrain: number;
+  /** printed: the fraction of `allowableStrain` a print takes when it's pulled across its layers
+   *  (along the build direction), where only the bond between layers holds it. 1 = isotropic. */
+  layerFactor?: number;
 }
 
 /**

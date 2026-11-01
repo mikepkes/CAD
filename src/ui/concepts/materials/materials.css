@@ -1,0 +1,32 @@
+/* Materials tab: layout for its own elements only. Colours are kit / app tokens. */
+
+.mats { display: flex; flex-direction: column; gap: 12px; padding: 10px 12px; min-width: 0; overflow-y: auto; }
+.mats-head { display: flex; align-items: center; gap: 8px; }
+.mats-head .k-select { flex: 1; min-width: 0; }
+
+.mat-swatch { display: block; flex: none; border-radius: 50%; }
+.mat-swatch.flat { box-shadow: inset -6px -8px 12px rgba(0, 0, 0, 0.45), inset 4px 4px 8px rgba(255, 255, 255, 0.18); }
+
+.mats-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mats-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px; border-radius: var(--k-radius-sm); border: 1px solid transparent; }
+.mats-row.on { border-color: var(--k-accent); background: color-mix(in srgb, var(--k-accent) 8%, transparent); }
+.mats-pick { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.mats-name { display: flex; flex-direction: column; min-width: 0; font-size: 12.5px; }
+.mats-name b { font-weight: 600; }
+.mats-name span { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.mats-edit { flex-basis: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px 2px 4px 6px; font-size: 12px; }
+.mats-edit label { display: grid; grid-template-columns: minmax(72px, 38%) minmax(0, 1fr); align-items: center; gap: 8px; }
+.mats-edit label > :last-child { min-width: 0; width: 100%; box-sizing: border-box; }
+.mats-edit .k-pills { display: flex; }
+.mats-edit .k-pills .k-btn { flex: 1; min-width: 0; }
+.mats-edit label > span { color: var(--text-dim); }
+.mats-edit input[type="range"] { width: 100%; }
+.mats-edit input[type="color"] { width: 44px !important; height: 24px; padding: 0; border: 0; background: none; }
+.mats-mech { display: grid; gap: 6px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
+
+.mats-presets { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; border-top: 1px solid var(--line); }
+.mats-group { display: flex; flex-direction: column; gap: 6px; }
+.mats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px; }
+.mats-preset { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; border-radius: var(--k-radius-sm); border: 1px solid var(--line); background: var(--panel-2, transparent); color: inherit; font-size: 11px; line-height: 1.2; text-align: center; cursor: pointer; }
+.mats-preset:hover { border-color: var(--k-accent); }

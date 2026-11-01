@@ -39,7 +39,9 @@ export function MechanismPanel() {
   const curve = drive ? curves[drive.name]?.curve : undefined;
   const live = pose && drive && pose.drive === drive.name ? pose : null;
   const bars = pose ? strainBars(pose.state) : [];
-  const limit = pose?.state.flexures.find((f) => f.allowable)?.allowable;
+  const limits = [...new Set((pose?.state.flexures ?? []).flatMap((f) => (f.allowable ? [Math.round(f.allowable * 1e6) / 1e6] : [])))];
+  // one limit for all, or (a print, weaker across its layers) one per flexure by its direction
+  const limit = limits.length === 1 ? limits[0] : undefined;
 
   return (
     <section className="panel mech" aria-label="Mechanism">
@@ -80,7 +82,7 @@ export function MechanismPanel() {
       <div className="mech-strain">
         <div className="mech-strain-head">
           <span className="k-label">Flexure strain</span>
-          <span className="k-dim">{limit ? `of the limit (${fmt(limit * 100, 2)}%)` : "peak strain"}</span>
+          <span className="k-dim">{limit ? `of the limit (${fmt(limit * 100, 2)}%)` : limits.length > 1 ? `of each one's limit (${fmt(Math.min(...limits) * 100, 2)}–${fmt(Math.max(...limits) * 100, 2)}%, by print direction)` : "peak strain"}</span>
         </div>
         <ul className="mech-bars" aria-label="Flexure strain">
           {bars.map((b) => (

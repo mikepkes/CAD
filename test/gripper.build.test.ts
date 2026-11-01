@@ -20,7 +20,7 @@ import { resolveParameters } from "../src/core/parameters";
 import { flexureEquilibria, flexureState, flexureSweep } from "../src/sim/flexure";
 import { applyPoint } from "../src/math/transform";
 import { materialForComponent } from "../src/core/document";
-import { HINGE_MATERIALS as MATERIALS, DEFAULT_HINGE_MATERIAL as DEFAULT_MATERIAL, num, pickBy } from "./flexure-materials";
+import { HINGE_MATERIALS as MATERIALS, DEFAULT_HINGE_MATERIAL as DEFAULT_MATERIAL, num, pickBy, printedMaterial } from "./flexure-materials";
 import type { CadSession } from "../src/core/command/session";
 
 const OUT = process.env.BUILD_GRIPPER || "";
@@ -108,7 +108,7 @@ async function buildGripper(s: CadSession, opts: { springs?: number; skeleton?: 
   await dis(s, "parameter.add", { name: "hingeL", expression: pickBy((m) => m.L) });
   await dis(s, "parameter.add", { name: "springT", expression: SPRING_T });
   const mats: string[] = [];
-  for (const m of MATERIALS) mats.push((await dis(s, "material.create", { name: m.name, kind: "plastic", finish: m.finish, color: m.color, youngsModulus: m.E, allowableStrain: m.strain }))[0]);
+  for (const m of MATERIALS) mats.push((await dis(s, "material.create", printedMaterial(m)))[0]);
   const part = async (name: string) => { const c = (await dis(s, "component.create", { name }))[0]; await dis(s, "material.assign", { component: c, materials: mats, by: "material" }); return c; };
   const frame = await part("Frame"), plunger = await part("Plunger");
   const guide1 = await part("Guide lower"), guide2 = await part("Guide upper");

@@ -5,9 +5,10 @@
 
 import { create } from "zustand";
 
-export type ConceptPanel = "workbench" | "ledger" | "space" | "lens" | "intent" | "mechanism";
-/** Which tab the right side panel shows. Ledger, Space and Mechanism exist only while their panel is on. */
-export type RightTab = "inspector" | "ledger" | "space" | "mechanism";
+export type ConceptPanel = "workbench" | "ledger" | "space" | "lens" | "intent" | "mechanism" | "materials";
+/** Which tab the right side panel shows. Ledger, Space, Mechanism and Materials exist only while their panel is on. */
+export type RightTab = "inspector" | "ledger" | "space" | "mechanism" | "materials";
+const TABS: RightTab[] = ["ledger", "space", "mechanism", "materials"];
 
 export interface UiState {
   /** Feature whose card is open on the part (the pin / chip / sentence in focus). */
@@ -39,7 +40,7 @@ export const clampSide = (px: number) => Math.round(Math.min(SIDE_MAX, Math.max(
 const KEY = "vibecad.ui.panels.v1";
 const TAB_KEY = "vibecad.ui.rightTab.v1";
 const WIDTH_KEY = "vibecad.ui.sideWidth.v1";
-const DEFAULT_PANELS: Record<ConceptPanel, boolean> = { workbench: true, ledger: false, space: false, lens: false, intent: true, mechanism: false };
+const DEFAULT_PANELS: Record<ConceptPanel, boolean> = { workbench: true, ledger: false, space: false, lens: false, intent: true, mechanism: false, materials: false };
 
 function loadPanels(): Record<ConceptPanel, boolean> {
   try {
@@ -51,7 +52,7 @@ function loadPanels(): Record<ConceptPanel, boolean> {
 function loadTab(panels: Record<ConceptPanel, boolean>): RightTab {
   try {
     const raw = typeof localStorage !== "undefined" ? localStorage.getItem(TAB_KEY) : null;
-    return rightTabFor(raw === "ledger" || raw === "space" || raw === "mechanism" ? raw : "inspector", panels);
+    return rightTabFor(TABS.includes(raw as RightTab) ? (raw as RightTab) : "inspector", panels);
   } catch { return "inspector"; }
 }
 
@@ -68,9 +69,9 @@ export function rightTabFor(tab: RightTab, panels: Record<ConceptPanel, boolean>
   return tab === "inspector" || panels[tab] ? tab : "inspector";
 }
 
-/** The right tab after a panel toggle: turning Ledger/Space/Mechanism on shows it; turning the shown one off returns to the inspector. */
+/** The right tab after a panel toggle: turning Ledger/Space/Mechanism/Materials on shows it; turning the shown one off returns to the inspector. */
 export function rightTabAfterToggle(tab: RightTab, p: ConceptPanel, on: boolean, panels: Record<ConceptPanel, boolean>): RightTab {
-  if ((p === "ledger" || p === "space" || p === "mechanism") && on) return p;
+  if (TABS.includes(p as RightTab) && on) return p as RightTab;
   return rightTabFor(tab, panels);
 }
 
