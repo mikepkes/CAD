@@ -476,6 +476,9 @@ export class SceneManager {
     this.orthoCam.right = halfH * aspect;
     this.orthoCam.updateProjectionMatrix();
     this.renderer.setSize(w, h);
+    // setSize clears the canvas; draw again now, or the browser can paint it blank before the next frame
+    // (the model flickers out while a side panel is dragged). The recorder draws its own frames.
+    if (!this.recording) this.drawFrame();
   };
 
   private animate = () => {
@@ -499,11 +502,15 @@ export class SceneManager {
       this.rerenderSketchLayer();
     }
     this.lastPixelScale = scale;
-    this.renderer.render(this.scene, this.camera);
-    // Lens: redraw the solids under the lens with the analysis material (no-op when unset).
-    this.lensPass.render(this.renderer, this.scene, this.camera, this.solidsGroup, this.lastData?.solids);
+    this.drawFrame();
     this.noticeCameraChange();
   };
+
+  /** Draw the scene, then the lens over it: redraw the solids under the lens with the analysis material (no-op when unset). */
+  private drawFrame() {
+    this.renderer.render(this.scene, this.camera);
+    this.lensPass.render(this.renderer, this.scene, this.camera, this.solidsGroup, this.lastData?.solids);
+  }
 
   /** Show analysis under a lens / wipe (null clears it). See lensPass.ts. */
   setLens(spec: LensSpec | null) { this.lensPass.setSpec(spec); }

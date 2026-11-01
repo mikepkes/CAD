@@ -62,6 +62,15 @@ describe("the tutorial's phone stand", () => {
     expect(lip.z).toBeLessThanOrEqual(STAND.base + STAND.lipH + 1e-6);
   });
 
+  it("keeps a box's pin on its top while it's resized, even when a side becomes the largest face", async () => {
+    for (const [x, y, z] of [[90, 70, 6], [20, 20, 80], [80, 10, 40], [10, 60, 30]]) {
+      const s = realSession();
+      await s.dispatch("feature.primitive", { shape: "box", x: String(x), y: String(y), z: String(z), at: { x: 0, y: 0, z: z / 2 } });
+      const rows = featureRows(s.doc, s.timeline, s.rollbackIndex, evaluateFeatures(s.doc, resolveParameters(s.doc.parameters).scope));
+      expect(pinAnchor(rows[0])!.z).toBeCloseTo(z, 3);
+    }
+  });
+
   it("extrudes the back and lip to the base's far face, and they follow it when the base widens", async () => {
     const s = realSession();
     const h = { dispatch: (t: string, p: Record<string, unknown>) => s.dispatch(t, p), doc: () => s.doc };

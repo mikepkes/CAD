@@ -24,10 +24,15 @@ export const CLUSTER_RADIUS = 26;
 
 // ---- pins ----
 
-/** The direction a pin is pushed from its anchor: away from the viewport centre, so it sits beside the geometry, which is usually framed around the centre. */
+/** How far (px) from the viewport's middle lines an anchor must be before its pin flips to that side. */
+export const PIN_DEAD_ZONE = 60;
+
+/** The direction a pin is pushed from its anchor: away from the viewport centre, so it sits beside the geometry,
+ *  which is usually framed around the centre. Near the middle it keeps to the north-east, so an anchor drifting
+ *  across the centre (a box being resized) doesn't flip its pin from side to side. */
 export function quadrantDir(p: Pt, bounds: Box): PinDir {
-  const ns = p.y < bounds.h / 2 ? "n" : "s";
-  const ew = p.x < bounds.w / 2 ? "w" : "e";
+  const ns = p.y > bounds.h / 2 + PIN_DEAD_ZONE ? "s" : "n";
+  const ew = p.x < bounds.w / 2 - PIN_DEAD_ZONE ? "w" : "e";
   return `${ns}${ew}` as PinDir;
 }
 

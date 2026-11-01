@@ -201,6 +201,13 @@ describe("named-choice parameters", () => {
     expect(materialForComponent(s.doc, comp)?.name).toBe("PLA");
     expect((await s.dispatch("material.assign", { component: comp, materials: [pla], by: "nope" })).ok).toBe(false);
   });
+
+  it("gives a body with no single sketch (a loft, a primitive) the document's material", async () => {
+    const s = realSession();
+    const petg = (await dis(s, "material.create", { name: "PETG", kind: "plastic", color: "#f4f1ea" }))[0];
+    await dis(s, "material.assign", { material: petg }); // the root: the document-wide default
+    expect(materialForComponent(s.doc, undefined)?.name).toBe("PETG");
+  });
 });
 
 describe("expression flexure strips", () => {

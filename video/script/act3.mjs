@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 
 import { existsSync } from "node:fs";
 
-const agentCache = JSON.parse(readFileSync(new URL("../mock/agent-coaster.json", import.meta.url), "utf8"));
+const agentCache = JSON.parse(readFileSync(new URL("../mock/agent-vase.json", import.meta.url), "utf8"));
 const forcesCache = JSON.parse(readFileSync(new URL("../mock/agent-bistable-forces.json", import.meta.url), "utf8"));
 const hasExample = (name) => existsSync(new URL(`../../public/examples/${name}.json`, import.meta.url));
 
@@ -154,24 +154,33 @@ export async function act3(d) {
   await d.cut(async () => {
     await d.run(() => window.__vibecadDemo.store.getState().closeDrawing());
     await d.api("newDocument");
-    await d.run((c) => { const D = window.__vibecadDemo; D.mockAgent(c); D.view("iso"); }, agentCache);
+    await d.run((c) => { const D = window.__vibecadDemo; D.mockAgent(c); D.view("iso"); const st = D.store.getState(); if (st.showPlanes) st.toggleShowPlanes(); }, agentCache);
     await d.settle(400);
   });
-  await d.beat("agent", "Or just describe it. Claude builds it with the same commands you use, and the result is an ordinary parametric model you can keep editing.", async () => {
+  await d.beat("agent", "Or just describe it. Claude builds it with the same commands you use: a twisted vase, every section sized from a parameter. Then refine it in plain words. Turn it into a lamp shade, and Claude cuts the windows and sets the material. The result is an ordinary parametric model you can keep editing.", async () => {
     await d.lower("Ask Claude", "it builds with the same commands you do");
     await d.api("cursor", true);
     await d.clickEl("button", "Agent");
-    await d.clickEl(".agent-input textarea");
-    await d.type(agentCache.prompt, 40);
-    await d.key("Enter");
-    await d.fast("Claude building", async () => {
-      await d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 });
-      await d.settle(400);
-    });
-    await d.api("frameAll");
-    await d.wait(1200); d.pick("agent build");
-    await d.wait(800);
-  }, { minMs: 9000 });
+    const ask = async (text, label) => {
+      await d.clickEl(".agent-input textarea");
+      await d.type(text, 40);
+      await d.key("Enter");
+      await d.fast(label, async () => {
+        await d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 });
+        await d.settle(400);
+      });
+    };
+    await ask(agentCache.prompt, "Claude building");
+    await d.api("aim", { dir: [1, -1, 0.45], ms: 1200, margin: 0.9 });
+    await d.wait(1600); d.pick("agent build");
+    // the refinement: a second prompt in the same conversation
+    for (const f of agentCache.followUps ?? []) await ask(f, "Claude refining");
+    await d.api("aim", { dir: [1, -1, 0.3], ms: 1200, margin: 0.85 });
+    await d.api("turntable", 8);
+    await d.wait(1200); d.pick("lamp shade");
+    await d.wait(2400);
+    await d.api("turntable", null);
+  }, { minMs: 14000 });
 
   await d.beat("outro", "That's VibeCAD. Free, open source, in your browser or on your desktop. Thanks for watching.", async () => {
     await d.lower(null);

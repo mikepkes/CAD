@@ -454,7 +454,8 @@ export const useStore = create<AppState>((set, get) => {
     runCommand: async (type: string, params: Record<string, unknown>) => {
       const r = await runDispatch(type, params);
       if (r.ok && type === "sketch.create") set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
-      if (r.ok && type.startsWith("feature.")) set({ mode: "model" }); // a new solid (members, primitives, imports…) is seen in model mode
+      // a new solid (members, primitives, imports…) is seen in model mode, with no sketch left open (as finishing one does)
+      if (r.ok && type.startsWith("feature.")) set({ mode: "model", activeSketchId: null, tool: "select", selection: [] });
       const out: { ok: boolean; createdIds?: string[]; message?: string; error?: string; frame?: unknown; warning?: string } =
         { ok: r.ok, createdIds: r.createdIds, message: r.message, error: r.error };
       // A new sketch reports its world frame so callers know which way u/v/normal point.

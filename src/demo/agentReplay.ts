@@ -17,6 +17,8 @@ export interface AgentTurn {
 
 export interface AgentCache {
   prompt: string;
+  /** What the user types next, once the turns for the prompt before it end (a refinement); the turns run on in order. */
+  followUps?: string[];
   model: string;
   /** Where this cache came from (written by hand as a likely result, or recorded). */
   source: string;
