@@ -1,0 +1,381 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bundled examples > public/examples/skadis.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext1097",
+    "max": [
+      51,
+      -10.6,
+      46,
+    ],
+    "min": [
+      28.3,
+      -42.6,
+      10,
+    ],
+    "name": "Pad right",
+    "volume": 10310.7,
+  },
+  {
+    "body": "ext1155",
+    "max": [
+      49,
+      -3.5,
+      19,
+    ],
+    "min": [
+      41,
+      -14.1,
+      13.3,
+    ],
+    "name": "Pad pin, right lower head",
+    "volume": 219.9,
+  },
+  {
+    "body": "ext1180",
+    "max": [
+      49,
+      -3.5,
+      45,
+    ],
+    "min": [
+      41,
+      -14.1,
+      39.2,
+    ],
+    "name": "Pad pin, right upper head",
+    "volume": 219.9,
+  },
+  {
+    "body": "ext1251",
+    "max": [
+      -13,
+      -5.3,
+      46,
+    ],
+    "min": [
+      -50,
+      -10.3,
+      20,
+    ],
+    "name": "Upper arm, left hub",
+    "volume": 1237.8,
+  },
+  {
+    "body": "ext1361",
+    "max": [
+      -28.3,
+      -10.6,
+      46,
+    ],
+    "min": [
+      -51,
+      -42.6,
+      10,
+    ],
+    "name": "Pad left",
+    "volume": 10310.7,
+  },
+  {
+    "body": "ext1419",
+    "max": [
+      -41,
+      -3.5,
+      19,
+    ],
+    "min": [
+      -49,
+      -14.1,
+      13.2,
+    ],
+    "name": "Pad pin, left lower head",
+    "volume": 219.9,
+  },
+  {
+    "body": "ext1444",
+    "max": [
+      -41,
+      -3.5,
+      45,
+    ],
+    "min": [
+      -49,
+      -14.1,
+      39.3,
+    ],
+    "name": "Pad pin, left upper head",
+    "volume": 219.9,
+  },
+  {
+    "body": "ext1478",
+    "max": [
+      66.7,
+      5,
+      101.6,
+    ],
+    "min": [
+      -67.3,
+      0,
+      -118.4,
+    ],
+    "name": "SKÅDIS board",
+    "volume": 138695.6,
+  },
+  {
+    "body": "ext174",
+    "max": [
+      25,
+      0,
+      34,
+    ],
+    "min": [
+      -25,
+      -5,
+      -16,
+    ],
+    "name": "Back plate",
+    "volume": 9233.8,
+  },
+  {
+    "body": "ext252",
+    "max": [
+      25,
+      -10.6,
+      34,
+    ],
+    "min": [
+      -25,
+      -14.1,
+      -16,
+    ],
+    "name": "Cover",
+    "volume": 7481.5,
+  },
+  {
+    "body": "ext312",
+    "max": [
+      -14,
+      0,
+      5,
+    ],
+    "min": [
+      -24,
+      -14.1,
+      -2.1,
+    ],
+    "name": "Pin 1 collar",
+    "volume": 494.8,
+  },
+  {
+    "body": "ext380",
+    "max": [
+      24,
+      0,
+      5,
+    ],
+    "min": [
+      14,
+      -14.1,
+      -2.1,
+    ],
+    "name": "Pin 2 collar",
+    "volume": 494.8,
+  },
+  {
+    "body": "ext448",
+    "max": [
+      -14,
+      0,
+      31,
+    ],
+    "min": [
+      -24,
+      -14.1,
+      23.9,
+    ],
+    "name": "Pin 3 collar",
+    "volume": 494.8,
+  },
+  {
+    "body": "ext516",
+    "max": [
+      24,
+      0,
+      31,
+    ],
+    "min": [
+      14,
+      -14.1,
+      23.9,
+    ],
+    "name": "Pin 4 collar",
+    "volume": 494.8,
+  },
+  {
+    "body": "ext584",
+    "max": [
+      5,
+      -5,
+      13,
+    ],
+    "min": [
+      -5,
+      -14.1,
+      5.9,
+    ],
+    "name": "Pin 5 collar",
+    "volume": 366.7,
+  },
+  {
+    "body": "ext64",
+    "max": [
+      10.5,
+      8.4,
+      30,
+    ],
+    "min": [
+      -7.5,
+      -3,
+      -21.6,
+    ],
+    "name": "Strip",
+    "volume": 2933.5,
+  },
+  {
+    "body": "ext641",
+    "max": [
+      5,
+      -5,
+      -1,
+    ],
+    "min": [
+      -5,
+      -14.1,
+      -8.1,
+    ],
+    "name": "Pin 6 collar",
+    "volume": 366.7,
+  },
+  {
+    "body": "ext773",
+    "max": [
+      15,
+      -10.6,
+      -18,
+    ],
+    "min": [
+      -15,
+      -50.8,
+      -34.5,
+    ],
+    "name": "Foot ring",
+    "volume": 2429.2,
+  },
+  {
+    "body": "ext850",
+    "max": [
+      4,
+      -3.5,
+      -17.5,
+    ],
+    "min": [
+      -4,
+      -14.1,
+      -23.2,
+    ],
+    "name": "Foot pin 1 head",
+    "volume": 219.9,
+  },
+  {
+    "body": "ext875",
+    "max": [
+      4,
+      -3.5,
+      -23.5,
+    ],
+    "min": [
+      -4,
+      -14.1,
+      -29.2,
+    ],
+    "name": "Foot pin 2 head",
+    "volume": 219.9,
+  },
+  {
+    "body": "ext926",
+    "max": [
+      15,
+      -14.6,
+      89,
+    ],
+    "min": [
+      -15,
+      -59.6,
+      -31,
+    ],
+    "name": "Stand-in item",
+    "volume": 146100,
+  },
+  {
+    "body": "ext987",
+    "max": [
+      50,
+      -5.3,
+      46,
+    ],
+    "min": [
+      13,
+      -10.3,
+      20,
+    ],
+    "name": "Upper arm, right hub",
+    "volume": 1237.8,
+  },
+  {
+    "body": "gear1196",
+    "max": [
+      -7.1,
+      -5.3,
+      20,
+    ],
+    "min": [
+      -50,
+      -10.3,
+      -12,
+    ],
+    "name": "Pinion, left",
+    "volume": 2192.6,
+  },
+  {
+    "body": "gear695",
+    "max": [
+      10,
+      -5.3,
+      22,
+    ],
+    "min": [
+      -10,
+      -10.3,
+      -31,
+    ],
+    "name": "Rack, right",
+    "volume": 2506,
+  },
+  {
+    "body": "gear932",
+    "max": [
+      50,
+      -5.3,
+      20,
+    ],
+    "min": [
+      7.1,
+      -10.3,
+      -12,
+    ],
+    "name": "Pinion, right",
+    "volume": 2192.6,
+  },
+]
+`;
