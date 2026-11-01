@@ -42,7 +42,7 @@ import { pickItems, sketchPickItems, type PickItem } from "./pickMenu";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
 import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
 import { renameViaEdit } from "./assist";
-import { FeatureTool, FeatureToolKind, defaultRevolveAxis, profileChoices, toggled, toolCommand, toolExpressions } from "./featureTools";
+import { FeatureTool, FeatureToolKind, defaultRevolveAxis, hasClosedRegion, profileChoices, toggled, toolCommand, toolExpressions } from "./featureTools";
 
 /** The geometry backend: a Web Worker when available (keeps the OCC kernel off
  *  the main thread), else inline on this thread. */
@@ -314,7 +314,7 @@ export interface AppState {
   // features (3D)
   ensureKernel: () => Promise<void>;
   rebuildSolids: () => Promise<void>;
-  extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut" | "intersect"; symmetric?: boolean; region?: { x: number; y: number }; toFace?: { normal: Vec3; point: Vec3; name?: string } }) => Promise<void>;
+  extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut" | "intersect"; symmetric?: boolean; region?: { x: number; y: number }; toFace?: { normal: Vec3; point: Vec3; name?: string }; reverse?: boolean; throughAll?: boolean }) => Promise<void>;
   /** Extrude session (model mode): active flag, target profile sketch, chosen region, live params. */
   extrudeActive: boolean;
   extrudeTarget: string | null;
@@ -322,11 +322,13 @@ export interface AppState {
   extrudeDistanceExpr: string;
   extrudeOperation: "new" | "join" | "cut" | "intersect";
   extrudeSymmetric: boolean;
-  /** How far the extrude goes: a distance, or up to a face picked in the viewport. */
-  extrudeExtent: "distance" | "toFace";
+  /** How far the extrude goes: a distance, through everything, or up to a face picked in the viewport. */
+  extrudeExtent: "distance" | "toFace" | "throughAll";
+  /** Extrude to the other side of the sketch. */
+  extrudeReverse: boolean;
   /** The face a "to face" extrude stops at (picked while the session is open). */
   extrudeToFace: { normal: Vec3; point: Vec3; name?: string } | null;
-  setExtrudeExtent: (e: "distance" | "toFace") => void;
+  setExtrudeExtent: (e: "distance" | "toFace" | "throughAll") => void;
   /** Pick the face a "to face" extrude stops at; the distance field shows how far that is. */
   pickExtrudeToFace: (point: Vec3, normal: Vec3) => void;
   openExtrude: (sketchId?: string) => void;
@@ -710,6 +712,7 @@ export const useStore = create<AppState>((set, get) => {
     extrudeOperation: "new",
     extrudeSymmetric: false,
     extrudeExtent: "distance",
+    extrudeReverse: false,
     extrudeToFace: null,
     agentOpen: false,
     apiKey: readLS(AGENT_KEY_LS),
@@ -1208,9 +1211,15 @@ export const useStore = create<AppState>((set, get) => {
     },
     cancelMotionStudy: () => { motionToken++; set({ motionStatus: "idle", motionProgress: 0 }); },
     extrudeSketch: async (sketchId, distanceExpr, opts) => {
-      if (distanceExpr != null && !opts?.toFace) {
+      if (distanceExpr != null && !opts?.toFace && !opts?.throughAll) {
         const problem = expressionProblem(distanceExpr, get().session.doc.parameters.map((p) => p.name));
         if (problem) { set({ toast: { kind: "error", text: `Distance: ${problem}` } }); return; }
+      }
+      // a sketch with no closed region has nothing to extrude: say so rather than add a feature that fails (M11)
+      const sk = get().session.doc.sketches[sketchId];
+      if (sk && !opts?.region && !hasClosedRegion(sk)) {
+        set({ toast: { kind: "error", text: `${sk.name} has no closed region to extrude: close its outline first` } });
+        return;
       }
       await get().ensureKernel();
       await runDispatch("feature.extrude", {
@@ -1220,6 +1229,8 @@ export const useStore = create<AppState>((set, get) => {
         ...(opts?.symmetric ? { symmetric: true } : {}),
         ...(opts?.region ? { region: opts.region } : {}),
         ...(opts?.toFace ? { extent: "toFace", toFace: opts.toFace, distance: "0" } : {}),
+        ...(opts?.throughAll ? { extent: "throughAll" } : {}),
+        ...(opts?.reverse && !opts?.symmetric && !opts?.toFace ? { direction: "reverse" } : {}),
       });
     },
     mirrorModel: async (plane) => {
@@ -1231,15 +1242,16 @@ export const useStore = create<AppState>((set, get) => {
     },
     openExtrude: (sketchId) => {
       const s = get();
-      const sketches = Object.values(s.session.doc.sketches);
+      const sketches = profileChoices(s.session.doc);
       const hasBody = Object.keys(s.session.doc.features).length > 0;
+      // the sketch asked for, else the open one, else the latest that has a closed region
       const target = sketchId ?? s.activeSketchId ?? (sketches.length ? sketches[sketches.length - 1].id : null);
       if (!target && !hasBody) { set({ toast: { kind: "info", text: "Draw a sketch first, then extrude." } }); return; }
       const onFace = !!target && s.session.doc.sketches[target]?.planeId === "custom";
       // Enter an extrude session: click a profile region or a face to pick what to extrude.
       set({
         extrudeActive: true, extrudeTarget: target, extrudeRegion: null,
-        extrudeDistanceExpr: "10", extrudeOperation: hasBody && onFace ? "join" : "new", extrudeSymmetric: false, extrudeExtent: "distance", extrudeToFace: null,
+        extrudeDistanceExpr: "10", extrudeOperation: hasBody && onFace ? "join" : "new", extrudeSymmetric: false, extrudeExtent: "distance", extrudeReverse: false, extrudeToFace: null,
         mode: "model", activeSketchId: null, selection: [], featureTool: null,
       });
     },
@@ -1332,10 +1344,12 @@ export const useStore = create<AppState>((set, get) => {
       const s = get();
       if (!s.extrudeTarget) return;
       if (s.extrudeExtent === "toFace" && !s.extrudeToFace) { set({ lastMessage: "Click the face to extrude up to." }); return; }
-      await s.extrudeSketch(s.extrudeTarget, s.extrudeDistanceExpr.trim() || "10", {
+      await s.extrudeSketch(s.extrudeTarget, s.extrudeExtent === "throughAll" ? "0" : s.extrudeDistanceExpr.trim() || "10", {
         operation: s.extrudeOperation,
         symmetric: s.extrudeSymmetric,
         region: s.extrudeRegion ?? undefined,
+        reverse: s.extrudeReverse,
+        throughAll: s.extrudeExtent === "throughAll",
         ...(s.extrudeExtent === "toFace" && s.extrudeToFace ? { toFace: s.extrudeToFace } : {}),
       });
       get().closeExtrude();
