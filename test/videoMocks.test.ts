@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, FULL } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { evaluateFeatures } from "../src/core/features";
 import { resolveParameters } from "../src/core/parameters";
@@ -15,10 +15,12 @@ const dir = fileURLToPath(new URL("../video/mock/", import.meta.url));
 const caches = readdirSync(dir).filter((f) => /^agent-.*\.json$/.test(f));
 const UI_TOOLS = new Set(["set_panel", "run_action", "get_state", "get_hotkeys", "get_ring", "get_assist_inbox", "render_view"]);
 
+// Every command must still run, by default; building the bodies they make is the
+// extended run's (the vase's loft and shell take most of a minute).
 describe("video mock agent caches", () => {
   it("has at least one", () => expect(caches.length).toBeGreaterThan(0));
   for (const f of caches) {
-    it(`${f}: every tool call runs and builds a body`, async () => {
+    it(`${f}: every tool call runs${FULL ? " and builds a body" : ""}`, async () => {
       const cache = JSON.parse(readFileSync(dir + f, "utf8"));
       const s = realSession();
       for (const turn of cache.turns) {
@@ -30,8 +32,9 @@ describe("video mock agent caches", () => {
         }
       }
       expect(cache.turns.at(-1).stop_reason).toBe("end_turn");
+      if (!FULL) return;
       const bodies = Object.values(evaluateFeatures(s.doc, resolveParameters(s.doc.parameters).scope)).filter((b) => b.mesh);
       if (cache.turns.some((t: { content: { type: string; name?: string }[] }) => t.content.some((b) => b.type === "tool_use" && !UI_TOOLS.has(b.name!)))) expect(bodies.length).toBeGreaterThan(0);
-    });
+    }, 120000);
   }
 });
