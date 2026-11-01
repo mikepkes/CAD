@@ -4,6 +4,7 @@ import { PLANES } from "../geometry/plane";
 import { ask } from "./kit/askDialog";
 import { addPrimitive, addGear } from "./concepts/contextActions";
 import { Icon, iconForAction } from "./icons";
+import { ExamplesMenu } from "./ExamplesMenu";
 
 function FileMenu() {
   const newDocument = useStore((s) => s.newDocument);
@@ -16,6 +17,7 @@ function FileMenu() {
     <div className="file-menu">
       <button className="btn ghost with-icon" title="New document" onClick={() => void ask({ title: "New document", text: "Start a new document? The current one is replaced; unsaved work is autosaved in this browser or app only.", confirmLabel: "New document", danger: true }).then((ok) => { if (ok) newDocument(); })}><Icon name="file-new" />New</button>
       <button className="btn ghost with-icon" title="Open a .vibecad.json file" onClick={() => inputRef.current?.click()}><Icon name="folder" />Open</button>
+      <ExamplesMenu />
       <button className="btn ghost with-icon" title="Save to a .vibecad.json file" onClick={saveToFile}><Icon name="save" />Save</button>
       <button className="btn ghost with-icon" title="Import STEP, BREP, STL, FreeCAD (.FCStd) or Rhino (.3dm) as bodies" onClick={() => importRef.current?.click()}><Icon name="import" />Import</button>
       <ExportMenu />

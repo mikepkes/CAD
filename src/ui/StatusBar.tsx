@@ -10,9 +10,10 @@ export function StatusBar() {
   const mcp = useStore((s) => s.desktopMcp);
 
   return (
-    <div className="statusbar">
+    <div className="statusbar" role="contentinfo" aria-label="Status">
       <span className="status-mode">{mode === "sketch" ? `Sketch · ${tool}` : "Model"}</span>
-      <span className="status-msg">{message}</span>
+      {/* a live region: what just happened is read out as it changes */}
+      <span className="status-msg" role="status" aria-live="polite">{message}</span>
       <div className="spacer" />
       <AssistChip />
       {mcp.running && mcp.port && (

@@ -39,6 +39,7 @@ import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
 import type { CutPart } from "../core/drawings";
 import { pickItems, type PickItem } from "./pickMenu";
+import { exampleTitle, exampleUrl } from "./examples";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
 import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
 
@@ -413,6 +414,8 @@ export interface AppState {
   loadDocument: (doc: CadDocument) => Promise<void>;
   saveToFile: () => void;
   openFile: (file: File) => Promise<void>;
+  /** Open a bundled example (public/examples/<name>.json) in place of the document. */
+  openExample: (name: string) => Promise<void>;
   /** Import a STEP / BREP / STL / FreeCAD file as bodies (feature.import on the timeline). */
   importFile: (file: File) => Promise<void>;
 }
@@ -1460,6 +1463,9 @@ export const useStore = create<AppState>((set, get) => {
       void get().ensureKernel();
       // a 3D mouse: the desktop's native reader, or a browser device paired before
       void import("./spaceMouseInput").then((m) => m.autoConnectSpaceMouse()).catch(() => { /* no device support here */ });
+      // a link to an example (?example=roubo) opens it; otherwise the autosaved document comes back
+      const example = typeof location !== "undefined" ? new URLSearchParams(location.search).get("example") : null;
+      if (example) { await get().openExample(example); return; }
       let saved: string | null = null;
       try {
         saved = localStorage.getItem(AUTOSAVE_KEY);
@@ -1517,6 +1523,19 @@ export const useStore = create<AppState>((set, get) => {
         bump({ toast: { kind: "info", text: `Opened ${file.name}` } });
       } catch (e) {
         bump({ toast: { kind: "error", text: `Open failed: ${(e as Error).message}` } });
+      }
+    },
+    openExample: async (name) => {
+      try {
+        const resp = await fetch(exampleUrl(name));
+        const text = await resp.text();
+        if (!resp.ok || /^\s*</.test(text)) { bump({ toast: { kind: "error", text: `Couldn't find the example “${name}”.` } }); return; }
+        await get().loadDocument(deserializeDocument(text));
+        const doc = get().session.doc;
+        bump({ toast: { kind: "info", text: `Opened ${doc.about?.title ?? exampleTitle(name)}` }, lastMessage: `Opened the ${exampleTitle(name)} example` });
+        window.dispatchEvent(new CustomEvent("vibecad:view", { detail: "iso" }));
+      } catch (e) {
+        bump({ toast: { kind: "error", text: `Couldn't open the example: ${(e as Error).message}` } });
       }
     },
     importFile: async (file) => {

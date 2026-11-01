@@ -26,6 +26,7 @@ import { registerAppPanels } from "../model/appPanels";
 import { SideResizer } from "./SideResizer";
 import { BuildProgress } from "./BuildProgress";
 import { Toast } from "./Toast";
+import { FirstRun } from "./FirstRun";
 
 export function App() {
   const mode = useStore((s) => s.mode);
@@ -46,23 +47,25 @@ export function App() {
 
   return (
     <div className="app">
+      <h1 className="sr-only">VibeCAD</h1>
       <Toolbar />
       {mode === "sketch" && <ConstraintBar />}
       <div className="workspace">
-        <aside className={`side left ${leftOpen ? "" : "collapsed"}`} style={{ width: sideWidth.left, marginLeft: leftOpen ? 0 : -sideWidth.left }}>
+        <aside id="side-left" aria-label="Browser, parameters and history" className={`side left ${leftOpen ? "" : "collapsed"}`} style={{ width: sideWidth.left, marginLeft: leftOpen ? 0 : -sideWidth.left }}>
           <BrowserPanel />
           <ParametersPanel />
           <TimelinePanel />
         </aside>
         {leftOpen && <SideResizer side="left" />}
-        <button className="side-toggle left" onClick={() => setLeftOpen((v) => !v)}>
-          {leftOpen ? "‹" : "›"}
+        <button className="side-toggle left" aria-controls="side-left" aria-expanded={leftOpen} aria-label={leftOpen ? "Hide the left panel" : "Show the left panel"} title={leftOpen ? "Hide the left panel" : "Show the left panel"} onClick={() => setLeftOpen((v) => !v)}>
+          <span aria-hidden="true">{leftOpen ? "‹" : "›"}</span>
         </button>
 
         <main className="center">
           <div className="center-view">
             <Viewport overlays={<>{workbench && <WorkbenchOverlay />}<LensOverlay /></>} />
             <PanelToggles />
+            <FirstRun />
             <Toast />
             <BuildProgress />
             <ExtrudePanel />
@@ -71,11 +74,11 @@ export function App() {
           {workbench && mode === "model" && <div className="center-dock"><HistoryStrip /></div>}
         </main>
 
-        <button className="side-toggle right" onClick={() => setRightOpen((v) => !v)}>
-          {rightOpen ? "›" : "‹"}
+        <button className="side-toggle right" aria-controls="side-right" aria-expanded={rightOpen} aria-label={rightOpen ? "Hide the right panel" : "Show the right panel"} title={rightOpen ? "Hide the right panel" : "Show the right panel"} onClick={() => setRightOpen((v) => !v)}>
+          <span aria-hidden="true">{rightOpen ? "›" : "‹"}</span>
         </button>
         {rightOpen && <SideResizer side="right" />}
-        <aside className={`side right ${rightOpen ? "" : "collapsed"}`} style={{ width: sideWidth.right, marginRight: rightOpen ? 0 : -sideWidth.right }}>
+        <aside id="side-right" aria-label="Inspector and concept panels" className={`side right ${rightOpen ? "" : "collapsed"}`} style={{ width: sideWidth.right, marginRight: rightOpen ? 0 : -sideWidth.right }}>
           <RightPanel />
         </aside>
       </div>
