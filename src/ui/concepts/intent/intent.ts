@@ -321,7 +321,7 @@ export function resolve(text: string, ctx: IntentCtx): Suggestion[] {
   for (const a of ctx.actions) {
     if (/^(view\.(frame|iso|front|top|right|back|left|bottom|workbench|lens|ledger|space|materials|mechanism)$|edit\.undo|edit\.redo|intent\.)/.test(a.id)) continue;
     const m = bestOf(trimmed, a.label, ACTION_ALIASES[a.id] ?? []);
-    if (m.score) add({ kind: "action", score: m.score * 0.9, action: { type: "hotkey", id: a.id }, label: a.label, detail: m.alias ? `“${m.alias}”` : "Run it", message: `${a.label}.` });
+    if (m.score) add({ kind: "action", score: m.score * 0.9, action: { type: "hotkey", id: a.id }, label: a.label, detail: m.alias ? `alias: ${m.alias}` : COMMON_DETAIL[a.id] ?? "Run it", message: `${a.label}.` });
   }
 
   return rank(out);
@@ -346,9 +346,15 @@ export function remember(recent: RecentCommand[], s: RecentCommand): RecentComma
 
 /** The ids of the common commands offered when nothing is typed (each only while it can run). */
 export const COMMON_ACTIONS = ["view.section", "app.agent", "app.shortcuts", "motion.study"];
+const COMMON_DETAIL: Record<string, string> = {
+  "view.section": "Clip the model on a plane to see inside",
+  "app.agent": "Ask Claude to build or change the model",
+  "app.shortcuts": "Every key, and what the action ring holds",
+  "motion.study": "Check the joints move through their range without collisions",
+};
 
 /** What an empty palette offers: the recent commands, then the common ones (panels, fit, section, agent, help). */
-export function emptySuggestions(ctx: IntentCtx, recent: RecentCommand[]): (Suggestion & { group: "recent" | "common" })[] {
+export function emptySuggestions(ctx: IntentCtx, recent: RecentCommand[], can: (id: string) => boolean = () => true): (Suggestion & { group: "recent" | "common" })[] {
   const out: (Omit<Suggestion, "id"> & { group: "recent" | "common" })[] = [];
   for (const r of recent) out.push({ ...r, score: 1, group: "recent" });
   const common: Omit<Suggestion, "id">[] = [
@@ -356,7 +362,7 @@ export function emptySuggestions(ctx: IntentCtx, recent: RecentCommand[]): (Sugg
     { kind: "view", score: 1, action: { type: "frame" }, label: "Fit the view", detail: "Frame the selection or the whole part", message: "Framed." },
     ...COMMON_ACTIONS.flatMap((id) => {
       const a = ctx.actions.find((x) => x.id === id);
-      return a ? [{ kind: "action" as const, score: 1, action: { type: "hotkey" as const, id }, label: a.label, detail: ACTION_ALIASES[id]?.[0] ? `“${ACTION_ALIASES[id][0]}”` : "Run it", message: `${a.label}.` }] : [];
+      return a && can(id) ? [{ kind: "action" as const, score: 1, action: { type: "hotkey" as const, id }, label: a.label, detail: COMMON_DETAIL[id] ?? "Run it", message: `${a.label}.` }] : [];
     }),
     panelSuggestion("ledger", 1),
   ];

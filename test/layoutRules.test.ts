@@ -18,10 +18,11 @@ describe("layout rules", () => {
     expect(t).toMatch(/height:\s*52px/);
     expect(t).toMatch(/flex-wrap:\s*nowrap/);
   });
-  it("the side panels' collapse buttons sit in the first header row, which keeps room for them (no more 'OWSER')", () => {
-    expect(rules(".side-toggle.open")).toMatch(/height:\s*24px/);
-    expect(rules(".side.left > .panel:first-child > .panel-head")).toMatch(/padding-left:\s*36px/);
-    expect(css).toMatch(/\.side\.right > \.k-tabs,[\s\S]*?padding-right:\s*36px/);
+  it("the side panels' collapse buttons sit on the view's edge, never over a header (no more 'OWSER'), and the crumb and switches clear them", () => {
+    expect(rules(".side-toggle.left.open")).toMatch(/left:\s*calc\(var\(--side-left/);
+    expect(rules(".side-toggle.right.open")).toMatch(/right:\s*calc\(var\(--side-right/);
+    expect(rules(".center-view .wb-crumb")).toMatch(/left:\s*36px/);
+    expect(rules(".center-view > .k-panel-toggle")).toMatch(/right:\s*36px/);
   });
   it("the Agent drawer opens under the panel switches, which stay reachable", () => {
     expect(rules(".agent-panel")).toMatch(/top:\s*52px/);

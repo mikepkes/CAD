@@ -424,12 +424,10 @@ body {
 }
 /* the panel switches: one line along the top of the view, clear of the crumb (beside-crumb) and of a collapsed
    side's toggle; the row itself lets pointer events through to the model, its buttons take them */
-.center-view > .k-panel-toggle { left: 12px; right: 12px; pointer-events: none; }
+.center-view > .k-panel-toggle { left: 36px; right: 36px; pointer-events: none; }
 .center-view > .k-panel-toggle > * { pointer-events: auto; }
 .center-view > .k-panel-toggle.beside-crumb { left: 45%; }
-.workspace.right-collapsed .center-view > .k-panel-toggle { right: 36px; }
-.workspace.left-collapsed .center-view > .k-panel-toggle:not(.beside-crumb) { left: 36px; }
-.workspace.left-collapsed .wb-crumb { left: 36px; }
+.center-view .wb-crumb { left: 36px; }
 .center-dock {
   flex: none;
   max-height: 40%;
@@ -598,12 +596,13 @@ body {
 .side-resize:hover,
 body.side-resizing .side-resize { background: var(--accent); opacity: 0.5; }
 body.side-resizing { cursor: col-resize; user-select: none; }
-/* a side panel's collapse button: in its first header row while the panel is open (the row keeps room for it),
-   at the view's top edge while it is collapsed */
+/* a side panel's collapse button sits on the view's edge beside the panel, open or collapsed: never over a
+   panel's header or its rows (a header scrolls away with the panel), and the crumb and the switches keep
+   clear of it. --side-left / --side-right are the panels' drawn widths (App.tsx). */
 .side-toggle {
   position: absolute;
   top: 12px;
-  z-index: 3;
+  z-index: 16;
   width: 22px;
   height: 28px;
   padding: 0;
@@ -614,17 +613,14 @@ body.side-resizing { cursor: col-resize; user-select: none; }
   border-radius: 6px;
 }
 .side-toggle:hover { color: var(--text); border-color: var(--accent); }
-.side-toggle.open { top: 5px; height: 24px; }
 .side-toggle.left {
   left: 6px;
 }
 .side-toggle.right {
   right: 6px;
 }
-.side.left > .panel:first-child > .panel-head { padding-left: 36px; }
-.side.right > .k-tabs,
-.side.right > .panel:first-child > .panel-head,
-.side.right > :first-child:not(.k-tabs) .panel-head:first-child { padding-right: 36px; }
+.side-toggle.left.open { left: calc(var(--side-left, 0px) + 6px); }
+.side-toggle.right.open { right: calc(var(--side-right, 0px) + 6px); }
 
 /* ---------- Panels ---------- */
 .panel {
@@ -1591,11 +1587,11 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .config-grid input.config-cell::placeholder { color: var(--text-dim); opacity: 0.6; }
 .config-name.default, .config-cell.default { font-size: 12px; color: var(--text-dim); padding: 3px 5px; font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .config-grid { padding-bottom: 4px; }
-.config-text-btn { background: transparent; border: 1px solid var(--line); color: var(--text-dim); border-radius: 5px; font-size: 11px; padding: 2px 7px; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.config-text-btn { background: transparent; border: 1px solid var(--line); color: var(--text-dim); border-radius: 5px; font-size: 11px; padding: 2px 7px; cursor: pointer; text-transform: none; letter-spacing: 0; white-space: nowrap; }
 .config-text-btn:hover, .config-text-btn[aria-pressed="true"] { color: var(--text); border-color: var(--accent); }
 .config-name.default { font-family: inherit; }
 .config-row.warn input.config-name { border-color: var(--warn); }
-.config-add { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 5px; font-size: 11px; padding: 1px 2px; max-width: 92px; text-transform: none; letter-spacing: 0; }
+.config-add { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 5px; font-size: 11px; padding: 1px 2px; max-width: 84px; text-transform: none; letter-spacing: 0; }
 .config-paste textarea { width: 100%; box-sizing: border-box; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 5px; font: 12px ui-monospace, monospace; padding: 5px; }
 .param-value.configured { color: var(--accent); }
 

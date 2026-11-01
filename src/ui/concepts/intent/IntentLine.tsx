@@ -52,7 +52,7 @@ export function IntentLine() {
   const ctx = useMemo(() => buildCtx(session, rows, hotkeys.describe().contexts, intents), [session, rev, rows, mode, intents, open]);
   const [recent, setRecent] = useState<RecentCommand[]>(loadRecent);
   // nothing typed: the recent commands, then common ones
-  const suggestions: (Suggestion & { group?: "recent" | "common" })[] = useMemo(() => (!open ? [] : text.trim() ? resolve(text, ctx) : emptySuggestions(ctx, recent)), [open, text, ctx, recent]);
+  const suggestions: (Suggestion & { group?: "recent" | "common" })[] = useMemo(() => (!open ? [] : text.trim() ? resolve(text, ctx) : emptySuggestions(ctx, recent, (id) => hotkeys.can(id))), [open, text, ctx, recent]);
   const selected = Math.min(sel, Math.max(0, suggestions.length - 1));
 
   // ---- run: every route ends in the store ----

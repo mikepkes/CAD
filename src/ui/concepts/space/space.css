@@ -4,9 +4,10 @@
 .space-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .space-row .k-label { display: inline-flex; align-items: center; gap: 4px; }
 .space-progress { margin-left: auto; }
-.space-progress-row { display: flex; align-items: center; gap: 8px; }
-.space-progress-row .space-progress { margin-left: 0; flex: none; font-size: 12px; color: var(--text); }
-.space-progress-bar { flex: 1; min-width: 40px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+/* the bar across the panel, then the count with the time left and Stop under it */
+.space-progress-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 8px; }
+.space-progress-row .space-progress { margin-left: 0; min-width: 0; font-size: 12px; color: var(--text); }
+.space-progress-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .space-progress-bar > span { display: block; height: 100%; background: var(--k-accent); transition: width 160ms linear; }
 .space-note { margin: 0; font-size: 12px; line-height: 1.45; }
 .space-ghost-status { margin-left: auto; }

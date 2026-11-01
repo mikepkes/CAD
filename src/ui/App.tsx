@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import { Viewport } from "./Viewport";
 import { Toolbar } from "./Toolbar";
 import { ConstraintBar } from "./ConstraintBar";
@@ -81,7 +81,8 @@ export function App() {
     <div className="app">
       <Toolbar />
       {mode === "sketch" && <ConstraintBar />}
-      <div className={`workspace${leftOpen ? "" : " left-collapsed"}${rightOpen ? "" : " right-collapsed"}`}>
+      <div className={`workspace${leftOpen ? "" : " left-collapsed"}${rightOpen ? "" : " right-collapsed"}`}
+        style={{ "--side-left": `${narrow ? 240 : sideWidth.left}px`, "--side-right": `${narrow ? 240 : sideWidth.right}px` } as CSSProperties}>
         <aside className={`side left ${leftOpen ? "" : "collapsed"}`} style={{ width: sideWidth.left, marginLeft: leftOpen ? 0 : -sideWidth.left }}>
           <BrowserPanel />
           <ParametersPanel />
