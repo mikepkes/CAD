@@ -574,6 +574,13 @@ export class SceneManager {
   }
 
   /** The camera's position and view direction in world space. */
+  /** The camera's axes in world space: screen right, screen up, and back (from the target towards the camera). */
+  cameraBasis(): { right: { x: number; y: number; z: number }; up: { x: number; y: number; z: number }; back: { x: number; y: number; z: number } } {
+    this.camera.updateMatrixWorld();
+    const e = this.camera.matrixWorld.elements;
+    return { right: { x: e[0], y: e[1], z: e[2] }, up: { x: e[4], y: e[5], z: e[6] }, back: { x: e[8], y: e[9], z: e[10] } };
+  }
+
   cameraPose(): { position: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number } } {
     const p = this.camera.position, d = this.camera.getWorldDirection(new THREE.Vector3());
     return { position: { x: p.x, y: p.y, z: p.z }, direction: { x: d.x, y: d.y, z: d.z } };
@@ -1036,16 +1043,56 @@ export class SceneManager {
     });
   }
 
-  /** Animate back to a perspective 3D view (on finishing a sketch). */
+  /** Animate back to a perspective 3D view (on finishing a sketch): ease from looking straight at the sketch to a
+   *  three-quarter view of it, Z up, so an extrude's depth can be seen. */
   exitSketchView() {
     if ((this.camera as THREE.OrthographicCamera).isOrthographicCamera) {
       this.matchPerspectiveToOrtho();
       this.setActiveCamera(this.perspCam);
     }
-    // keep the current orientation; just a gentle settle (no reframe)
     this.tween = null;
     this.controls.enabled = true;
     this.controls.update();
+    const off = this.camOff();
+    const len = off.length();
+    if (len < 1e-6) return;
+    const n = off.clone().normalize();
+    // the screen's right and up while looking at the sketch: lean the view up and to the right of its normal
+    const right = new THREE.Vector3().crossVectors(this.camera.up, n).normalize();
+    const up = new THREE.Vector3().crossVectors(n, right).normalize();
+    if (!Number.isFinite(right.x) || right.lengthSq() < 1e-9) return;
+    // lean to the +X side, and upward (a wall-like sketch) or towards the front (a floor-like one): a front-right,
+    // from-above three-quarter view like the standard iso
+    if (right.x < -1e-6) right.negate();
+    const s = Math.abs(up.z) > 0.5 ? Math.sign(up.z) : up.y > 0 ? -1 : 1;
+    const dir = n.clone().addScaledVector(right, 0.85).addScaledVector(up, 0.75 * s).normalize();
+    // a view from below the floor looks wrong: keep it above
+    if (dir.z < 0.25) { dir.z = 0.25 + Math.abs(dir.z) * 0.5; dir.normalize(); }
+    this.beginTween({
+      from: { off, target: this.controls.target.clone(), up: this.camera.up.clone(), zoom: this.perspCam.zoom },
+      to: { off: dir.multiplyScalar(len), target: this.controls.target.clone(), up: new THREE.Vector3(0, 0, 1), zoom: this.perspCam.zoom },
+      dur: 0.6,
+    });
+  }
+
+  /** Turn (animated) to look at the model from along `dir` (world, pointing from the model to the camera), framed:
+   *  what a click on the view cube's face, edge or corner does. Model mode only. */
+  viewFromDir(dir: { x: number; y: number; z: number }) {
+    if (this.lastData?.mode === "sketch") return;
+    const d = new THREE.Vector3(dir.x, dir.y, dir.z);
+    if (d.lengthSq() < 1e-12) return;
+    d.normalize();
+    const box = new THREE.Box3().setFromObject(this.solidsGroup);
+    const center = box.isEmpty() ? this.controls.target.clone() : box.getCenter(new THREE.Vector3());
+    const radius = box.isEmpty() ? Math.max(20, this.camOff().length() / 3) : Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
+    const pc = this.perspCam;
+    const dist = (radius * 1.3) / Math.tan(((pc.fov * Math.PI) / 180) / 2);
+    // straight down or up: Y up on screen; otherwise Z up
+    const up = Math.abs(d.z) > 0.999 ? new THREE.Vector3(0, d.z > 0 ? 1 : -1, 0) : new THREE.Vector3(0, 0, 1);
+    this.beginTween({
+      from: { off: this.camOff(), target: this.controls.target.clone(), up: this.camera.up.clone(), zoom: pc.zoom },
+      to: { off: d.multiplyScalar(dist), target: center, up, zoom: pc.zoom },
+    });
   }
 
   /** Zoom-to-fit a set of sketch (u,v) points, keeping the current view direction. */

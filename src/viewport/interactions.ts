@@ -102,7 +102,10 @@ export class Interactions {
   };
 
   /** Frame (zoom-to-fit): the selection if any, else everything in view. */
-  private onView = (e: CustomEvent<string>) => this.scene.viewFrom(e.detail);
+  private onView = (e: CustomEvent<string | { dir: { x: number; y: number; z: number } }>) => {
+    if (typeof e.detail === "string") this.scene.viewFrom(e.detail);
+    else if (e.detail?.dir) this.scene.viewFromDir(e.detail.dir);
+  };
 
   private onFrame = () => {
     const st = this.st();
