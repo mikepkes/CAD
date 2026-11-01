@@ -145,6 +145,8 @@ export interface AppState {
   // 3D solids (derived from features via the OCC kernel)
   solids: Record<string, SolidEval>;
   kernelReady: boolean;
+  /** The model rebuilding now: when it started (performance.now) and how far it has got (0…1); null when idle. */
+  build: { started: number; fraction: number } | null;
   kernelLoading: boolean;
 
   // Motion study (customize mode): sweep the driven joints and pass/fail the
@@ -632,6 +634,7 @@ export const useStore = create<AppState>((set, get) => {
     faceSelection: null,
     solids: {},
     kernelReady: false,
+    build: null,
     motionStatus: "idle",
     motionProgress: 0,
     motionResult: null,
@@ -1044,10 +1047,12 @@ export const useStore = create<AppState>((set, get) => {
       if (rebuildInFlight) { rebuildDirty = true; return rebuildInFlight; }
       rebuildInFlight = (async () => {
         try {
+          const started = performance.now(); // kept across the re-runs a drag queues: it's one wait to the person watching
           do {
             rebuildDirty = false;
             const doc = get().session.doc;
-            const { solids, facePlanes } = await geometry.evaluate(doc);
+            set({ build: { started, fraction: 0 } });
+            const { solids, facePlanes } = await geometry.evaluate(doc, (fraction) => set({ build: { started, fraction } }));
             // The backend may run on a worker (a doc copy), so fold the derived state
             // back onto the live doc: feature distances (inspector) and re-resolved
             // face-sketch planes (so the ghost sketch tracks its face).
@@ -1064,6 +1069,7 @@ export const useStore = create<AppState>((set, get) => {
           await refreshAnalysis();
         } finally {
           rebuildInFlight = null;
+          set({ build: null });
         }
       })();
       return rebuildInFlight;

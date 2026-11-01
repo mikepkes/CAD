@@ -1481,11 +1481,25 @@ function applyInTemplateFrame(apply: () => void, f: FeatureDef, bodies: Body[], 
 
 /** Build every feature in order into live bodies (caller frees the shapes).
  *  With a cache, unchanged steps replay instead of running the kernel. */
+/** Where a build reports how far it has got (0…1): set around one evaluation by its caller. */
+let buildProgress: ((fraction: number) => void) | null = null;
+/** Report a running evaluation's progress to `sink` while `fn` runs (the features, then the meshing). */
+export function withBuildProgress<T>(sink: ((fraction: number) => void) | undefined, fn: () => T): T {
+  const was = buildProgress;
+  buildProgress = sink ?? null;
+  try { return fn(); } finally { buildProgress = was; }
+}
+// building the features is nearly all the work (the star box: 2.8 s of 3); meshing them the rest
+const FEATURE_SHARE = 0.9;
+
 function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): { bodies: Body[]; out: Record<string, SolidEval> } {
   const out: Record<string, SolidEval> = {};
   const bodies: Body[] = [];
   let worlds: Map<string, Rigid> | undefined; // component frames, resolved only for pattern instances
-  for (const f of activeFeatures(doc, scope)) {
+  const active = activeFeatures(doc, scope);
+  let done = 0;
+  for (const f of active) {
+    buildProgress?.((FEATURE_SHARE * done++) / active.length);
     let T: Rigid | undefined;
     if (f.instanceFrame) {
       worlds ??= resolveComponentWorld(doc, scope);
@@ -1528,7 +1542,9 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
   cache?.begin();
   try {
     const { bodies, out } = evaluateBodies(doc, scope, cache);
+    let meshed = 0;
     for (const body of bodies) {
+      buildProgress?.(FEATURE_SHARE + ((1 - FEATURE_SHARE) * meshed++) / bodies.length);
       const row: SolidEval = { ...(out[body.id] ?? {}), featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance };
       if (body.decals?.length) row.threadDecals = body.decals;
       try {

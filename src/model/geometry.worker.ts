@@ -23,6 +23,9 @@ ctx.onmessage = async (e: MessageEvent) => {
     return;
   }
   if (initPromise) await initPromise;
-  const { res, transfer } = await runGeometryJob(msg, cache);
+  // progress, at most every 50 ms, so a long build can show how far it has got
+  let last = 0;
+  const progress = (fraction: number) => { const t = performance.now(); if (t - last > 50) { last = t; ctx.postMessage({ id: msg.id, kind: "progress", fraction }); } };
+  const { res, transfer } = await runGeometryJob(msg, cache, progress);
   ctx.postMessage(res, transfer);
 };
