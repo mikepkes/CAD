@@ -1,5 +1,6 @@
 // Act 3 · Rapid fire: about seven seconds per idea, mostly the bundled examples, then the mock agent.
 // Loading each model is cut from the edit; slow processing is sped up with its speed shown.
+// Narration: lines.mjs, by beat id.
 
 import { readFileSync } from "node:fs";
 
@@ -58,12 +59,12 @@ export async function act3(d) {
     await d.clickEl(".side-toggle.left"); await d.clickEl(".side-toggle.right");
   });
 
-  const clip = async (id, name, title, sub, narration, act) => {
+  const clip = async (id, name, title, sub, act) => {
     await load(d, name);
-    await d.beat(id, narration, async () => { await d.lower(title, sub); await act(); }, { minMs: 6500 });
+    await d.beat(id, async () => { await d.lower(title, sub); await act(); }, { minMs: 6500 });
   };
 
-  await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a section view, then a motion study", "A gyroscope that prints in one piece, already assembled. Cut it open and turn square to the cut: each ring hangs on cone pins that come to a point inside a socket, with just enough clearance to spin. Then the motion study turns every joint through a full circle and checks that nothing collides.", async () => {
+  await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a section view, then a motion study", async () => {
     // the section: tick Section in the toolbar, cut on the vertical XZ plane through the middle
     await d.api("cursor", true);
     const sec = await d.rect(".grid-controls label", "Section");
@@ -87,7 +88,7 @@ export async function act3(d) {
     await d.wait(1200);
   });
   if (hasExample("clockwork")) {
-    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm, and a Geneva drive", "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train. The planets roll inside the ring gear, and the worm creeps its wheel round at a fraction of the speed. And a Geneva drive turns steady motion into steps: the pin catches a slot, flicks the star a quarter turn, and the locking disc holds it still until the next.", async () => {
+    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm, and a Geneva drive", async () => {
       // no turntable: the camera holds still and only the gears move (posed from the turn parameter, not rebuilt)
       await d.api("aim", { dir: [0.2, -0.5, 1], ms: 1200, margin: 0.8 });
       await d.api("poseSweep", "turn", 0, 360, 5200, { ease: false });
@@ -104,8 +105,8 @@ export async function act3(d) {
       await d.api("poseSweep", "turn", 3204, 4068, 3000, { ease: false });
     });
   } else d.note("no clockwork example yet: gears clip skipped");
-  await clip("scissor-jointed", "scissor-jointed", "Jointed scissor lift", "the stage count is a slider, and it still moves", "A scissor lift where even the number of stages is a slider, patterned as a jointed assembly that still moves.", async () => { await sweep(d, "stages", [3, 4, 5, 4, 3], 2600); d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600); });
-  await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", "A box that snaps together, with every snap sized for the material you print it in.", async () => { await sweep(d, "width", [64, 76], 900); d.pick("star box"); await sweep(d, "width", [88, 76, 64], 2100); });
+  await clip("scissor-jointed", "scissor-jointed", "Jointed scissor lift", "the stage count is a slider, and it still moves", async () => { await sweep(d, "stages", [3, 4, 5, 4, 3], 2600); d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600); });
+  await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", async () => { await sweep(d, "width", [64, 76], 900); d.pick("star box"); await sweep(d, "width", [88, 76, 64], 2100); });
 
   // the bistable switch: ask Claude, which opens the force analysis itself (set_panel / run_action), sweeps it, and puts the lens on strain
   await d.cut(async () => {
@@ -113,7 +114,7 @@ export async function act3(d) {
     await d.clickEl(".side-toggle.right"); // the Mechanism tab lives in the right panel
     await d.run((c) => window.__vibecadDemo.mockAgent(c), forcesCache);
   });
-  await d.beat("bistable-forces", "Ask about a design, and Claude can drive the interface for you: here it opens the force analysis on a bistable switch, sweeps it through its travel, and turns the lens to strain. Both rest positions and the snap force are marked on the curve.", async () => {
+  await d.beat("bistable-forces", async () => {
     await d.lower("Bistable switch", "Claude opens the force analysis for you");
     await d.api("cursor", true);
     await d.clickEl("button", "Agent");
@@ -127,7 +128,7 @@ export async function act3(d) {
     await d.wait(300); d.pick("force analysis");
     await d.wait(1200);
   }, { minMs: 12000 });
-  await d.beat("print-direction", "It's a print, and prints are weakest across their layers. Flat on the bed, the blades bend along their layers. Stand it on its end, and every blade is pulled across them: the same strain is now a bigger share of a lower limit.", async () => {
+  await d.beat("print-direction", async () => {
     await d.lower("Print direction", "the strain study knows a print is weaker across its layers");
     await d.api("cursor", true);
     await d.run(() => { const st = window.__vibecadDemo.store.getState(); st.agentOpen && st.toggleAgent(); });
@@ -149,8 +150,8 @@ export async function act3(d) {
     await d.clickEl(".side-toggle.right");
   });
 
-  await clip("gimbal", "gimbal", "Flexure gimbal", "steers a mirror on eight blades", "A two-axis flexure gimbal, the kind satellites use to steer a mirror.", async () => { await sweep(d, "alpha", there(-8, 8, 6), 2400); d.pick("gimbal"); await sweep(d, "beta", there(-8, 8, 6), 2400); });
-  await clip("roubo", "roubo", "Roubo workbench", "the leg vise, and the shop drawing to build it from", "A full-size woodworking bench, resized from one number. Its leg vise opens on a slider joint, and the shop drawing and cut list come straight from the model.", async () => {
+  await clip("gimbal", "gimbal", "Flexure gimbal", "steers a mirror on eight blades", async () => { await sweep(d, "alpha", there(-8, 8, 6), 2400); d.pick("gimbal"); await sweep(d, "beta", there(-8, 8, 6), 2400); });
+  await clip("roubo", "roubo", "Roubo workbench", "the leg vise, and the shop drawing to build it from", async () => {
     await d.api("aim", { dir: [0.45, -1, 0.5], ms: 1000, margin: 0.7 });
     await sweep(d, "L", there(1700, 2100, 4), 2400);
     // in on the leg vise while it opens and closes (posed, not rebuilt)
@@ -175,7 +176,7 @@ export async function act3(d) {
     await d.run((c) => { const D = window.__vibecadDemo; D.mockAgent(c); D.view("iso"); const st = D.store.getState(); if (st.showPlanes) st.toggleShowPlanes(); }, agentCache);
     await d.settle(400);
   });
-  await d.beat("agent", "Or just describe it. Claude builds it with the same commands you use: a twisted vase, every section sized from a parameter. Then refine it in plain words. Turn it into a lamp shade, and Claude cuts the windows and sets the material. The result is an ordinary parametric model you can keep editing.", async () => {
+  await d.beat("agent", async () => {
     await d.lower("Ask Claude", "it builds with the same commands you do");
     await d.api("cursor", true);
     await d.clickEl("button", "Agent");
@@ -200,7 +201,7 @@ export async function act3(d) {
     await d.api("turntable", null);
   }, { minMs: 14000 });
 
-  await d.beat("outro", "That's VibeCAD. Free, open source, in your browser or on your desktop. Thanks for watching.", async () => {
+  await d.beat("outro", async () => {
     await d.lower(null);
     await d.api("cursor", false);
     await d.api("titleCard", { title: "VibeCAD", subtitle: "mikepkes.github.io/CAD", chips: ["Free", "Open source (MIT)", "Browser or desktop"] });

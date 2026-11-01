@@ -1,5 +1,7 @@
 // Record takes: `node video/record.mjs [--acts 1,2,3] [--run NAME] [--dry]`.
-// Needs the dev server (`npm run dev`, or `npm run tauri:dev`) on :5173.
+// Needs the dev server (`npm run dev`, or `npm run tauri:dev`) on :5173, or another with --url / VIDEO_URL
+// (e.g. VIDEO_URL="http://localhost:5187/?demo"). Beats are timed to the voiceover clips in video/vo (video/vo.mjs)
+// when they exist, for the voices VIDEO_VOICES / VIDEO_TTS select; otherwise to each line's read time.
 // --dry runs the script without capturing frames (fast iteration).
 // Each act is its own take in video/takes/<run>/act<N>/, with a still per beat in beats/.
 
@@ -11,7 +13,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? proces
 const acts = arg("--acts", "1,2,3").split(",").map(Number);
 const run = arg("--run", new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19));
 const dry = process.argv.includes("--dry");
-const url = arg("--url", "http://localhost:5173/?demo");
+const url = arg("--url", process.env.VIDEO_URL ?? "http://localhost:5173/?demo");
 const root = join(new URL(".", import.meta.url).pathname, "takes", run);
 
 // Warm up first: the dev server pre-bundles dependencies on first use and reloads the page when it does, which
@@ -30,9 +32,9 @@ for (const n of acts) {
   const takeDir = join(root, `act${n}`);
   mkdirSync(join(takeDir, "beats"), { recursive: true });
   console.log(`act ${n} → ${takeDir}${dry ? " (dry)" : ""}`);
-  const d = await Director.open({ url, takeDir, record: !dry });
+  const d = await Director.open({ url, takeDir, record: !dry, act: n });
   const origBeat = d.beat.bind(d);
-  d.beat = async (id, text, fn, opts) => { await origBeat(id, text, fn, opts); await d.page.screenshot({ path: join(takeDir, "beats", `${String(d.timing.beats.length).padStart(2, "0")}-${id}.png`) }).catch(() => {}); };
+  d.beat = async (id, ...rest) => { await origBeat(id, ...rest); await d.page.screenshot({ path: join(takeDir, "beats", `${String(d.timing.beats.length).padStart(2, "0")}-${id}.png`) }).catch(() => {}); };
   try {
     if (mod.preroll) await mod.preroll(d);
     await d.startRecording();

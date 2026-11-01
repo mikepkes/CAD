@@ -4,6 +4,81 @@ Running notes for the automated tutorial video, newest pass first. Each pass
 records what to keep doing, what broke and how it was fixed, and what is still
 open, so the next pass starts from here rather than from memory.
 
+## Voiceover
+
+Synthesised narration, 20 voices, each its own audio track in the MP4.
+
+```
+node video/vo.mjs                      # every line in every voice; only changed lines are made again
+node video/vo.mjs --check              # + per line: longest/shortest voice, and the phonemes Kokoro read
+node video/vo.mjs --say                # the fallback: macOS `say` (voice say-daniel), when the GPU box is unreachable
+node video/vo.mjs --calibrate          # each Kokoro voice's pace over its clips, and the speed for 170 words a minute
+VIDEO_VOICES=af_heart node video/…     # any subset (ids from video/lib/voices.mjs), for vo, record and edit alike
+node video/checks/vo.mjs --run NAME    # after the edit: every line has its clips, each fits its beat, none overlap
+```
+
+- **The lines** live in `video/script/lines.mjs` by act and beat id (the act scripts say `d.beat(id, fn)`), plus the
+  montage's. Nothing needs a browser to read them.
+- **Clips:** `video/vo/<voice>/<act>-<beat>.wav`, 48 kHz 16-bit mono, with `manifest.json` per voice (text, the text
+  the engine was given, hash, length by `afinfo`, peak and speech level, the silence trimmed, Kokoro's phonemes).
+  A clip is used only while its hash (line, voice, speed, synth version) is current. Git-ignored.
+- **Engine:** Kokoro-82M (hexgrad, Apache-2.0: free to use its output in a public video) on hexgame, over ssh:
+  `vo.mjs` sends the lines as JSON to `video/tts/synth.py` (copied over each run), which runs them on the GPU with
+  the most free memory, a few sentences (≤ 200 characters) at a time (given a 95-word line whole, Kokoro rushed it
+  at 200–260 wpm), trims each clip's leading and trailing silence to 60 ms, levels the speech to −20 dBFS RMS
+  (peaks ≤ −1 dBFS) so switching tracks doesn't jump in volume, and writes 24 kHz WAVs; they come back by rsync and
+  `afconvert` makes them 48 kHz. Batches of 120 are saved as they land.
+  - **The GPUs are shared:** an Ollama LLM server holds most of both cards' memory, leaving about 1 GB each. That is
+    enough a few sentences at a time (all 560 clips ran on the 2080 Ti, about 1 s each, 8 minutes in all); a clip
+    that runs out of memory is made on the CPU (about 10 s) and the next one tries the GPU again.
+- **Voices** (`video/lib/voices.mjs`, in track order): the 20 best of Kokoro's 28 English voices by its own grades,
+  11 female and 9 male, 13 American and 7 British. **The default (first track, and the preview's only one) is
+  `af_heart`**, Kokoro's only A-grade voice: calm and warm. Then af_bella, bf_emma, am_michael, bm_george,
+  am_fenrir, af_aoede, af_kore, am_puck, af_sarah, bm_fable, bf_isabella, af_alloy, af_nova, bm_lewis, am_onyx,
+  af_sky, am_eric, bf_alice, bm_daniel. Left out: am_adam (F+), am_santa (D−), af_jessica, af_river, bf_lily,
+  am_liam, am_echo (D), and af_nicole (whispery, made for headphones). To change the default, move a voice to the
+  top of `KOKORO`; to add or drop one, edit the list (each needs a speed: `--calibrate`).
+- **Pace:** each voice has a `speed` (0.81–1.03) that brings it to 169–173 words a minute over all the lines
+  (Kokoro at speed 1 runs 166–217). The response is not linear (Eric: 186 wpm at 0.82, 163 at 0.78, 173 at 0.80),
+  so after `--calibrate` check the result and nudge. Levels: speech −19.8 to −21.7 dBFS, peaks ≤ −0.6 dBFS,
+  leading and trailing silence 60–120 ms after trimming.
+- **Pronunciation** (`spokenText()` in `video/lib/voices.mjs`; the captions keep the written words). Checked from
+  Kokoro's phonemes rather than by ear: VibeCAD → "vibe CAD" (it ran the word together), Roubo → "roo-bo" (it said
+  "row-bo"), fillet → "fill-it" (it said the cooking "fil-ay"), mikepkes → "mike p kes" (garbled). Already right:
+  Geneva, PETG and PLA (spelt out), STL, 3MF ("three M F"), STEP ("step"), Command K, millimetres. For `say`: the
+  same words respelt, plus PETG and PLA as letters.
+- **Timing:** the director pads each beat to max(its actions, the longest clip of its line across all the voices +
+  0.5 s), so no voice runs into the next beat; without clips it falls back to the read time (150 wpm + 0.5 s), as
+  before. `timing.json` records, per beat, `actionsMs`, `wantMs` and `defaultWantMs` (the default voice alone), and
+  the edit reports how much longer the slowest voices make the cut. Each clip starts at its beat's start. The
+  montage keeps its quick cuts and lets the last shot (the lamp shade turning) play on until the line is said.
+- **The mix:** `video/edit.mjs` places every clip at its beat's start in the cut (the cue sheet's "In": cut and
+  sped-up spans before it are already accounted for), one mix per voice (`video/out/<run>/vo/<voice>.wav`), and
+  writes `vo-timeline.json`. The compositor encodes the default voice's mix as AAC (WebCodecs `AudioEncoder`) into the
+  MP4 through mp4-muxer, which writes one audio track. The full render then gets all 20: `afconvert` encodes each
+  mix as AAC, and ffmpeg on hexgame remuxes the video with them (`-c copy`; each named e.g. "en-US · Heart (Kokoro)"
+  — ffmpeg's MP4 muxer keeps a track's name as its handler name, which players list — language eng, the first one
+  default); ffprobe's report is in `tracks.json`. The preview keeps the default voice
+  only. If hexgame is down, the MP4 keeps its one default track and the edit says so. `--no-vo` renders it silent.
+- **Installed on hexgame** (user space, nothing system-wide, no services): `~/vibecad-tts/` holds a Python 3.12 venv
+  (`venv/`, 5.9 GB: kokoro 0.9.4, misaki 0.9.4 with spaCy 3.8 and en_core_web_sm 3.8.0, torch 2.15.0 + CUDA 13.2
+  wheels, transformers, soundfile, espeakng-loader, phonemizer-fork; 117 packages from PyPI), the model
+  (`hf/`, 323 MB: hexgrad/Kokoro-82M from Hugging Face, `kokoro-v1_0.pth`, `config.json` and the 20 voice packs),
+  and `synth.py`. Nothing runs between uses; `out/` and `mux/` are emptied after each run. ffmpeg/ffprobe are the
+  system's (`/usr/bin`), already there. To remove it all: `rm -rf ~/vibecad-tts`.
+- **Re-creating it:** `python3 -m venv ~/vibecad-tts/venv && ~/vibecad-tts/venv/bin/pip install kokoro==0.9.4
+  soundfile`; the model downloads on first use (`HF_HOME=~/vibecad-tts/hf`).
+- **First test (run `vo-test`, Act 1 only, recorded against a dev server on :5187):** 188.7 s cut, 10 voiced beats;
+  the 20 voices make it 1.7 s longer than Heart alone would. Every clip is heard within 60 ms of its beat's start
+  (the trim pad) and nothing outside the clips; the tightest fit leaves 0.49 s before the next beat; ffprobe lists
+  20 AAC tracks of 188.67 s against 188.65 s of video; `video/checks/vo.mjs` passes (852 checks). The take itself
+  has five beat failures that the unchanged pass-5 scripts also have against the current app (raise-the-back's
+  picker finds only the YZ plane, and the beats after it miss their elements): re-check Act 1 before pass 5.
+- **Not chosen:** Orpheus (an older setup is in hexgame's home) is a 3B model built on Llama 3.2 (that licence's
+  terms apply) and needs GPU memory the Ollama server holds; F5-TTS's released weights are CC-BY-NC (not for a
+  public video); Dia-1.6B (Apache-2.0) needs several GB of GPU memory, against the ~1 GB free. Kokoro fits, its
+  licence is clean, and it is a strong narrator.
+
 ## Pass 5 (not recorded yet): your pass 4 review
 
 ### Your review of pass 4, and what changed

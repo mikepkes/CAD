@@ -1,5 +1,5 @@
 // Act 1 · Start: blank page to a parametric phone stand, by hand first.
-// Each beat: what happens (real input unless marked PUPPET) and its narration.
+// Each beat: what happens (real input unless marked PUPPET); its narration is in lines.mjs, under the same id.
 
 const W = (x, y, z) => ({ x, y, z });
 
@@ -123,13 +123,13 @@ async function pickBehind(d, world, want) {
 export async function act1(d) {
   const S = await d.run(() => window.__vibecadDemo.STAND);
 
-  await d.beat("title", "", async () => {
+  await d.beat("title", async () => {
     await d.api("titleCard", TITLE);
     await d.wait(2600);
     await d.api("titleCard", null);
   });
 
-  await d.beat("cold-open", "This is a phone stand made in VibeCAD. Drag one number, the phone's thickness, and the whole stand adapts. In the next four minutes you'll build it from a blank page.", async () => {
+  await d.beat("cold-open", async () => {
     await d.api("cursor", false);
     await d.api("turntable", 12); // degrees a second: a slow, readable turn (pass 1's 3D-mouse drift ran at about 450°/s)
     await d.wait(2200);
@@ -147,12 +147,12 @@ export async function act1(d) {
     await d.api("sideWidth", "left", 272, 500);
   });
 
-  await d.beat("get-vibecad", "VibeCAD runs in your browser at mikepkes dot github dot io slash CAD, or as a desktop app from the project's GitHub releases. It's free, it's open source under the MIT licence, and it will stay that way.", async () => {
+  await d.beat("get-vibecad", async () => {
     await d.api("cursor", false);
     await d.api("titleCard", { title: "Get VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Always will be"] });
   });
 
-  await d.beat("the-room", "Start a new document. Four places matter: the model in the middle, its history along the bottom, its numbers on the left, and two shortcuts. Command K runs anything you can type, and Space opens the action ring.", async () => {
+  await d.beat("the-room", async () => {
     await d.api("titleCard", null);
     await d.api("cursor", true);
     await d.clickEl(".toolbar button, button", "New");
@@ -171,7 +171,7 @@ export async function act1(d) {
     await d.key("Escape");
   });
 
-  await d.beat("block", "Start with a block. Hold Space for the action ring, point at Box and let go. Then click a face and drag its number to push it out. Turn the model to reach the far sides. Type a size when you know it, and pull the top down to make a thin base.", async () => {
+  await d.beat("block", async () => {
     await d.move(820, 420, 400);
     await d.ring("Add a box");
     await d.settle(400);
@@ -189,7 +189,7 @@ export async function act1(d) {
 
   let lipSketch = null;
   const side = W(S.width / 2, -S.depth / 2 + 8, S.base / 2); // the base's +X side, clear of the plate and the lip
-  await d.beat("raise-the-back", "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and pick Sketch from its action ring: the ring changes with what you've selected. Draw the outline corner by corner, finish the sketch, and extrude it up to the far side of the base, so it always spans the base, whatever its width. That side is hidden, so press and hold: VibeCAD lists everything under the cursor and lights each one as you point at it. The lip in front of the phone is a rectangle, made the same way.", async () => {
+  await d.beat("raise-the-back", async () => {
     await d.api("closeCards");
     await d.clickWorld(side); await d.settle();
     await d.shot("side");
@@ -217,7 +217,7 @@ export async function act1(d) {
     await extrudeToFarSide(d, S, W(-S.width / 2, (back[0].y + back[2].y) / 2 + 2, S.base + S.height * 0.6)); // the plate's far side: the base's is behind the panel now
   });
 
-  await d.beat("what-it-kept", "Here's the quiet part: VibeCAD kept a recipe of everything you did by hand. Every push and every sketch is a step in the history. Drag back through it, and forward again. Nothing has to be redone, and every step can still change.", async () => {
+  await d.beat("what-it-kept", async () => {
     const r = await d.rect(".wb-strip input[type=range]");
     await d.drag({ x: r.x + r.w - 6, y: r.cy }, { x: r.x + r.w * 0.2, y: r.cy }, 2200);
     await d.wait(500);
@@ -225,7 +225,7 @@ export async function act1(d) {
     await d.settle();
   }, { lower: { title: "Parametric history", sub: "direct edits are recorded as features" } });
 
-  await d.beat("make-it-parametric", "Now make it parametric. Open the base and name the numbers that matter: its depth and its width. Add a phone parameter, and tell the lip to sit phone plus two millimetres in front of the back.", async () => {
+  await d.beat("make-it-parametric", async () => {
     await d.lower("Design intent", "named numbers, and the rules between them");
     await d.api("closeCards");
     await d.clickWorld(topOfBase(S)); await d.settle();
@@ -250,7 +250,7 @@ export async function act1(d) {
     await d.key("Escape");
   });
 
-  await d.beat("turn-the-dials", "Now turn the dial. A thicker phone, and the lip moves to make room. That's all parametric means: change one number, and everything that depends on it follows. And Command Z puts it back.", async () => {
+  await d.beat("turn-the-dials", async () => {
     await d.lower(null);
     await d.api("aim", { dir: STAND_VIEW, ms: 1000, margin: 0.95 });
     await d.api("sideWidth", "left", WIDE, 500);
@@ -261,7 +261,7 @@ export async function act1(d) {
     await d.api("sideWidth", "left", 272, 500);
   });
 
-  await d.beat("just-type-it", "Or skip the mouse. Command K, and type what you want. Right, for a side view. Phone fourteen, and the lip makes room. Back to step two, and the history rolls back with it; roll to the end, and it's all there again.", async () => {
+  await d.beat("just-type-it", async () => {
     await d.lower("Intent line", "⌘K: type what you want");
     await d.intent("right", "View right");
     await d.wait(500);
@@ -275,7 +275,7 @@ export async function act1(d) {
     await d.lower(null);
   });
 
-  await d.beat("keep-it", "Save it to a file whenever you like. VibeCAD also keeps your work as you go, so you can experiment freely.", async () => {
+  await d.beat("keep-it", async () => {
     await d.clickEl("button", "Save");
     await d.wait(600);
   });
