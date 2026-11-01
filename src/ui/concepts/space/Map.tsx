@@ -3,12 +3,12 @@
 // point with a crosshair, the pins and the lightest passing cell. Dragging or
 // arrow keys move the design; every number comes from space.ts.
 
-import { useId, useRef, KeyboardEvent, PointerEvent } from "react";
+import { useEffect, useId, useRef, useState, CSSProperties, KeyboardEvent, PointerEvent } from "react";
 import type { Intent } from "../../../model/concepts/intents";
 import { Legend } from "../../kit/primitives";
 import {
   VIEW_W, VIEW_H, layout, cellSize, gridToSvg, clientToSvg, pointToValues, ticks, axisCoord, keyMove, metricRange, frontiers, frontierStroke, mapLegend,
-  describePoint, formatMetric, cellOpacity, cellTitle, lightestMark,
+  describePoint, formatMetric, cellOpacity, cellTitle, lightestMark, bestWord, mapFontSize,
   type GridSpec, type CellVerdict, type MetricKey, type Pin, type Verdict,
 } from "./space";
 
@@ -40,6 +40,17 @@ export function DesignSpaceMap(p: MapProps) {
   const range = metricRange(p.cells, p.metric);
   const dragging = useRef(false);
   const svgRef = useRef<SVGSVGElement>(null);
+  // the SVG is scaled to the panel: follow its width so its text reads at a fixed size on screen
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setWidth(el.getBoundingClientRect().width));
+    ro.observe(el);
+    setWidth(el.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, []);
+  const fontVars = { "--space-fs": `${mapFontSize(width, 10)}px`, "--space-fs-name": `${mapFontSize(width, 11)}px` } as CSSProperties;
 
   const valuesAt = (e: PointerEvent<SVGSVGElement>) => {
     const r = svgRef.current?.getBoundingClientRect() ?? { left: 0, top: 0, width: VIEW_W, height: VIEW_H };
@@ -83,6 +94,7 @@ export function DesignSpaceMap(p: MapProps) {
         role="img"
         tabIndex={0}
         aria-label={describePoint(p.spec, p.current.x, p.current.y, p.verdict, p.currentMetric)}
+        style={fontVars}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
@@ -141,7 +153,7 @@ export function DesignSpaceMap(p: MapProps) {
           <text className="space-axis-name" transform={`translate(12 ${L.top + L.h / 2}) rotate(-90)`} textAnchor="middle">{p.spec.y.name}{p.spec.y.unit ? ` (${p.spec.y.unit})` : ""}</text>
         </g>
         {p.lightest && (
-          <path className="space-lightest" data-testid="space-lightest" d={lightestMark(gridToSvg(L, p.lightest.i, p.lightest.j), cell)}><title>Lightest that passes: {formatMetric(p.lightest.metrics?.[p.metric], p.metric)}</title></path>
+          <path className="space-lightest" data-testid="space-lightest" d={lightestMark(gridToSvg(L, p.lightest.i, p.lightest.j), cell)}><title>The {bestWord(p.metric)} that passes: {formatMetric(p.lightest.metrics?.[p.metric], p.metric)}</title></path>
         )}
         {p.pins.filter((pin) => pin.xName === p.spec.x.name && pin.yName === p.spec.y.name).map((pin) => {
           const s = gridToSvg(L, axisCoord(p.spec.x, pin.x, p.spec.n), axisCoord(p.spec.y, pin.y, p.spec.n));

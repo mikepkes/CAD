@@ -1,6 +1,7 @@
 // Numbered pins on the geometry of the active component, one per feature row,
 // with leader lines; other components collapse into one badge each. Overlapping
-// pins merge into a cluster badge that opens a small chooser.
+// pins merge into a cluster badge that opens a small chooser, and so do
+// overlapping component badges ("Wheel handle · 3 ▾" lists the three).
 
 import { useRef, useState } from "react";
 import { useStore } from "../../../model/store";
@@ -10,7 +11,7 @@ import { clusterPins, placeCard, CARD_W_NARROW } from "../../kit/anchor";
 import { Button, Card, Pin } from "../../kit/primitives";
 import { useFeatureRows, useActiveComponent } from "../../kit/useFeatureRows";
 import { useCardSize } from "../../kit/useCardSize";
-import { CLUSTER_RADIUS, chooserSize, clusterKey, clusterLabel, componentLabel, hasMember, leaderState, otherComponentGroups, pinAnchors, pinState, placePins, visiblePins } from "./workbench";
+import { CLUSTER_RADIUS, badgeClusterLabel, chooserSize, clusterBadges, clusterKey, clusterLabel, componentLabel, hasMember, leaderState, otherComponentGroups, pinAnchors, pinState, placePins, visiblePins } from "./workbench";
 
 export function Pins() {
   const rows = useFeatureRows();
@@ -36,6 +37,18 @@ export function Pins() {
   const clusters = clusterPins(pins, CLUSTER_RADIUS);
   const open = chooser ? clusters.find((c) => clusterKey(c.members) === chooser) : null;
   const chooserBox = useCardSize(chooserRef, chooserSize(open?.members.length ?? 0));
+  // the other components' badges, merged where they overlap
+  const badges = clusterBadges(groups.flatMap((g, i) => {
+    const p = centres[i];
+    if (!p?.visible) return [];
+    const name = components[g.componentId]?.name ?? g.componentId;
+    return [{ pos: { x: p.x, y: p.y }, label: componentLabel(name, g.rows.length), name, group: g }];
+  }), 4, (ms) => (ms.length === 1 ? ms[0].label : `${badgeClusterLabel(ms.map((m) => m.name))} ▾`));
+  const [badgeChooser, setBadgeChooser] = useState<string | null>(null);
+  const badgeKey = (members: { group: { componentId: string } }[]) => members.map((m) => m.group.componentId).join(",");
+  const openBadges = badgeChooser ? badges.find((c) => badgeKey(c.members) === badgeChooser) : null;
+  const badgeRef = useRef<HTMLDivElement>(null);
+  const badgeBoxSize = useCardSize(badgeRef, chooserSize(openBadges?.members.length ?? 0));
   if (mode !== "model") return null;
 
   return (
@@ -79,7 +92,7 @@ export function Pins() {
             hot={hasMember(c.members, hotFeature)}
             ariaLabel={`Features ${label}`}
             ariaExpanded={chooser === key}
-            onClick={() => setChooser(chooser === key ? null : key)}
+            onClick={() => { setBadgeChooser(null); setChooser(chooser === key ? null : key); }}
           >
             {label}
           </Pin>
@@ -94,16 +107,29 @@ export function Pins() {
           ))}
         </Card>
       )}
-      {groups.map((g, i) => {
-        const p = centres[i];
-        if (!p?.visible) return null;
-        const name = components[g.componentId]?.name ?? g.componentId;
+      {badges.map((c) => {
+        if (c.members.length === 1) {
+          const { name, group: g, pos } = c.members[0];
+          return <Pin key={g.componentId} at={pos} cluster className="wb-component" ariaLabel={`Activate ${name} (${g.rows.length} features)`} title={`Activate ${name}`} onClick={() => activateComponent(g.componentId)}>{componentLabel(name, g.rows.length)}</Pin>;
+        }
+        const key = badgeKey(c.members);
+        const label = badgeClusterLabel(c.members.map((m) => m.name));
         return (
-          <Pin key={g.componentId} at={p} cluster className="wb-component" ariaLabel={`Activate ${name} (${g.rows.length} features)`} title={`Activate ${name}`} onClick={() => activateComponent(g.componentId)}>
-            {componentLabel(name, g.rows.length)}
+          <Pin key={key} at={c.pos} cluster className="wb-component" ariaLabel={`${c.members.length} components: ${c.members.map((m) => m.name).join(", ")}`} ariaExpanded={badgeChooser === key}
+            title="Components here: choose one" onClick={() => { setChooser(null); setBadgeChooser(badgeChooser === key ? null : key); }}>
+            {label} ▾
           </Pin>
         );
       })}
+      {openBadges && (
+        <Card ref={badgeRef} role="menu" ariaLabel="Choose a component" className="wb-chooser" at={placeCard({ anchor: openBadges.pos, size: badgeBoxSize, bounds, prefer: "below" })} width={CARD_W_NARROW}>
+          {openBadges.members.map((m) => (
+            <Button key={m.group.componentId} size="sm" ghost onClick={() => { setBadgeChooser(null); activateComponent(m.group.componentId); }}>
+              {m.name} <span className="k-dim">· {m.group.rows.length}</span>
+            </Button>
+          ))}
+        </Card>
+      )}
     </>
   );
 }

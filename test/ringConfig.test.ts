@@ -72,6 +72,13 @@ describe("ring config", () => {
     expect(editorSlotPos(0, 100, 50)).toEqual({ x: 0, y: -50 });
     expect(editorSlotPos(2, 100, 50)).toEqual({ x: 100, y: 0 });
     expect(editorSlotPos(6, 100, 50)).toEqual({ x: -100, y: 0 });
+    // the editor's slot boxes (128 × 58 at radii 180 × 112) never overlap: N clears NE and NW, S clears SE and SW
+    const box = (i: number) => { const p = editorSlotPos(i, 180, 112); return { l: p.x - 64, r: p.x + 64, t: p.y - 29, b: p.y + 29 }; };
+    for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
+      const a = box(i), b = box(j);
+      const overlap = a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+      expect(overlap, `slots ${i} and ${j}`).toBe(false);
+    }
   });
 
   it("previews the ring on a stack", () => {

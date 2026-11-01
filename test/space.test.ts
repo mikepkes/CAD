@@ -10,6 +10,7 @@ import {
   boundedParams, pickAxes, axisOf, quantizeTo, axisValue, axisIndex, axisCoord, axisFromCoord, stepValue, cellOrder, cellKey,
   judgeCell, mappableIntents, metricRange, shadeOf, lightestPassing, frontier, frontiers, layout, gridToSvg, svgToGrid, clientToSvg, pointToValues, ticks,
   addPin, removePin, metricDeltas, formatDelta, formatMetric, docSignature, gridKey, describePoint, withDensity,
+  niceStep, mapFontSize, jumpLabel, shouldCoarsen, etaMs, etaText, SLOW_GRID_MS,
   keyMove, swapAxes, cellOpacity, cellTitle, lightestMark, frontierStroke, frontierColor, mapLegend, resultsFor, okCount, readoutState, intentsText, statusText, pinMove,
   type Axis, type CellVerdict, type GridSpec,
 } from "../src/ui/concepts/space/space";
@@ -82,6 +83,35 @@ describe("design space: axes and grid", () => {
     expect(axisValue(stepped, 1, 9)).toBe(15);
     expect(axisValue(stepped, 3, 9)).toBe(25); // 25 exactly on the step
     expect(axisFromCoord(stepped, 2.4, 9)).toBe(20);
+  });
+
+  it("a drag or a key on an axis without a step snaps to a round one, never 59.3292", () => {
+    expect(niceStep(60)).toBe(0.5);
+    expect(niceStep(20)).toBe(0.2);
+    expect(niceStep(1)).toBe(0.01);
+    const free: Axis = { name: "width", min: 40, max: 100 };
+    expect(quantizeTo(free, 59.3292, true)).toBe(59.5);
+    expect(quantizeTo(free, 59.3292)).toBe(59.3292); // grid values keep their exact place
+    expect(axisFromCoord(free, 1.555, 9)).toBe(51.5);
+  });
+
+  it("sets the map's text in viewBox units that read 10 px on screen, and paces the sampling", () => {
+    expect(mapFontSize(280, 10)).toBe(20);
+    expect(mapFontSize(560, 10)).toBe(10);
+    expect(mapFontSize(0, 10)).toBe(11); // before layout
+    expect(jumpLabel("mass")).toBe("Jump to lightest");
+    expect(jumpLabel("height")).toBe("Jump to lowest");
+    expect(shouldCoarsen(9, 2400, 80, false)).toBe(true);
+    expect(shouldCoarsen(9, 2400, 80, true)).toBe(false);
+    expect(shouldCoarsen(5, 9000, 24, false)).toBe(false);
+    expect(shouldCoarsen(9, 100, 80, false)).toBe(false);
+    expect(SLOW_GRID_MS).toBeGreaterThan(0);
+    expect(etaMs(0, 1000, 10)).toBeNull();
+    expect(etaMs(4, 8000, 50)).toBe(100000);
+    expect(etaText(100000)).toBe("about 2 min left");
+    expect(etaText(40000)).toBe("about 40 s left");
+    expect(etaText(3000)).toBe("a few seconds left");
+    expect(statusText("sampling", { done: 31, total: 81 }, null, 240000)).toBe("sampling 31 / 81 · about 4 min left");
   });
 
   it("arrow steps use the parameter step, else one cell; shift always one cell", () => {
@@ -279,6 +309,9 @@ describe("design space: pins, metrics and the cache key", () => {
     expect(lightestMark({ x: 100, y: 50 }, { w: 50, h: 100 })).toBe("M100 34 L116 50 L100 66 L84 50 Z");
     expect(frontierStroke(0, 2)).toBe(frontierColor(0));
     expect(frontierStroke(2, 2)).toBe("var(--k-bad)");
+    // no intents: no "All intents" row in the failure red; a frontier never drawn has no row either
+    expect(mapLegend("mass", [{ label: "All intents", segments: [] }], 0).map((r) => r.label)).toEqual(["passes (brighter = lower mass (est.))", "fails / did not build"]);
+    expect(mapLegend("mass", [{ label: "Wide", segments: [] }, { label: "All intents", segments: [1] }], 1).map((r) => r.label)).toEqual(["passes (brighter = lower mass (est.))", "fails / did not build", "All intents"]);
     const legend = mapLegend("volume", [{ label: "Volume cap" }, { label: "All intents" }], 1);
     expect(legend.map((r) => r.label)).toEqual(["passes (brighter = lower volume)", "fails / did not build", "Volume cap", "All intents"]);
     expect(legend.map((r) => r.color)).toEqual(["var(--k-ok)", "var(--k-bad)", frontierColor(0), "var(--k-bad)"]);

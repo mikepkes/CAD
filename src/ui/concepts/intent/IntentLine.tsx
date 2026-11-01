@@ -10,7 +10,7 @@ import { useUi } from "../../../model/concepts/uiState";
 import { useIntents } from "../../../model/concepts/intentsStore";
 import { Button, Card } from "../../kit/primitives";
 import { useFeatureRows } from "../../kit/useFeatureRows";
-import { MAX_SUGGESTIONS, Suggestion, buildCtx, moveSelection, resolve } from "./intent";
+import { MAX_SUGGESTIONS, Suggestion, buildCtx, emptySuggestions, moveSelection, remember, resolve, type RecentCommand } from "./intent";
 import { execute, Executor } from "./execute";
 import { suggestionIcon } from "./suggestionIcon";
 import { Icon } from "../../icons";
@@ -19,7 +19,13 @@ import "./intent.css";
 /** Id of the hotkey action that opens the palette (⌘K / Ctrl+K, or "/"). */
 export const OPEN_ACTION_ID = "intent.open";
 
-const PLACEHOLDER = "wall 5 · front · back to 2 · measure hole · mass <= 120";
+const PLACEHOLDER = "type a command, a parameter or an intent: wall 5 · front · pins · mass <= 120";
+
+const RECENT_KEY = "vibecad.intent.recent.v1";
+function loadRecent(): RecentCommand[] {
+  try { const raw = localStorage.getItem(RECENT_KEY); const v = raw ? JSON.parse(raw) : []; return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function saveRecent(r: RecentCommand[]) { try { localStorage.setItem(RECENT_KEY, JSON.stringify(r)); } catch { /* ignore */ } }
 
 export function IntentLine() {
   const [open, setOpen] = useState(false);
@@ -44,7 +50,9 @@ export function IntentLine() {
   // ---- what the resolver can see (the hotkey contexts depend on the mode and on what is mounted, so re-read on open) ----
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const ctx = useMemo(() => buildCtx(session, rows, hotkeys.describe().contexts, intents), [session, rev, rows, mode, intents, open]);
-  const suggestions = useMemo(() => (open ? resolve(text, ctx) : []), [open, text, ctx]);
+  const [recent, setRecent] = useState<RecentCommand[]>(loadRecent);
+  // nothing typed: the recent commands, then common ones
+  const suggestions: (Suggestion & { group?: "recent" | "common" })[] = useMemo(() => (!open ? [] : text.trim() ? resolve(text, ctx) : emptySuggestions(ctx, recent, (id) => hotkeys.can(id))), [open, text, ctx, recent]);
   const selected = Math.min(sel, Math.max(0, suggestions.length - 1));
 
   // ---- run: every route ends in the store ----
@@ -60,6 +68,8 @@ export function IntentLine() {
       addIntent: (text, label) => useIntents.getState().add(text, label),
     };
     setOpen(false);
+    // a parameter's or a feature's value is remembered by what it did, not as a command to repeat blindly
+    if (s.kind !== "intent") setRecent((r) => { const next = remember(r, s); saveRecent(next); return next; });
     try {
       await execute(s.action, x);
       useStore.getState().setMessage(s.message);
@@ -99,7 +109,8 @@ export function IntentLine() {
         />
         <ul id={listId} className="intent-list" role="listbox" aria-label="Suggestions">
           {suggestions.length === 0 && text.trim() && <li className="intent-empty k-dim">Nothing matches — try a feature, a parameter, a view or a hotkey.</li>}
-          {suggestions.slice(0, MAX_SUGGESTIONS).map((s, i) => (
+          {suggestions.slice(0, MAX_SUGGESTIONS).flatMap((s, i) => [
+            ...(s.group && s.group !== suggestions[i - 1]?.group ? [<li key={`g-${s.group}`} role="presentation" className="intent-group k-label">{s.group === "recent" ? "Recent" : "Common"}</li>] : []),
             <li
               key={s.id}
               id={s.id}
@@ -114,8 +125,8 @@ export function IntentLine() {
               <Icon name={suggestionIcon(s.action, rows, session.timeline.length)} className="intent-icon" />
               <span className="intent-label">{s.label}</span>
               <span className="k-dim intent-detail">{s.detail}</span>
-            </li>
-          ))}
+            </li>,
+          ])}
         </ul>
         <div className="intent-hint k-dim k-num">↑↓ choose · Enter run · Esc close</div>
       </Card>

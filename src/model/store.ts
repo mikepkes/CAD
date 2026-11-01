@@ -348,6 +348,11 @@ export interface AppState {
   // timeline / history
   undo: () => void;
   redo: () => void;
+  /** Where the undo history stands now: pass it to endGesture when a drag or a preview ends. */
+  beginGesture: () => number;
+  /** A drag or preview has ended: fold the steps it took since `mark` into one undoable step
+   *  named `label`, or ("drop") forget them because the preview put everything back. */
+  endGesture: (mark: number, how: { label: string } | "drop") => void;
   editOperation: (opId: string, params: Record<string, unknown>) => Promise<void>;
   suppressOperation: (opId: string, suppressed: boolean) => Promise<void>;
   deleteOperation: (opId: string) => Promise<void>;
@@ -450,7 +455,9 @@ export interface AppState {
   renameEntity: (id: string, name: string) => Promise<void>;
   initApp: () => Promise<void>;
   newDocument: () => Promise<void>;
-  loadDocument: (doc: CadDocument) => Promise<void>;
+  /** The document's name: the file it was opened from (without .json), else null (the Ledger says "Untitled model"). */
+  docName: string | null;
+  loadDocument: (doc: CadDocument, name?: string | null) => Promise<void>;
   saveToFile: () => void;
   openFile: (file: File) => Promise<void>;
   /** Open a bundled example (public/examples/<name>.json) in place of the document. */
@@ -749,6 +756,7 @@ export const useStore = create<AppState>((set, get) => {
     motionCoarse: null,
     motionEta: null,
     hasMotionStudy: false,
+    docName: null,
     kernelLoading: false,
     toast: null,
     saving: null,
@@ -1176,6 +1184,13 @@ export const useStore = create<AppState>((set, get) => {
       const label = get().session.redoLabel();
       if (!get().session.redo()) { set({ lastMessage: "Nothing to redo" }); return; }
       bump({ lastMessage: `Redid ${label ?? "the last change"}`, toast: null, faceSelection: null }); afterMutate();
+    },
+    // (a session stand-in without an undo history, as some tests use, has nothing to fold)
+    beginGesture: () => get().session.undoDepth ?? 0,
+    endGesture: (mark, how) => {
+      const s = get().session;
+      if (how === "drop") s.dropSince?.(mark);
+      else s.squashSince?.(mark, how.label);
     },
     editOperation: async (opId, params) => {
       // a changed value that should be an expression must read and name only real parameters
@@ -1651,10 +1666,11 @@ export const useStore = create<AppState>((set, get) => {
         }
       }
     },
-    loadDocument: async (doc) => {
+    loadDocument: async (doc, name = null) => {
       const s = new CadSession(doc, registry, solver);
       set({
         dirty: false,
+        docName: name,
         session: s,
         mode: "model",
         activeSketchId: null,
@@ -1717,7 +1733,7 @@ export const useStore = create<AppState>((set, get) => {
         const doc = deserializeDocument(text);
         // a file saved before documents had names is named after the file
         if (!doc.name) { const base = file.name.replace(/(\.vibecad)?\.json$/i, "").trim(); if (base && base !== "model") doc.name = base; }
-        await get().loadDocument(doc);
+        await get().loadDocument(doc, file.name.replace(/(\.vibecad)?\.json$/i, ""));
         // the opened file is now the autosave too (not the document it replaced), and it starts clean
         try { localStorage.setItem(AUTOSAVE_KEY, serializeDocument(get().session.doc)); localStorage.setItem(AUTOSAVE_DIRTY_KEY, "0"); } catch { /* ignore */ }
         bump({ dirty: false, toast: { kind: "info", text: `Opened ${file.name}` }, lastMessage: `Opened ${doc.name ?? file.name}` });

@@ -8,12 +8,13 @@
 
 import { hotkeys, HotkeyAction } from "./hotkeys";
 import { useStore, Tool } from "./store";
-import { useUi } from "./concepts/uiState";
+import { useUi, PANEL_NAMES } from "./concepts/uiState";
 import { contextStack, ContextInput } from "./contexts";
 import { useRing, RING_ACTION_ID } from "./ring";
 import { hasFlexures } from "../sim/flexure";
 import { drivesOf } from "./concepts/mechanism";
 import { useMechanism } from "./concepts/mechanismStore";
+import { driveParams } from "./motionStudy";
 
 const st = () => useStore.getState();
 const fire = (name: string) => window.dispatchEvent(new CustomEvent(name));
@@ -34,6 +35,18 @@ const canExtrude = () => {
 /** Something is built (what export and projection need). */
 const hasSolid = () => Object.keys(st().session.doc.features).length > 0;
 
+/** Open the left panel and bring the configurations table into view, lit for a moment. */
+function showConfigurations() {
+  useUi.getState().setSideOpen("left", true);
+  requestAnimationFrame(() => {
+    const el = document.querySelector<HTMLElement>(".config-table");
+    if (!el) return;
+    el.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 1200);
+  });
+}
+
 const ACTIONS: HotkeyAction[] = [
   // ---- global ----
   { id: "view.frame", label: "Frame selection / fit", context: "global", defaultPrimary: "f", run: () => fire("vibecad:frame") },
@@ -41,16 +54,29 @@ const ACTIONS: HotkeyAction[] = [
   ...(["iso", "front", "top", "right", "back", "left", "bottom"] as const).map((v) => ({
     id: `view.${v}`, label: `View: ${v[0].toUpperCase()}${v.slice(1)}`, context: "global", run: () => window.dispatchEvent(new CustomEvent("vibecad:view", { detail: v })),
   })),
-  // concept panels (toggle; unbound by default, bindable in the Hotkeys panel)
-  { id: "view.workbench", label: "Toggle feature pins (Workbench)", context: "global", run: () => useUi.getState().togglePanel("workbench") },
-  { id: "view.lens", label: "Toggle the lens", context: "global", defaultPrimary: "shift+l", run: () => useUi.getState().togglePanel("lens") },
-  { id: "view.ledger", label: "Toggle the Ledger tab", context: "global", run: () => useUi.getState().togglePanel("ledger") },
-  { id: "view.space", label: "Toggle the Design Space tab", context: "global", run: () => useUi.getState().togglePanel("space") },
-  { id: "view.mechanism", label: "Toggle the Mechanism tab", context: "global", run: () => useUi.getState().togglePanel("mechanism") },
+  // concept panels, named as on their switches (toggle; a lit one whose tab is hidden comes forward first;
+  // unbound by default, bindable in the Hotkeys panel)
+  { id: "view.workbench", label: `Toggle ${PANEL_NAMES.workbench} (feature pins and the history strip)`, context: "global", run: () => useUi.getState().togglePanel("workbench") },
+  { id: "view.lens", label: `Toggle ${PANEL_NAMES.lens}`, context: "global", defaultPrimary: "shift+l", run: () => useUi.getState().togglePanel("lens") },
+  { id: "view.ledger", label: `Toggle ${PANEL_NAMES.ledger}`, context: "global", run: () => useUi.getState().togglePanel("ledger") },
+  { id: "view.space", label: `Toggle ${PANEL_NAMES.space}`, context: "global", run: () => useUi.getState().togglePanel("space") },
+  { id: "view.materials", label: `Toggle ${PANEL_NAMES.materials}`, context: "global", run: () => useUi.getState().togglePanel("materials") },
+  { id: "view.mechanism", label: `Toggle ${PANEL_NAMES.mechanism}`, context: "global", run: () => useUi.getState().togglePanel("mechanism") },
   {
     id: "mechanism.sweep", label: "Sweep the mechanism's drive", context: "model",
     when: () => hasFlexures(st().session.doc) && drivesOf(st().session.doc).length > 0,
     run: () => { const m = useMechanism.getState(); if (m.sweeping) m.stopSweep(); else void m.sweep(); },
+  },
+  // the app's own commands, so the ring, a key and ⌘K reach them too
+  { id: "view.section", label: "Section: cut the model on a plane", context: "global", when: () => Object.keys(st().solids).length > 0,
+    run: () => { const s = st(); s.setSection(s.section ? null : { plane: "XY", offset: 0, flip: false }); } },
+  { id: "app.agent", label: "Agent: describe it to Claude", context: "global", run: () => st().toggleAgent() },
+  { id: "app.settings", label: "Settings", context: "global", run: () => st().setSettingsOpen(true) },
+  { id: "view.configurations", label: "Configurations: the design variants table", context: "global", run: () => showConfigurations() },
+  {
+    id: "motion.study", label: "Motion study (do the joints move through their range without collisions?)", context: "model",
+    when: () => driveParams(st().session.doc).length > 0,
+    run: () => { if (st().motionStatus === "running") st().cancelMotionStudy(); else void st().runMotionStudy(); },
   },
   { id: RING_ACTION_ID, label: "Action ring (hold, point, release)", context: "global", defaultPrimary: "space", run: () => useRing.getState().openRing() },
   { id: "edit.undo", label: "Undo", context: "global", defaultPrimary: "mod+z", run: () => st().undo() },

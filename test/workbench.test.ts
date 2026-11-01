@@ -9,6 +9,7 @@ import {
   selectionContext, shouldDropSelection,
   crumbPath, isDescendant, showCrumb, rowsInScope, moreLabel, isAssemblyStep, stepLabel, assemblySteps, stripEntries,
   countText, stripRange, rangeValue, snapRollback, type StripEntry,
+  badgeBox, badgeClusterLabel, clusterBadges,
 } from "../src/ui/concepts/workbench/workbench";
 import type { OperationRecord } from "../src/core/command/types";
 import type { SolidMesh } from "../src/core/occ/kernel";
@@ -356,5 +357,21 @@ describe("component scope: the crumb and the scoped strip", () => {
     await s.moveRollback(s.timeline.length);
     const unsorted: StripEntry[] = [{ name: "b", index: 7, opId: "b", suppressed: false, rolledBack: false }, { name: "a", index: 2, opId: "a", suppressed: false, rolledBack: false }];
     expect(stripRange(unsorted)).toEqual({ min: 2, max: 8, stops: [2, 3, 8] });
+  });
+});
+
+describe("component badges", () => {
+  it("merge where their boxes overlap, like feature pins, and read as the shared name and a count", () => {
+    const b = (label: string, x: number, y: number) => ({ label, pos: { x, y } });
+    const items = [b("Wheel handle 1 · 1", 100, 100), b("Wheel handle 2 · 1", 120, 110), b("Wheel handle 3 · 1", 140, 120), b("Leg BR · 3", 400, 300)];
+    const c = clusterBadges(items);
+    expect(c.map((x) => x.members.length)).toEqual([3, 1]);
+    expect(c[0].pos).toEqual({ x: 120, y: 110 });
+    expect(badgeBox("Leg BR · 3").h).toBe(24);
+    // far enough apart, side by side: no merge
+    expect(clusterBadges([b("A · 1", 0, 0), b("B · 1", 0, 40)]).length).toBe(2);
+    expect(badgeClusterLabel(["Wheel handle 1", "Wheel handle 2", "Wheel handle 3"])).toBe("Wheel handle · 3");
+    expect(badgeClusterLabel(["Top", "Pin"])).toBe("Top +1");
+    expect(badgeClusterLabel(["Shuttle"])).toBe("Shuttle");
   });
 });

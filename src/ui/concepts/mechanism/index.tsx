@@ -16,6 +16,8 @@ import "./mechanism.css";
 
 export function MechanismPanel() {
   useEffect(() => useMechanism.getState().follow(), []);
+  // switching away from the tab stops a running sweep (a preview nobody is watching)
+  useEffect(() => useMechanism.getState().watch(), []);
   useStore((s) => s.rev); // re-render as the model changes
   const doc = useStore((s) => s.session.doc);
   const chosen = useMechanism((s) => s.drive);

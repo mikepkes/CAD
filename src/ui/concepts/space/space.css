@@ -4,15 +4,24 @@
 .space-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .space-row .k-label { display: inline-flex; align-items: center; gap: 4px; }
 .space-progress { margin-left: auto; }
+/* the bar across the panel, then the count with the time left and Stop under it */
+.space-progress-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 8px; }
+.space-progress-row .space-progress { margin-left: 0; min-width: 0; font-size: 12px; color: var(--text); }
+.space-progress-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.space-progress-bar > span { display: block; height: 100%; background: var(--k-accent); transition: width 160ms linear; }
+.space-note { margin: 0; font-size: 12px; line-height: 1.45; }
 .space-ghost-status { margin-left: auto; }
 
 .space-select { max-width: 140px; }
+/* the empty state reads in the panels' empty-state type (Ledger, Mechanism) */
+.space-empty { margin: 0; line-height: 1.45; font-size: 12.5px; }
 
 .space-map-wrap { display: flex; flex-direction: column; gap: 8px; }
 .space-map { width: 100%; height: auto; display: block; border-radius: var(--k-radius-sm); outline: none; touch-action: none; user-select: none; cursor: crosshair; }
 .space-map:focus-visible { outline: 2px solid var(--k-select); outline-offset: 2px; }
-.space-map text { fill: var(--text-dim); font-family: var(--k-mono); font-size: 11px; }
-.space-map .space-axis-name { fill: var(--text); font-size: 12px; }
+/* the map is a scaled SVG: its text sizes are set in viewBox units from the rendered width (Map.tsx), so they read 10–11 px on screen */
+.space-map text { fill: var(--text-dim); font-family: var(--k-mono); font-size: var(--space-fs, 11px); }
+.space-map .space-axis-name { fill: var(--text); font-size: var(--space-fs-name, 12px); }
 .space-map .space-plot { fill: var(--panel); stroke: var(--line); }
 .space-map .space-axis line { stroke: var(--line); stroke-width: 1; }
 .space-map .space-cell.pass { fill: var(--k-ok); stroke: var(--bg); stroke-width: 0.5; }
@@ -26,7 +35,7 @@
 .space-map .space-point.pass { fill: var(--k-ok); }
 .space-map .space-lightest { fill: none; stroke: var(--k-select); stroke-width: 2.5; }
 .space-map .space-pin-mark circle { fill: var(--k-float); stroke: var(--text); stroke-width: 1.5; }
-.space-map .space-pin-mark text { fill: var(--text); font-size: 11px; font-weight: 600; }
+.space-map .space-pin-mark text { fill: var(--text); font-size: var(--space-fs, 11px); font-weight: 600; }
 
 .space-pins { display: flex; flex-direction: column; gap: 8px; }
 .space-pin .k-title { font-family: var(--k-mono); font-weight: 500; }

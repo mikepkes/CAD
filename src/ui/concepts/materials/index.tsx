@@ -3,16 +3,22 @@
 // presets (real finishes, with mechanical properties for prints and rubber).
 // Every change is a material.create / material.update / material.assign
 // command, so it undoes, rebuilds and travels with the file like the rest.
+// "Whole model" reaches every part (each part's own material is cleared so it
+// inherits), a part whose material a parameter picks asks before it is
+// overridden, the material in effect is marked, and a preset already in the
+// document is reused rather than added again (apply.ts decides each).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../../../model/store";
-import type { CadDocument, Material } from "../../../core/document";
+import type { Material } from "../../../core/document";
 import { MATERIAL_KINDS, SURFACE_TEXTURES } from "../../../core/document";
 import { materialSpec } from "../../../viewport/material";
 import { materialSwatch } from "../../../viewport/swatch";
 import { SPECIES_KEYS } from "../../../viewport/material";
 import { Button, Pills, Select } from "../../kit/primitives";
 import { MATERIAL_PRESETS, MaterialPreset } from "./presets";
+import { applyPlan, choiceText, effectiveMaterial, nameList, partsUsing, presetInDoc } from "./apply";
+import { ask } from "../../kit/askDialog";
 import "./materials.css";
 
 const FINISHES: Record<string, string[]> = {
@@ -33,8 +39,8 @@ export function Swatch(p: { spec: Parameters<typeof materialSwatch>[0]; px?: num
     : <span className="mat-swatch flat" style={{ width: px, height: px, background: p.spec.color ?? "#888" }} />;
 }
 
-const usedBy = (doc: CadDocument, id: string) => Object.values(doc.components).filter((c) => c.materialId === id).length;
 const kindLine = (m: Material) => [m.kind, m.kind === "wood" ? m.species : m.finish, m.texture && m.texture !== "none" ? m.texture : null, m.kind === "printed" ? `${m.layerHeight ?? 0.2} mm layers along ${(m.printAxis ?? "z").toUpperCase()}` : null, m.kind === "paper" && m.backColor && m.backColor !== m.color ? "two-sided" : null].filter(Boolean).join(" · ");
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export function MaterialsPanel() {
   useStore((s) => s.rev);
@@ -45,11 +51,36 @@ export function MaterialsPanel() {
   useEffect(() => setTarget(active), [active]);
   const dispatch = useStore.getState().dispatch;
   const comp = doc.components[target] ?? doc.components[doc.rootComponentId];
+  const whole = comp.id === doc.rootComponentId;
   const components = Object.values(doc.components);
   const mats = Object.values(doc.materials);
+  const plan = applyPlan(doc, comp.id);
+  const effective = effectiveMaterial(doc, comp.id);
+  const following = choiceText(doc, comp.id);
+  const where = whole ? "the whole model" : comp.name;
 
-  const apply = (id: string) => dispatch("material.assign", { material: id, ...(comp.id === doc.rootComponentId ? {} : { component: comp.id }) });
+  /** Apply a material to the chosen target: the whole model reaches every part; a part that follows a parameter asks first. One undoable step. */
+  const apply = async (id: string) => {
+    const m = doc.materials[id];
+    if (plan.choiceParts.length) {
+      const names = plan.choiceParts.map((c) => doc.components[c]?.name ?? c);
+      const one = names.length === 1;
+      const ok = await ask({
+        title: "Override a parameter-driven material?",
+        text: `${nameList(names)} ${one ? "follows a parameter that picks its" : "follow a parameter that picks their"} material. Applying ${m?.name ?? "this material"} replaces that choice.`,
+        confirmLabel: "Override",
+      });
+      if (!ok) return;
+    }
+    const st = useStore.getState();
+    const mark = st.beginGesture();
+    for (const c of plan.clears) await dispatch("material.assign", { component: c, clear: true });
+    await dispatch("material.assign", { material: id, ...(whole ? {} : { component: comp.id }) });
+    st.endGesture(mark, { label: `Apply ${m?.name ?? "material"} to ${where}` });
+  };
   const add = async (p: MaterialPreset) => {
+    const existing = presetInDoc(doc, p);
+    if (existing) return apply(existing.id);
     const r = await dispatch("material.create", { name: p.name, ...p.params });
     if (r.ok) await apply(r.createdIds[0]);
   };
@@ -59,21 +90,30 @@ export function MaterialsPanel() {
       <div className="mats-head">
         <span className="k-label">Apply to</span>
         <Select ariaLabel="Apply materials to" value={comp.id}
-          options={components.map((c) => ({ key: c.id, label: c.id === doc.rootComponentId ? "Whole model" : c.name }))}
+          options={components.map((c) => ({ key: c.id, label: c.id === doc.rootComponentId ? "Whole model · every part" : c.name }))}
           onChange={setTarget} />
       </div>
+      {(following || (whole && plan.clears.length > 0)) && (
+        <p className="mats-note" data-testid="mats-note">
+          {following
+            ? <><span className="mats-warn" aria-hidden="true">⚠</span> {following}. Applying a material asks before it replaces that.</>
+            : <>Applies to every part{plan.clears.length > plan.choiceParts.length ? `, replacing the own material of ${plural(plan.clears.length - plan.choiceParts.length, "part")}` : ""}.
+              {plan.choiceParts.length > 0 && <> <span className="mats-warn" aria-hidden="true">⚠</span> {plural(plan.choiceParts.length, "part follows", "parts follow")} a parameter; applying asks first.</>}</>}
+        </p>
+      )}
 
       {mats.length > 0 && (
         <ul className="mats-list" aria-label="Document materials">
           {mats.map((m) => {
-            const on = comp.materialId === m.id;
+            const on = effective?.id === m.id;
+            const using = partsUsing(doc, m.id);
             return (
-              <li key={m.id} className={`mats-row${on ? " on" : ""}`}>
-                <button className="mats-pick" onClick={() => void apply(m.id)} title={`Apply ${m.name} to ${comp.id === doc.rootComponentId ? "the whole model" : comp.name}`}>
+              <li key={m.id} className={`mats-row${on ? " on" : ""}`} aria-current={on ? "true" : undefined}>
+                <button className="mats-pick" onClick={() => void apply(m.id)} title={`Apply ${m.name} to ${where}`}>
                   <Swatch spec={materialSpec(m)} />
                   <span className="mats-name">
-                    <b>{m.name}</b>
-                    <span className="k-dim">{kindLine(m)}{usedBy(doc, m.id) ? ` · ${usedBy(doc, m.id)} part${usedBy(doc, m.id) > 1 ? "s" : ""}` : ""}</span>
+                    <b>{m.name}{on && <em className="mats-effect" title={`The material ${where} shows now`}> · in effect</em>}</b>
+                    <span className="k-dim">{kindLine(m)}{using ? ` · in use on ${plural(using, "part")}` : ""}</span>
                   </span>
                 </button>
                 <Button size="sm" ghost on={editing === m.id} ariaLabel={`Edit ${m.name}`} onClick={() => setEditing(editing === m.id ? null : m.id)}>Edit</Button>
@@ -89,12 +129,15 @@ export function MaterialsPanel() {
           <div key={g} className="mats-group">
             <span className="k-label">{g}</span>
             <div className="mats-grid">
-              {MATERIAL_PRESETS.filter((p) => p.group === g).map((p) => (
-                <button key={p.name} className="mats-preset" title={`Add ${p.name} and apply it`} onClick={() => void add(p)}>
-                  <Swatch spec={materialSpec(p.params as unknown as Parameters<typeof materialSpec>[0])} px={44} />
-                  <span>{p.name}</span>
-                </button>
-              ))}
+              {MATERIAL_PRESETS.filter((p) => p.group === g).map((p) => {
+                const existing = presetInDoc(doc, p);
+                return (
+                  <button key={p.name} className={`mats-preset${existing ? " in-doc" : ""}`} title={existing ? `Apply ${p.name} (already in this document)` : `Add ${p.name} and apply it`} onClick={() => void add(p)}>
+                    <Swatch spec={materialSpec(p.params as unknown as Parameters<typeof materialSpec>[0])} px={44} />
+                    <span>{p.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         ))}

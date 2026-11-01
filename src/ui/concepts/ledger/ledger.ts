@@ -91,6 +91,20 @@ export function rhsStep(v: number): number {
   return Math.abs(v) < 10 ? 0.1 : 1;
 }
 
+/** The unit a built-in metric reads in, for an intent that names none ("mass <= 120" is in grams). */
+export const METRIC_UNITS: Record<string, string> = { mass: "g", volume: "mm³", width: "mm", depth: "mm", height: "mm", density: "g/cm³" };
+/** An intent's unit: its own, else its metric's when its left side is a bare built-in metric. */
+export function intentUnit(intent: { lhs: string; unit?: string }): string {
+  return intent.unit ?? METRIC_UNITS[intent.lhs.trim()] ?? "";
+}
+
+/** What the Ledger's header calls the document: its own title (document.describe), else its name (the file it
+ *  came from), its drawing's title, its root component's name when renamed, else "Untitled model". */
+export function documentTitle(doc: { about?: { title?: string }; drawing?: { title: string }; rootComponentId: string; components: Record<string, { name: string }> }, name?: string | null): string {
+  const root = doc.components[doc.rootComponentId]?.name;
+  return doc.about?.title || name || doc.drawing?.title || (root && root !== "Root Component" ? root : "Untitled model");
+}
+
 /** A metric or parameter value as the "now X" readout prints it (magnitude precision, trailing zeros dropped). */
 export function formatNow(v: number): string {
   return formatMagnitude(v, "", { trim: true });
@@ -252,6 +266,8 @@ export interface MetricSearchOpts {
   /** Candidates per side of each parameter (default 6). */
   count?: number;
   cancelled?: () => boolean;
+  /** After each build: how many candidates were tried, of how many the search could try at most. */
+  onProgress?: (tried: number, total: number) => void;
 }
 
 /**
@@ -293,10 +309,15 @@ export async function findMetricFixes(intents: Intent[], results: IntentResult[]
   const label = failing.map((r) => r.intent.label).join(", ");
   const names = [...new Set(failing.flatMap((r) => metricDeps(r.intent)))];
   const out: (Suggestion & { rel: number })[] = [];
-  for (const p of searchableParams(params)) {
+  const plans = searchableParams(params).flatMap((p) => {
     const from = scope[p.name] ?? p.value;
-    if (!Number.isFinite(from)) continue;
-    const sides = candidateValues({ ...p, value: from }, opts.count);
+    return Number.isFinite(from) ? [{ p, from, sides: candidateValues({ ...p, value: from }, opts.count) }] : [];
+  });
+  const total = plans.reduce((a, x) => a + x.sides.up.length + x.sides.down.length, 0);
+  let tried = 0;
+  const evaluateCounted: EvaluateVariant = async (o) => { const m = await evaluate(o); tried++; opts.onProgress?.(tried, total); return m; };
+  for (const { p, from, sides } of plans) {
+    const evaluate = evaluateCounted;
     const passes = (value: number, m: Metrics | null): m is Metrics => !!m && allPass(intents, variantScope(params, scope, { [p.name]: value }, m));
     let best: { to: number; metrics: Metrics } | null = null;
     for (const side of [sides.up, sides.down]) {
@@ -349,11 +370,12 @@ export class VariantCache {
 /** Where the sampled search stands, for the Suggestions section. */
 export type FixSearchStatus = "idle" | "searching" | "done" | "error";
 
-/** The line shown while the search runs, when it found nothing, or when it could not run ("" otherwise). */
-export function fixSearchText(status: FixSearchStatus, found: number, error: string | null): string {
+/** The line shown while the search runs, when it found nothing, or when it could not run ("" otherwise); with how
+ *  many candidates it has built of the most it could. */
+export function fixSearchText(status: FixSearchStatus, found: number, error: string | null, tried?: { n: number; of: number }): string {
   switch (status) {
-    case "searching": return "Looking for a fix…";
-    case "done": return found === 0 ? "No change to a bounded parameter fixes this within its range." : "";
+    case "searching": return tried && tried.n > 0 ? `Looking for a fix… tried ${tried.n} of ${tried.of}` : "Looking for a fix…";
+    case "done": return found === 0 ? `No change to a bounded parameter fixes this within its range${tried && tried.of ? ` (tried ${tried.n} of ${tried.of})` : ""}.` : "";
     case "error": return `Could not look for a fix: ${error ?? "unknown error"}`;
     default: return "";
   }

@@ -101,10 +101,16 @@ export function slotViews(ctx: ContextId, overrides: RingOverrides): SlotView[] 
   }));
 }
 
-/** Where the editor draws slot `i`: the ring's own compass, stretched to an ellipse of radii (`rx`, `ry`). */
+/** How far out the diagonal slots sit in the editor, as a share of the x radius: far enough that a slot box
+ *  clears N and S beside it (a 128-px slot at rx 180). */
+export const EDITOR_DIAGONAL_X = 0.82;
+
+/** Where the editor draws slot `i`: the ring's own compass, stretched to an ellipse of radii (`rx`, `ry`), the
+ *  diagonals pushed out sideways so NE and NW never touch N (nor SE and SW touch S). */
 export function editorSlotPos(i: number, rx: number, ry: number): { x: number; y: number } {
   const u = slotOffset(i, 1);
-  return { x: Math.round(u.x * rx), y: Math.round(u.y * ry) };
+  const diagonal = u.x !== 0 && u.y !== 0;
+  return { x: Math.round((diagonal ? Math.sign(u.x) * EDITOR_DIAGONAL_X : u.x) * rx), y: Math.round(u.y * ry) };
 }
 
 /** "N Line tool · NE Rectangle tool · …": what the ring key shows on this stack right now. */

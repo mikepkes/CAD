@@ -251,6 +251,17 @@ export function parseConfigTable(text: string): { name: string; values: Record<s
   }));
 }
 
+/** The values a new configuration captures: the parameters a person tunes (bounded, a switch or a choice; not
+ *  hidden), else every plain-number one — not every expression, so a new column per parameter doesn't push
+ *  the grid off screen. Numbers as the store writes them. */
+export function configurationCapture(params: { name: string; expr: string; value: number; min?: number; max?: number; values?: number[]; boolean?: boolean; options?: string[]; hidden?: boolean }[]): Record<string, string> {
+  const shown = params.filter((p) => !p.hidden);
+  const tuned = shown.filter((p) => (p.min != null && p.max != null) || p.values || p.boolean || p.options);
+  const plain = shown.filter((p) => /^\s*-?(\d+\.?\d*|\.\d+)\s*$/.test(p.expr));
+  const pick = tuned.length ? tuned : plain;
+  return Object.fromEntries(pick.map((p) => [p.name, Number.isInteger(p.value) ? String(p.value) : String(Math.round(p.value * 1e6) / 1e6)]));
+}
+
 /**
  * The configuration table: one row per design variant plus "Default" (the
  * timeline's own values), one column per parameter any row overrides. The
@@ -293,9 +304,15 @@ function ConfigurationsTable() {
       <div className="panel-head sub">
         <span>Configurations</span>
         <span className="param-row-btns">
-          <button className="icon-btn" title="Paste a table (CSV / tab-separated): header “name, param…”, one row per configuration" onClick={() => setPasting(!pasting)}>⎘</button>
-          <button className="icon-btn" title="Save the current parameter values as a new configuration" onClick={() => {
-            void askText({ title: "New configuration", label: "Name", initial: `Config ${configs.length + 1}`, confirmLabel: "Create" }).then((name) => { if (name) void create(name); });
+          {configs.length > 0 && addable.length > 0 && (
+            <select className="config-add" value="" aria-label="Add a parameter column" title="Add a parameter column" onChange={(e) => e.target.value && setExtraCols([...extraCols, e.target.value])}>
+              <option value="">＋ Column</option>
+              {addable.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
+          <button className="config-text-btn" title="Paste a table (CSV / tab-separated): header “name, param…”, one row per configuration" aria-pressed={pasting} onClick={() => setPasting(!pasting)}>Paste table</button>
+          <button className="icon-btn" aria-label="New configuration" title="Save the current values of the parameters you tune (bounded, switches, choices) as a new configuration" onClick={() => {
+            void askText({ title: "New configuration", label: "Name", initial: `Config ${configs.length + 1}`, confirmLabel: "Create" }).then((name) => { if (name) void create(name, configurationCapture(params)); });
           }}>＋</button>
         </span>
       </div>
@@ -309,24 +326,18 @@ function ConfigurationsTable() {
         </div>
       )}
       {configs.length === 0 && !pasting ? (
-        <div className="param-empty">No configurations. ＋ saves the current values as one.</div>
+        <div className="param-empty">No configurations. ＋ saves the values of the parameters you tune as one.</div>
       ) : (
-        <div className="config-grid" style={{ gridTemplateColumns: `18px minmax(70px, 1.2fr) repeat(${cols.length}, minmax(48px, 1fr)) minmax(56px, 1fr) 22px` }}>
+        // each column keeps a readable width; the grid scrolls sideways rather than squeezing them
+        <div className="config-grid" style={{ gridTemplateColumns: `18px minmax(84px, max-content) repeat(${cols.length}, minmax(64px, 96px)) minmax(64px, 96px) 22px` }}>
           <span /><span className="config-head">Name</span>
-          {cols.map((c) => <span key={c} className="config-head" title={`Default: ${base(c)}`}>{c}</span>)}
+          {cols.map((c) => <span key={c} className="config-head" title={`${c} · default: ${base(c)}`}>{c}</span>)}
           <span className="config-head" title="Bodies (feature ids), sketches or components hidden while this configuration is active, comma-separated">hide</span>
-          <span>
-            {addable.length > 0 && (
-              <select className="config-add" value="" title="Add a parameter column" onChange={(e) => e.target.value && setExtraCols([...extraCols, e.target.value])}>
-                <option value="">＋</option>
-                {addable.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-            )}
-          </span>
+          <span />
 
           <input type="radio" name="active-config" checked={!doc.activeConfiguration} onChange={() => void setActive(null)} title="Use the timeline's own values" />
           <span className="config-name default">Default</span>
-          {cols.map((c) => <span key={c} className="config-cell default">{base(c)}</span>)}
+          {cols.map((c) => <span key={c} className="config-cell default" title={base(c)}>{base(c)}</span>)}
           <span className="config-cell default">—</span>
           <span />
 

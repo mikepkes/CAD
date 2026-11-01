@@ -35,7 +35,7 @@ const variantCache = new VariantCache();
 /** Forget every built variant (tests, or after the kernel is swapped). */
 export function clearFixCache(): void { variantCache.clear(); }
 
-interface FixSearch { status: FixSearchStatus; fixes: Suggestion[]; error: string | null }
+interface FixSearch { status: FixSearchStatus; fixes: Suggestion[]; error: string | null; tried?: { n: number; of: number } }
 const IDLE: FixSearch = { status: "idle", fixes: [], error: null };
 
 export function Suggestions({ scope, parameterNames, exprs, createBackend }: SuggestionsProps) {
@@ -66,9 +66,13 @@ export function Suggestions({ scope, parameterNames, exprs, createBackend }: Sug
         const backend = await getSamplerBackend(createBackend);
         if (t !== token.current) return;
         const evaluate = (overrides: Record<string, number>) => variantCache.get(docKey, overrides, (o) => evaluateVariant(backend, snapshot, o, density));
-        const fixes = await findMetricFixes(intents, results, scope, snapshot.parameters, evaluate, { cancelled: () => t !== token.current });
+        let tried = { n: 0, of: 0 };
+        const fixes = await findMetricFixes(intents, results, scope, snapshot.parameters, evaluate, {
+          cancelled: () => t !== token.current,
+          onProgress: (n, of) => { tried = { n, of }; if (t === token.current) setSearch({ status: "searching", fixes: [], error: null, tried }); },
+        });
         if (t !== token.current || !fixes) return;
-        setSearch({ status: "done", fixes, error: null });
+        setSearch({ status: "done", fixes, error: null, tried });
       } catch (e) {
         if (t !== token.current) return;
         setSearch({ status: "error", fixes: [], error: e instanceof Error ? e.message : String(e) });
@@ -80,7 +84,7 @@ export function Suggestions({ scope, parameterNames, exprs, createBackend }: Sug
   const all = useMemo(() => mergeSuggestions(instant, search.fixes, search.status), [instant, search]);
   const open = visibleSuggestions(all, { dismissed, accepted });
   const done = Object.values(accepted);
-  const line = fixSearchText(search.status, search.fixes.length, search.error);
+  const line = fixSearchText(search.status, search.fixes.length, search.error, search.tried);
   if (open.length === 0 && done.length === 0 && !line) return null;
 
   const onAccept = (s: Suggestion) => {

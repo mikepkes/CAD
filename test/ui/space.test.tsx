@@ -46,6 +46,9 @@ function mount(s: CadSession, opts: { solids?: Record<string, unknown>; backend?
   return { ...r, setParameterExpr, createBackend };
 }
 
+/** The store's own parameter edit (mount() swaps in a spy). */
+const realSetParameterExpr = useStore.getState().setParameterExpr;
+
 const currentSolids = { b: { featureId: "b", name: "b", sketchId: "", distance: 0, mesh: {}, volume: 4500, bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 30, y: 15, z: 10 } } } };
 
 describe("DesignSpacePanel", () => {
@@ -56,7 +59,7 @@ describe("DesignSpacePanel", () => {
     clearGridCache();
     s.doc.intents = []; // intents are document state; `mount` bumps the store, which re-reads them
     useIntents.setState({ docId: s.doc.id, intents: [], results: [], scope: {} });
-    useSpace.setState({ xName: null, yName: null, n: 5, metric: "mass", pins: [], compare: null });
+    useSpace.setState({ xName: null, yName: null, n: 5, nPicked: false, metric: "mass", pins: [], compare: null });
   });
 
   it("shows an empty state when fewer than two parameters have bounds", async () => {
@@ -139,6 +142,32 @@ describe("DesignSpacePanel", () => {
     // the intermediate request (30, 15) was superseded by the newest, so only two positions were sent
     const sent = setParameterExpr.mock.calls.map((c) => (c as unknown as [string, string]).join("="));
     expect(sent).toEqual(["w=50", "h=5", "w=10", "h=25"]);
+  });
+
+  it("a drag previews live and leaves one undoable step when it ends", async () => {
+    const real = await twoBounded();
+    const keep = { setParameterExpr: useStore.getState().setParameterExpr, rebuildSolids: useStore.getState().rebuildSolids };
+    useStore.setState({ setParameterExpr: realSetParameterExpr, rebuildSolids: async () => {} });
+    useStore.setState({ session: real, rev: useStore.getState().rev + 1, solids: currentSolids as never });
+    render(<DesignSpacePanel createBackend={async () => boxBackend()} />);
+    await waitFor(() => expect(screen.getByText("25 cells")).toBeTruthy());
+    const before = real.undoDepth;
+    const map = screen.getByRole("img", { name: /Design space map/ });
+    const L = layout(5);
+    const pts = [gridToSvg(L, 4, 0), gridToSvg(L, 3, 1), gridToSvg(L, 2, 2), gridToSvg(L, 1, 3)];
+    fireEvent.pointerDown(map, { button: 0, clientX: pts[0].x, clientY: pts[0].y, pointerId: 1 });
+    for (const p of pts.slice(1)) {
+      await waitFor(() => expect(real.doc.parameters.find((q) => q.name === "w")?.value).not.toBe(30));
+      fireEvent.pointerMove(map, { clientX: p.x, clientY: p.y });
+    }
+    fireEvent.pointerUp(map);
+    await waitFor(() => expect(real.doc.parameters.find((q) => q.name === "w")?.value).toBe(20));
+    await waitFor(() => expect(real.undoDepth).toBe(before + 1));
+    expect(real.doc.parameters.find((q) => q.name === "h")?.value).toBe(20);
+    real.undo();
+    expect(real.doc.parameters.find((q) => q.name === "w")?.value).toBe(30);
+    expect(real.doc.parameters.find((q) => q.name === "h")?.value).toBe(15);
+    useStore.setState(keep);
   });
 
   it("steps with the arrow keys when the map is focused: the parameter's step, shift = one cell", async () => {
@@ -288,10 +317,46 @@ describe("DesignSpacePanel", () => {
     useSpace.setState({ n: 9 }); // a fresh key, not in the cache
     mount(s, { backend: slow });
     await waitFor(() => expect(screen.getByText(/sampling 0 \/ 81/)).toBeTruthy());
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("progressbar", { name: "Sampling" }).getAttribute("aria-valuemax")).toBe("81");
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
     release();
     expect(screen.getByRole("button", { name: "Resample" })).toBeTruthy();
     expect(screen.queryByText(/sampling/)).toBeNull();
+  });
+});
+
+describe("DesignSpacePanel, pace and labels", () => {
+  let s: CadSession;
+  beforeAll(async () => { s = await twoBounded(); });
+  beforeEach(() => {
+    clearGridCache();
+    s.doc.intents = [];
+    useIntents.setState({ docId: s.doc.id, intents: [], results: [], scope: {} });
+    useSpace.setState({ xName: null, yName: null, n: 9, nPicked: false, metric: "mass", pins: [], compare: null });
+  });
+
+  it("times the first cell: a slow model starts at 5×5 and says why, unless the size was picked", async () => {
+    const now = vi.spyOn(Date, "now");
+    let t = 1_000_000;
+    now.mockImplementation(() => t);
+    let budget = 1; // builds allowed before the backend stalls (so the run stays "sampling")
+    const slow: GeometryBackend = { ...boxBackend(), evaluate: (doc) => { if (budget <= 0) return new Promise(() => {}); budget--; t += 4000; return boxBackend().evaluate(doc); } }; // 4 s a build
+    mount(s, { backend: slow, solids: currentSolids });
+    await waitFor(() => expect(useSpace.getState().n).toBe(5));
+    expect(screen.getByTestId("space-coarsened").textContent).toMatch(/about 4\.0 s a build, so the map starts at 5×5\. 9×9 would take about 5 min/);
+    // picked by hand, the finer grid is sampled anyway, with the time left at its pace
+    budget = 2;
+    await userEvent.click(screen.getByRole("button", { name: "9×9" }));
+    expect(useSpace.getState()).toMatchObject({ n: 9, nPicked: true });
+    expect(screen.queryByTestId("space-coarsened")).toBeNull();
+    await waitFor(() => expect(screen.getByText(/sampling \d+ \/ 81 · about \d+ min left/)).toBeTruthy());
+    now.mockRestore();
+  });
+
+  it("names the jump after the metric it shades by", async () => {
+    useSpace.setState({ n: 5, metric: "width" });
+    mount(s, { solids: currentSolids });
+    expect(await screen.findByRole("button", { name: "Jump to narrowest" })).toBeTruthy();
   });
 });
 

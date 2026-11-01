@@ -3,6 +3,10 @@
 .mats { display: flex; flex-direction: column; gap: 12px; padding: 10px 12px; min-width: 0; overflow-y: auto; }
 .mats-head { display: flex; align-items: center; gap: 8px; }
 .mats-head .k-select { flex: 1; min-width: 0; }
+.mats-note { margin: -4px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--text-dim); }
+.mats-warn { color: var(--caution, var(--k-bad)); }
+.mats-effect { font-style: normal; font-weight: 500; color: var(--k-accent); }
+.mats-preset.in-doc { border-style: dashed; }
 
 .mat-swatch { display: block; flex: none; border-radius: 50%; }
 .mat-swatch.flat { box-shadow: inset -6px -8px 12px rgba(0, 0, 0, 0.45), inset 4px 4px 8px rgba(255, 255, 255, 0.18); }

@@ -4,6 +4,8 @@
 /* a dimming layer over the whole window while the ring is open: a press on it closes the ring, and
    the dim keeps the slots legible over cards and panels underneath */
 .ring-scrim { position: fixed; inset: 0; z-index: 70; background: var(--k-scrim); }
+/* the pins and their leaders step back while the ring is open (RingOverlay sets body.ring-open) */
+body.ring-open .k-pin, body.ring-open .k-leader { opacity: 0.12; transition: opacity 120ms ease-out; }
 
 /* zero-size box at the ring centre; everything inside is placed from it */
 .ring {

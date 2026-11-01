@@ -58,7 +58,7 @@ export function runActionTool(args: { action?: unknown }, hk: Pick<HotkeyManager
 }
 
 export const SET_PANEL_DESCRIPTION =
-  "Show or hide a panel of the app: {panel, on} (omit `on` to toggle). Panels are the concept surfaces (workbench pins and history strip, ledger, space, lens, intent line, and any added later) plus app panels such as the agent chat and the hotkeys sheet. Returns every panel and whether it is shown; an unknown name lists them.";
+  "Show or hide a panel of the app: {panel, on}. Omit `on` to press its switch: an off panel comes on; an on panel whose right-side tab is hidden comes forward; a shown one goes off. Panels are the concept surfaces (workbench = Pins: feature pins and the history strip; ledger, space, lens, materials, mechanism, intent line, and any added later) plus app panels such as the agent chat and the hotkeys sheet. Returns every panel and whether it is shown; an unknown name lists them.";
 
 export const RUN_ACTION_DESCRIPTION =
   "Run any app action a key, the action ring or a 3D-mouse button can run, by its id: drawing tools (tool.line, tool.circle, …), views (view.front, view.iso, view.frame), lens modes, panel toggles, undo/redo and more. Call get_hotkeys first for the ids and which contexts are active: an action runs only when its context is on the active stack and it applies now. Returns whether it ran; an unknown id lists the action ids.";

@@ -49,6 +49,13 @@ export const MODES: { key: LensMode; label: string; title: string }[] = [
   { key: "strain", label: "Strain", title: "Each flexure coloured by its peak bending strain against its material's limit" },
 ];
 export const SHAPES: { key: LensShape; label: string }[] = [{ key: "lens", label: "Lens" }, { key: "wipe", label: "Wipe" }];
+/** The shape pills: the lens, the wipe, and the whole view (a wipe at the left edge: the analysis everywhere). */
+export type ShapeChoice = LensShape | "whole";
+export const SHAPE_CHOICES: { key: ShapeChoice; label: string; title?: string }[] = [...SHAPES, { key: "whole", label: "Whole view", title: "The analysis over the whole view" }];
+/** Which shape pill is lit: a wipe at the left edge is the whole view. */
+export function shapeChoice(shape: LensShape, wipeX: number): ShapeChoice {
+  return shape === "wipe" && wipeX <= 0 && wipeX !== -1 ? "whole" : shape;
+}
 export const SIZES: { key: LensSize; label: string }[] = [{ key: "S", label: "S" }, { key: "M", label: "M" }, { key: "L", label: "L" }];
 export const ORIENTS: { key: Orient; label: string; title: string }[] = [
   { key: "standing", label: "Standing", title: "Printed as modelled, +Z up" },
@@ -119,8 +126,17 @@ export function overhangClass(d: number, h: number, bedTol = 0.01): OverhangClas
   return "neutral";
 }
 
-/** Where the HUD card sits: off the circle's right rim, or beside the wipe line's top; flipped and clamped inside. */
-export function hudPlacement(f: LensFrame, card: Box, bounds: Box): Pt {
+/** The band along the top of the view the HUD keeps clear of: the panel switches and the component crumb
+ *  (one line each, 12 px from the top, 28 px high) and a gap. */
+export const HUD_TOP_KEEPOUT = 52;
+
+/** Where the HUD card sits: off the circle's right rim, or beside the wipe line's top; flipped and clamped
+ *  inside, and never in the top `keepTop` px (the switches and the crumb). */
+export function hudPlacement(f: LensFrame, card: Box, bounds: Box, keepTop = 0): Pt {
+  if (keepTop > 0 && bounds.h - keepTop > card.h + 16) {
+    const p = hudPlacement({ ...f, y: f.y - keepTop }, card, { w: bounds.w, h: bounds.h - keepTop });
+    return { x: p.x, y: p.y + keepTop };
+  }
   if (f.shape === "lens") {
     // beside the lens, never over it: right of its right edge, else left of its left edge, else under it
     const y = f.y - f.r * 0.5, gap = 16, m = 8;
@@ -142,6 +158,52 @@ export interface AnalysisParams {
   draftDeg: number;
   pull: { x: number; y: number; z: number };
   quantity: "mean" | "gaussian" | "max" | "min";
+}
+
+/** The settings each mode's card can change (the Lens is their one home): readouts of the same name give way to them. */
+export const SETTING_LABELS = new Set(["Stripes", "Draft angle", "Pull", "Quantity"]);
+export const STRIPES = { min: 2, max: 60, step: 2 };
+export const DRAFT = { min: 0, max: 45, step: 0.5 };
+export const QUANTITIES: { key: AnalysisParams["quantity"]; label: string }[] = [{ key: "mean", label: "Mean" }, { key: "gaussian", label: "Gaussian" }, { key: "max", label: "Max" }, { key: "min", label: "Min" }];
+export const PULLS: { key: "Z" | "Y" | "X"; label: string }[] = [{ key: "Z", label: "+Z" }, { key: "Y", label: "+Y" }, { key: "X", label: "+X" }];
+export const pullKey = (p: AnalysisParams["pull"]): "X" | "Y" | "Z" => (p.x ? "X" : p.y ? "Y" : "Z");
+export const pullOf = (k: "X" | "Y" | "Z") => ({ x: k === "X" ? 1 : 0, y: k === "Y" ? 1 : 0, z: k === "Z" ? 1 : 0 });
+/** A stepped value, clamped to its range and rounded to its step. */
+export function stepTo(v: number, d: number, r: { min: number; max: number; step: number }): number {
+  const n = Math.round((v + d * r.step) / r.step) * r.step;
+  return +Math.min(r.max, Math.max(r.min, n)).toFixed(3);
+}
+
+/** The area (mm²) of the faces that need support in a print orientation, and of every face, summed over the
+ *  display meshes' triangles (an estimate: the mesh, not the B-rep). A face on the bed never counts. */
+export function supportArea(meshes: { positions: ArrayLike<number>; indices: ArrayLike<number> }[], up: { x: number; y: number; z: number }): { steep: number; mild: number; total: number } {
+  let bed = Infinity;
+  for (const m of meshes) for (let i = 0; i + 2 < m.positions.length; i += 3) bed = Math.min(bed, m.positions[i] * up.x + m.positions[i + 1] * up.y + m.positions[i + 2] * up.z);
+  let steep = 0, mild = 0, total = 0;
+  for (const m of meshes) {
+    const P = m.positions, I = m.indices;
+    for (let t = 0; t + 2 < I.length; t += 3) {
+      const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+      const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+      const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      const len = Math.hypot(nx, ny, nz);
+      if (!len) continue;
+      const area = len / 2;
+      total += area;
+      const d = (nx * up.x + ny * up.y + nz * up.z) / len;
+      const h = Math.max(...[a, b, c].map((k) => P[k] * up.x + P[k + 1] * up.y + P[k + 2] * up.z)) - bed;
+      const cls = overhangClass(d, h);
+      if (cls === "steep") steep += area; else if (cls === "mild") mild += area;
+    }
+  }
+  return { steep, mild, total };
+}
+
+/** "1,240 mm²", "12.4 cm²". */
+function areaText(mm2: number): string {
+  if (mm2 >= 1e4) return `${(mm2 / 100).toLocaleString("en-US", { maximumFractionDigits: 1 })} cm²`;
+  return `${Math.round(mm2).toLocaleString("en-US")} mm²`;
 }
 
 /** The spec the 3D pass renders from (with the strain field, in strain mode). */
@@ -197,10 +259,17 @@ export function strainSummary(count: number, state: Pick<FlexureState, "flexures
 const STRAIN_SOURCE = "From the flexure model: each hinge as a small-length flexural pivot, each beam by a large-deflection beam solve; an estimate, not a finite-element result";
 
 /** The readouts the HUD shows for a mode. */
-export function readoutsFor(mode: LensMode, a: AnalysisParams, o: { bodiesInside: number; orient: Orient; hasCurvature: boolean; strain?: StrainSummary }): ReadoutSpec[] {
+export function readoutsFor(mode: LensMode, a: AnalysisParams, o: { bodiesInside: number; orient: Orient; hasCurvature: boolean; strain?: StrainSummary; support?: { steep: number; total: number } }): ReadoutSpec[] {
   switch (mode) {
     case "xray": return [{ label: "Bodies under the lens", value: String(o.bodiesInside), title: "Counted by each body's bounds centre" }];
-    case "overhang": return [{ label: "Orientation", value: ORIENTS.find((x) => x.key === o.orient)?.label ?? o.orient, title: "Faces are coloured by their angle to the build direction; a face count would need the B-rep, so none is shown" }];
+    case "overhang": return [
+      { label: "Orientation", value: ORIENTS.find((x) => x.key === o.orient)?.label ?? o.orient, title: "Faces are coloured by their angle to the build direction" },
+      ...(o.support && o.support.total > 0 ? [{
+        label: "Needs support", value: o.support.steep > 0 ? `${areaText(o.support.steep)} · ${Math.max(1, Math.round((100 * o.support.steep) / o.support.total))}%` : "none",
+        title: "The area of the faces overhanging more than 45° in this orientation, and its share of the whole surface: summed over the display mesh, so an estimate",
+        state: o.support.steep > 0 ? ("bad" as const) : ("ok" as const),
+      }] : []),
+    ];
     case "draft": return [{ label: "Draft angle", value: `${a.draftDeg}°` }, { label: "Pull", value: `${a.pull.x}, ${a.pull.y}, ${a.pull.z}` }];
     case "zebra": return [{ label: "Stripes", value: String(a.stripes) }];
     case "curvature": return [{ label: "Quantity", value: a.quantity }, ...(o.hasCurvature ? [] : [{ label: "Data", value: "none yet", title: "Curvature is being computed for the lens (or turn on Analysis ▸ Curvature / Combs); it appears when the backend answers" }])];

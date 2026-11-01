@@ -11,6 +11,9 @@
 
 /* ---- the prose ---- */
 .ledger-prose { gap: 2px; }
+.ledger-fold { margin: 0 0 2px; }
+.ledger-fold-btn { padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.ledger-fold-btn:hover { color: var(--text); }
 .ledger-row {
   position: relative;
   margin: 0;

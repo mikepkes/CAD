@@ -9,3 +9,6 @@
 .lens-hud .lens-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .lens-hud .lens-readouts { display: flex; gap: 8px; flex-wrap: wrap; }
 .lens-hud .k-pills { flex-wrap: wrap; }
+.lens-hud .lens-stepper { display: inline-flex; align-items: center; gap: 4px; }
+.lens-hud .lens-stepper .k-label { margin-right: 4px; }
+.lens-hud .lens-stepper-value { min-width: 36px; text-align: center; }

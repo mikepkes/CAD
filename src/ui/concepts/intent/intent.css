@@ -40,3 +40,4 @@
 .intent-detail { grid-column: 3; font-size: 12px; }
 .intent-empty { padding: 6px 8px; font-size: 12px; }
 .intent-hint { display: flex; justify-content: flex-end; font-size: 11px; }
+.intent-group { padding: 8px 8px 2px; font-size: 10.5px; list-style: none; }

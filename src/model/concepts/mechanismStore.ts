@@ -9,7 +9,8 @@
 //
 // Sweep steps the drive across its range through the store's command path
 // (`setParameterExpr`), a step every 150 ms, so the model moves and the
-// panel's marker runs along the curve.
+// panel's marker runs along the curve. It is a preview: stopped or finished,
+// the drive goes back to where it was and the undo history is as before.
 
 import { create } from "zustand";
 import { useStore } from "../store";
@@ -38,6 +39,10 @@ export interface MechanismState {
   studying: boolean;
   /** The drive a Sweep is moving, or null. */
   sweeping: string | null;
+  /** How many Mechanism panels are showing (a sweep with none shows a Stop chip over the viewport). */
+  watchers: number;
+  /** A Mechanism panel is showing; returns its release, which stops a running sweep (switching away ends the preview). */
+  watch: () => () => void;
   setDrive: (name: string) => void;
   /** Start following the document store; returns the release. */
   follow: () => () => void;
@@ -164,6 +169,17 @@ export const useMechanism = create<MechanismState>((set, get) => {
     curves: {},
     studying: false,
     sweeping: null,
+    watchers: 0,
+    watch: () => {
+      set({ watchers: get().watchers + 1 });
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        set({ watchers: Math.max(0, get().watchers - 1) });
+        if (get().sweeping) get().stopSweep();
+      };
+    },
     setDrive: (name) => { set({ drive: name }); if (followers) schedule(); },
     follow: () => {
       followers++;
@@ -191,6 +207,10 @@ export const useMechanism = create<MechanismState>((set, get) => {
       const plan = sweepPlan(drive.value, drive.min, drive.max, opts.perLeg ?? 20, drive.step);
       const token = ++sweepToken;
       set({ sweeping: drive.name });
+      // A sweep is a preview: it ends with the drive where it started and leaves nothing to undo.
+      const st = useStore.getState();
+      const mark = st.beginGesture();
+      const startExpr = st.session.doc.parameters.find((p) => p.name === drive.name)?.expr ?? fmt(drive.value, 6);
       try {
         for (const v of plan) {
           if (token !== sweepToken) break;
@@ -202,9 +222,15 @@ export const useMechanism = create<MechanismState>((set, get) => {
           const wait = (opts.stepMs ?? STEP_MS) - (Date.now() - t0);
           if (wait > 0) await new Promise((r) => setTimeout(r, wait));
         }
-        await useStore.getState().rebuildSolids(); // end on the model built where it stopped
       } finally {
-        if (token === sweepToken) set({ sweeping: null });
+        try {
+          const now = useStore.getState().session.doc.parameters.find((p) => p.name === drive.name)?.expr;
+          if (now != null && now !== startExpr) await useStore.getState().setParameterExpr(drive.name, startExpr);
+          useStore.getState().endGesture(mark, "drop");
+          await useStore.getState().rebuildSolids(); // end on the model built where it started
+        } finally {
+          if (token === sweepToken) set({ sweeping: null });
+        }
       }
     },
     stopSweep: () => { sweepToken++; set({ sweeping: null }); },
