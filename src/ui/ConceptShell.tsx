@@ -4,7 +4,9 @@
 // decided in uiState.ts (rightTabFor).
 
 import { InspectorPanel } from "./InspectorPanel";
-import { useUi, type RightTab } from "../model/concepts/uiState";
+import { useUi, PANEL_NAMES, type ConceptPanel, type RightTab } from "../model/concepts/uiState";
+import { OverflowRow, type OverflowRowItem } from "./kit/OverflowRow";
+import { showCrumb } from "./concepts/workbench/workbench";
 import { Button, Pills } from "./kit/primitives";
 import { LedgerPanel } from "./concepts/ledger";
 import { DesignSpacePanel } from "./concepts/space";
@@ -16,39 +18,47 @@ import { hasFlexures } from "../sim/flexure";
 import { MaterialsPanel } from "./concepts/materials";
 import { useMechanism } from "../model/concepts/mechanismStore";
 
-/** Switches for the concept surfaces, at the top-right of the viewport; also
- *  mounts the action ring once (it renders into document.body while open). */
+/** Switches for the concept surfaces, at the top-right of the viewport: one line, whatever does not fit goes
+ *  into a ⋯ menu; clear of the component crumb at the top-left; hidden while sketching (the sketch needs the
+ *  whole view, and the switches are in ⌘K and the hotkeys). Also mounts the action ring once (it renders into
+ *  document.body while open). */
 export function PanelToggles() {
   const panels = useUi((s) => s.panels);
   const toggle = useUi((s) => s.togglePanel);
   const compliant = useStore((s) => hasFlexures(s.session.doc));
+  const mode = useStore((s) => s.mode);
+  const crumb = useStore((s) => showCrumb(s.session.doc)) && panels.workbench && mode === "model";
+  const sw = (p: ConceptPanel, title: string) => ({
+    key: p,
+    node: <Button size="sm" on={!!panels[p]} title={title} onClick={() => toggle(p)}>{PANEL_NAMES[p]}</Button>,
+  });
+  const items: OverflowRowItem[] = [
+    { ...sw("workbench", "Pins: numbered feature pins on the part, and the history strip under the view"), priority: 5 },
+    { ...sw("lens", "Lens: analysis under a draggable lens"), priority: 4 },
+    { ...sw("ledger", "Ledger: the model read back as sentences, with design intents"), priority: 3 },
+    { ...sw("space", "Space: two parameters on a map, intents as frontiers"), priority: 2 },
+    { ...sw("materials", "Materials: metals, plastics, prints, rubber, wood; apply them to parts"), priority: 1 },
+    ...(compliant || panels.mechanism ? [{ ...sw("mechanism", "Mechanism: force against travel, its rest positions, the strain in each flexure"), priority: 1 }] : []),
+    { key: "intent", node: <IntentButton size="sm" />, pin: true },
+  ];
   return (
     <>
-      <div className="k-panel-toggle" role="toolbar" aria-label="Concept panels">
-        <Button size="sm" on={panels.workbench} title="Feature pins and history strip on the part" onClick={() => toggle("workbench")}>Pins</Button>
-        <Button size="sm" on={panels.lens} title="Analysis under a draggable lens" onClick={() => toggle("lens")}>Lens</Button>
-        <Button size="sm" on={panels.ledger} title="The model read back as sentences, with design intents" onClick={() => toggle("ledger")}>Ledger</Button>
-        <Button size="sm" on={panels.space} title="Two parameters on a map, intents as frontiers" onClick={() => toggle("space")}>Space</Button>
-        <Button size="sm" on={!!panels.materials} title="Materials: metals, plastics, prints, rubber, wood; apply them to parts" onClick={() => toggle("materials")}>Materials</Button>
-        {(compliant || panels.mechanism) && <Button size="sm" on={!!panels.mechanism} title="The compliant mechanism: force against travel, its rest positions, the strain in each flexure" onClick={() => toggle("mechanism")}>Mechanism</Button>}
-        <IntentButton size="sm" />
-      </div>
+      {mode !== "sketch" && (
+        <OverflowRow className={`k-panel-toggle${crumb ? " beside-crumb" : ""}`} role="toolbar" ariaLabel="Concept panels" moreLabel="More panels" items={items} />
+      )}
       <RingOverlay />
     </>
   );
 }
 
-/** The right side panel: the inspector, with Ledger, Design Space and Mechanism as tabs while their panels are on. */
+/** The right side panel: the inspector, with Ledger, Space, Mechanism and Materials as tabs while their panels are on. */
 export function RightPanel() {
   const panels = useUi((s) => s.panels);
   const tab = useUi((s) => s.rightTab);
   const setTab = useUi((s) => s.setRightTab);
   const options: { key: RightTab; label: string }[] = [
     { key: "inspector", label: "Inspector" },
-    ...(panels.ledger ? [{ key: "ledger" as const, label: "Ledger" }] : []),
-    ...(panels.space ? [{ key: "space" as const, label: "Space" }] : []),
-    ...(panels.mechanism ? [{ key: "mechanism" as const, label: "Mechanism" }] : []),
-    ...(panels.materials ? [{ key: "materials" as const, label: "Materials" }] : []),
+    ...(["ledger", "space", "mechanism", "materials"] as const).filter((k) => panels[k]).map((k) => ({ key: k, label: PANEL_NAMES[k] })),
   ];
   return (
     <>

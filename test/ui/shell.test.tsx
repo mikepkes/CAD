@@ -4,8 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { useUi } from "../../src/model/concepts/uiState";
 import { useStore } from "../../src/model/store";
 import { PanelToggles, RightPanel } from "../../src/ui/ConceptShell";
+import { OverflowRow } from "../../src/ui/kit/OverflowRow";
 
-const reset = () => useUi.setState({ panels: { workbench: true, ledger: false, space: false, lens: false, intent: true }, rightTab: "inspector" });
+const reset = () => { useUi.setState({ panels: { workbench: true, ledger: false, space: false, lens: false, intent: true } as never, rightTab: "inspector", sideOpen: { left: true, right: true } }); useStore.setState({ mode: "model" }); };
 
 describe("PanelToggles", () => {
   beforeEach(reset);
@@ -20,6 +21,54 @@ describe("PanelToggles", () => {
     expect(useUi.getState().panels.ledger).toBe(true);
     expect(useUi.getState().rightTab).toBe("ledger");
     expect(within(bar).getByRole("button", { name: "Open the intent line" })).toBeTruthy();
+  });
+});
+
+describe("PanelToggles, more", () => {
+  beforeEach(reset);
+  it("a lit switch whose tab is hidden brings the tab forward; the second press turns it off", async () => {
+    useUi.getState().togglePanel("ledger", true);
+    useUi.getState().setRightTab("inspector");
+    render(<PanelToggles />);
+    const bar = screen.getByRole("toolbar", { name: "Concept panels" });
+    await userEvent.click(within(bar).getByRole("button", { name: "Ledger" }));
+    expect(useUi.getState().panels.ledger).toBe(true);
+    expect(useUi.getState().rightTab).toBe("ledger");
+    await userEvent.click(within(bar).getByRole("button", { name: "Ledger" }));
+    expect(useUi.getState().panels.ledger).toBe(false);
+  });
+  it("is hidden while sketching (the sketch needs the whole view)", () => {
+    useStore.setState({ mode: "sketch" });
+    render(<PanelToggles />);
+    expect(screen.queryByRole("toolbar", { name: "Concept panels" })).toBeNull();
+  });
+});
+
+describe("OverflowRow", () => {
+  it("keeps one line: what does not fit goes into the ⋯ menu, and runs from there", async () => {
+    const proto = HTMLElement.prototype;
+    const keep = { ow: Object.getOwnPropertyDescriptor(proto, "offsetWidth"), cw: Object.getOwnPropertyDescriptor(proto, "clientWidth") };
+    Object.defineProperty(proto, "offsetWidth", { configurable: true, get() { return (this as HTMLElement).classList.contains("k-ovf-more") ? 30 : 100; } });
+    Object.defineProperty(proto, "clientWidth", { configurable: true, get() { return (this as HTMLElement).classList.contains("k-ovf") ? 250 : 0; } });
+    try {
+      let ran = "";
+      const btn = (k: string) => <button onClick={() => { ran = k; }}>{k}</button>;
+      render(<OverflowRow ariaLabel="Row" role="toolbar" items={[
+        { key: "a", node: btn("A"), priority: 2 }, { key: "b", node: btn("B"), priority: 1 }, { key: "c", node: btn("C") }, { key: "k", node: btn("K"), pin: true },
+      ]} />);
+      const row = screen.getByRole("toolbar", { name: "Row" });
+      // four 100-px items in 250 px: only A and the pinned K stay, with the menu button
+      expect(within(row).getAllByRole("button").map((b) => b.textContent)).toEqual(["A", "K", "⋯2"]);
+      await userEvent.click(within(row).getByRole("button", { name: "More" }));
+      const menu = screen.getByRole("menu", { name: "More" });
+      expect(within(menu).getAllByRole("button").map((b) => b.textContent)).toEqual(["B", "C"]);
+      await userEvent.click(within(menu).getByRole("button", { name: "C" }));
+      expect(ran).toBe("C");
+      expect(screen.queryByRole("menu", { name: "More" })).toBeNull();
+    } finally {
+      if (keep.ow) Object.defineProperty(proto, "offsetWidth", keep.ow);
+      if (keep.cw) Object.defineProperty(proto, "clientWidth", keep.cw);
+    }
   });
 });
 

@@ -7,6 +7,8 @@
 .space-ghost-status { margin-left: auto; }
 
 .space-select { max-width: 140px; }
+/* the empty state reads in the panels' empty-state type (Ledger, Mechanism) */
+.space-empty { margin: 0; line-height: 1.45; font-size: 12.5px; }
 
 .space-map-wrap { display: flex; flex-direction: column; gap: 8px; }
 .space-map { width: 100%; height: auto; display: block; border-radius: var(--k-radius-sm); outline: none; touch-action: none; user-select: none; cursor: crosshair; }

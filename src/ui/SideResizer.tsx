@@ -1,12 +1,17 @@
 import { useRef } from "react";
-import { useUi, SIDE_DEFAULT, type Side } from "../model/concepts/uiState";
+import { useUi, SIDE_DEFAULT, maxSide, type Side } from "../model/concepts/uiState";
 
-/** The grip on a side panel's inner edge: drag to resize the panel, double-click to reset it. */
+/** The grip on a side panel's inner edge: drag to resize the panel (never so wide the view drops under
+ *  MIN_VIEW), double-click to reset it. */
 export function SideResizer({ side }: { side: Side }) {
   const setSideWidth = useUi((s) => s.setSideWidth);
   const drag = useRef<{ x: number; w: number } | null>(null);
   // the left panel grows as the grip moves right, the right panel as it moves left
-  const widthAt = (x: number) => drag.current!.w + (side === "left" ? x - drag.current!.x : drag.current!.x - x);
+  const widthAt = (x: number) => {
+    const w = drag.current!.w + (side === "left" ? x - drag.current!.x : drag.current!.x - x);
+    const ui = useUi.getState();
+    return Math.min(w, maxSide(side, ui.sideWidth, ui.sideOpen, window.innerWidth));
+  };
   return (
     <div
       className={`side-resize ${side}`}

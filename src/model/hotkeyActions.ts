@@ -8,7 +8,7 @@
 
 import { hotkeys, HotkeyAction } from "./hotkeys";
 import { useStore, Tool } from "./store";
-import { useUi } from "./concepts/uiState";
+import { useUi, PANEL_NAMES } from "./concepts/uiState";
 import { contextStack, ContextInput } from "./contexts";
 import { useRing, RING_ACTION_ID } from "./ring";
 import { hasFlexures } from "../sim/flexure";
@@ -40,12 +40,14 @@ const ACTIONS: HotkeyAction[] = [
   ...(["iso", "front", "top", "right", "back", "left", "bottom"] as const).map((v) => ({
     id: `view.${v}`, label: `View: ${v[0].toUpperCase()}${v.slice(1)}`, context: "global", run: () => window.dispatchEvent(new CustomEvent("vibecad:view", { detail: v })),
   })),
-  // concept panels (toggle; unbound by default, bindable in the Hotkeys panel)
-  { id: "view.workbench", label: "Toggle feature pins (Workbench)", context: "global", run: () => useUi.getState().togglePanel("workbench") },
-  { id: "view.lens", label: "Toggle the lens", context: "global", defaultPrimary: "shift+l", run: () => useUi.getState().togglePanel("lens") },
-  { id: "view.ledger", label: "Toggle the Ledger tab", context: "global", run: () => useUi.getState().togglePanel("ledger") },
-  { id: "view.space", label: "Toggle the Design Space tab", context: "global", run: () => useUi.getState().togglePanel("space") },
-  { id: "view.mechanism", label: "Toggle the Mechanism tab", context: "global", run: () => useUi.getState().togglePanel("mechanism") },
+  // concept panels, named as on their switches (toggle; a lit one whose tab is hidden comes forward first;
+  // unbound by default, bindable in the Hotkeys panel)
+  { id: "view.workbench", label: `Toggle ${PANEL_NAMES.workbench} (feature pins and the history strip)`, context: "global", run: () => useUi.getState().togglePanel("workbench") },
+  { id: "view.lens", label: `Toggle ${PANEL_NAMES.lens}`, context: "global", defaultPrimary: "shift+l", run: () => useUi.getState().togglePanel("lens") },
+  { id: "view.ledger", label: `Toggle ${PANEL_NAMES.ledger}`, context: "global", run: () => useUi.getState().togglePanel("ledger") },
+  { id: "view.space", label: `Toggle ${PANEL_NAMES.space}`, context: "global", run: () => useUi.getState().togglePanel("space") },
+  { id: "view.materials", label: `Toggle ${PANEL_NAMES.materials}`, context: "global", run: () => useUi.getState().togglePanel("materials") },
+  { id: "view.mechanism", label: `Toggle ${PANEL_NAMES.mechanism}`, context: "global", run: () => useUi.getState().togglePanel("mechanism") },
   {
     id: "mechanism.sweep", label: "Sweep the mechanism's drive", context: "model",
     when: () => hasFlexures(st().session.doc) && drivesOf(st().session.doc).length > 0,

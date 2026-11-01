@@ -170,6 +170,7 @@ const ACTIONS: Record<string, IconName> = {
   "view.lens": "lens",
   "view.ledger": "ledger",
   "view.space": "space",
+  "view.materials": "material",
   "view.mechanism": "mechanism",
   "mechanism.sweep": "play",
   "ring.open": "action-ring",

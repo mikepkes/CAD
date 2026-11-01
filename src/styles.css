@@ -388,9 +388,14 @@ body {
   flex: 1;
   min-height: 0;
 }
-.center-view > .k-panel-toggle {
-  right: 36px; /* clear of the side-panel collapse button */
-}
+/* the panel switches: one line along the top of the view, clear of the crumb (beside-crumb) and of a collapsed
+   side's toggle; the row itself lets pointer events through to the model, its buttons take them */
+.center-view > .k-panel-toggle { left: 12px; right: 12px; pointer-events: none; }
+.center-view > .k-panel-toggle > * { pointer-events: auto; }
+.center-view > .k-panel-toggle.beside-crumb { left: 45%; }
+.workspace.right-collapsed .center-view > .k-panel-toggle { right: 36px; }
+.workspace.left-collapsed .center-view > .k-panel-toggle:not(.beside-crumb) { left: 36px; }
+.workspace.left-collapsed .wb-crumb { left: 36px; }
 .center-dock {
   flex: none;
   max-height: 40%;
@@ -559,24 +564,33 @@ body {
 .side-resize:hover,
 body.side-resizing .side-resize { background: var(--accent); opacity: 0.5; }
 body.side-resizing { cursor: col-resize; user-select: none; }
+/* a side panel's collapse button: in its first header row while the panel is open (the row keeps room for it),
+   at the view's top edge while it is collapsed */
 .side-toggle {
   position: absolute;
-  top: 10px;
+  top: 12px;
   z-index: 3;
   width: 22px;
-  height: 36px;
+  height: 28px;
+  padding: 0;
   background: var(--panel-2);
   border: 1px solid var(--line);
   color: var(--text-dim);
   cursor: pointer;
   border-radius: 6px;
 }
+.side-toggle:hover { color: var(--text); border-color: var(--accent); }
+.side-toggle.open { top: 5px; height: 24px; }
 .side-toggle.left {
   left: 6px;
 }
 .side-toggle.right {
   right: 6px;
 }
+.side.left > .panel:first-child > .panel-head { padding-left: 36px; }
+.side.right > .k-tabs,
+.side.right > .panel:first-child > .panel-head,
+.side.right > :first-child:not(.k-tabs) .panel-head:first-child { padding-right: 36px; }
 
 /* ---------- Panels ---------- */
 .panel {
@@ -1253,7 +1267,7 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 /* ---------- Agent panel ---------- */
 .agent-panel {
   position: absolute;
-  top: 0;
+  top: 52px; /* under the panel switches, which stay reachable */
   right: 0;
   bottom: 0;
   width: 360px;

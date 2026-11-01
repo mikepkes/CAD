@@ -189,8 +189,8 @@ export function DesignSpacePanel(p: DesignSpacePanelProps = {}) {
   if (!spec || !current) {
     return (
       <div className="space-panel" data-testid="space-empty">
-        <span className="k-label">Design space</span>
-        <p className="k-dim">Set a min and max on at least two parameters in the Parameters panel to map them here. {bounded.length === 1 ? `Only "${bounded[0].name}" has bounds so far.` : "None have bounds yet."}</p>
+        <span className="k-label">Space</span>
+        <p className="k-dim space-empty">Set a min and max on at least two parameters in the Parameters panel to map them here. {bounded.length === 1 ? `Only "${bounded[0].name}" has bounds so far.` : "None have bounds yet."}</p>
       </div>
     );
   }
