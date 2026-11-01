@@ -238,8 +238,26 @@ export function pushParamOf(row: FeatureRow | undefined): CardParam | null {
 export type Axis = "x" | "y" | "z";
 
 /** What a Push/Pull on one face drives: the number, and for a face that should move on its own (a box's side, a
- *  cylinder's end), the axis and side its centre shifts along so the opposite face stays put. */
-export interface PushTarget { param: CardParam; shift?: { axis: Axis; sign: 1 | -1 } }
+ *  cylinder's end), the axis and side its centre shifts along so the opposite face stays put. An extrude's start cap
+ *  `moves: "start"`: the start offset follows the depth so the end face stays where it is. `outward` is the sign a
+ *  step takes to move the face out (an extrude whose distance is negative grows by going more negative). */
+export interface PushTarget { param: CardParam; shift?: { axis: Axis; sign: 1 | -1 }; moves?: "start"; outward?: 1 | -1 }
+
+const LITERAL = /^\s*\(?\s*[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?\s*\)?\s*$/i;
+
+/** Whether an expression is a formula (`w*2`, `h - 3`): neither a plain number nor a single parameter's name. A
+ *  formula is shown read-only (edited as text, "edit formula…"); Push/Pull never overwrites it with a number. */
+export function isFormula(expr: string, names: string[]): boolean {
+  return !LITERAL.test(expr) && !namedParam(expr, names);
+}
+
+/** Which cap of an extrude a face name is ("ext3:end" → "end"), or null for a side or another feature's face. */
+export function extrudeCap(faceName: string | undefined, featureId: string): "start" | "end" | null {
+  if (!faceName) return null;
+  if (faceName === `${featureId}:end`) return "end";
+  if (faceName === `${featureId}:start`) return "start";
+  return null;
+}
 
 const dominant = (n: { x: number; y: number; z: number }): { axis: Axis; sign: 1 | -1 } => {
   const a = Math.abs(n.x), b = Math.abs(n.y), c = Math.abs(n.z);
@@ -247,11 +265,24 @@ const dominant = (n: { x: number; y: number; z: number }): { axis: Axis; sign: 1
   return { axis, sign: n[axis] < 0 ? -1 : 1 };
 };
 
-/** The Push/Pull for the face with outward `normal` on `row`'s body. Direct modelling: a box's face drives its own
- *  size along the face normal (and only that face moves); a cylinder's or cone's end drives its height, its side
- *  its radius. Any other feature (or no normal) drives the feature's own push param, as before. */
-export function pushTargetOf(row: FeatureRow | undefined, normal?: { x: number; y: number; z: number }): PushTarget | null {
+/** The Push/Pull for the face with outward `normal` (and topological `faceName`) on `row`'s body. Direct modelling:
+ *  a box's face drives its own size along the face normal (and only that face moves); a cylinder's or cone's end
+ *  drives its height, its side its radius. An extrude offers it only on its caps: the end cap moves by its depth,
+ *  the start cap moves by its depth and start offset together (the end stays); a symmetric extrude grows both ways;
+ *  a side face has nothing to push. Any other feature (or no face given) drives the feature's own push param. */
+export function pushTargetOf(row: FeatureRow | undefined, normal?: { x: number; y: number; z: number }, faceName?: string): PushTarget | null {
   if (!row) return null;
+  if (row.spec.kind === "extrude" && faceName) {
+    const cap = extrudeCap(faceName, row.featureId);
+    const param = cap ? cardParams(row).find((p) => p.key === "distance") : undefined;
+    if (!cap || !param) return null;
+    const outward: 1 | -1 = param.value < 0 ? -1 : 1;
+    if (cap === "end" || row.op.params.symmetric) return { param, outward };
+    // the start cap: only when the start offset is a plain number (a formula there isn't overwritten)
+    const off = row.op.params.startOffset;
+    if (off != null && !LITERAL.test(String(off))) return null;
+    return { param, outward, moves: "start" };
+  }
   if (row.spec.kind === "primitive" && normal) {
     const shape = String(row.op.params.shape ?? "box");
     const params = cardParams(row);
@@ -283,13 +314,29 @@ export function namedParam(expr: string, names: string[]): string | null {
 /** One Push/Pull edit: the op with its pushed number (and a box face's shifted centre), or, when the number is a
  *  named parameter, that parameter's new value. */
 export type PushEdit =
-  | { kind: "op"; opId: string; params: Record<string, unknown> }
+  | { kind: "op"; opId: string; params: Record<string, unknown>; also?: { name: string; expr: string } }
   | { kind: "param"; name: string; expr: string };
 
 const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
 
 /** Push `target` on `row` to `value`. `names` are the document's parameter names. */
 export function pushTo(row: FeatureRow, target: PushTarget, value: number, names: string[] = []): PushEdit {
+  // an extrude's depth never crosses zero by pushing: it stops a step short instead of flipping to the other side
+  if (row.spec.kind === "extrude" && target.param.key === "distance" && Number.isFinite(target.param.value)) {
+    const was = target.param.value, step = target.param.spec.step || 0.5;
+    if (Math.abs(value) < step / 2 || (was !== 0 && Math.sign(value) !== Math.sign(was))) value = was < 0 ? -step : step;
+  }
+  if (target.moves === "start" && Number.isFinite(target.param.value)) {
+    // the start face moves; the end stays: the offset (along the sketch normal) takes up the change in depth
+    const rev = row.op.params.direction === "reverse" ? -1 : 1;
+    const off = Number(String(row.op.params.startOffset ?? "0").replace(/[()]/g, "")) || 0;
+    const params = paramsWith(row, target.param.key, value);
+    const named = namedParam(target.param.expr, names);
+    if (named) params[target.param.key] = target.param.expr;
+    params.startOffset = String(round6(off - rev * (value - target.param.value)));
+    if (named) return { kind: "op", opId: row.opId, params, also: { name: named, expr: String(value) } };
+    return { kind: "op", opId: row.opId, params };
+  }
   const named = namedParam(target.param.expr, names);
   if (named) return { kind: "param", name: named, expr: String(value) };
   const params = paramsWith(row, target.param.key, value);
@@ -303,10 +350,10 @@ export function pushTo(row: FeatureRow, target: PushTarget, value: number, names
 
 /** One Push/Pull step (`dir` −1 pulls in, +1 pushes out) on a face of `row`: null when there is no numeric number to
  *  push. The face verbs' −/+ and the face.push/face.pull hotkeys send this. */
-export function pushEdit(row: FeatureRow | undefined, dir: -1 | 1, normal?: { x: number; y: number; z: number }, names: string[] = []): PushEdit | null {
-  const t = pushTargetOf(row, normal);
-  if (!row || !t || !t.param.numeric) return null;
-  return pushTo(row, t, pushed(t.param.value, dir, t.param.spec), names);
+export function pushEdit(row: FeatureRow | undefined, dir: -1 | 1, normal?: { x: number; y: number; z: number }, names: string[] = [], faceName?: string): PushEdit | null {
+  const t = pushTargetOf(row, normal, faceName);
+  if (!row || !t || !t.param.numeric || isFormula(t.param.expr, names)) return null;
+  return pushTo(row, t, pushed(t.param.value, (dir * (t.outward ?? 1)) as -1 | 1, t.param.spec), names);
 }
 
 /** A name to offer for a number: its label as an identifier ("Distance" → `distance`), numbered past the taken ones. */

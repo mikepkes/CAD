@@ -83,6 +83,10 @@ export interface ExtrudeFeature {
   symmetric?: boolean;
   /** Extrude against the sketch normal (equivalent to a negative distance). */
   direction?: "normal" | "reverse";
+  /** Where the extrude starts, along the sketch normal from the sketch plane (expression; default 0). Push/Pull on
+   *  a start cap moves the start by this, keeping the end face where it is. */
+  startOffsetExpr?: string;
+  startOffsetValue?: number;
   /** "blind" (default): `distance`. "throughAll": far past every existing body in the chosen direction(s) — for cuts/joins that must go all the way through.
    *  "toFace": up to the face `toFace` names, re-found on every rebuild (Fusion's "To object"), so the extrude follows that face when it moves. */
   extent?: "blind" | "throughAll" | "toFace";

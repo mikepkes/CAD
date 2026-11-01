@@ -52,7 +52,8 @@ const P = (param: string): Segment => ({ param });
 const opVerb = (o: unknown) => (o === "cut" ? " cut from the body" : o === "join" ? " joined to the body" : o === "intersect" ? " kept where it meets the body" : "");
 
 const SPECS: FeatureSpec[] = [
-  { kind: "extrude", op: "feature.extrude", label: "Extrude", params: [mm("distance", "Distance", 0.5, 500)], pushParam: "distance",
+  // negative distances extrude the other way (a formula may well be negative): no clamp that flips the back
+  { kind: "extrude", op: "feature.extrude", label: "Extrude", params: [mm("distance", "Distance", -500, 500)], pushParam: "distance",
     sentence: (op, names) => [T("Extrude "), { ref: String(op.params.sketch), text: names(String(op.params.sketch)) },
       ...(op.params.extent === "toFace" ? [T(" up to a face")] : op.params.extent === "throughAll" ? [T(" through everything")] : [T(" by "), P("distance"), T(op.params.symmetric ? " each way" : "")]),
       T(opVerb(op.params.operation)), T(".")] },

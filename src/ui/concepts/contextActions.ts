@@ -46,7 +46,7 @@ const faceRow = (): FeatureRow | undefined => { const f = face(); return f ? row
 /** The document's parameter names (a number that is one of them is a dial: Push/Pull moves the parameter). */
 const paramNames = () => st().session.doc.parameters.map((p) => p.name);
 /** The Push/Pull step for the selected face: face-aware on a box or cylinder, the parameter itself when the number is named. */
-const facePush = (dir: -1 | 1) => pushEdit(faceRow(), dir, face()?.normal, paramNames());
+const facePush = (dir: -1 | 1) => pushEdit(faceRow(), dir, face()?.normal, paramNames(), face()?.faceName);
 
 /** The open feature card's row (the card shows only with the workbench panel on, in model mode). */
 function openRow(): FeatureRow | undefined {
@@ -77,9 +77,38 @@ export async function deleteFeature(row: Pick<FeatureRow, "name" | "opId">): Pro
   return true;
 }
 
-/** Send one Push/Pull edit: the op, or the named parameter it reads. */
-export function applyPush(e: PushEdit): Promise<void> {
-  return e.kind === "param" ? st().setParameterExpr(e.name, e.expr) : st().editOperation(e.opId, e.params);
+/** Send one Push/Pull edit: the op, or the named parameter it reads (both, as one undo step, when a start cap
+ *  moves an extrude whose depth is a parameter). */
+export async function applyPush(e: PushEdit): Promise<void> {
+  if (e.kind === "param") return st().setParameterExpr(e.name, e.expr);
+  if (!e.also) return st().editOperation(e.opId, e.params);
+  const cp = st().session.checkpoint();
+  await st().setParameterExpr(e.also.name, e.also.expr);
+  await st().editOperation(e.opId, e.params);
+  st().session.squash(cp, "Push/Pull");
+}
+
+/** Edit a number that is a formula as text (the card's and the face verbs' "edit formula…"): the formula is kept
+ *  as an expression, never replaced by the number it gives. */
+export async function editFormula(row: FeatureRow, p: CardParam): Promise<boolean> {
+  const value = Number.isFinite(p.value) ? `${Math.round(p.value * 1000) / 1000}${p.unit ? ` ${p.unit}` : ""}` : "no value";
+  const expr = await askText({
+    title: `Edit formula: ${row.name} ${p.label.toLowerCase()}`,
+    text: `Now ${p.expr} = ${value}. Type a number or an expression that uses parameters (like ${paramNames()[0] ?? "width"}*2).`,
+    label: p.label, initial: p.expr, confirmLabel: "Set",
+  });
+  if (!expr || expr.trim() === p.expr) return false;
+  const op = st().session.timeline.find((o) => o.opId === row.opId);
+  await st().editOperation(row.opId, { ...(op?.params ?? row.op.params), [p.key]: expr.trim() });
+  return true;
+}
+
+/** Flip an extrude to the other side of its sketch (the card's Reverse). */
+export function reverseExtrude(row: FeatureRow): Promise<void> {
+  const op = st().session.timeline.find((o) => o.opId === row.opId);
+  const params = { ...(op?.params ?? row.op.params) };
+  if (params.direction === "reverse") delete params.direction; else params.direction = "reverse";
+  return st().editOperation(row.opId, params);
 }
 export const pushKey = (e: PushEdit) => JSON.stringify(e);
 

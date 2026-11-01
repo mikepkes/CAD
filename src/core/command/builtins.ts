@@ -1955,6 +1955,7 @@ export const BUILTINS: CommandDef<any>[] = [
         distance: { type: "string", description: "Distance expression, e.g. '10' or 'height*2'." },
         symmetric: { type: "boolean", description: "Extrude symmetrically about the plane." },
         direction: { type: "string", enum: ["normal", "reverse"], description: "Along the sketch normal (default) or against it." },
+        startOffset: { type: "string", description: "Start this far from the sketch plane along its normal (expression; default 0). Push/Pull on a start cap sets it." },
         extent: { type: "string", enum: ["blind", "throughAll", "toFace"], description: "blind (default): `distance`. throughAll: past every existing body. toFace: up to the face `toFace` names (a planar face parallel to the sketch), following it when it moves; `distance` is ignored." },
         toFace: { type: "object", description: "For extent toFace: the face to stop at, as {normal, point, name?} (name = its topological name, e.g. \"prim2:-X\"; point = a point on it).", properties: { normal: { type: "object" }, point: { type: "object" }, name: { type: "string" } }, required: ["normal", "point"] },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies: new (default), join, or cut." },
@@ -1975,7 +1976,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A through-hole from a face sketch", params: { sketch: "sketch4", distance: "0", operation: "cut", direction: "reverse", extent: "throughAll" } },
       { note: "A side profile extruded across a body, up to its far face (it follows that face when the body changes)", params: { sketch: "sketch5", distance: "0", operation: "join", extent: "toFace", toFace: { normal: { x: -1, y: 0, z: 0 }, point: { x: -45, y: 0, z: 3 } } } },
     ],
-    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; extent?: "blind" | "throughAll" | "toFace"; toFace?: { normal: { x: number; y: number; z: number }; point: { x: number; y: number; z: number }; name?: string }; operation?: "new" | "join" | "cut" | "intersect"; region?: { x: number; y: number }; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; startOffset?: string; extent?: "blind" | "throughAll" | "toFace"; toFace?: { normal: { x: number; y: number; z: number }; point: { x: number; y: number; z: number }; name?: string }; operation?: "new" | "join" | "cut" | "intersect"; region?: { x: number; y: number }; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("ext");
       draft.features[id] = {
@@ -1987,6 +1988,7 @@ export const BUILTINS: CommandDef<any>[] = [
         distanceValue: 0,
         symmetric: !!p.symmetric,
         ...(p.direction === "reverse" ? { direction: "reverse" as const } : {}),
+        ...(p.startOffset != null && String(p.startOffset).trim() && String(p.startOffset).trim() !== "0" ? { startOffsetExpr: String(p.startOffset), startOffsetValue: 0 } : {}),
         ...(p.extent === "throughAll" ? { extent: "throughAll" as const } : {}),
         ...(p.extent === "toFace" ? (() => { if (!p.toFace) throw new Error("extent toFace needs `toFace` (the face to stop at)"); return { extent: "toFace" as const, toFace: p.toFace }; })() : {}),
         operation: p.operation ?? "new",
