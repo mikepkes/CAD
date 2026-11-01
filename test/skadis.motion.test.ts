@@ -2,6 +2,7 @@
 // the gear ratio, the pads stay upright and shut on the item, and nothing hits.
 import { describe, it, beforeAll, expect } from "vitest";
 import type { CadSession } from "../src/core/command/session";
+import { itFull } from "./helpers";
 import { collideFeatures } from "../src/core/features";
 import { resolveComponentWorld } from "../src/core/recompute";
 import { applyPoint, applyVec } from "../src/math/transform";
@@ -43,18 +44,22 @@ describe("SKÅDIS gravity holder: motion", () => {
     console.log(rows.join("\n"));
   }, 120000);
 
-  // The motion study sweeps `drop` and `lift` at the saved sizes (test/examples.test.ts); here, the corners.
-  const POSES: Record<string, number>[] = [
-    { drop: 2.6 }, { item: 20, drop: DROP }, { item: 40, drop: DROP }, { arm: 8, drop: DROP }, { arm: 5, hooks: 80, lift: 25, drop: 2 },
+  // The motion study sweeps `drop` and `lift` at the saved sizes (test/examples.skadis.test.ts, on the committed
+  // example this builds); here, the corners: by default shut on the smallest and the largest item, and the
+  // combined corner; mid-drop at the saved size (the example suite's sweep passes 2.56) and the widest arms in the
+  // extended run.
+  const POSES: [Record<string, number>, boolean][] = [
+    [{ drop: 2.6 }, false], [{ item: 20, drop: DROP }, true], [{ item: 40, drop: DROP }, true], [{ arm: 8, drop: DROP }, false], [{ arm: 5, hooks: 80, lift: 25, drop: 2 }, true],
   ];
-  for (const over of POSES) {
+  for (const [over, always] of POSES) {
     const label = Object.entries(over).map(([k, v]) => `${k} ${v}`).join(", ");
-    it(`is clear at ${label}`, async () => { const { doc, scope } = posed(s, over); clear(doc, scope, label); }, 600000);
+    (always ? it : itFull)(`is clear at ${label}`, async () => { const { doc, scope } = posed(s, over); clear(doc, scope, label); }, 120000);
   }
-  it("the check can fail: a pinion half a tooth out of phase hits the rack", async () => {
+  // (Extended run: test/gearSolid.test.ts makes the same check on a spur pair by default.)
+  itFull("the check can fail: a pinion half a tooth out of phase hits the rack", async () => {
     const { doc, scope } = posed(s, { drop: 2 }, (d) => Object.fromEntries(Object.entries(d.joints).map(([k, j]) => [k, j.name === "Lower arm, right" ? { ...j, valueExpr: `${j.valueExpr} + ${180 / ZP}` } : j])));
     const hit = collideFeatures(doc, scope).overlaps.find((o) => /Pinion|Lower arm, right/.test(o.a + o.b) && /Rack/.test(o.a + o.b));
     expect(hit?.volume ?? 0).toBeGreaterThan(0.5);
-  }, 600000);
+  }, 120000);
 
 });

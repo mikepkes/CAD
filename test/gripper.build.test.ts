@@ -9,7 +9,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample } from "./helpers";
+import { realSession, describeExample, forkSession, itFull, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFusedBlob } from "../src/core/features";
@@ -96,7 +96,7 @@ function springStrip(y0: number): [X, X][] {
 /** The k-th of something counted by `springs` (k from 1) is there while springs ≥ k. */
 const nth = (k: number) => (k === 1 ? "springs" : `max(0, springs - ${k - 1})`);
 
-async function buildGripper(s: CadSession, opts: { springs?: number; skeleton?: boolean } = {}): Promise<void> {
+export async function buildGripper(s: CadSession, opts: { springs?: number; skeleton?: boolean } = {}): Promise<void> {
   await dis(s, "parameter.add", { name: "push", expression: "0", min: 0, max: PUSH, step: 0.1 });
   await dis(s, "parameter.add", { name: "jaw", expression: String(JAW.value), min: JAW.range[0], max: JAW.range[1], step: 1 });
   await dis(s, "parameter.add", { name: "material", expression: String(DEFAULT_MATERIAL), options: MATERIALS.map((m) => m.name) });
@@ -248,29 +248,41 @@ function jaws(s: CadSession, push: number) {
 const pushes = Array.from({ length: 11 }, (_, k) => (PUSH * k) / 10);
 
 describe("compliant gripper", () => {
-  beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
-
-  it("builds eight parts that print as one piece", async () => {
-    const s = realSession();
-    await buildGripper(s);
+  // built once: the tests below only pose it, or change a fork of it (`springs`
+  // and `skeleton` are parameters, so setting one on a fork is the same model as
+  // building with it)
+  let built: CadSession;
+  const withParams = async (set: Record<string, number>) => {
+    const s = await forkSession(built);
+    for (const [name, v] of Object.entries(set)) await dis(s, "parameter.set", { name, expression: String(v) });
     await s.recompute();
+    return s;
+  };
+  beforeAll(async () => {
+    await initKernel({ wasmBinary: wasm });
+    built = realSession();
+    await buildGripper(built);
+    await built.recompute();
+  }, 60000);
+
+  // Its eight parts building clean on both geometry paths, only touching at rest
+  // (at the split strips), clear as the plunger is pushed and printing as one
+  // piece are the example suite's (test/exampleSuite.ts), on the committed
+  // example this must reproduce.
+  it("builds the committed example: eight parts", async () => {
+    const s = built;
     if (OUT) writeFileSync(`${OUT}/gripper.vibecad.json`, serializeDocument(s.doc));
+    expectCommittedExample(s, "gripper");
     for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
-    const scope = scopeOf(s);
-    placeComponentSketches(s.doc, scope);
-    const bodies = Object.values(evaluateFeatures(s.doc, scope));
-    for (const b of bodies) expect(b.error, b.name).toBeUndefined();
-    expect(bodies.filter((b) => b.mesh).length).toBe(8);
-    expect(collideFeatures(s.doc, scope).maxOverlap).toBeLessThan(0.01); // they only touch, at the split strips
-    const stl = exportFusedBlob(s.doc, scope, "stl");
-    expect(stl && stl.size).toBeGreaterThan(10000);
-    if (OUT) writeFileSync(`${OUT}/gripper.stl`, Buffer.from(await stl!.arrayBuffer()));
-  }, 120000);
+    if (OUT) {
+      const scope = scopeOf(s);
+      placeComponentSketches(s.doc, scope);
+      writeFileSync(`${OUT}/gripper.stl`, Buffer.from(await exportFusedBlob(s.doc, scope, "stl")!.arrayBuffer()));
+    }
+  });
 
   it("pushing the plunger opens both jaws, amplified: three loops close, every hinge within its limit", async () => {
-    const s = realSession();
-    await buildGripper(s);
-    await s.recompute();
+    const s = built;
     const poses = flexureSweep(s.doc, "push", pushes);
     for (const p of poses) {
       expect(p.error, `push ${p.value}`).toBeUndefined();
@@ -292,15 +304,14 @@ describe("compliant gripper", () => {
     const rests = st.states.filter((q) => q.stable).map((q) => q.value);
     expect(rests.length).toBe(1);
     expect(rests[0]).toBeCloseTo(0, 6);
-  }, 120000);
+  });
 
-  it("each grip spring adds 12EI/L³ to the push, and so to the grip, without changing how it moves", async () => {
+  // Extended run: four loop-closing sweeps of the whole mechanism.
+  itFull("each grip spring adds 12EI/L³ to the push, and so to the grip, without changing how it moves", async () => {
     const rows: string[] = [];
     let last: { force: number; gap: number } | undefined;
     for (const springs of [0, 1, 2, 3]) {
-      const s = realSession();
-      await buildGripper(s, { springs });
-      await s.recompute();
+      const s = await withParams({ springs });
       const [half, full] = flexureSweep(s.doc, "push", [PUSH / 2, PUSH]);
       const sc = scopeOf(s), gain = (jaws(s, PUSH).gap - jaws(s, 0).gap) / 2 / PUSH;
       const k = (12 * MATERIALS[DEFAULT_MATERIAL].E * (Hz * sc.springT ** 3) / 12) / SPRING_L ** 3;
@@ -318,10 +329,10 @@ describe("compliant gripper", () => {
     console.log(rows.join("\n"));
   }, 300000);
 
-  it("ticking skeleton puts a PLA core in every link, sealed in its skin and riding with it, and it saves as a two-part 3MF", async () => {
-    const s = realSession();
-    await buildGripper(s, { skeleton: true });
-    await s.recompute();
+  // Extended run: test/bistable.build.test.ts checks a skeleton's core and its
+  // two-part 3MF by default.
+  itFull("ticking skeleton puts a PLA core in every link, sealed in its skin and riding with it, and it saves as a two-part 3MF", async () => {
+    const s = await withParams({ skeleton: 1 });
     for (const push of [0, PUSH]) {
       await dis(s, "parameter.set", { name: "push", expression: String(push) });
       await s.recompute();
@@ -349,9 +360,7 @@ describe("compliant gripper", () => {
   }, 300000);
 
   it("in every material, and at both jaw lengths, the hinges and all three springs stay within the limit and the loops close", async () => {
-    const s = realSession();
-    await buildGripper(s, { springs: 3 });
-    await s.recompute();
+    const s = await withParams({ springs: 3 });
     const rows: string[] = [];
     for (const [i, m] of MATERIALS.entries()) for (const jaw of JAW.range) {
       let worst = 0;
@@ -364,15 +373,14 @@ describe("compliant gripper", () => {
       rows.push(`${m.name}, jaw ${jaw}: worst hinge or spring ${(worst * m.strain * 100).toFixed(2)}% of ${m.strain * 100}%`);
     }
     console.log(rows.join("\n"));
-  }, 120000);
+  });
 
   // The part as built clears itself through the stroke: with the as-designed
-  // strip and the longest (PLA), at both jaw lengths.
+  // strip and the longest (PLA), at both jaw lengths. Extended run: by default
+  // the example suite sweeps the stroke in the as-designed material.
   for (const name of ["TPU 68D (TPU for AMS)", "PLA"]) {
-    it(`clears itself through the stroke, with all its springs, in ${name}`, async () => {
-      const s = realSession();
-      await buildGripper(s, { springs: 3 });
-      await dis(s, "parameter.set", { name: "material", expression: String(MATERIALS.findIndex((m) => m.name === name)) });
+    itFull(`clears itself through the stroke, with all its springs, in ${name}`, async () => {
+      const s = await withParams({ springs: 3, material: MATERIALS.findIndex((m) => m.name === name) });
       for (const jaw of JAW.range) {
         await dis(s, "parameter.set", { name: "jaw", expression: String(jaw) });
         await s.recompute();

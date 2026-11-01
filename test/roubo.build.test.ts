@@ -6,7 +6,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures } from "../src/core/features";
@@ -323,6 +323,7 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     const { chop } = await buildRoubo(s);
     await s.recompute();
     if (OUT) writeFileSync(`${OUT}/roubo.vibecad.json`, serializeDocument(s.doc));
+    expectCommittedExample(s, "roubo");
 
     const b0 = bodies(s);
     // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw+garter + 2 arms + 5 pins + wheel + 3 landings + 3 handles = 33
