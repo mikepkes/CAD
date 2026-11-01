@@ -27,6 +27,11 @@ export async function preroll(d) {
   await d.settle(600);
 }
 
+/** Side-on to the stand's profile, a little from the front and above: the lip and the phone gap face the camera. */
+const STAND_VIEW = [1, -0.45, 0.4];
+/** The Parameters panel's width while a value is dragged on camera (it's 272 otherwise). */
+const WIDE = 480;
+
 /** The value → x position of a range input's thumb. */
 const thumbX = (r, min, max, v) => r.x + 8 + ((v - min) / (max - min)) * (r.w - 16);
 
@@ -116,14 +121,19 @@ export async function act1(d) {
   await d.beat("cold-open", "This is a phone stand made in VibeCAD. Drag one number, the phone's thickness, and the whole stand adapts. In the next four minutes you'll build it from a blank page.", async () => {
     await d.api("cursor", false);
     await d.api("turntable", 12); // degrees a second: a slow, readable turn (pass 1's 3D-mouse drift ran at about 450°/s)
-    await d.wait(2500);
+    await d.wait(2200);
+    await d.api("turntable", null);
+    // stop side-on to the profile, where the lip and the phone gap face the camera, and widen the numbers to drag
+    await d.api("aim", { dir: STAND_VIEW, ms: 1300, margin: 0.95 });
+    await d.api("sideWidth", "left", WIDE, 500);
     await d.api("cursor", true);
     const r = await d.rect(".param-slider input[type=range]");
     await d.move(thumbX(r, 6, 16, 9), r.cy, 700);
     await d.drag({ x: thumbX(r, 6, 16, 9), y: r.cy }, { x: thumbX(r, 6, 16, 15), y: r.cy }, 1800);
     await d.wait(600);
     await d.drag({ x: thumbX(r, 6, 16, 15), y: r.cy }, { x: thumbX(r, 6, 16, 9), y: r.cy }, 1500);
-    await d.api("turntable", null);
+    await d.api("cursor", false);
+    await d.api("sideWidth", "left", 272, 500);
   });
 
   await d.beat("get-vibecad", "VibeCAD runs in your browser at mikepkes dot github dot io slash CAD, or as a desktop app from the project's GitHub releases. It's free, it's open source under the MIT licence, and it will stay that way.", async () => {
@@ -137,6 +147,7 @@ export async function act1(d) {
     await d.clickEl(".toolbar button, button", "New");
     await d.clickEl("[role=dialog] button", "New document");
     await d.settle(500);
+    await d.run(() => { const st = window.__vibecadDemo.store.getState(); if (st.showPlanes) st.toggleShowPlanes(); }); // PUPPET: New brings the origin planes back
     await d.api("view", "iso"); await d.settle(300);
     await d.run((names) => window.__vibecadDemo.mockAgent({ prompt: "", model: "claude-haiku-5-5", source: "video act 1 names", turns: [], names }), NAMES); // fresh names for the new document
     await d.move(820, 380, 700); await d.wait(700);
@@ -149,8 +160,9 @@ export async function act1(d) {
     await d.key("Escape");
   });
 
-  await d.beat("block", "Start with a block. Press B, then click a face and drag its number to push it out. Turn the model to reach the far sides. Type a size when you know it, and pull the top down to make a thin base.", async () => {
-    await d.key("b");
+  await d.beat("block", "Start with a block. Hold Space for the action ring, point at Box and let go. Then click a face and drag its number to push it out. Turn the model to reach the far sides. Type a size when you know it, and pull the top down to make a thin base.", async () => {
+    await d.move(820, 420, 400);
+    await d.ring("Add a box");
     await d.settle(400);
     await d.key("Escape");
     await clickFace(d, "+x"); await scrubFace(d, 250);
@@ -166,11 +178,11 @@ export async function act1(d) {
 
   let lipSketch = null;
   const side = W(S.width / 2, -S.depth / 2 + 8, S.base / 2); // the base's +X side, clear of the plate and the lip
-  await d.beat("raise-the-back", "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and press S to sketch on it. Draw the outline corner by corner, finish the sketch, and extrude it up to the far side of the base, so it always spans the base, whatever its width. That side is hidden, so press and hold: VibeCAD lists everything under the cursor and lights each one as you point at it. The lip in front of the phone is a rectangle, made the same way.", async () => {
+  await d.beat("raise-the-back", "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and pick Sketch from its action ring: the ring changes with what you've selected. Draw the outline corner by corner, finish the sketch, and extrude it up to the far side of the base, so it always spans the base, whatever its width. That side is hidden, so press and hold: VibeCAD lists everything under the cursor and lights each one as you point at it. The lip in front of the phone is a rectangle, made the same way.", async () => {
     await d.api("closeCards");
     await d.clickWorld(side); await d.settle();
     await d.shot("side");
-    await d.key("s");
+    await d.ring("Sketch");
     await d.settle(300);
     await d.key("f"); await d.wait(900);
     const back = await d.run(() => window.__vibecadDemo.backOutline());
@@ -229,10 +241,13 @@ export async function act1(d) {
 
   await d.beat("turn-the-dials", "Now turn the dial. A thicker phone, and the lip moves to make room. That's all parametric means: change one number, and everything that depends on it follows. And Command Z puts it back.", async () => {
     await d.lower(null);
+    await d.api("aim", { dir: STAND_VIEW, ms: 1000, margin: 0.95 });
+    await d.api("sideWidth", "left", WIDE, 500);
     const r = await d.rect(".param-slider input[type=range]");
     await d.drag({ x: thumbX(r, 6, 16, 9), y: r.cy }, { x: thumbX(r, 6, 16, 14), y: r.cy }, 1800);
     await d.settle(400); await d.wait(800);
     await d.page.keyboard.press("Meta+Z"); await d.settle(400);
+    await d.api("sideWidth", "left", 272, 500);
   });
 
   await d.beat("keep-it", "Save it to a file whenever you like. VibeCAD also keeps your work as you go, so you can experiment freely.", async () => {

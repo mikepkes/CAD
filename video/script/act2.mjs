@@ -29,12 +29,19 @@ const toggle = (d, label) => d.clickEl(".k-panel-toggle button", label);
 export async function act2(d) {
   const S = await d.run(() => window.__vibecadDemo.STAND);
 
-  await d.beat("soften", "Sharp edges chip and catch. Click the front face and choose Round edges: every edge around it gets a fillet, and its radius is just another number you can drag or name.", async () => {
-    await d.clickWorld(W(-S.width / 4, -S.depth / 2, S.base * 0.6)); await d.settle();
-    await d.clickEl(".wb-verbs button", "Round edges");
+  await d.beat("soften", "Sharp corners chip and catch. Click the top of the base and choose Round corners: its four corners get a fillet, and the radius is just another number you can drag, type or name. Make it generous: fifteen millimetres.", async () => {
+    await d.clickWorld(W(-S.width / 4, -S.depth / 2 + 4, S.base)); await d.settle();
+    await d.clickEl(".wb-verbs button", "Round corners");
     await d.settle(400);
     const n = await d.rect(".wb-card .k-live");
-    await d.drag({ x: n.cx, y: n.cy }, { x: n.cx + 30, y: n.cy }, 900);
+    await d.drag({ x: n.cx, y: n.cy }, { x: n.cx + 40, y: n.cy }, 900);
+    await d.settle(300);
+    const m = await d.rect(".wb-card .k-live");
+    await d.click(m.cx, m.cy);
+    await d.key("Enter");
+    await d.type("15", 8);
+    await d.wait(250);
+    await d.key("Enter");
     await d.settle(400);
     await d.api("closeCards");
   }, { lower: { title: "Fillet", sub: "a feature like any other, in the history" } });
@@ -69,22 +76,48 @@ export async function act2(d) {
     await d.wait(1500);
   });
 
-  await d.beat("will-it-print", "Will it print? Bring up the lens and switch it to overhangs: red would need supports. Then zebra stripes show how smoothly the surfaces flow into each other.", async () => {
+  await d.beat("will-it-print", "Will it print? Bring up the lens and switch it to overhangs: red would need supports. Then zebra stripes: on the rounded corner they bend smoothly through the curve and on into the flat faces, with no kinks.", async () => {
     await toggle(d, "Space"); await toggle(d, "Ledger");
     await toggle(d, "Lens"); await d.settle(400);
     await d.move(820, 420, 500);
     await d.key("5"); await d.settle(400); await d.wait(1800);
-    await d.key("1"); await d.settle(400); await d.wait(1500);
+    // zebra on the big rounded corner: stripes bend through the curve and flow on into the flat faces
+    await d.key("1"); await d.settle(400);
+    const b = (await d.api("bounds"))[0]; // the stand as it is now (the design space changed its width and depth)
+    const R = 15, cx = b.max.x - R, cy = b.min.y + R; // the front-right corner's centre
+    await d.api("aim", { dir: [1, -1, 0.7], box: { min: { x: cx - 6, y: b.min.y - 2, z: 0 }, max: { x: b.max.x + 2, y: cy + 6, z: S.base + 4 } }, ms: 1500, margin: 1.6 });
+    const c = await d.world(W(cx + R * 0.71, cy - R * 0.71, S.base / 2));
+    await d.move(c.x, c.y, 600);
+    await d.api("turntable", 5); await d.wait(2600); await d.api("turntable", null);
+    await d.wait(400);
     await toggle(d, "Lens");
+    await d.api("view", "iso");
   }, { lower: { title: "Analysis lens", sub: "overhang, draft, curvature, zebra, x-ray" } });
 
-  await d.beat("make-it-yours", "Every action has a key, and the ones you use most can live on the action ring. Each context has its own ring, and you decide what's on it.", async () => {
+  await d.beat("make-it-yours", "Every action has a key, and the ones you use most can live on the action ring. Each context has its own ring, and you decide what's on it. Put Round edges on the face ring, and it's one flick away: here it softens every edge around the top of the base.", async () => {
     await d.lower(null);
     await d.clickEl("button[title='Keyboard shortcuts']");
     await d.settle(300);
     await d.clickEl(".hk-modal button", "Ring");
-    await d.wait(2200);
+    await d.wait(600);
+    await d.clickEl(".hk-ring-ctx button", "Face");
+    await d.wait(500);
+    await d.clickEl(".hk-slot[data-slot=SW]");
+    await d.wait(400);
+    const pick = d.page.locator(".hk-slot-picker select"), pb = await pick.boundingBox();
+    await d.move(pb.x + pb.width / 2, pb.y + pb.height / 2);
+    await pick.selectOption("face.fillet");
+    await d.wait(900);
     await d.clickEl(".hk-modal button", "Done");
+    await d.settle(300);
+    // use it: the top of the base, in front of the lip, then the ring's new slot
+    const b = (await d.api("bounds"))[0];
+    await d.api("closeCards");
+    await d.clickWorld(W(b.min.x + 0.3 * (b.max.x - b.min.x), b.min.y + 4, S.base)); await d.settle();
+    await d.ring("Round");
+    await d.settle(400);
+    await d.wait(800);
+    await d.api("closeCards");
   });
 
   await d.beat("ship-it", "When it's right, export it: STL for any printer, 3MF to keep parts and materials together, or STEP for other CAD tools.", async () => {

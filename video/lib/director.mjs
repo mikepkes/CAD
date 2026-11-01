@@ -45,7 +45,7 @@ export class Director {
   constructor(browser, context, page, takeDir, record) {
     Object.assign(this, { browser, context, page, takeDir, record });
     this.pointer = { x: VIEW.width / 2, y: VIEW.height / 2 };
-    this.timing = { view: VIEW, beats: [], fast: [], captions: [], notes: [] };
+    this.timing = { view: VIEW, beats: [], fast: [], captions: [], notes: [], picks: [] };
     this.frames = [];
     this.t0 = null;
   }
@@ -133,6 +133,8 @@ export class Director {
     return r;
   }
   note(text) { this.timing.notes.push({ t: this.now(), text }); }
+  /** Mark this moment for the intro montage: the edit cuts a fraction of a second from here into the cold open. */
+  pick(label) { this.timing.picks.push({ t: this.now(), label }); }
   async lower(title, sub) { await this.api("lowerThird", title ? { title, sub } : null); }
 
   // ---- input ----
@@ -167,6 +169,22 @@ export class Director {
     await sleep(150);
   }
   async key(k, hold = 70) { await this.page.keyboard.down(k); await sleep(hold); await this.page.keyboard.up(k); await sleep(180); }
+  /** Use the action ring: hold Space (it opens at the pointer), glide to the slot labelled `label`, release to run it. */
+  async ring(label, { glide = 650, dwell = 450 } = {}) {
+    await this.page.keyboard.down(" ");
+    try {
+      await sleep(500);
+      const r = await this.rect(".ring-slot", label);
+      await this.move(r.cx, r.cy, glide);
+      await sleep(dwell);
+    } catch (e) {
+      await this.page.keyboard.up(" ");
+      await this.key("Escape"); // never leave the ring open over the next beat
+      throw e;
+    }
+    await this.page.keyboard.up(" ");
+    await sleep(300);
+  }
   async type(text, cps = 14) { for (const ch of text) { await this.page.keyboard.type(ch); await sleep(1000 / cps); } }
   wait(ms) { return sleep(ms); }
 }

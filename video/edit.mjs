@@ -52,6 +52,30 @@ function chunks(text) {
   return out;
 }
 
+// ---- the intro montage: a third of a second from each moment Act 3 marked (`d.pick`), before Act 1's cold open ----
+const MONTAGE = "Gears, mechanisms, sections, forces, shop drawings.";
+const PICK = Math.round(FPS / 3);
+if (acts[0] === 1 && existsSync(join(takes, "act3", "timing.json"))) {
+  const timing = JSON.parse(readFileSync(join(takes, "act3", "timing.json"), "utf8"));
+  const list = JSON.parse(readFileSync(join(takes, "act3", "frames.json"), "utf8")).filter((f) => f.t >= 0);
+  const picks = timing.picks ?? [];
+  if (picks.length && list.length) {
+    const ti = takeFiles.push({ dir: `video/takes/${run}/act3/frames`, files: list.map((f) => f.file) }) - 1;
+    const from = outFrame;
+    for (const p of picks) {
+      let fi = 0;
+      for (let k = 0; k < PICK; k++) {
+        const t = p.t + k / FPS;
+        while (fi + 1 < list.length && list[fi + 1].t <= t) fi++;
+        frames.push([ti, fi]); outFrame++;
+      }
+    }
+    cues.push({ act: 1, id: "montage", from, to: outFrame, text: MONTAGE });
+    captions.push({ from, to: outFrame, text: MONTAGE });
+    console.log(`montage: ${picks.length} picks (${picks.map((p) => p.label).join(", ")}), ${((outFrame - from) / FPS).toFixed(1)} s`);
+  }
+}
+
 for (const n of acts) {
   const dir = join(takes, `act${n}`);
   if (!existsSync(join(dir, "timing.json"))) { console.warn(`no take for act ${n}`); continue; }

@@ -67,6 +67,7 @@ export function FaceVerbs() {
           <div className="wb-verb-row">
             <Button size="sm" title="Round every edge around this face (a fillet you can resize or name)" onClick={() => void edgeFace("fillet")}>Round edges</Button>
             <Button size="sm" title="Bevel every edge around this face" onClick={() => void edgeFace("chamfer")}>Chamfer edges</Button>
+            <Button size="sm" title="Round the corner edges running back from this face, e.g. a plate's four corners" onClick={() => void edgeFace("fillet", "corners")}>Round corners</Button>
           </div>
         )}
         {measuring && (
