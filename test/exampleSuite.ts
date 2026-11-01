@@ -41,7 +41,7 @@ export const EXAMPLES = DIRS.flatMap((d) => {
 
 /** Examples checked in a kernel (a test file) of their own — see above; the handlebar too, whose
  *  freeform collision checks are slow enough to want running beside the others, not after them. */
-export const OWN_KERNEL = ["public/examples/clockwork.json", "public/examples/skadis.json", "public/examples/handlebar.json"];
+export const OWN_KERNEL = ["public/examples/clockwork.json", "public/examples/skadis.json", "public/examples/handlebar.json", "public/examples/walker.json"];
 
 /** Examples whose bodies interpenetrate BY CONSTRUCTION, with why. Their overlap
  *  at rest and at every motion sample is snapshotted instead (so any change shows
