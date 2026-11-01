@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 1812,
-  "rollbackIndex": 627,
+  "nextId": 1819,
+  "rollbackIndex": 634,
   "operations": [
     {
       "opId": "op1",
@@ -11065,6 +11065,93 @@
       "createdIds": [],
       "label": "Publish drawing",
       "at": 1793560961958
+    },
+    {
+      "opId": "op1812",
+      "type": "parameter.describe",
+      "params": {
+        "name": "drop",
+        "label": "Rack drop",
+        "unit": "mm",
+        "description": "0 is open and empty; the item's weight pushes the rack down"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793564294819
+    },
+    {
+      "opId": "op1813",
+      "type": "parameter.describe",
+      "params": {
+        "name": "item",
+        "label": "Item width",
+        "unit": "mm",
+        "description": "The width the pads close on"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793564294839
+    },
+    {
+      "opId": "op1814",
+      "type": "parameter.describe",
+      "params": {
+        "name": "hooks",
+        "label": "Hook spacing",
+        "unit": "mm",
+        "description": "One or two of the board's slot pitches between the strip's hook and peg"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793564294860
+    },
+    {
+      "opId": "op1815",
+      "type": "parameter.describe",
+      "params": {
+        "name": "arm",
+        "label": "Arm width",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793564294881
+    },
+    {
+      "opId": "op1816",
+      "type": "parameter.describe",
+      "params": {
+        "name": "lift",
+        "label": "Lift off the strip",
+        "unit": "mm",
+        "description": "Slides the holder up off its mounting strip"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793564294903
+    },
+    {
+      "opId": "op1817",
+      "type": "parameter.describe",
+      "params": {
+        "name": "board",
+        "label": "Show the pegboard",
+        "description": "A piece of the board and a stand-in item, for context (not printed)"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793564294925
+    },
+    {
+      "opId": "op1818",
+      "type": "document.describe",
+      "params": {
+        "title": "SKÅDIS gravity holder",
+        "description": "A shaver or toothbrush holder for an IKEA SKÅDIS pegboard: the item's own weight drops a rack that swings two side pads in to clamp it; lift it out and they open."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793564294945
     }
   ],
   "timelineGroups": [],
