@@ -139,6 +139,7 @@ export async function act3(d) {
     await d.clickEl(".k-tabs button", "Mechanism"); await d.settle(400);
     await d.wait(2600);
     await d.clickEl(".k-tabs button", "Materials"); await d.wait(300);
+    await d.clickEl("button[aria-label^='Edit TPU 68D']"); await d.wait(400); // the editor closed with the tab
     await d.clickEl("[aria-label='Print direction'] button", "=Z");
     await d.settle(400);
     await d.clickEl(".k-tabs button", "Mechanism"); await d.settle(300);
