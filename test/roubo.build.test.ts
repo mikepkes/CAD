@@ -302,6 +302,9 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   for (const l of landingIds) await dis(s, "material.assign", { material: iron, component: l });  // landings are cast too
   for (const h of handleIds) await dis(s, "material.assign", { material: walnut, component: h });
 
+  // the shop drawing goes with it: the viewer offers it as a PDF
+  await dis(s, "drawing.publish", { title: "Roubo workbench" });
+
   return { chop, armIds };
 }
 

@@ -198,8 +198,9 @@ export function drawingSheetSVG(doc: CadDocument, scope: Scope, opts: SheetOptio
   });
 
   // ---- title block ----
-  parts.push(`<text x="${SHEET_W - M - 300}" y="${M + 4}" font-size="18" font-weight="bold" fill="#111">${esc(title)}</text>`);
-  parts.push(`<text x="${SHEET_W - M - 300}" y="${M + 22}" font-size="11" fill="#555">Third-angle projection · units ${esc(units)} · generated from the parametric model</text>`);
+  // the title block hangs from the right margin, so a wider font (a PDF rasteriser's) can't push it off the sheet
+  parts.push(`<text x="${SHEET_W - M}" y="${M + 4}" text-anchor="end" font-size="18" font-weight="bold" fill="#111">${esc(title)}</text>`);
+  parts.push(`<text x="${SHEET_W - M}" y="${M + 22}" text-anchor="end" font-size="11" fill="#555">Third-angle projection · units ${esc(units)} · generated from the parametric model</text>`);
   parts.push(`</svg>`);
   return parts.join("\n");
 }
