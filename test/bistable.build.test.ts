@@ -12,7 +12,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample } from "./helpers";
+import { realSession, describeExample, itFull, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFusedBlob, GeometryCache } from "../src/core/features";
@@ -98,7 +98,7 @@ function halfBeam(side: -1 | 1, y0: number): [X, X][] {
  *  on a long base: kept to show why it failed (the base bends, the walls splay
  *  and tilt, and the beams lose their second rest position). `rigid` holds the
  *  walls still, as the beams alone would behave. */
-async function buildBistable(s: CadSession, opts: { span?: number; arch?: number; frame?: number; u?: boolean; rigid?: boolean; swaying?: boolean; skeleton?: boolean } = {}): Promise<void> {
+export async function buildBistable(s: CadSession, opts: { span?: number; arch?: number; frame?: number; u?: boolean; rigid?: boolean; swaying?: boolean; skeleton?: boolean } = {}): Promise<void> {
   // the drive: how far the shuttle has been pushed down (mm); it rests again
   // just short of 2·rise, the beams' mirror shape
   await dis(s, "parameter.add", { name: "travel", expression: "0", min: 0, max: TRAVEL, step: 0.1 });
@@ -210,25 +210,33 @@ const scopeOf = (s: CadSession) => resolveParameters(s.doc.parameters).scope;
 const restsOf = (st: ReturnType<typeof flexureEquilibria>) => st.states.filter((q) => q.stable).map((q) => q.value);
 const fmt = (vs: number[]) => vs.map((v) => v.toFixed(2)).join(" and ");
 
+// The default run builds it, checks the skeleton's 3MF, the snap against the
+// curved-beam prediction and the arch's threshold. The studies of its variants
+// (the frames, every material, the slider corners, the path through the snap,
+// the swaying shuttle; each an equilibrium search over the throw, some for
+// several models) and the clearance through the throw at a tighter limit than
+// the example suite's are the extended run's (`npm run test:full`).
 describe("bistable switch", () => {
   beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
 
-  it("builds a ring frame with its beams and a shuttle that print as one piece", async () => {
+  // Its two bodies building clean on both geometry paths, the beams only
+  // touching the shuttle at rest, clear through the throw and printing as one
+  // piece are the example suite's (test/exampleSuite.ts), on the committed
+  // example this must reproduce.
+  it("builds the committed example: a ring frame with its beams, and a shuttle", async () => {
     const s = realSession();
     await buildBistable(s);
     await s.recompute();
     if (OUT) writeFileSync(`${OUT}/bistable.vibecad.json`, serializeDocument(s.doc));
+    expectCommittedExample(s, "bistable");
+    for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
     const scope = scopeOf(s);
     expect(scope.thickness).toBeGreaterThan(0.85); // TPU 68D: stout beams, a firm snap
-    placeComponentSketches(s.doc, scope);
-    const bodies = Object.values(evaluateFeatures(s.doc, scope));
-    for (const b of bodies) expect(b.error, b.name).toBeUndefined();
-    expect(bodies.filter((b) => b.mesh).length).toBe(2);
-    expect(collideFeatures(s.doc, scope).maxOverlap).toBeLessThan(0.01); // the beams only touch the shuttle
-    const stl = exportFusedBlob(s.doc, scope, "stl");
-    expect(stl && stl.size).toBeGreaterThan(10000);
-    if (OUT) writeFileSync(`${OUT}/bistable.stl`, Buffer.from(await stl!.arrayBuffer()));
-  }, 120000);
+    if (OUT) {
+      placeComponentSketches(s.doc, scope);
+      writeFileSync(`${OUT}/bistable.stl`, Buffer.from(await exportFusedBlob(s.doc, scope, "stl")!.arrayBuffer()));
+    }
+  });
 
   it("ticking skeleton embeds a PLA core in the frame, sealed in its skin, and it saves as a two-part 3MF", async () => {
     const s = realSession();
@@ -276,7 +284,7 @@ describe("bistable switch", () => {
 
   // In TPU 68D the bars are already stiff for the beams, so a core adds a
   // little; in a soft TPU it is what makes the frame hold.
-  it("the skeleton stiffens the frame: with a PLA core a soft TPU ring snaps nearly as hard as a rigid one", async () => {
+  itFull("the skeleton stiffens the frame: with a PLA core a soft TPU ring snaps nearly as hard as a rigid one", async () => {
     const thin = SLIDERS.frame.range[0], soft = MATERIALS.length - 1; // TPU 95A
     const snapOf = async (material: number, opts: Parameters<typeof buildBistable>[1]) => {
       const s = realSession();
@@ -323,7 +331,7 @@ describe("bistable switch", () => {
   }, 120000);
 
   // The first design, printed: it sprang back unless its walls were squeezed.
-  it("the frame decides it: the U-frame's walls splay and it springs back; the ring holds a firm second rest", async () => {
+  itFull("the frame decides it: the U-frame's walls splay and it springs back; the ring holds a firm second rest", async () => {
     const at = async (opts: Parameters<typeof buildBistable>[1]) => {
       const s = realSession();
       await buildBistable(s, opts);
@@ -345,7 +353,7 @@ describe("bistable switch", () => {
   // Beams can hold more than one shape for the same ends; the answer for a pose
   // must not depend on what was solved before it (a solve continued from a
   // pose on the far side of a snap stays on that side).
-  it("the force and energy at a pose don't depend on the path there: through the snap and back gives the same", async () => {
+  itFull("the force and energy at a pose don't depend on the path there: through the snap and back gives the same", async () => {
     const s = realSession();
     await buildBistable(s);
     await s.recompute();
@@ -366,7 +374,7 @@ describe("bistable switch", () => {
   // drawn beams stay on it. Pushed by its knob alone it sways and tilts
   // through the middle of the snap (the beams' second mode), which this
   // measures; it's square again at the rest positions.
-  it("pushed by its knob alone, mid-snap the shuttle sways and tilts: the same snap force and rests, a softer far side", async () => {
+  itFull("pushed by its knob alone, mid-snap the shuttle sways and tilts: the same snap force and rests, a softer far side", async () => {
     const square = realSession(), free = realSession();
     await buildBistable(square);
     await buildBistable(free, { swaying: true });
@@ -396,7 +404,7 @@ describe("bistable switch", () => {
     expect(pullFree / pullSquare).toBeLessThan(0.95);
   }, 300000);
 
-  it("in every material, it is bistable and the beams stay within its strain limit through the snap", async () => {
+  itFull("in every material, it is bistable and the beams stay within its strain limit through the snap", async () => {
     const s = realSession();
     await buildBistable(s);
     await s.recompute();
@@ -416,7 +424,7 @@ describe("bistable switch", () => {
     console.log(rows.join("\n"));
   }, 300000);
 
-  it("stays bistable, within the strain limit, at every corner of the span and frame sliders", async () => {
+  itFull("stays bistable, within the strain limit, at every corner of the span and frame sliders", async () => {
     const rows: string[] = [];
     for (const span of SLIDERS.span.range) for (const frame of SLIDERS.frame.range) {
       const s = realSession();
@@ -443,7 +451,7 @@ describe("bistable switch", () => {
     expect(await at(SLIDERS.arch.range[0])).toBe(false); // it just springs back
   }, 300000);
 
-  it("clears itself through the whole throw: the drawn beams bend with the shuttle", async () => {
+  itFull("clears itself through the whole throw: the drawn beams bend with the shuttle", async () => {
     const s = realSession();
     await buildBistable(s);
     for (const pos of [2.5, 5, 7.5, TRAVEL]) {

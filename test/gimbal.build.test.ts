@@ -23,7 +23,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample } from "./helpers";
+import { realSession, describeExample, itFull, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, exportFusedBlob } from "../src/core/features";
@@ -246,26 +246,24 @@ describe("flexure gimbal", () => {
     await s.recompute();
   }, 120000);
 
-  it("builds: base, ring, platform, mirror and eight pivot clamps, touching and nowhere overlapping", async () => {
+  // Its twelve bodies building clean on both geometry paths, touching and nowhere
+  // overlapping at rest, and printing as one piece, are the example suite's
+  // (test/exampleSuite.ts), on the committed example this must reproduce.
+  it("builds the committed example: base, ring, platform, mirror and eight pivot clamps, the pivots where the parameters say", async () => {
     if (OUT) writeFileSync(`${OUT}/gimbal.vibecad.json`, serializeDocument(s.doc));
+    expectCommittedExample(s, "gimbal");
     for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
     for (const pl of Object.values(s.doc.planes)) expect(pl.error, pl.name).toBeUndefined();
     const scope = scopeOf(s);
-    placeComponentSketches(s.doc, scope);
-    const bodies = Object.values(evaluateFeatures(s.doc, scope));
-    for (const b of bodies) expect(b.error, b.name).toBeUndefined();
-    expect(bodies.filter((b) => b.mesh).length).toBe(12);
-    const rest = collideFeatures(s.doc, scope);
-    for (const o of rest.overlaps) expect(o.volume, `${o.a} × ${o.b}`).toBeLessThan(0.01);
-    expect(rest.maxOverlap).toBeLessThan(0.01);
     // the pivots sit where the parameters say, the mirror's face at its centre
     expect(scope.pX).toBeCloseTo(scope.Rout + scope.w + 1 + CLR + 2, 9);
     expect(scope.H).toBeCloseTo(BASE_T + 3 + RING_H * Math.cos(RANGE * RAD) + scope.Rout * Math.sin(RANGE * RAD), 9);
-    const stl = exportFusedBlob(s.doc, scope, "stl");
-    expect(stl && stl.size).toBeGreaterThan(10000);
-    if (OUT) writeFileSync(`${OUT}/gimbal.stl`, Buffer.from(await stl!.arrayBuffer()));
+    if (OUT) {
+      placeComponentSketches(s.doc, scope);
+      writeFileSync(`${OUT}/gimbal.stl`, Buffer.from(await exportFusedBlob(s.doc, scope, "stl")!.arrayBuffer()));
+    }
     console.log(`pivots at x = ±${scope.pX}, y = ±${scope.pY}, height ${scope.H.toFixed(1)}; ring ${scope.Rin}–${scope.Rout}; blades ${scope.L} × ${scope.w} × ${scope.t} mm`);
-  }, 180000);
+  });
 
   it("alpha tilts the ring and the mirror about X, beta the mirror about the ring's Y, about one fixed point", async () => {
     const rest = posed(s, 0, 0);
@@ -345,12 +343,13 @@ describe("flexure gimbal", () => {
   it("clears itself at every corner of ±8° on both axes", async () => {
     for (const a of [-RANGE, RANGE]) for (const b of [-RANGE, RANGE]) await clearAt(s, a, b);
     await clearAt(s, RANGE / 2, -RANGE);
-  }, 300000);
+  }, 120000);
 
   // Each customize slider at both ends: the part still builds, sits clear at
-  // rest and clears itself steered to a corner.
+  // rest and clears itself steered to a corner. (Extended run: by default the
+  // example suite builds the committed example at every slider's ends.)
   for (const [name, ends] of [["L", [10, 16]], ["t", [0.25, 0.6]], ["w", [6, 14]], ["range", [RANGE, 15]], ["platR", [36, 50]]] as const) {
-    it(`builds and clears itself with ${name} at ${ends[0]} and ${ends[1]}`, async () => {
+    itFull(`builds and clears itself with ${name} at ${ends[0]} and ${ends[1]}`, async () => {
       const saved = s.doc.parameters.find((p) => p.name === name)!.expr;
       for (const v of ends) {
         await dis(s, "parameter.set", { name, expression: String(v) });
@@ -371,6 +370,6 @@ describe("flexure gimbal", () => {
       }
       await dis(s, "parameter.set", { name, expression: saved }); // back to the design
       await s.recompute();
-    }, 600000);
+    }, 120000);
   }
 });

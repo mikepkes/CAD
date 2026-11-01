@@ -6,7 +6,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, itFull } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { collideFeatures, evaluateFeatures, SolidEval } from "../src/core/features";
 import { placeComponentSketches } from "../src/core/recompute";
@@ -192,6 +192,11 @@ async function gearOn(s: CadSession, name: string, params: Record<string, unknow
   return id;
 }
 
+// The spur (with the check that can fail) and the ring, planet, rack and pinion
+// run by default; the helical, herringbone, bevel and worm pairs (the slowest
+// booleans: a worm pair alone took 40 s) in the extended run. By default every
+// one of those pairs is also built and collided meshing in the clockwork
+// example (test/examples.clockwork.test.ts), which turns them through its sweep.
 describe("feature.gear: meshed pairs turn without interpenetrating", () => {
   beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
   const drive = async (s: CadSession) => { await dis(s, "parameter.add", { name: "t", expression: "0", min: -360, max: 360 }); await dis(s, "parameter.add", { name: "slip", expression: "0" }); };
@@ -211,7 +216,7 @@ describe("feature.gear: meshed pairs turn without interpenetrating", () => {
     expect(overlapsAt(s, [0])[0]).toBeGreaterThan(1);
   }, 240000);
 
-  it("helical (opposite hands) and herringbone pairs", async () => {
+  itFull("helical (opposite hands) and herringbone pairs", async () => {
     for (const type of ["helical", "herringbone"]) {
       const s = realSession(); await drive(s);
       const a = await gearOn(s, "A", { type, module: 1.5, teeth: 22, faceWidth: 9, helixAngle: type === "helical" ? 25 : 30 }, { value: "t" });
@@ -237,7 +242,7 @@ describe("feature.gear: meshed pairs turn without interpenetrating", () => {
     for (const o of overlapsAt(s, ANGLES)) expect(o).toBeLessThan(0.01);
   }, 240000);
 
-  it("a straight bevel pair at 90° (placed by the documented maths)", async () => {
+  itFull("a straight bevel pair at 90° (placed by the documented maths)", async () => {
     const s = realSession(); await drive(s);
     const m = 2, N1 = 16, N2 = 24;
     await gearOn(s, "Pinion", { type: "bevel", module: m, teeth: N1, mateTeeth: N2, faceWidth: 8 }, { value: "t" });
@@ -253,7 +258,7 @@ describe("feature.gear: meshed pairs turn without interpenetrating", () => {
     for (const o of overlapsAt(s, ANGLES)) expect(o).toBeLessThan(0.01);
   }, 240000);
 
-  it("a worm and its wheel (a helical gear at the lead angle)", async () => {
+  itFull("a worm and its wheel (a helical gear at the lead angle)", async () => {
     const s = realSession(); await drive(s);
     const m = 2, starts = 1, dW = 16, N = 24, b = 8, L = 40;
     const w = wormGeometry(m, starts, dW, { backlash: 0.1 });

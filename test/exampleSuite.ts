@@ -11,16 +11,26 @@
 // An example under examples/ or public/examples/ is picked up automatically; its
 // first run writes the snapshot to commit alongside it.
 //
-// The checks live here; test/examples.test.ts runs them for every example, in
-// one kernel. An example in OWN_KERNEL runs them in a test file of its own
-// (test/examples.<name>.test.ts), so in a kernel of its own: OCC keeps some
+// The checks live here; test/examples.test.ts, examples.b.test.ts and
+// examples.c.test.ts run them, each for a third of the examples (by a hash of
+// the name, so adding one doesn't move the others' snapshots), so the three
+// run in parallel. An example in OWN_KERNEL runs them in a test file of its
+// own (test/examples.<name>.test.ts), so in a kernel of its own: OCC keeps some
 // memory from every boolean (tens of MB for a pair of helical gears), and a gear
 // train's collision sweep, sharing the kernel with every other example, ran it
-// out of memory.
+// out of memory. A file holding the same model as one already listed (an old copy
+// under examples/, maybe without the titles and labels) is checked once.
+//
+// The default run sweeps each drive at three of its six samples (its ends and
+// one in between; a bare revolute drive every 90°, not 30°), and leaves a
+// drive's own slider ends to that sweep; the extended run (`npm run test:full`)
+// does every sample. An example with KNOWN_OVERLAPS always gets every sample, as
+// its trace is snapshotted.
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { sessionFromDoc } from "./helpers";
+import { createHash } from "node:crypto";
+import { sessionFromDoc, FULL } from "./helpers";
 import { deserializeDocument } from "../src/core/persistence";
 import { InlineGeometryBackend } from "../src/core/geometry/backend";
 import { evaluateFeatures } from "../src/core/features";
@@ -33,11 +43,22 @@ import type { CadDocument } from "../src/core/document";
 
 const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
 
-const DIRS = ["../examples/", "../public/examples/"];
+// public/examples/ first: it is what the app serves, so an old copy of the same model under examples/ is the one dropped
+const DIRS = ["../public/examples/", "../examples/"];
+/** The model a file holds: its recipe without the display-only commands (titles, labels), which build nothing. */
+const DISPLAY_ONLY = new Set(["document.describe", "parameter.describe"]);
+const digest = (url: URL) => {
+  const d = JSON.parse(readFileSync(url, "utf8")) as { operations: { type: string; params: unknown; suppressed?: boolean }[]; hidden?: string[] };
+  const model = { ops: d.operations.filter((o) => !DISPLAY_ONLY.has(o.type)).map((o) => [o.type, o.params, !!o.suppressed]), hidden: d.hidden ?? [] };
+  return createHash("sha256").update(JSON.stringify(model)).digest("hex");
+};
 export const EXAMPLES = DIRS.flatMap((d) => {
   const dir = new URL(d, import.meta.url);
   return readdirSync(dir).filter((f) => f.endsWith(".json")).sort().map((f) => ({ name: `${d.replace("../", "")}${f}`, url: new URL(f, dir) }));
-});
+}).filter((e, i, all) => all.findIndex((o) => digest(o.url) === digest(e.url)) === i);
+
+/** Which of `shards` test files checks an example: stable per name. */
+export const shardOf = (name: string, shards: number) => createHash("sha256").update(name).digest().readUInt32BE(0) % shards;
 
 /** Examples checked in a kernel (a test file) of their own — see above; the handlebar too, whose
  *  freeform collision checks are slow enough to want running beside the others, not after them. */
@@ -83,7 +104,17 @@ const pairKey = (o: CollisionResult["overlaps"][number]) => [o.aId, o.bId].sort(
 /** Sample values for every parameter that drives a joint (or joint template):
  *  across [min, max] (or its value list) when bounded; through 360° when it is a
  *  bare revolute drive. An unbounded slider has no known range, so it is skipped. */
-function motionSamples(doc: CadDocument): { name: string; values: number[] }[] {
+function motionSamples(doc: CadDocument, every = FULL): { name: string; values: number[] }[] {
+  // The default run's subset: a drive's ends, and one sample in between that is
+  // neither an end nor (for a range centred on rest) the rest pose; a revolute
+  // drive every 90°. The bodies are rigid between samples, so what the extra
+  // samples add is the in-between phases of a mechanism (a gear's tooth, a
+  // Geneva's step), which the generator tests and the extended run cover.
+  const pick = (values: number[]) => (every || values.length <= 3 ? values : values.length === 6 ? [0, 2, 5].map((k) => values[k]) : values.filter((_, k) => k % 3 === 0));
+  return allMotionSamples(doc).map((m) => ({ ...m, values: pick(m.values) }));
+}
+
+function allMotionSamples(doc: CadDocument): { name: string; values: number[] }[] {
   const drives = [...Object.values(doc.joints), ...Object.values(doc.jointTemplates ?? {})].flatMap((j) => [
     { kind: j.kind, expr: (j.valueExpr ?? "").trim() },
     ...("planar" in j && j.planar ? Object.values(j.planar).map((e) => ({ kind: j.kind, expr: String(e).trim() })) : []), // a planar joint's driven axes
@@ -143,22 +174,22 @@ export function defineExampleSuite(which: (name: string) => boolean): void {
           }
 
           expect(fingerprint(rebuilt)).toMatchSnapshot();
-        }, 300000);
+        }, 120000);
 
         it("is clear at rest and while its joints are driven", async () => {
           const s = await load(ex.url);
           const known = KNOWN_OVERLAPS[ex.name];
           const trace: string[] = [];
-          const check = (c: CollisionResult, at: string) => {
+          const check = (c: CollisionResult, at: string, limit = 1) => {
             expect(c.buildError, at).toBeUndefined();
             if (known) trace.push(`${at}: ${c.overlaps.map((o) => `${pairKey(o)} ${r1(o.volume)}`).sort().join(", ")}`);
-            else for (const o of c.overlaps) expect(o.volume, `${o.a} hits ${o.b} at ${at}`).toBeLessThan(1);
+            else for (const o of c.overlaps) expect(o.volume, `${o.a} hits ${o.b} at ${at}`).toBeLessThan(limit);
           };
 
           const rest = await backend.collide(s.doc);
-          check(rest, "rest");
+          check(rest, "rest", 0.01); // at rest parts only touch (a bent flexure strip may sliver, below 1 mm³, once driven)
           if (known) expect(rest.maxOverlap, `${ex.name} no longer overlaps: remove its KNOWN_OVERLAPS entry`).toBeGreaterThan(1);
-          const samples = motionSamples(s.doc);
+          const samples = motionSamples(s.doc, FULL || !!known);
           for (const { name, values } of samples) {
             // the other drives stay at their saved values
             const others = Object.fromEntries(samples.filter((m) => m.name !== name).map((m) => [m.name, String(s.doc.parameters.find((p) => p.name === m.name)!.value)]));
@@ -174,7 +205,7 @@ export function defineExampleSuite(which: (name: string) => boolean): void {
             }
           }
           if (known) expect(trace).toMatchSnapshot();
-        }, 600000);
+        }, 300000);
 
         // The download: a compliant part prints at rest, as one piece, and all of
         // it. (Its drives were zeroed for the print along with every size the
@@ -190,18 +221,27 @@ export function defineExampleSuite(which: (name: string) => boolean): void {
           for (let t = 0; t < n; t++) for (let k = 0; k < 9; k++) pos[9 * t + k] = dv.getFloat32(84 + 50 * t + 12 + 4 * k, true);
           const printed = meshVolume(pos, idx);
           expect(Math.abs(printed - modelled) / modelled, `printed ${r1(printed)} mm³ of ${r1(modelled)}`).toBeLessThan(5e-3);
-        }, 300000);
+        }, 120000);
 
         // Through the same path as the slider: set the parameter and recompute, so
         // sketches re-solve and expression-positioned geometry moves.
+        // (In the default run a joint's drive skips the build here when the
+        // motion sweep above has already built and collided the model at both
+        // its ends; its sketches are still re-solved there and checked.)
         it("builds at the ends of every customize slider", async () => {
           const s = await load(ex.url);
+          const endsOf = (p: CadDocument["parameters"][number]) => (p.values?.length ? [Math.min(...p.values), Math.max(...p.values)] : p.min != null && p.max != null ? [p.min, p.max] : []);
+          const swept = new Set(FULL ? [] : motionSamples(s.doc).filter((m) => {
+            const ends = endsOf(s.doc.parameters.find((q) => q.name === m.name)!);
+            return ends.length && ends.every((e) => m.values.includes(e));
+          }).map((m) => m.name));
           for (const p of [...s.doc.parameters]) {
-            const ends = p.values?.length ? [Math.min(...p.values), Math.max(...p.values)] : p.min != null && p.max != null ? [p.min, p.max] : [];
+            const ends = endsOf(p);
             for (const v of ends) {
               const r = await s.dispatch("parameter.set", { name: p.name, expression: String(v) });
               expect(r.ok, `${p.name} = ${v}: ${r.error}`).toBe(true);
               for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `${p.name} = ${v}: sketch ${sk.name} conflicts`).toBe(false);
+              if (swept.has(p.name)) continue;
               const c = await backend.collide(s.doc);
               expect(c.buildError, `${p.name} = ${v}`).toBeUndefined();
             }
