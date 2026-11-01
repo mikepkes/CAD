@@ -12,6 +12,7 @@ import { drivesOf } from "../model/concepts/mechanism";
 import { Viewport } from "./Viewport";
 import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
+import { editCommitter } from "./editCommitter";
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000));
 // The 3D rebuild is the slow part, so the slider's own value updates live while
@@ -177,7 +178,6 @@ export function CustomizeApp() {
   const [open, setOpen] = useState(true);
 
   const idle = useRef<ReturnType<typeof setTimeout>>();
-  const commit = useRef<{ timer?: ReturnType<typeof setTimeout>; pending: [string, string] | null }>({ pending: null });
 
   // Run the study only after the user has been idle; any edit restarts the wait.
   const armStudy = useCallback(() => {
@@ -186,18 +186,12 @@ export function CustomizeApp() {
     idle.current = setTimeout(() => void runMotionStudy(), IDLE_MS);
   }, [cancelMotionStudy, runMotionStudy]);
 
-  // Commit a control's value to the model. Debounced: a continuous drag doesn't
-  // rebuild until you pause briefly (or release, `flush`), so a ~2s rebuild is
-  // never spent on a value you've already dragged past. The slider's own number
-  // tracks every move regardless (Control keeps a local value).
+  // Commit a control's value to the model after a pause (see editCommitter). The
+  // slider's own number tracks every move regardless (Control keeps a local value).
+  const committer = useRef(editCommitter((n, v) => void useStore.getState().setParameterExpr(n, v), COMMIT_MS));
   const onEdit = useCallback((name: string, value: string, flush: boolean) => {
     armStudy();
-    const c = commit.current;
-    c.pending = [name, value];
-    const fire = () => { if (!c.pending) return; const [n, v] = c.pending; c.pending = null; void useStore.getState().setParameterExpr(n, v); };
-    clearTimeout(c.timer);
-    if (flush) fire();
-    else c.timer = setTimeout(fire, COMMIT_MS);
+    committer.current.edit(name, value, flush);
   }, [armStudy]);
 
   useEffect(() => {
@@ -210,6 +204,9 @@ export function CustomizeApp() {
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`Could not load model (${resp.status}).`);
         await loadDocument(deserializeDocument(await resp.text()));
+        // frame it: the default camera suits a small part, and sits inside anything the size of a workbench
+        window.dispatchEvent(new CustomEvent("vibecad:view", { detail: "iso" }));
+        window.dispatchEvent(new CustomEvent("vibecad:frame"));
         setState("ready");
         armStudy(); // validate the starting configuration once
       } catch (e) {
@@ -217,7 +214,7 @@ export function CustomizeApp() {
         setState("error");
       }
     })();
-    return () => { clearTimeout(idle.current); clearTimeout(commit.current.timer); };
+    return () => { clearTimeout(idle.current); committer.current.cancel(); };
   }, [ensureKernel, loadDocument, armStudy]);
 
   const bounded = params.filter((p) => (p.min != null && p.max != null) || (p.values && p.values.length));

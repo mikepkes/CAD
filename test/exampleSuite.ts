@@ -47,8 +47,8 @@ export const OWN_KERNEL = ["public/examples/clockwork.json"];
  *  up in review), and the entry must go once the example is fixed (asserted). */
 const KNOWN_OVERLAPS: Record<string, string> = {
   "public/examples/roubo.json":
-    "clearance cuts are missing: rail/leg tenons sit in legs and top with no mortise, the vise screw passes " +
-    "Leg FL with no bore, pins have no holes, handles no bores",
+    "the handwheel's three handle landings and handle spigots are seated into its rim: they are separate parts " +
+    "only so each can be canted by a joint (one casting, and a press fit, in the real thing)",
 };
 
 const r1 = (v: number | undefined) => (v == null ? null : Math.round(v * 10) / 10);
