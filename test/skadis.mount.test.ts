@@ -34,7 +34,7 @@ describe("SKÅDIS gravity holder: mount", () => {
       const sunk = posed(s, { hooks }, nudge("Strip on the board", { z: -1.5 }));
       expect(collideFeatures(only(sunk.doc, ["Strip", "SKÅDIS board (not printed)"]), sunk.scope).overlaps.filter((o) => /board/.test(o.a + o.b)).length).toBeGreaterThanOrEqual(1);
     }
-  }, 600000);
+  }, 300000);
 
   it("slides onto the strip: clear all the way down, captured by the dovetail, and stopped by the channel's end", async () => {
     for (const lift of [60, 30, 0]) { const { doc, scope } = posed(s, { lift }); clear(only(doc, ["Strip", "SKÅDIS board (not printed)", "Back plate", "Cover", "Rack", "Foot", "Foot pin 1", "Foot pin 2", "Pivot pin 1", "Pivot pin 2"]), scope, `lift ${lift}`); }
@@ -48,6 +48,6 @@ describe("SKÅDIS gravity holder: mount", () => {
     expect(strip({ x: -0.15 })).toBe(0);
     expect(strip({ x: 1 })).toBeGreaterThan(0.1);     // …and no more
     expect(strip({ x: -1 })).toBeGreaterThan(0.1);
-  }, 600000);
+  }, 120000);
 
 });

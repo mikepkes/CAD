@@ -38,7 +38,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { realSession, describeExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
-import { collideFeatures, evaluateFeatures } from "../src/core/features";
+import { collideFeatures, evaluateFeatures, GeometryCache } from "../src/core/features";
 import { placeComponentSketches, placeParametricPoints } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
@@ -428,10 +428,11 @@ export function posed(s: CadSession, over: Record<string, number> = {}, joints: 
   return { doc, scope };
 }
 export const componentOf = (doc: CadDocument, sketchId: string) => doc.components[doc.sketches[sketchId]?.componentId ?? ""]?.name ?? "?";
-/** Each part's bodies (volume, centroid, mesh) at a pose. */
-export function parts(s: CadSession, over: Record<string, number> = {}) {
+/** Each part's bodies (volume, centroid, mesh) at a pose. With a cache (one across a sweep of poses), a
+ *  body that only moved is replayed in its new place, as the app does, rather than built again. */
+export function parts(s: CadSession, over: Record<string, number> = {}, cache?: GeometryCache) {
   const { doc, scope } = posed(s, over);
-  const out = evaluateFeatures(doc, scope);
+  const out = evaluateFeatures(doc, scope, cache);
   const by: Record<string, { volume: number; centroid: { x: number; y: number; z: number }; meshes: { positions: ArrayLike<number>; indices: ArrayLike<number> }[] }> = {};
   for (const b of Object.values(out)) {
     if (!b.mesh || !b.volume) continue;

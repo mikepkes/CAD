@@ -165,21 +165,24 @@ describe("proposal 6 — feature.thread", () => {
     expect(b.threadDecals![0]).toMatchObject({ form: "metric", pitch: 1.5, radius: 5 });
   });
 
+  // The modelled threads are 6 mm long, a few turns: every turn is the same
+  // geometry, and the helical sweep and its boolean cost grow with the turns
+  // (at 14 mm the internal one took 35 s of a 40 s timeout).
   it("a modelled thread is real geometry, or falls back cleanly to cosmetic — never an error", async () => {
     // OCC's helical sweep can degenerate under load; buildThread validates and
     // the feature then falls back to a cosmetic decal (+warning), so the contract
     // is: always a usable body, never an error.
     const s = realSession();
-    await s.dispatch("feature.thread", { at: PId, spec: { form: "metric", pitch: 2, diameter: 12, length: 14, representation: "modeled" } });
+    await s.dispatch("feature.thread", { at: PId, spec: { form: "metric", pitch: 2, diameter: 12, length: 6, representation: "modeled" } });
     const b = body0(s);
     expect(b.error).toBeUndefined();
     if (b.threadDecals?.length) {
       expect(b.warning).toMatch(/fell back to cosmetic/);        // documented fallback
-      expect(b.volume!).toBeCloseTo(PI * 36 * 14, 0);            // a plain Ø12 cylinder
+      expect(b.volume!).toBeCloseTo(PI * 36 * 6, 0);            // a plain Ø12 cylinder
     } else {
       const minorR = 6 - 0.6134 * 2;
-      expect(b.volume!).toBeGreaterThan(PI * minorR * minorR * 14); // real ribs: more than the core
-      expect(b.volume!).toBeLessThan(PI * 36 * 14 * 1.02);         // less than the full Ø12
+      expect(b.volume!).toBeGreaterThan(PI * minorR * minorR * 6); // real ribs: more than the core
+      expect(b.volume!).toBeLessThan(PI * 36 * 6 * 1.02);         // less than the full Ø12
     }
   }, 40000);
 
@@ -188,7 +191,7 @@ describe("proposal 6 — feature.thread", () => {
     await s.dispatch("feature.primitive", { shape: "box", x: "30", y: "30", z: "16", at: { x: 0, y: 0, z: 8 } });
     await s.dispatch("feature.hole", { at: [{ x: 0, y: 0, z: 16 }], diameter: "6.75", throughAll: true });    // tap drill
     const bored = vol0(s);
-    await s.dispatch("feature.thread", { at: { x: 0, y: 0, z: 16 }, axis: { x: 0, y: 0, z: -1 }, spec: { form: "metric", pitch: 1.25, diameter: 8, length: 14, internal: true, representation: "modeled" } });
+    await s.dispatch("feature.thread", { at: { x: 0, y: 0, z: 16 }, axis: { x: 0, y: 0, z: -1 }, spec: { form: "metric", pitch: 1.25, diameter: 8, length: 6, internal: true, representation: "modeled" } });
     expect(body0(s).error).toBeUndefined();
     expect(vol0(s)).toBeLessThan(bored); // the tap removed the thread valleys
   }, 40000);

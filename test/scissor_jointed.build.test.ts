@@ -7,7 +7,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample } from "./helpers";
+import { realSession, describeExample, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { evaluateFeatures } from "../src/core/features";
@@ -77,6 +77,7 @@ describe("jointed parametric scissor (geometry)", () => {
     // Serialize the CLEAN construction (no trailing parameter.set ops, which would
     // otherwise override the Customize sliders on load).
     if (OUT) writeFileSync(`${OUT}/scissor-jointed.vibecad.json`, serializeDocument(s.doc));
+    expectCommittedExample(s, "scissor-jointed");
 
     const r3 = build(s);
     expect(r3.bodies).toBe(6); // 3 stages × 2 bars, each a real solid

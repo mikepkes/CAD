@@ -10,10 +10,10 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample } from "./helpers";
+import { realSession, describeExample, forkSession, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
-import { collideFeatures, evaluateFeatures, exportFusedBlob } from "../src/core/features";
+import { collideFeatures, exportFusedBlob } from "../src/core/features";
 import { placeComponentSketches, resolveComponentWorld } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
 import { flexureState, flexureSweep } from "../src/sim/flexure";
@@ -128,29 +128,32 @@ function platformAt(s: CadSession, x: number, y: number) {
 }
 
 describe("XY flexure stage", () => {
-  beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
+  // built once: the tests below only pose it, or change a fork of it
+  let stage: CadSession;
+  beforeAll(async () => {
+    await initKernel({ wasmBinary: wasm });
+    stage = realSession();
+    await buildStage(stage);
+    await stage.recompute();
+  }, 60000);
 
-  it("builds a frame, a carriage and a platform that print as one piece", async () => {
-    const s = realSession();
-    await buildStage(s);
-    await s.recompute();
+  // Its three bodies building clean on both geometry paths, nowhere overlapping
+  // at rest and printing as one piece are the example suite's
+  // (test/exampleSuite.ts), on the committed example this must reproduce.
+  it("builds the committed example: a frame, a carriage and a platform", async () => {
+    const s = stage;
     if (OUT) writeFileSync(`${OUT}/xystage.vibecad.json`, serializeDocument(s.doc));
+    expectCommittedExample(s, "xystage");
     for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
-    const scope = scopeAt(s);
-    placeComponentSketches(s.doc, scope);
-    const bodies = Object.values(evaluateFeatures(s.doc, scope));
-    for (const b of bodies) expect(b.error, b.name).toBeUndefined();
-    expect(bodies.filter((b) => b.mesh).length).toBe(3);
-    expect(collideFeatures(s.doc, scope).maxOverlap).toBeLessThan(0.01);
-    const stl = exportFusedBlob(s.doc, scope, "stl");
-    expect(stl && stl.size).toBeGreaterThan(10000);
-    if (OUT) writeFileSync(`${OUT}/xystage.stl`, Buffer.from(await stl!.arrayBuffer()));
-  }, 120000);
+    if (OUT) {
+      const scope = scopeAt(s);
+      placeComponentSketches(s.doc, scope);
+      writeFileSync(`${OUT}/xystage.stl`, Buffer.from(await exportFusedBlob(s.doc, scope, "stl")!.arrayBuffer()));
+    }
+  });
 
   it("goes where it's driven on both axes, centred and square: the blades hold it", async () => {
-    const s = realSession();
-    await buildStage(s);
-    await s.recompute();
+    const s = stage;
     const rows: string[] = [];
     for (const [x, y] of [[TRAVEL, 0], [0, TRAVEL], [TRAVEL, -TRAVEL], [-TRAVEL / 2, TRAVEL / 2]]) {
       const p = platformAt(s, x, y);
@@ -160,16 +163,14 @@ describe("XY flexure stage", () => {
       expect(Math.abs(p.turn)).toBeLessThan(1e-3); // …and its turn
     }
     console.log(rows.join("\n"));
-  }, 120000);
+  });
 
   // Each axis rides four blades: a small push meets 4 × 12EI/L³. Further out,
   // the over-constraint shows: each blade must stretch by 0.6·δ²/L (the draw-in
   // its bending wants), so the push stiffens roughly as 2.88·EA·δ³/L³ on top —
   // the reason a precision stage uses double parallelograms instead.
   it("is linear for a small push, and stiffens with travel as its blades stretch", async () => {
-    const s = realSession();
-    await buildStage(s);
-    await s.recompute();
+    const s = stage;
     const sc = scopeAt(s), m = MATERIALS[DEFAULT_MATERIAL];
     const L = sc.blade, EI = (m.E * Hz * sc.thickness ** 3) / 12, EA = m.E * Hz * sc.thickness;
     const small = 0.05, [p0] = flexureSweep(s.doc, "x", [small]);
@@ -187,12 +188,10 @@ describe("XY flexure stage", () => {
     // and the Y axis is the same
     const [q] = flexureSweep(s.doc, "y", [1]);
     expect(q.effort / flexureSweep(s.doc, "x", [1])[0].effort).toBeCloseTo(1, 2);
-  }, 120000);
+  });
 
   it("in every material, at the corners of travel, the blades stay within the limit", async () => {
-    const s = realSession();
-    await buildStage(s);
-    await s.recompute();
+    const s = stage;
     const rows: string[] = [];
     for (const [i, m] of MATERIALS.entries()) {
       let worst = 0;
@@ -205,11 +204,11 @@ describe("XY flexure stage", () => {
       expect(worst, m.name).toBeLessThan(1);
     }
     console.log(rows.join("\n"));
-  }, 300000);
+  });
 
+  // (the example suite sweeps each axis alone; these are the corners, both driven at once)
   it("clears itself across the travel: the drawn blades bend with the stages", async () => {
-    const s = realSession();
-    await buildStage(s);
+    const s = await forkSession(stage);
     for (const [x, y] of [[TRAVEL, TRAVEL], [-TRAVEL, TRAVEL], [TRAVEL, -TRAVEL]]) {
       await dis(s, "parameter.set", { name: "x", expression: String(x) });
       await dis(s, "parameter.set", { name: "y", expression: String(y) });
@@ -220,5 +219,5 @@ describe("XY flexure stage", () => {
       expect(c.buildError).toBeUndefined();
       expect(c.maxOverlap, `(${x}, ${y}): ${JSON.stringify(c.overlaps)}`).toBeLessThan(0.05);
     }
-  }, 300000);
+  }, 120000);
 });

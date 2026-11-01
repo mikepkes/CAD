@@ -70,7 +70,8 @@ function chunks(text) {
   return out;
 }
 
-// ---- the intro montage: a third of a second from each moment Act 3 marked (`d.pick`), before Act 1's cold open ----
+// ---- the intro montage: a third of a second from each moment Act 3 marked (`d.pick`; longer, and sped up, where
+// the pick says so), before Act 1's cold open ----
 const PICK = Math.round(FPS / 3);
 let montageExtra = 0, beatsExtra = 0; // seconds the voices beyond the default add to the cut
 if (acts[0] === 1 && existsSync(join(takes, "act3", "timing.json"))) {
@@ -84,12 +85,14 @@ if (acts[0] === 1 && existsSync(join(takes, "act3", "timing.json"))) {
     const clips = vo?.clips("act1-montage", MONTAGE) ?? [];
     const need = clips.length ? Math.ceil(((Math.max(...clips.map((c) => c.ms)) + VO_TAIL_MS) / 1000) * FPS) : 0;
     const needDefault = clips.length ? Math.ceil((((clips.find((c) => c.voice === vo.voices[0]) ?? clips[0]).ms + VO_TAIL_MS) / 1000) * FPS) : 0;
-    const lastLen = Math.max(PICK, need - (picks.length - 1) * PICK);
-    montageExtra = (lastLen - Math.max(PICK, needDefault - (picks.length - 1) * PICK)) / FPS;
+    const lenOf = (p) => (p.len ? Math.round(p.len * FPS) : PICK);
+    const before = picks.slice(0, -1).reduce((a, p) => a + lenOf(p), 0);
+    const lastLen = Math.max(lenOf(picks.at(-1)), need - before);
+    montageExtra = (lastLen - Math.max(lenOf(picks.at(-1)), needDefault - before)) / FPS;
     for (const [pi, p] of picks.entries()) {
       let fi = 0;
-      for (let k = 0; k < (pi === picks.length - 1 ? lastLen : PICK); k++) {
-        const t = p.t + k / FPS;
+      for (let k = 0; k < (pi === picks.length - 1 ? lastLen : lenOf(p)); k++) {
+        const t = p.t + (k * (p.speed ?? 1)) / FPS;
         while (fi + 1 < list.length && list[fi + 1].t <= t) fi++;
         frames.push([ti, fi]); outFrame++;
       }

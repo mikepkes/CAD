@@ -19,10 +19,11 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample } from "./helpers";
+import { realSession, describeExample, itFull, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
-import { collideFeatures, evaluateFeatures } from "../src/core/features";
+import { collideFeatures, gearValues } from "../src/core/features";
+import type { GearFeature } from "../src/core/document";
 import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
 import { wormGeometry } from "../src/core/geometry/gear";
@@ -310,16 +311,18 @@ describe("clockwork", () => {
     await s.recompute();
   }, 180000);
 
-  it("builds: every gear type, each body clean", async () => {
+  // Building every body clean (on both geometry paths), and clear at rest and as
+  // `turn` is swept, is the example suite's (test/examples.clockwork.test.ts),
+  // on the committed example this generator must reproduce.
+  it("builds the committed example: every gear type, each on its planned shaft", async () => {
     if (OUT) writeFileSync(`${OUT}/clockwork.json`, serializeDocument(s.doc));
+    expectCommittedExample(s, "clockwork");
     for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
-    const { doc, scope } = posed(s, 0);
-    const out = evaluateFeatures(doc, scope);
-    for (const b of Object.values(out)) expect(b.error, b.name).toBeUndefined();
     const types = new Set(Object.values(s.doc.features).flatMap((f) => (f.kind === "gear" ? [f.gearType] : [])));
     expect([...types].sort()).toEqual(["bevel", "helical", "herringbone", "rack", "ring", "spur", "worm"]);
     // the meshed placements land on the planned shafts
-    const v = (k: string) => (s.doc.features[ids[k]] as { dimValues: Record<string, number> }).dimValues;
+    const scope = resolveParameters(s.doc.parameters).scope; // the placement maths, without building (gearValues is what the build reads)
+    const v = (k: string) => gearValues(structuredClone(s.doc.features[ids[k]]) as GearFeature, scope);
     for (const [k, p] of [["A", S1], ["B", S2], ["D", S3], ["F", S4], ["G", S5]] as const) {
       expect(v(k).x, k).toBeCloseTo(p.x, 3);
       expect(v(k).y, k).toBeCloseTo(p.y, 3);
@@ -327,7 +330,7 @@ describe("clockwork", () => {
     expect(Math.hypot(v("sun").x, v("sun").y)).toBeLessThan(1e-9);
     console.log(`shafts: S2 (${r3(S2.x)}, ${r3(S2.y)}), S3 (${r3(S3.x)}, ${r3(S3.y)}), S4 (${r3(S4.x)}, ${r3(S4.y)}); bevel apex z ${H_APEX}; wheel at (${r3(JC.x)}, ${r3(JC.y)}); ` +
       `ratios: carrier 1/${(Z.sun + Z.ring) / Z.sun}, cross shaft ×${(Z.sun / (Z.sun + Z.ring)) * (Z.A / Z.B) * (Z.C / Z.D) * (Z.E / Z.F) * (Z.H / Z.I)}, wheel 1/${1 / ((Z.sun / (Z.sun + Z.ring)) * (Z.A / Z.B) * (Z.C / Z.D) * (Z.E / Z.F) * (Z.H / Z.I) / Z.J)}`);
-  }, 300000);
+  });
 
   it("the joints turn every shaft by the ratio of its gearing", async () => {
     posed(s, 96); // placing the components evaluates every joint
@@ -362,7 +365,8 @@ describe("clockwork", () => {
   }, 60000);
 
   // the check can fail: knock one shaft half a tooth out of phase and its teeth hit
-  it("collides when a shaft is half a tooth out", async () => {
+  // (extended run: test/gearSolid.test.ts makes the same check on a spur pair in the default run)
+  itFull("collides when a shaft is half a tooth out", async () => {
     const { doc, scope } = posed(s, 0);
     const j = Object.values(doc.joints).find((x) => x.name === "Shaft 4")!;
     const slipped = { ...doc, joints: { ...doc.joints, [j.id]: { ...j, valueExpr: `${j.valueExpr} + ${180 / Z.F}` } } };
@@ -370,24 +374,20 @@ describe("clockwork", () => {
     const c = collideFeatures(slipped, scope);
     const hit = c.overlaps.find((o) => /Herringbone/.test(o.a) && /Herringbone/.test(o.b));
     expect(hit?.volume ?? 0).toBeGreaterThan(1);
-  }, 600000);
+  }, 120000);
 
-  // through a Geneva step (crank 140°…220°), with the pin in the slot and the star swinging past the locking disc
-  for (const crankDeg of [140, 165, 195, 220]) {
-    it(`the Geneva drive is clear at crank = ${crankDeg}°`, async () => {
+  // through a Geneva step (the pin enters a slot at crank 135° and leaves at 225°), with the pin in the slot and the
+  // star swinging past the locking disc: mid-step by default, and just in and about to leave in the extended run.
+  // (The example suite's sweep of `turn` never reaches a step: the crank turns 0.625 × turn.)
+  for (const crankDeg of [195, 140, 220]) {
+    (crankDeg === 195 ? it : itFull)(`the Geneva drive is clear at crank = ${crankDeg}°`, async () => {
       const { doc, scope } = posed(s, crankDeg / (-(Z.sun / (Z.sun + Z.ring)) * Z.A / Z.G));
       const c = collideFeatures(doc, scope);
       expect(c.buildError).toBeUndefined();
       for (const o of c.overlaps) expect(o.volume, `${o.a} × ${o.b} at crank ${crankDeg}`).toBeLessThan(0.01);
-    }, 600000);
+    }, 120000);
   }
 
-  for (const turn of [37, -113]) { // rest and the ends of the slider are swept by test/examples.test.ts
-    it(`stays meshed and clear at turn = ${turn}°`, async () => {
-      const { doc, scope } = posed(s, turn);
-      const c = collideFeatures(doc, scope);
-      expect(c.buildError).toBeUndefined();
-      for (const o of c.overlaps) expect(o.volume, `${o.a} × ${o.b} at turn ${turn}`).toBeLessThan(0.01);
-    }, 600000);
-  }
+  // (Meshed and clear as `turn` is swept, from its rest and to the ends of its slider: the example suite's,
+  // test/examples.clockwork.test.ts, on the committed example this builds.)
 });

@@ -349,6 +349,36 @@ npm run typecheck
 npm run mcp          # build + run the MCP server over stdio
 ```
 
+### Testing
+
+```bash
+npm test             # the default run: a few minutes
+npm run test:full    # the extended run: every sweep (much longer)
+npx vitest run test/gripper.build.test.ts             # one file, default checks
+npx vitest run --mode full test/gripper.build.test.ts # one file, everything
+```
+
+The **default run** is every unit and UI test, and every bundled example
+(`public/examples/`) replayed, built on both geometry paths and matched to its
+snapshot, clear at rest and at its drives' ends and middle, and built at the
+ends of every customize slider (`test/exampleSuite.ts`). Each example generator
+(`test/*.build.test.ts`) checks that it still produces its committed example
+exactly, so the example suite's checks are its model's too, plus its own
+mechanism, placement and strain checks that don't need a sweep.
+
+The **extended run** (`--mode full`, which sets `VIBECAD_TEST_FULL=1`) adds the
+slow sweeps, marked `itFull` / `describeFull` in the tests (`test/helpers.ts`):
+each example's drives at six samples (a revolute drive every 30°), not three;
+the generators' slider-corner, per-material and pose sweeps (clockwork's Geneva
+step, the four-bar's link-length corners, the gripper's springs and stroke, the
+bistable's frame, material and corner studies, the star box's size corners and
+every print material, two of the SKÅDIS holder's five corner poses); the
+half-a-tooth-out checks on whole models (the spur pair in
+`test/gearSolid.test.ts` makes that check by default); the helical, bevel and
+worm gear pairs; and building the video's mock agent caches. Run it before
+merging a change to geometry, the flexure solver or an example. CI runs the
+default run.
+
 ### Desktop app (optional)
 
 The web app is the product and is what GitHub Pages serves; the desktop app is
@@ -461,6 +491,7 @@ straight from a URL:
 ?mode=customize&example=skadis         # SKÅDIS gravity holder: the item's weight drives a rack and two pinion parallelograms that clamp it; drop, item width, hook spacing, arm and slide-on sliders
 ?mode=customize&example=origami        # a paper airplane folded step by step from a flat sheet on one `fold` slider (0 flat … 6 done); width + length size the paper
 ?mode=customize&example=handlebar      # a riser-bar cockpit from organic surfaces: a bar swept on a 3D spline with a tapering section, winged grips with a wrapped hex pattern; width, rise, sweep, grip and stem sliders
+?mode=customize&example=walker         # a Jansen wind-walker: one crank, a six-throw crankshaft, twelve eleven-bar legs 60° apart; `t` turns the crank, `s` scales it
 ?mode=customize&model=<url-to.json>    # any VibeCAD model file
 ```
 

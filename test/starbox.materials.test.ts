@@ -4,7 +4,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession } from "./helpers";
+import { realSession, describeFull } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { collideFeatures } from "../src/core/features";
 import { materialForComponent } from "../src/core/document";
@@ -44,14 +44,14 @@ describe("star box print materials", () => {
     expect(faceForce(tongueBeam(sc, MATERIALS[soft].E).force, MATERIALS[soft].mu, sc.retention)).toBeGreaterThan(5);
   }, 120000);
 
-  // Every material's geometry: closes cleanly and resists a twist, at the default
+  // Every material's geometry (extended run: five builds, each closed and twisted at three sizes): closes cleanly and resists a twist, at the default
   // size and the extreme corners of the size sliders. One test per size, letting
   // the event loop breathe between the long kernel calls, so vitest's worker can
   // still report progress when the machine is loaded.
   const breathe = () => new Promise((r) => setTimeout(r, 0));
   for (const [i, m] of MATERIALS.entries()) {
     if (i === DEFAULT_MATERIAL) continue; // test/starbox.build.test.ts
-    describe(`printed in ${m.name}`, () => {
+    describeFull(`printed in ${m.name}`, () => {
       let s: CadSession;
       beforeAll(async () => {
         s = realSession();

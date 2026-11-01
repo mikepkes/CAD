@@ -1,0 +1,788 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bundled examples > examples/scissor.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext40",
+    "max": [
+      44.5,
+      0,
+      129.4,
+    ],
+    "min": [
+      -2.1,
+      -4,
+      -2.1,
+    ],
+    "name": "Extrude",
+    "volume": 8064,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/gimbal.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext286",
+    "max": [
+      106,
+      6.9,
+      30,
+    ],
+    "min": [
+      82,
+      -6.9,
+      19.9,
+    ],
+    "name": "Yoke clamp",
+    "volume": 1723.9,
+  },
+  {
+    "body": "ext352",
+    "max": [
+      106,
+      6.9,
+      39.8,
+    ],
+    "min": [
+      81,
+      -6.9,
+      29.8,
+    ],
+    "name": "Ring arm",
+    "volume": 1793.4,
+  },
+  {
+    "body": "ext426",
+    "max": [
+      -82,
+      6.9,
+      30,
+    ],
+    "min": [
+      -106,
+      -6.9,
+      19.9,
+    ],
+    "name": "Yoke clamp",
+    "volume": 1723.9,
+  },
+  {
+    "body": "ext492",
+    "max": [
+      -81,
+      6.9,
+      39.8,
+    ],
+    "min": [
+      -106,
+      -6.9,
+      29.8,
+    ],
+    "name": "Ring arm",
+    "volume": 1793.4,
+  },
+  {
+    "body": "ext566",
+    "max": [
+      6.9,
+      69,
+      30,
+    ],
+    "min": [
+      -6.9,
+      45,
+      19.9,
+    ],
+    "name": "Ring clamp",
+    "volume": 1723.9,
+  },
+  {
+    "body": "ext632",
+    "max": [
+      6.9,
+      69,
+      39.8,
+    ],
+    "min": [
+      -6.9,
+      38,
+      29.8,
+    ],
+    "name": "Riser",
+    "volume": 2373,
+  },
+  {
+    "body": "ext69",
+    "max": [
+      110,
+      83,
+      19.9,
+    ],
+    "min": [
+      -110,
+      -83,
+      0,
+    ],
+    "name": "Base plate",
+    "volume": 228425.5,
+  },
+  {
+    "body": "ext727",
+    "max": [
+      6.9,
+      -45,
+      30,
+    ],
+    "min": [
+      -6.9,
+      -69,
+      19.9,
+    ],
+    "name": "Ring clamp",
+    "volume": 1723.9,
+  },
+  {
+    "body": "ext793",
+    "max": [
+      6.9,
+      -38,
+      39.8,
+    ],
+    "min": [
+      -6.9,
+      -69,
+      29.8,
+    ],
+    "name": "Riser",
+    "volume": 2373,
+  },
+  {
+    "body": "rev132",
+    "max": [
+      81,
+      79,
+      39.9,
+    ],
+    "min": [
+      -81,
+      -79,
+      19.9,
+    ],
+    "name": "Ring",
+    "volume": 77932.5,
+  },
+  {
+    "body": "rev237",
+    "max": [
+      44,
+      44,
+      32.9,
+    ],
+    "min": [
+      -44,
+      -44,
+      26.9,
+    ],
+    "name": "Platform",
+    "volume": 36492.7,
+  },
+  {
+    "body": "rev258",
+    "max": [
+      20,
+      20,
+      34.9,
+    ],
+    "min": [
+      -20,
+      -20,
+      32.9,
+    ],
+    "name": "Mirror",
+    "volume": 2513.3,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/roubo.json > is clear at rest and while its joints are driven 1`] = `
+[
+  "rest: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
+  "viseGap = 0: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext742 × ext815 718, ext742 × ext825 718, ext754 × ext803 718, ext764 × ext803 718, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
+  "viseGap = 34: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
+  "viseGap = 68: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
+  "viseGap = 102: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
+  "viseGap = 136: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
+  "viseGap = 170: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
+]
+`;
+
+exports[`bundled examples > public/examples/roubo.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext1009",
+    "max": [
+      -618.8,
+      -373.9,
+      368.4,
+    ],
+    "min": [
+      -653.8,
+      -408.9,
+      333.1,
+    ],
+    "name": "Extrude",
+    "volume": 14778.1,
+  },
+  {
+    "body": "ext1047",
+    "max": [
+      -735.9,
+      -373.9,
+      281.4,
+    ],
+    "min": [
+      -769,
+      -408.9,
+      251.2,
+    ],
+    "name": "Extrude",
+    "volume": 14778.1,
+  },
+  {
+    "body": "ext112",
+    "max": [
+      850,
+      249.2,
+      425,
+    ],
+    "min": [
+      -850,
+      125,
+      325,
+    ],
+    "name": "Top 4",
+    "volume": 20509000,
+  },
+  {
+    "body": "ext135",
+    "max": [
+      -620,
+      -150,
+      325,
+    ],
+    "min": [
+      -720,
+      -250,
+      -425,
+    ],
+    "name": "Leg FL",
+    "volume": 6585400,
+  },
+  {
+    "body": "ext158",
+    "max": [
+      -642.5,
+      -172.5,
+      425,
+    ],
+    "min": [
+      -697.5,
+      -227.5,
+      325,
+    ],
+    "name": "Tenon FL",
+    "volume": 302500,
+  },
+  {
+    "body": "ext202",
+    "max": [
+      720,
+      -150,
+      325,
+    ],
+    "min": [
+      620,
+      -250,
+      -425,
+    ],
+    "name": "Leg FR",
+    "volume": 7302880,
+  },
+  {
+    "body": "ext225",
+    "max": [
+      697.5,
+      -172.5,
+      425,
+    ],
+    "min": [
+      642.5,
+      -227.5,
+      325,
+    ],
+    "name": "Tenon FR",
+    "volume": 302500,
+  },
+  {
+    "body": "ext269",
+    "max": [
+      -620,
+      250,
+      325,
+    ],
+    "min": [
+      -720,
+      150,
+      -425,
+    ],
+    "name": "Leg BL",
+    "volume": 7302880,
+  },
+  {
+    "body": "ext292",
+    "max": [
+      -642.5,
+      227.5,
+      425,
+    ],
+    "min": [
+      -697.5,
+      172.5,
+      325,
+    ],
+    "name": "Tenon BL",
+    "volume": 302500,
+  },
+  {
+    "body": "ext336",
+    "max": [
+      720,
+      250,
+      325,
+    ],
+    "min": [
+      620,
+      150,
+      -425,
+    ],
+    "name": "Leg BR",
+    "volume": 7302880,
+  },
+  {
+    "body": "ext359",
+    "max": [
+      697.5,
+      227.5,
+      425,
+    ],
+    "min": [
+      642.5,
+      172.5,
+      325,
+    ],
+    "name": "Tenon BR",
+    "volume": 302500,
+  },
+  {
+    "body": "ext403",
+    "max": [
+      648,
+      -184,
+      -145,
+    ],
+    "min": [
+      -648,
+      -216,
+      -255,
+    ],
+    "name": "Front rail",
+    "volume": 4561920,
+  },
+  {
+    "body": "ext43",
+    "max": [
+      850,
+      -125.8,
+      425,
+    ],
+    "min": [
+      -850,
+      -250,
+      325,
+    ],
+    "name": "Top 1",
+    "volume": 20509000,
+  },
+  {
+    "body": "ext468",
+    "max": [
+      648,
+      216,
+      -145,
+    ],
+    "min": [
+      -648,
+      184,
+      -255,
+    ],
+    "name": "Back rail",
+    "volume": 4561920,
+  },
+  {
+    "body": "ext533",
+    "max": [
+      -654,
+      178,
+      -145,
+    ],
+    "min": [
+      -686,
+      -178,
+      -255,
+    ],
+    "name": "End rail L",
+    "volume": 1253120,
+  },
+  {
+    "body": "ext598",
+    "max": [
+      686,
+      178,
+      -145,
+    ],
+    "min": [
+      654,
+      -178,
+      -255,
+    ],
+    "name": "End rail R",
+    "volume": 1253120,
+  },
+  {
+    "body": "ext66",
+    "max": [
+      850,
+      -0.8,
+      425,
+    ],
+    "min": [
+      -850,
+      -125,
+      325,
+    ],
+    "name": "Top 2",
+    "volume": 21114000,
+  },
+  {
+    "body": "ext663",
+    "max": [
+      -590,
+      -310,
+      425,
+    ],
+    "min": [
+      -750,
+      -352,
+      -275,
+    ],
+    "name": "Vise chop",
+    "volume": 4039179.3,
+  },
+  {
+    "body": "ext677",
+    "max": [
+      -654,
+      -180,
+      291,
+    ],
+    "min": [
+      -686,
+      -352,
+      259,
+    ],
+    "name": "Vise screw",
+    "volume": 138330.6,
+  },
+  {
+    "body": "ext692",
+    "max": [
+      -624,
+      -352,
+      321,
+    ],
+    "min": [
+      -716,
+      -364,
+      229,
+    ],
+    "name": "Garter",
+    "volume": 57905.8,
+  },
+  {
+    "body": "ext742",
+    "max": [
+      -658,
+      -221.8,
+      183.3,
+    ],
+    "min": [
+      -670,
+      -338.2,
+      -173.3,
+    ],
+    "name": "Crisscross arm 1",
+    "volume": 117833.4,
+  },
+  {
+    "body": "ext754",
+    "max": [
+      -652,
+      -230.1,
+      175,
+    ],
+    "min": [
+      -688,
+      -249.9,
+      155.2,
+    ],
+    "name": "Pin",
+    "volume": 11084.7,
+  },
+  {
+    "body": "ext764",
+    "max": [
+      -652,
+      -310.1,
+      -145.2,
+    ],
+    "min": [
+      -688,
+      -329.9,
+      -165,
+    ],
+    "name": "Pin",
+    "volume": 11084.7,
+  },
+  {
+    "body": "ext774",
+    "max": [
+      -649.6,
+      -270.1,
+      14.9,
+    ],
+    "min": [
+      -690.4,
+      -289.9,
+      -4.9,
+    ],
+    "name": "Pin",
+    "volume": 12562.6,
+  },
+  {
+    "body": "ext803",
+    "max": [
+      -670,
+      -221.8,
+      183.3,
+    ],
+    "min": [
+      -682,
+      -338.2,
+      -173.3,
+    ],
+    "name": "Crisscross arm 2",
+    "volume": 117833.4,
+  },
+  {
+    "body": "ext815",
+    "max": [
+      -652,
+      -310.1,
+      175,
+    ],
+    "min": [
+      -688,
+      -329.9,
+      155.2,
+    ],
+    "name": "Pin",
+    "volume": 11084.7,
+  },
+  {
+    "body": "ext825",
+    "max": [
+      -652,
+      -230.1,
+      -145.2,
+    ],
+    "min": [
+      -688,
+      -249.9,
+      -165,
+    ],
+    "name": "Pin",
+    "volume": 11084.7,
+  },
+  {
+    "body": "ext89",
+    "max": [
+      850,
+      124.2,
+      425,
+    ],
+    "min": [
+      -850,
+      0,
+      325,
+    ],
+    "name": "Top 3",
+    "volume": 21114000,
+  },
+  {
+    "body": "ext895",
+    "max": [
+      -570,
+      -363,
+      375,
+    ],
+    "min": [
+      -770,
+      -421,
+      175,
+    ],
+    "name": "Wheel",
+    "volume": 362752.4,
+  },
+  {
+    "body": "ext971",
+    "max": [
+      -603,
+      -373.9,
+      226.2,
+    ],
+    "min": [
+      -639.5,
+      -408.9,
+      189.7,
+    ],
+    "name": "Extrude",
+    "volume": 14778.1,
+  },
+  {
+    "body": "rev1035",
+    "max": [
+      -603.9,
+      -385.8,
+      409.8,
+    ],
+    "min": [
+      -642,
+      -424.2,
+      355,
+    ],
+    "name": "Revolve",
+    "volume": 15888.1,
+  },
+  {
+    "body": "rev1073",
+    "max": [
+      -759.1,
+      -385.8,
+      276.1,
+    ],
+    "min": [
+      -816.8,
+      -424.2,
+      248.4,
+    ],
+    "name": "Revolve",
+    "volume": 15888.1,
+  },
+  {
+    "body": "rev997",
+    "max": [
+      -579,
+      -385.8,
+      206.3,
+    ],
+    "min": [
+      -624,
+      -424.2,
+      154.1,
+    ],
+    "name": "Revolve",
+    "volume": 15888.1,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/scissor.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext40",
+    "max": [
+      44.5,
+      0,
+      129.4,
+    ],
+    "min": [
+      -2.1,
+      -4,
+      -2.1,
+    ],
+    "name": "Extrude",
+    "volume": 8064,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/xystage.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext1094",
+    "max": [
+      12,
+      12,
+      6,
+    ],
+    "min": [
+      -12,
+      -12,
+      0,
+    ],
+    "name": "Platform",
+    "volume": 3456,
+  },
+  {
+    "body": "ext54",
+    "max": [
+      66,
+      66,
+      6,
+    ],
+    "min": [
+      -66,
+      -66,
+      0,
+    ],
+    "name": "Frame top",
+    "volume": 18835.2,
+  },
+  {
+    "body": "ext574",
+    "max": [
+      54,
+      24,
+      6,
+    ],
+    "min": [
+      -54,
+      -24,
+      0,
+    ],
+    "name": "Carriage top",
+    "volume": 11059.2,
+  },
+]
+`;

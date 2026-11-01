@@ -15,7 +15,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample } from "./helpers";
+import { realSession, describeExample, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { evaluateFeatures, SolidEval } from "../src/core/features";
@@ -117,6 +117,7 @@ describe("origami: a paper airplane folded step by step", () => {
 
   it("builds the finished plane from one sheet of A4", async () => {
     if (OUT) writeFileSync(`${OUT}/origami.json`, serializeDocument(s.doc));
+    expectCommittedExample(s, "origami");
     for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
     const out = evaluate(s);
     for (const r of Object.values(out)) expect(r.error, r.name).toBeUndefined();

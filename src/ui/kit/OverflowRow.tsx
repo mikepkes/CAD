@@ -102,7 +102,9 @@ export function OverflowRow(p: OverflowRowProps) {
           </button>
           {open && (
             <div className="k-ovf-menu" role="menu" aria-label={p.moreLabel ?? "More"}
-              onClickCapture={(e) => { const t = e.target as HTMLElement; if (t.closest("button:not([aria-haspopup]), [role=menuitem]") && !t.closest("label")) setOpen(false); }}>
+              // on the way back up (bubbling), after the command's own handler: closing on the way down unmounts
+              // the menu before a real click reaches its button (React re-renders between the two phases)
+              onClick={(e) => { const t = e.target as HTMLElement; if (t.closest("button:not([aria-haspopup]), [role=menuitem]") && !t.closest("label")) setOpen(false); }}>
               {inMenu.map((it) => <div key={it.key} className="k-ovf-menu-item" data-ovf={it.key}>{it.menuNode ?? it.node}</div>)}
             </div>
           )}

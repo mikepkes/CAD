@@ -21,6 +21,8 @@ export const EXAMPLES: ExampleInfo[] = [
   { name: "gimbal", title: "Flexure gimbal", blurb: "A mirror steered on two pairs of blades" },
   { name: "xystage", title: "XY flexure stage", blurb: "A platform that moves in X and Y on blades" },
   { name: "skadis", title: "SKÅDIS holder", blurb: "A pegboard holder that grips by its load's weight" },
+  { name: "handlebar", title: "Bike handlebar", blurb: "A riser bar and winged grips from organic surfaces" },
+  { name: "walker", title: "Wind walker", blurb: "Twelve Jansen legs walking off one crank" },
   { name: "origami", title: "Paper airplane", blurb: "A dart folded from a sheet, step by step" },
   { name: "scissor", title: "Scissor lift", blurb: "A scissor linkage driven by its stage count" },
   { name: "scissor-jointed", title: "Jointed scissor", blurb: "The scissor as a pattern of jointed stages" },

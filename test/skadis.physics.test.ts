@@ -2,6 +2,7 @@
 // only the item's weight shuts it, and every part prints without supports.
 import { describe, it, beforeAll, expect } from "vitest";
 import type { CadSession } from "../src/core/command/session";
+import { GeometryCache } from "../src/core/features";
 import { built, parts, PRINTED, MOVING, RHO, G, DROP, RP, LA, A0, S } from "./skadis";
 
 describe("SKÅDIS gravity holder: physics and printing", () => {
@@ -13,7 +14,8 @@ describe("SKÅDIS gravity holder: physics and printing", () => {
   // item of mass M adds −M·drop, and shuts it once it outweighs that.
   it("falls open when empty, and only the item's weight shuts it: the least weight, and the grip", async () => {
     const drops = Array.from({ length: 7 }, (_, k) => (DROP * k) / 6);
-    const U = drops.map((drop) => { const { by } = parts(s, { drop }); return MOVING.reduce((u, k) => u + by[k].volume * RHO * by[k].centroid.z, 0); }); // g·mm
+    const cache = new GeometryCache(); // across the sweep: the parts only move, so each pose replays them, moved
+    const U = drops.map((drop) => { const { by } = parts(s, { drop }, cache); return MOVING.reduce((u, k) => u + by[k].volume * RHO * by[k].centroid.z, 0); }); // g·mm
     const slopes: number[] = [];
     for (let k = 1; k < drops.length; k++) slopes.push((U[k] - U[k - 1]) / (drops[k] - drops[k - 1])); // g per mm of drop: the weight it takes to hold it there
     const least = Math.max(...slopes);
@@ -27,7 +29,7 @@ describe("SKÅDIS gravity holder: physics and printing", () => {
     expect(least).toBeLessThan(70);                                  // a shaver or a toothbrush handle shuts it
     expect(grip(120)).toBeGreaterThan(0.1);
     expect(grip(150) - grip(100)).toBeCloseTo(grip(200) - grip(150), 9); // in proportion to the weight
-  }, 600000);
+  }, 300000);
 
   // Each part on its print bed: the face it lies on, and no face (other than
   // the bed) facing down more than 45° from the vertical.
@@ -72,5 +74,5 @@ describe("SKÅDIS gravity holder: physics and printing", () => {
       }
     }
     console.log(`on the bed: ${rows.join(", ")}`);
-  }, 600000);
+  }, 300000);
 });

@@ -10,10 +10,10 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample } from "./helpers";
+import { realSession, describeExample, forkSession, itFull, FULL, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
-import { collideFeatures, evaluateFeatures, exportFusedBlob } from "../src/core/features";
+import { collideFeatures, exportFusedBlob } from "../src/core/features";
 import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
 import { flexureSweep, flexureStiffness, flexureState } from "../src/sim/flexure";
@@ -140,30 +140,35 @@ async function buildFourBar(s: CadSession): Promise<void> {
 const sweep = Array.from({ length: 9 }, (_, k) => -THETA + (2 * THETA * k) / 8);
 
 describe("compliant four-bar", () => {
-  beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
+  // built once: the tests below only pose it, or change a fork of it
+  let built: CadSession;
+  beforeAll(async () => {
+    await initKernel({ wasmBinary: wasm });
+    built = realSession();
+    await buildFourBar(built);
+    await built.recompute();
+  }, 60000);
 
-  it("builds four links that print as one piece", async () => {
-    const s = realSession();
-    await buildFourBar(s);
-    await s.recompute();
+  // Its four links building clean on both geometry paths, only touching at rest,
+  // clearing each other as theta is swept and printing as one piece are the
+  // example suite's (test/exampleSuite.ts), on the committed example this must
+  // reproduce.
+  it("builds the committed example: four links on flexure hinges", async () => {
+    const s = built;
     if (OUT) writeFileSync(`${OUT}/fourbar.vibecad.json`, serializeDocument(s.doc));
-    const scope = resolveParameters(s.doc.parameters).scope;
-    placeComponentSketches(s.doc, scope);
-    const bodies = Object.values(evaluateFeatures(s.doc, scope));
-    for (const b of bodies) expect(b.error, b.name).toBeUndefined();
-    expect(bodies.filter((b) => b.mesh).length).toBe(4);
-    // at rest the links only touch (at the split hinge strips); fused they are one solid
-    expect(collideFeatures(s.doc, scope).maxOverlap).toBeLessThan(0.01);
-    const stl = exportFusedBlob(s.doc, scope, "stl");
-    expect(stl && stl.size).toBeGreaterThan(10000);
-    if (OUT) writeFileSync(`${OUT}/fourbar.stl`, Buffer.from(await stl!.arrayBuffer()));
-  }, 120000);
+    expectCommittedExample(s, "fourbar");
+    for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
+    expect(Object.values(s.doc.joints).filter((j) => j.flexure).length).toBe(4);
+    if (OUT) {
+      const scope = resolveParameters(s.doc.parameters).scope;
+      placeComponentSketches(s.doc, scope);
+      writeFileSync(`${OUT}/fourbar.stl`, Buffer.from(await exportFusedBlob(s.doc, scope, "stl")!.arrayBuffer()));
+    }
+  });
 
   it("moves through ±20°: the loop closes, every hinge stays under the TPU limit, the output swings", async () => {
     const m = MATERIALS[DEFAULT_MATERIAL];
-    const s = realSession();
-    await buildFourBar(s);
-    await s.recompute();
+    const s = built;
     const poses = flexureSweep(s.doc, "theta", sweep);
     for (const p of poses) {
       expect(p.error, `theta ${p.value}`).toBeUndefined();
@@ -178,21 +183,15 @@ describe("compliant four-bar", () => {
     const k = flexureStiffness(m.E, { length: m.L, width: Hz, thickness: m.t });
     console.log(`hinge k = ${k.toFixed(0)} N·mm/rad; output swing ${swing.toFixed(1)}° for ±${THETA}° input; ` +
       `at +${THETA}°: torque ${poses[8].effort.toFixed(0)} N·mm, peak strain ${(Math.max(...poses[8].flexures.map((f) => f.strain)) * 100).toFixed(1)}% (limit ${m.strain * 100}%)`);
-  }, 120000);
+  });
 
-  it("the links clear each other through the motion (only the hinge strips kink)", async () => {
-    const s = realSession();
-    await buildFourBar(s);
-    await s.recompute();
-    await clearThroughMotion(s);
-  }, 120000);
+  // (The links clearing each other through the motion, as designed: the example
+  // suite's sweep of theta, on the committed example, to the same limit.)
 
   // The link-length sliders: at every corner of their ranges, in every material,
   // the loop closes and every hinge stays under the material's strain limit.
   it("every corner of the link-length sliders closes and stays under every material's limit", async () => {
-    const s = realSession();
-    await buildFourBar(s);
-    await s.recompute();
+    const s = built;
     const rows: string[] = [];
     for (const c of CORNERS) for (const [i, m] of MATERIALS.entries()) {
       let peak = 0, swing = [0, 0];
@@ -206,14 +205,14 @@ describe("compliant four-bar", () => {
       if (i === DEFAULT_MATERIAL) rows.push(`crank ${c.crank} rocker ${c.rocker} ground ${c.ground}: pointer swings ${Math.abs(swing[0] - swing[1]).toFixed(1)}°, worst hinge ${(peak * m.strain * 100).toFixed(1)}% in ${m.name}`);
     }
     console.log(rows.join("\n"));
-  }, 120000);
+  });
 
   // ...and the part builds and clears itself through the motion there: with the
-  // as-designed strip, the longest (PLA) and the thickest (TPU 95A).
+  // as-designed strip, the longest (PLA) and the thickest (TPU 95A). Extended
+  // run (eight corners × five collision checks each, per material).
   for (const name of ["TPU 68D (TPU for AMS)", "PLA", "TPU 95A"]) {
-    it(`builds and clears itself at every corner of the link-length sliders, in ${name}`, async () => {
-      const s = realSession();
-      await buildFourBar(s);
+    itFull(`builds and clears itself at every corner of the link-length sliders, in ${name}`, async () => {
+      const s = await forkSession(built);
       await dis(s, "parameter.set", { name: "material", expression: String(MATERIALS.findIndex((m) => m.name === name)) });
       for (const c of CORNERS) {
         await setLinks(s, c);
@@ -229,14 +228,13 @@ describe("compliant four-bar", () => {
   }
 
   // Every other material: sized so its hinges stay under its strain limit (at
-  // ~80% of it) through the full ±20°, and the part still builds, closes its loop
-  // and clears itself through the motion.
+  // ~80% of it) through the full ±20°; and (extended run) the part still
+  // builds and clears itself through the motion.
   const breathe = () => new Promise((r) => setTimeout(r, 0));
   for (const [i, m] of MATERIALS.entries()) {
     if (i === DEFAULT_MATERIAL) continue;
-    it(`printed in ${m.name}: hinges within the strain limit through ±${THETA}°, links clear`, async () => {
-      const s = realSession();
-      await buildFourBar(s);
+    it(`printed in ${m.name}: hinges within the strain limit through ±${THETA}°${FULL ? ", links clear" : ""}`, async () => {
+      const s = await forkSession(built);
       await dis(s, "parameter.set", { name: "material", expression: String(i) });
       await s.recompute();
       const scope = resolveParameters(s.doc.parameters).scope;
@@ -252,6 +250,7 @@ describe("compliant four-bar", () => {
       expect(peak, "not over-built: the strip uses most of what the material allows").toBeGreaterThan(0.4);
       console.log(`${m.name}: strip ${m.t} × ${m.L} mm, k ${flexureStiffness(m.E, { length: m.L, width: Hz, thickness: m.t }).toFixed(0)} N·mm/rad, ` +
         `peak strain ${(peak * m.strain * 100).toFixed(2)}% of ${m.strain * 100}%, torque at +${THETA}° ${poses[8].effort.toFixed(0)} N·mm`);
+      if (!FULL) return;
       await breathe();
       placeComponentSketches(s.doc, scope);
       const rest = collideFeatures(s.doc, scope);
@@ -259,7 +258,7 @@ describe("compliant four-bar", () => {
       expect(rest.maxOverlap).toBeLessThan(0.01);
       await breathe();
       await clearThroughMotion(s);
-    }, 300000);
+    }, 120000);
   }
 });
 
