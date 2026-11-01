@@ -23,7 +23,7 @@ import { expressionProblem } from "../expressionCheck";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 /** A material's appearance fields, as material.create and material.update take them. */
-const MATERIAL_FIELDS = ["species", "finish", "color", "backColor", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength", "texture", "textureScale", "textureAxis", "layerHeight", "printAxis"] as const;
+const MATERIAL_FIELDS = ["species", "finish", "color", "backColor", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength", "texture", "textureScale", "textureAxis", "textureWrap", "layerHeight", "printAxis"] as const;
 
 // A point given either as coordinates (creates a new point) or a ref to an
 // existing point id (reuses it — which is how coincidence is expressed).
@@ -947,7 +947,8 @@ export const BUILTINS: CommandDef<any>[] = [
         kind: { type: "string", enum: ["wood", "metal", "plastic", "painted", "rubber", "printed", "paper"], description: "printed: an FDM print, drawn with layer lines and weaker across them. paper: matte, fibrous, a little translucent; `backColor` colours its other side." },
         species: { type: "string", description: "wood species preset key." },
         finish: { type: "string", description: "metal/plastic: polished|brushed|satin|matte|gloss; printed: matte|satin|silk." },
-        texture: { type: "string", enum: ["none", "stipple", "dimples", "knurl", "ribs"], description: "A procedural surface texture (drawn, not modelled)." },
+        texture: { type: "string", enum: ["none", "stipple", "dimples", "knurl", "ribs", "hex"], description: "A procedural surface texture (drawn, not modelled); hex: raised hexagonal grip pads." },
+        textureWrap: { type: "boolean", description: "Wrap dimples/knurl/hex round the part's long axis, sized by arc length (grips, knobs, collars), instead of projecting it." },
         textureScale: { type: "number", exclusiveMinimum: 0, description: "Texture pitch (mm)." },
         textureAxis: { type: "string", enum: ["x", "y", "z"], description: "ribs: the axis they run across; brushed metal: the brushing direction." },
         layerHeight: { type: "number", exclusiveMinimum: 0, description: "printed: layer height (mm), default 0.2." },
@@ -969,6 +970,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A flexible print (Bambu TPU for AMS, printed flat)", params: { name: "TPU", kind: "plastic", finish: "matte", youngsModulus: 1190, allowableStrain: 0.08 } },
       { note: "A steel screw", params: { name: "Steel", kind: "metal", finish: "satin", color: "#8a8f96" } },
       { note: "A rubber grip", params: { name: "Grip rubber", kind: "rubber", texture: "knurl", textureScale: 2 } },
+      { note: "A moulded grip: hex pads wrapped round it", params: { name: "Hex grip", kind: "rubber", texture: "hex", textureScale: 3.2, textureWrap: true } },
       { note: "PLA printed on its side (layers stack along X)", params: { name: "PLA, on its side", kind: "printed", color: "#e8e4dc", printAxis: "x", youngsModulus: 3500, allowableStrain: 0.02, layerFactor: 0.5 } },
       { note: "Origami paper: white on top, red underneath", params: { name: "Origami paper", kind: "paper", color: "#f3f0e8", backColor: "#c8323c" } },
     ],
@@ -1028,7 +1030,8 @@ export const BUILTINS: CommandDef<any>[] = [
         ringScale: { type: "number", exclusiveMinimum: 0 },
         grainContrast: { type: "number", minimum: 0, maximum: 1 },
         poreStrength: { type: "number", minimum: 0, maximum: 1 },
-        texture: { type: "string", enum: ["none", "stipple", "dimples", "knurl", "ribs"] },
+        texture: { type: "string", enum: ["none", "stipple", "dimples", "knurl", "ribs", "hex"] },
+        textureWrap: { type: "boolean" },
         textureScale: { type: "number", exclusiveMinimum: 0 },
         textureAxis: { type: "string", enum: ["x", "y", "z"] },
         layerHeight: { type: "number", exclusiveMinimum: 0 },
@@ -2800,38 +2803,68 @@ export const BUILTINS: CommandDef<any>[] = [
   {
     type: "feature.sweep",
     title: "Sweep",
-    summary: "Sweep a closed profile along an open path sketch.",
+    summary: "Sweep a closed profile along a path: a path sketch, or a smooth 3D spline with sections that change along it.",
     description:
-      "Drags the `profile` sketch's region along the `path` sketch (an open chain of lines/arcs — its spine), producing a solid like a pipe or extrusion that follows the route. `operation` combines it with existing bodies. Returns the feature id.",
+      "Drags the `profile` sketch's region along the `path` sketch (an open chain of lines/arcs — its spine), producing a solid like a pipe or extrusion that follows the route. " +
+      "Or along a 3D spine: give `points` (each {x, y, z}, numbers or parameter expressions) and the spine is a smooth cubic B-spline — by default with the points as its CONTROL polygon (four collinear points make an exactly straight run; every bend is curvature-continuous, like a bent tube), or `through: true` to pass through them (C2). " +
+      "The points are in the `path` sketch's frame (x, y along its plane, z along its normal), so the spine moves with that sketch's plane and component; sections stay upright toward `up` (default the path sketch's normal), so nothing twists. " +
+      "The profile (in its own sketch coordinates, centred on the sketch origin) is placed square to the spine at its start. `scale` stations ({at, value}) scale it along the spine — eased between stations (C2, flat at each), so equal neighbours hold the size exactly, e.g. a tube tapering from one diameter to another. " +
+      "Or `sections` ({sketch, at}): several profiles, each placed square to the spine `at` mm along it, morphed smoothly into one another (each must have as many holes; holes are swept and cut out). In `at` and scale values, `pathLength` is the spine's length. `operation` combines it with existing bodies. Returns the feature id.",
     paramsSchema: {
       type: "object",
-      required: ["profile", "path"],
+      required: ["path"],
       additionalProperties: false,
       properties: {
-        profile: { type: "string", description: "Closed profile sketch id (its first region)." },
-        path: { type: "string", description: "Open path sketch id (lines/arcs forming a chain)." },
+        profile: { type: "string", description: "Closed profile sketch id (its first region). Not needed with `sections`." },
+        path: { type: "string", description: "Open path sketch id (lines/arcs forming a chain) — or, with `points`, the sketch whose plane frames them." },
+        points: { type: "array", items: { type: "object", required: ["x", "y", "z"], properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, z: { type: ["number", "string"] } } }, description: "A 3D spine: its control points (or through-points), expressions allowed." },
+        through: { type: "boolean", description: "The spine passes through `points` (default: they are its control polygon)." },
+        up: { type: "object", required: ["x", "y", "z"], properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "The direction sections stay upright toward (world)." },
+        sections: { type: "array", items: { type: "object", required: ["sketch", "at"], properties: { sketch: { type: "string" }, at: { type: ["number", "string"], description: "mm along the spine; may use pathLength." } } }, description: "Several profiles morphed along a 3D spine." },
+        scale: { type: "array", items: { type: "object", required: ["at", "value"], properties: { at: { type: ["number", "string"] }, value: { type: ["number", "string"] } } }, description: "The profile's scale along a 3D spine, at stations (mm along it)." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies." },
         body: { type: "string", description: "Target body (feature id) for join/cut/intersect; default the most recent." },
         requireEffect: { type: "boolean", description: "Make a join/cut that changes nothing an error." },
         name: { type: "string" },
       },
     },
-    examples: [{ note: "Sweep a circle along an L-path", params: { profile: "sketch1", path: "sketch2" } }],
-    apply(draft, p: { profile: string; path: string; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
-      if (!draft.sketches[p.profile]) throw new Error(`No profile sketch "${p.profile}"`);
+    examples: [
+      { note: "Sweep a circle along an L-path", params: { profile: "sketch1", path: "sketch2" } },
+      { note: "A tube bent smoothly in 3D, its control points on the XY sketch's frame", params: { profile: "sketch1", path: "sketch2", points: [{ x: 0, y: 0, z: 0 }, { x: 60, y: 0, z: 0 }, { x: 100, y: 20, z: 30 }, { x: 140, y: 20, z: 60 }] } },
+      { note: "Taper it from full size to 70% over its second half", params: { profile: "sketch1", path: "sketch2", points: [{ x: 0, y: 0, z: 0 }, { x: 200, y: 0, z: "rise" }], scale: [{ at: "pathLength/2", value: 1 }, { at: "pathLength", value: 0.7 }] } },
+    ],
+    apply(draft, p: { profile?: string; path: string; points?: { x: number | string; y: number | string; z: number | string }[]; through?: boolean; up?: Vec3; sections?: { sketch: string; at: number | string }[]; scale?: { at: number | string; value: number | string }[]; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!draft.sketches[p.path]) throw new Error(`No path sketch "${p.path}"`);
+      if ((p.sections || p.scale || p.through || p.up) && !p.points) throw new Error("sections, scale, through and up go with a 3D path (`points`)");
+      if (p.sections && p.scale) throw new Error("give either sections or a scale law, not both");
+      const profile = p.sections ? p.sections[0]?.sketch : p.profile;
+      if (!profile) throw new Error("a sweep needs a profile (or sections)");
+      for (const sid of [profile, ...(p.sections ?? []).map((s) => s.sketch)]) if (!draft.sketches[sid]) throw new Error(`No profile sketch "${sid}"`);
+      const scope = resolveParameters(draft.parameters).scope;
+      const check = (v: number | string, what: string, extra?: Record<string, number>) => {
+        if (typeof v === "string" && !Number.isFinite(compileExpr(v).eval({ ...scope, ...(extra ?? {}) }))) throw new Error(`${what} "${v}" is not a number`);
+        return String(v);
+      };
+      if (p.up && Math.hypot(p.up.x, p.up.y, p.up.z) < 1e-12) throw new Error("up is zero");
+      // every expression checked before the feature exists
+      const path3d = p.points ? { points: p.points.map((q, i) => ({ x: check(q.x, `point ${i + 1} x`), y: check(q.y, `point ${i + 1} y`), z: check(q.z, `point ${i + 1} z`) })), ...(p.through ? { through: true } : {}), ...(p.up ? { up: { ...p.up } } : {}) } : undefined;
+      const sections = p.sections?.map((s, i) => ({ sketch: s.sketch, at: check(s.at, `section ${i + 1} at`, { pathLength: 1 }) }));
+      const scale = p.scale?.map((s, i) => ({ at: check(s.at, `scale ${i + 1} at`, { pathLength: 1 }), value: check(s.value, `scale ${i + 1} value`, { pathLength: 1 }) }));
       const id = ctx.alloc("swp");
       draft.features[id] = {
         id,
         kind: "sweep",
         name: p.name ?? "Sweep",
-        profileSketch: p.profile,
+        profileSketch: profile,
         pathSketch: p.path,
+        ...(path3d ? { path3d } : {}),
+        ...(sections ? { sections } : {}),
+        ...(scale ? { scale } : {}),
         operation: p.operation ?? "new",
         ...(p.body ? { body: p.body } : {}),
         ...(p.requireEffect ? { requireEffect: true } : {}),
       };
-      return { createdIds: [id], message: "Sweep profile along path" };
+      return { createdIds: [id], message: p.points ? `Sweep along a 3D path (${p.points.length} points${p.sections ? `, ${p.sections.length} sections` : ""})` : "Sweep profile along path" };
     },
   },
   {

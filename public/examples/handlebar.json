@@ -1,0 +1,3422 @@
+{
+  "format": "vibecad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 664,
+  "rollbackIndex": 179,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "width",
+        "expression": "760",
+        "min": 720,
+        "max": 800,
+        "step": 5
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612323
+    },
+    {
+      "opId": "op3",
+      "type": "parameter.add",
+      "params": {
+        "name": "rise",
+        "expression": "30",
+        "min": 25,
+        "max": 50,
+        "step": 5
+      },
+      "createdIds": [
+        "param4"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612326
+    },
+    {
+      "opId": "op5",
+      "type": "parameter.add",
+      "params": {
+        "name": "backsweep",
+        "expression": "9",
+        "min": 5,
+        "max": 12,
+        "step": 1
+      },
+      "createdIds": [
+        "param6"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612326
+    },
+    {
+      "opId": "op7",
+      "type": "parameter.add",
+      "params": {
+        "name": "upsweep",
+        "expression": "5",
+        "min": 3,
+        "max": 7,
+        "step": 1
+      },
+      "createdIds": [
+        "param8"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612326
+    },
+    {
+      "opId": "op9",
+      "type": "parameter.add",
+      "params": {
+        "name": "gripLen",
+        "expression": "135",
+        "min": 120,
+        "max": 145,
+        "step": 5
+      },
+      "createdIds": [
+        "param10"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612327
+    },
+    {
+      "opId": "op11",
+      "type": "parameter.add",
+      "params": {
+        "name": "stemLen",
+        "expression": "50",
+        "min": 40,
+        "max": 70,
+        "step": 5
+      },
+      "createdIds": [
+        "param12"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612327
+    },
+    {
+      "opId": "op13",
+      "type": "parameter.add",
+      "params": {
+        "name": "gx",
+        "expression": "cos(rad(upsweep))*cos(rad(backsweep))",
+        "hidden": true
+      },
+      "createdIds": [
+        "param14"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612327
+    },
+    {
+      "opId": "op15",
+      "type": "parameter.add",
+      "params": {
+        "name": "gy",
+        "expression": "-cos(rad(upsweep))*sin(rad(backsweep))",
+        "hidden": true
+      },
+      "createdIds": [
+        "param16"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612328
+    },
+    {
+      "opId": "op17",
+      "type": "parameter.add",
+      "params": {
+        "name": "gz",
+        "expression": "sin(rad(upsweep))",
+        "hidden": true
+      },
+      "createdIds": [
+        "param18"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612328
+    },
+    {
+      "opId": "op19",
+      "type": "parameter.add",
+      "params": {
+        "name": "tipY",
+        "expression": "200*gy",
+        "hidden": true
+      },
+      "createdIds": [
+        "param20"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612328
+    },
+    {
+      "opId": "op21",
+      "type": "parameter.add",
+      "params": {
+        "name": "k2x",
+        "expression": "width/2-200*gx",
+        "hidden": true
+      },
+      "createdIds": [
+        "param22"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612329
+    },
+    {
+      "opId": "op23",
+      "type": "parameter.add",
+      "params": {
+        "name": "k2z",
+        "expression": "rise-200*gz",
+        "hidden": true
+      },
+      "createdIds": [
+        "param24"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612329
+    },
+    {
+      "opId": "op25",
+      "type": "parameter.add",
+      "params": {
+        "name": "riseRun",
+        "expression": "sqrt((k2x-85)^2+k2z^2)",
+        "hidden": true
+      },
+      "createdIds": [
+        "param26"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612329
+    },
+    {
+      "opId": "op27",
+      "type": "parameter.add",
+      "params": {
+        "name": "rdx",
+        "expression": "(k2x-85)/riseRun",
+        "hidden": true
+      },
+      "createdIds": [
+        "param28"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612330
+    },
+    {
+      "opId": "op29",
+      "type": "parameter.add",
+      "params": {
+        "name": "rdz",
+        "expression": "k2z/riseRun",
+        "hidden": true
+      },
+      "createdIds": [
+        "param30"
+      ],
+      "label": "Add parameter",
+      "at": 1793561612330
+    },
+    {
+      "opId": "op31",
+      "type": "component.create",
+      "params": {
+        "name": "Cockpit"
+      },
+      "createdIds": [
+        "cmp32"
+      ],
+      "label": "New component",
+      "at": 1793561612331
+    },
+    {
+      "opId": "op33",
+      "type": "component.create",
+      "params": {
+        "name": "Bar",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp34"
+      ],
+      "label": "New component",
+      "at": 1793561612331
+    },
+    {
+      "opId": "op35",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp34",
+        "name": "Bar spine frame"
+      },
+      "createdIds": [
+        "sketch36",
+        "pt37"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612332
+    },
+    {
+      "opId": "op38",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp34",
+        "name": "Bar section"
+      },
+      "createdIds": [
+        "sketch39",
+        "pt40"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612402
+    },
+    {
+      "opId": "op41",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch39",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 15.9
+      },
+      "createdIds": [
+        "pt42",
+        "ci43"
+      ],
+      "label": "Add circle",
+      "at": 1793561612402
+    },
+    {
+      "opId": "op44",
+      "type": "feature.sweep",
+      "params": {
+        "profile": "sketch39",
+        "path": "sketch36",
+        "points": [
+          {
+            "x": "-(width/2)",
+            "y": "tipY",
+            "z": "rise"
+          },
+          {
+            "x": "-(k2x+120*gx)",
+            "y": "120*gy",
+            "z": "k2z+120*gz"
+          },
+          {
+            "x": "-(k2x+40*gx)",
+            "y": "40*gy",
+            "z": "k2z+40*gz"
+          },
+          {
+            "x": "-(k2x)",
+            "y": "0",
+            "z": "k2z"
+          },
+          {
+            "x": "-(k2x-40*rdx)",
+            "y": "0",
+            "z": "k2z-40*rdz"
+          },
+          {
+            "x": "-(85+35*rdx)",
+            "y": "0",
+            "z": "35*rdz"
+          },
+          {
+            "x": "-(85)",
+            "y": "0",
+            "z": "0"
+          },
+          {
+            "x": "-(50)",
+            "y": "0",
+            "z": "0"
+          },
+          {
+            "x": "-(20)",
+            "y": "0",
+            "z": "0"
+          },
+          {
+            "x": "20",
+            "y": "0",
+            "z": "0"
+          },
+          {
+            "x": "50",
+            "y": "0",
+            "z": "0"
+          },
+          {
+            "x": "85",
+            "y": "0",
+            "z": "0"
+          },
+          {
+            "x": "85+35*rdx",
+            "y": "0",
+            "z": "35*rdz"
+          },
+          {
+            "x": "k2x-40*rdx",
+            "y": "0",
+            "z": "k2z-40*rdz"
+          },
+          {
+            "x": "k2x",
+            "y": "0",
+            "z": "k2z"
+          },
+          {
+            "x": "k2x+40*gx",
+            "y": "40*gy",
+            "z": "k2z+40*gz"
+          },
+          {
+            "x": "k2x+120*gx",
+            "y": "120*gy",
+            "z": "k2z+120*gz"
+          },
+          {
+            "x": "width/2",
+            "y": "tipY",
+            "z": "rise"
+          }
+        ],
+        "name": "Bar",
+        "scale": [
+          {
+            "at": 0,
+            "value": 0.6981132075471698
+          },
+          {
+            "at": 165,
+            "value": 0.6981132075471698
+          },
+          {
+            "at": "pathLength/2-60",
+            "value": 1
+          },
+          {
+            "at": "pathLength/2+60",
+            "value": 1
+          },
+          {
+            "at": "pathLength-165",
+            "value": 0.6981132075471698
+          },
+          {
+            "at": "pathLength",
+            "value": 0.6981132075471698
+          }
+        ]
+      },
+      "createdIds": [
+        "swp45"
+      ],
+      "label": "Sweep",
+      "at": 1793561612408
+    },
+    {
+      "opId": "op46",
+      "type": "component.create",
+      "params": {
+        "name": "Grip R",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp47"
+      ],
+      "label": "New component",
+      "at": 1793561612410
+    },
+    {
+      "opId": "op48",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp47",
+        "name": "Grip R axis"
+      },
+      "createdIds": [
+        "sketch49",
+        "pt50"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612411
+    },
+    {
+      "opId": "op51",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp47",
+        "name": "Grip R section 1"
+      },
+      "createdIds": [
+        "sketch52",
+        "pt53"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612412
+    },
+    {
+      "opId": "op54",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch52",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 15.6
+      },
+      "createdIds": [
+        "pt55",
+        "ci56"
+      ],
+      "label": "Add circle",
+      "at": 1793561612418
+    },
+    {
+      "opId": "op57",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch52",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt58",
+        "ci59"
+      ],
+      "label": "Add circle",
+      "at": 1793561612419
+    },
+    {
+      "opId": "op60",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp47",
+        "name": "Grip R section 2"
+      },
+      "createdIds": [
+        "sketch61",
+        "pt62"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612422
+    },
+    {
+      "opId": "op63",
+      "type": "sketch.addEllipse",
+      "params": {
+        "sketch": "sketch61",
+        "center": {
+          "x": -0.4,
+          "y": 0
+        },
+        "rx": 16.4,
+        "ry": 16
+      },
+      "createdIds": [
+        "pt64",
+        "el65"
+      ],
+      "label": "Add ellipse",
+      "at": 1793561612426
+    },
+    {
+      "opId": "op66",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch61",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt67",
+        "ci68"
+      ],
+      "label": "Add circle",
+      "at": 1793561612429
+    },
+    {
+      "opId": "op69",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp47",
+        "name": "Grip R section 3"
+      },
+      "createdIds": [
+        "sketch70",
+        "pt71"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612432
+    },
+    {
+      "opId": "op72",
+      "type": "sketch.addEllipse",
+      "params": {
+        "sketch": "sketch70",
+        "center": {
+          "x": -4.2,
+          "y": 0.3
+        },
+        "rx": 20.4,
+        "ry": 16
+      },
+      "createdIds": [
+        "pt73",
+        "el74"
+      ],
+      "label": "Add ellipse",
+      "at": 1793561612441
+    },
+    {
+      "opId": "op75",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch70",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt76",
+        "ci77"
+      ],
+      "label": "Add circle",
+      "at": 1793561612442
+    },
+    {
+      "opId": "op78",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp47",
+        "name": "Grip R section 4"
+      },
+      "createdIds": [
+        "sketch79",
+        "pt80"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612447
+    },
+    {
+      "opId": "op81",
+      "type": "sketch.addEllipse",
+      "params": {
+        "sketch": "sketch79",
+        "center": {
+          "x": -9.6,
+          "y": 0.8
+        },
+        "rx": 25.6,
+        "ry": 15.6
+      },
+      "createdIds": [
+        "pt82",
+        "el83"
+      ],
+      "label": "Add ellipse",
+      "at": 1793561612451
+    },
+    {
+      "opId": "op84",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch79",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt85",
+        "ci86"
+      ],
+      "label": "Add circle",
+      "at": 1793561612452
+    },
+    {
+      "opId": "op87",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp47",
+        "name": "Grip R section 5"
+      },
+      "createdIds": [
+        "sketch88",
+        "pt89"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612461
+    },
+    {
+      "opId": "op90",
+      "type": "sketch.addEllipse",
+      "params": {
+        "sketch": "sketch88",
+        "center": {
+          "x": -9.2,
+          "y": 0.8
+        },
+        "rx": 24.6,
+        "ry": 14.8
+      },
+      "createdIds": [
+        "pt91",
+        "el92"
+      ],
+      "label": "Add ellipse",
+      "at": 1793561612462
+    },
+    {
+      "opId": "op93",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch88",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt94",
+        "ci95"
+      ],
+      "label": "Add circle",
+      "at": 1793561612468
+    },
+    {
+      "opId": "op96",
+      "type": "feature.sweep",
+      "params": {
+        "path": "sketch49",
+        "points": [
+          {
+            "x": "(width/2-(gripLen)*gx)",
+            "y": "tipY-(gripLen)*gy",
+            "z": "rise-(gripLen)*gz"
+          },
+          {
+            "x": "(width/2-(0)*gx)",
+            "y": "tipY-(0)*gy",
+            "z": "rise-(0)*gz"
+          }
+        ],
+        "sections": [
+          {
+            "sketch": "sketch52",
+            "at": "0"
+          },
+          {
+            "sketch": "sketch61",
+            "at": "0.3*pathLength"
+          },
+          {
+            "sketch": "sketch70",
+            "at": "0.62*pathLength"
+          },
+          {
+            "sketch": "sketch79",
+            "at": "pathLength-12"
+          },
+          {
+            "sketch": "sketch88",
+            "at": "pathLength"
+          }
+        ],
+        "name": "Grip R"
+      },
+      "createdIds": [
+        "swp97"
+      ],
+      "label": "Sweep",
+      "at": 1793561612471
+    },
+    {
+      "opId": "op98",
+      "type": "component.create",
+      "params": {
+        "name": "Collar R",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp99"
+      ],
+      "label": "New component",
+      "at": 1793561612477
+    },
+    {
+      "opId": "op100",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp99",
+        "name": "Collar R axis"
+      },
+      "createdIds": [
+        "sketch101",
+        "pt102"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612484
+    },
+    {
+      "opId": "op103",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp99",
+        "name": "Collar R section"
+      },
+      "createdIds": [
+        "sketch104",
+        "pt105"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612489
+    },
+    {
+      "opId": "op106",
+      "type": "sketch.addRing",
+      "params": {
+        "sketch": "sketch104",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "outerRadius": 15.3,
+        "innerRadius": 11.2
+      },
+      "createdIds": [
+        "pt107",
+        "ci108",
+        "ci109"
+      ],
+      "label": "Ring",
+      "at": 1793561612499
+    },
+    {
+      "opId": "op110",
+      "type": "feature.sweep",
+      "params": {
+        "profile": "sketch104",
+        "path": "sketch101",
+        "points": [
+          {
+            "x": "(width/2-(gripLen+9)*gx)",
+            "y": "tipY-(gripLen+9)*gy",
+            "z": "rise-(gripLen+9)*gz"
+          },
+          {
+            "x": "(width/2-(gripLen)*gx)",
+            "y": "tipY-(gripLen)*gy",
+            "z": "rise-(gripLen)*gz"
+          }
+        ],
+        "name": "Collar R"
+      },
+      "createdIds": [
+        "swp111"
+      ],
+      "label": "Sweep",
+      "at": 1793561612517
+    },
+    {
+      "opId": "op112",
+      "type": "component.create",
+      "params": {
+        "name": "End plug R",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp113"
+      ],
+      "label": "New component",
+      "at": 1793561612522
+    },
+    {
+      "opId": "op114",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp113",
+        "name": "End plug R axis"
+      },
+      "createdIds": [
+        "sketch115",
+        "pt116"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612527
+    },
+    {
+      "opId": "op117",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp113",
+        "name": "End plug R flange"
+      },
+      "createdIds": [
+        "sketch118",
+        "pt119"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612533
+    },
+    {
+      "opId": "op120",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch118",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 12.2
+      },
+      "createdIds": [
+        "pt121",
+        "ci122"
+      ],
+      "label": "Add circle",
+      "at": 1793561612538
+    },
+    {
+      "opId": "op123",
+      "type": "feature.sweep",
+      "params": {
+        "profile": "sketch118",
+        "path": "sketch115",
+        "points": [
+          {
+            "x": "(width/2-(0)*gx)",
+            "y": "tipY-(0)*gy",
+            "z": "rise-(0)*gz"
+          },
+          {
+            "x": "(width/2-(-5)*gx)",
+            "y": "tipY-(-5)*gy",
+            "z": "rise-(-5)*gz"
+          }
+        ],
+        "name": "End plug R",
+        "scale": [
+          {
+            "at": 0,
+            "value": 1
+          },
+          {
+            "at": 1.6,
+            "value": 1
+          },
+          {
+            "at": "pathLength",
+            "value": 0.6
+          }
+        ]
+      },
+      "createdIds": [
+        "swp124"
+      ],
+      "label": "Sweep",
+      "at": 1793561612544
+    },
+    {
+      "opId": "op125",
+      "type": "component.create",
+      "params": {
+        "name": "Grip L",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp126"
+      ],
+      "label": "New component",
+      "at": 1793561612556
+    },
+    {
+      "opId": "op127",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp126",
+        "name": "Grip L axis"
+      },
+      "createdIds": [
+        "sketch128",
+        "pt129"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612561
+    },
+    {
+      "opId": "op130",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp126",
+        "name": "Grip L section 1"
+      },
+      "createdIds": [
+        "sketch131",
+        "pt132"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612565
+    },
+    {
+      "opId": "op133",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch131",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 15.6
+      },
+      "createdIds": [
+        "pt134",
+        "ci135"
+      ],
+      "label": "Add circle",
+      "at": 1793561612569
+    },
+    {
+      "opId": "op136",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch131",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt137",
+        "ci138"
+      ],
+      "label": "Add circle",
+      "at": 1793561612577
+    },
+    {
+      "opId": "op139",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp126",
+        "name": "Grip L section 2"
+      },
+      "createdIds": [
+        "sketch140",
+        "pt141"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612579
+    },
+    {
+      "opId": "op142",
+      "type": "sketch.addEllipse",
+      "params": {
+        "sketch": "sketch140",
+        "center": {
+          "x": 0.4,
+          "y": 0
+        },
+        "rx": 16.4,
+        "ry": 16
+      },
+      "createdIds": [
+        "pt143",
+        "el144"
+      ],
+      "label": "Add ellipse",
+      "at": 1793561612584
+    },
+    {
+      "opId": "op145",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch140",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt146",
+        "ci147"
+      ],
+      "label": "Add circle",
+      "at": 1793561612593
+    },
+    {
+      "opId": "op148",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp126",
+        "name": "Grip L section 3"
+      },
+      "createdIds": [
+        "sketch149",
+        "pt150"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612601
+    },
+    {
+      "opId": "op151",
+      "type": "sketch.addEllipse",
+      "params": {
+        "sketch": "sketch149",
+        "center": {
+          "x": 4.2,
+          "y": 0.3
+        },
+        "rx": 20.4,
+        "ry": 16
+      },
+      "createdIds": [
+        "pt152",
+        "el153"
+      ],
+      "label": "Add ellipse",
+      "at": 1793561612606
+    },
+    {
+      "opId": "op154",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch149",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt155",
+        "ci156"
+      ],
+      "label": "Add circle",
+      "at": 1793561612612
+    },
+    {
+      "opId": "op157",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp126",
+        "name": "Grip L section 4"
+      },
+      "createdIds": [
+        "sketch158",
+        "pt159"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612623
+    },
+    {
+      "opId": "op160",
+      "type": "sketch.addEllipse",
+      "params": {
+        "sketch": "sketch158",
+        "center": {
+          "x": 9.6,
+          "y": 0.8
+        },
+        "rx": 25.6,
+        "ry": 15.6
+      },
+      "createdIds": [
+        "pt161",
+        "el162"
+      ],
+      "label": "Add ellipse",
+      "at": 1793561612625
+    },
+    {
+      "opId": "op163",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch158",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt164",
+        "ci165"
+      ],
+      "label": "Add circle",
+      "at": 1793561612627
+    },
+    {
+      "opId": "op166",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp126",
+        "name": "Grip L section 5"
+      },
+      "createdIds": [
+        "sketch167",
+        "pt168"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612633
+    },
+    {
+      "opId": "op169",
+      "type": "sketch.addEllipse",
+      "params": {
+        "sketch": "sketch167",
+        "center": {
+          "x": 9.2,
+          "y": 0.8
+        },
+        "rx": 24.6,
+        "ry": 14.8
+      },
+      "createdIds": [
+        "pt170",
+        "el171"
+      ],
+      "label": "Add ellipse",
+      "at": 1793561612638
+    },
+    {
+      "opId": "op172",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch167",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 11.2
+      },
+      "createdIds": [
+        "pt173",
+        "ci174"
+      ],
+      "label": "Add circle",
+      "at": 1793561612642
+    },
+    {
+      "opId": "op175",
+      "type": "feature.sweep",
+      "params": {
+        "path": "sketch128",
+        "points": [
+          {
+            "x": "-(width/2-(gripLen)*gx)",
+            "y": "tipY-(gripLen)*gy",
+            "z": "rise-(gripLen)*gz"
+          },
+          {
+            "x": "-(width/2-(0)*gx)",
+            "y": "tipY-(0)*gy",
+            "z": "rise-(0)*gz"
+          }
+        ],
+        "sections": [
+          {
+            "sketch": "sketch131",
+            "at": "0"
+          },
+          {
+            "sketch": "sketch140",
+            "at": "0.3*pathLength"
+          },
+          {
+            "sketch": "sketch149",
+            "at": "0.62*pathLength"
+          },
+          {
+            "sketch": "sketch158",
+            "at": "pathLength-12"
+          },
+          {
+            "sketch": "sketch167",
+            "at": "pathLength"
+          }
+        ],
+        "name": "Grip L"
+      },
+      "createdIds": [
+        "swp176"
+      ],
+      "label": "Sweep",
+      "at": 1793561612644
+    },
+    {
+      "opId": "op177",
+      "type": "component.create",
+      "params": {
+        "name": "Collar L",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp178"
+      ],
+      "label": "New component",
+      "at": 1793561612646
+    },
+    {
+      "opId": "op179",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp178",
+        "name": "Collar L axis"
+      },
+      "createdIds": [
+        "sketch180",
+        "pt181"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612649
+    },
+    {
+      "opId": "op182",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp178",
+        "name": "Collar L section"
+      },
+      "createdIds": [
+        "sketch183",
+        "pt184"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612653
+    },
+    {
+      "opId": "op185",
+      "type": "sketch.addRing",
+      "params": {
+        "sketch": "sketch183",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "outerRadius": 15.3,
+        "innerRadius": 11.2
+      },
+      "createdIds": [
+        "pt186",
+        "ci187",
+        "ci188"
+      ],
+      "label": "Ring",
+      "at": 1793561612655
+    },
+    {
+      "opId": "op189",
+      "type": "feature.sweep",
+      "params": {
+        "profile": "sketch183",
+        "path": "sketch180",
+        "points": [
+          {
+            "x": "-(width/2-(gripLen+9)*gx)",
+            "y": "tipY-(gripLen+9)*gy",
+            "z": "rise-(gripLen+9)*gz"
+          },
+          {
+            "x": "-(width/2-(gripLen)*gx)",
+            "y": "tipY-(gripLen)*gy",
+            "z": "rise-(gripLen)*gz"
+          }
+        ],
+        "name": "Collar L"
+      },
+      "createdIds": [
+        "swp190"
+      ],
+      "label": "Sweep",
+      "at": 1793561612658
+    },
+    {
+      "opId": "op191",
+      "type": "component.create",
+      "params": {
+        "name": "End plug L",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp192"
+      ],
+      "label": "New component",
+      "at": 1793561612662
+    },
+    {
+      "opId": "op193",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp192",
+        "name": "End plug L axis"
+      },
+      "createdIds": [
+        "sketch194",
+        "pt195"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612666
+    },
+    {
+      "opId": "op196",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp192",
+        "name": "End plug L flange"
+      },
+      "createdIds": [
+        "sketch197",
+        "pt198"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612689
+    },
+    {
+      "opId": "op199",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch197",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 12.2
+      },
+      "createdIds": [
+        "pt200",
+        "ci201"
+      ],
+      "label": "Add circle",
+      "at": 1793561612691
+    },
+    {
+      "opId": "op202",
+      "type": "feature.sweep",
+      "params": {
+        "profile": "sketch197",
+        "path": "sketch194",
+        "points": [
+          {
+            "x": "-(width/2-(0)*gx)",
+            "y": "tipY-(0)*gy",
+            "z": "rise-(0)*gz"
+          },
+          {
+            "x": "-(width/2-(-5)*gx)",
+            "y": "tipY-(-5)*gy",
+            "z": "rise-(-5)*gz"
+          }
+        ],
+        "name": "End plug L",
+        "scale": [
+          {
+            "at": 0,
+            "value": 1
+          },
+          {
+            "at": 1.6,
+            "value": 1
+          },
+          {
+            "at": "pathLength",
+            "value": 0.6
+          }
+        ]
+      },
+      "createdIds": [
+        "swp203"
+      ],
+      "label": "Sweep",
+      "at": 1793561612694
+    },
+    {
+      "opId": "op204",
+      "type": "component.create",
+      "params": {
+        "name": "Stem",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp205"
+      ],
+      "label": "New component",
+      "at": 1793561612697
+    },
+    {
+      "opId": "op206",
+      "type": "plane.create",
+      "params": {
+        "base": "XY",
+        "offset": "-20",
+        "name": "Stem underside"
+      },
+      "createdIds": [
+        "pl207"
+      ],
+      "label": "Offset plane",
+      "at": 1793561612704
+    },
+    {
+      "opId": "op208",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl207",
+        "component": "cmp205",
+        "name": "Steerer clamp"
+      },
+      "createdIds": [
+        "sketch209",
+        "pt210"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612707
+    },
+    {
+      "opId": "op211",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch209",
+        "x": 0,
+        "y": "-stemLen"
+      },
+      "createdIds": [
+        "pt212"
+      ],
+      "label": "Add point",
+      "at": 1793561612709
+    },
+    {
+      "opId": "op213",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch209",
+        "center": {
+          "ref": "pt212"
+        },
+        "radius": 22
+      },
+      "createdIds": [
+        "ci214"
+      ],
+      "label": "Add circle",
+      "at": 1793561612717
+    },
+    {
+      "opId": "op215",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch209",
+        "distance": "40",
+        "name": "Stem"
+      },
+      "createdIds": [
+        "ext216"
+      ],
+      "label": "Extrude",
+      "at": 1793561612722
+    },
+    {
+      "opId": "op217",
+      "type": "feature.fillet",
+      "params": {
+        "radius": "2",
+        "body": "ext216",
+        "edges": {
+          "inPlane": {
+            "plane": "XY",
+            "offset": -20
+          }
+        },
+        "name": "Steerer clamp rim"
+      },
+      "createdIds": [
+        "fil218"
+      ],
+      "label": "Fillet edges",
+      "at": 1793561612726
+    },
+    {
+      "opId": "op219",
+      "type": "feature.fillet",
+      "params": {
+        "radius": "2",
+        "body": "ext216",
+        "edges": {
+          "inPlane": {
+            "plane": "XY",
+            "offset": 20
+          }
+        },
+        "name": "Steerer clamp rim"
+      },
+      "createdIds": [
+        "fil220"
+      ],
+      "label": "Fillet edges",
+      "at": 1793561612729
+    },
+    {
+      "opId": "op221",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "component": "cmp205",
+        "name": "Neck axis"
+      },
+      "createdIds": [
+        "sketch222",
+        "pt223"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612734
+    },
+    {
+      "opId": "op224",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp205",
+        "name": "Neck section 1"
+      },
+      "createdIds": [
+        "sketch225",
+        "pt226"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612737
+    },
+    {
+      "opId": "op227",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch225",
+        "corner": {
+          "x": -15,
+          "y": -18
+        },
+        "opposite": {
+          "x": 15,
+          "y": 18
+        },
+        "cornerRadius": 9
+      },
+      "createdIds": [
+        "pt228",
+        "pt229",
+        "pt230",
+        "pt231",
+        "ln232",
+        "ln233",
+        "ln234",
+        "ln235",
+        "c236",
+        "c237",
+        "c238",
+        "c239",
+        "pt240",
+        "pt241",
+        "pt242",
+        "ar243",
+        "pt244",
+        "pt245",
+        "pt246",
+        "ar247",
+        "pt248",
+        "pt249",
+        "pt250",
+        "ar251",
+        "pt252",
+        "pt253",
+        "pt254",
+        "ar255"
+      ],
+      "label": "Add rectangle",
+      "at": 1793561612740
+    },
+    {
+      "opId": "op256",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp205",
+        "name": "Neck section 2"
+      },
+      "createdIds": [
+        "sketch257",
+        "pt258"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612750
+    },
+    {
+      "opId": "op259",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch257",
+        "corner": {
+          "x": -12.5,
+          "y": -15.5
+        },
+        "opposite": {
+          "x": 12.5,
+          "y": 15.5
+        },
+        "cornerRadius": 8
+      },
+      "createdIds": [
+        "pt260",
+        "pt261",
+        "pt262",
+        "pt263",
+        "ln264",
+        "ln265",
+        "ln266",
+        "ln267",
+        "c268",
+        "c269",
+        "c270",
+        "c271",
+        "pt272",
+        "pt273",
+        "pt274",
+        "ar275",
+        "pt276",
+        "pt277",
+        "pt278",
+        "ar279",
+        "pt280",
+        "pt281",
+        "pt282",
+        "ar283",
+        "pt284",
+        "pt285",
+        "pt286",
+        "ar287"
+      ],
+      "label": "Add rectangle",
+      "at": 1793561612759
+    },
+    {
+      "opId": "op288",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp205",
+        "name": "Neck section 3"
+      },
+      "createdIds": [
+        "sketch289",
+        "pt290"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612778
+    },
+    {
+      "opId": "op291",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch289",
+        "corner": {
+          "x": -17,
+          "y": -19
+        },
+        "opposite": {
+          "x": 17,
+          "y": 19
+        },
+        "cornerRadius": 9
+      },
+      "createdIds": [
+        "pt292",
+        "pt293",
+        "pt294",
+        "pt295",
+        "ln296",
+        "ln297",
+        "ln298",
+        "ln299",
+        "c300",
+        "c301",
+        "c302",
+        "c303",
+        "pt304",
+        "pt305",
+        "pt306",
+        "ar307",
+        "pt308",
+        "pt309",
+        "pt310",
+        "ar311",
+        "pt312",
+        "pt313",
+        "pt314",
+        "ar315",
+        "pt316",
+        "pt317",
+        "pt318",
+        "ar319"
+      ],
+      "label": "Add rectangle",
+      "at": 1793561612787
+    },
+    {
+      "opId": "op320",
+      "type": "feature.sweep",
+      "params": {
+        "path": "sketch222",
+        "points": [
+          {
+            "x": 0,
+            "y": "-stemLen+12",
+            "z": 0
+          },
+          {
+            "x": 0,
+            "y": -14,
+            "z": 0
+          }
+        ],
+        "sections": [
+          {
+            "sketch": "sketch225",
+            "at": "0"
+          },
+          {
+            "sketch": "sketch257",
+            "at": "0.5*pathLength"
+          },
+          {
+            "sketch": "sketch289",
+            "at": "pathLength"
+          }
+        ],
+        "operation": "join",
+        "body": "ext216",
+        "name": "Stem neck"
+      },
+      "createdIds": [
+        "swp321"
+      ],
+      "label": "Sweep",
+      "at": 1793561612803
+    },
+    {
+      "opId": "op322",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp205",
+        "name": "Bar clamp"
+      },
+      "createdIds": [
+        "sketch323",
+        "pt324"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612822
+    },
+    {
+      "opId": "op325",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch323",
+        "corner": {
+          "x": -19,
+          "y": -23.5
+        },
+        "opposite": {
+          "x": -1,
+          "y": 23.5
+        },
+        "cornerRadius": 6
+      },
+      "createdIds": [
+        "pt326",
+        "pt327",
+        "pt328",
+        "pt329",
+        "ln330",
+        "ln331",
+        "ln332",
+        "ln333",
+        "c334",
+        "c335",
+        "c336",
+        "c337",
+        "pt338",
+        "pt339",
+        "pt340",
+        "ar341",
+        "pt342",
+        "pt343",
+        "pt344",
+        "ar345",
+        "pt346",
+        "pt347",
+        "pt348",
+        "ar349",
+        "pt350",
+        "pt351",
+        "pt352",
+        "ar353"
+      ],
+      "label": "Add rectangle",
+      "at": 1793561612836
+    },
+    {
+      "opId": "op354",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch323",
+        "distance": "42",
+        "symmetric": true,
+        "operation": "join",
+        "body": "ext216",
+        "name": "Stem bar clamp"
+      },
+      "createdIds": [
+        "ext355"
+      ],
+      "label": "Extrude",
+      "at": 1793561612887
+    },
+    {
+      "opId": "op356",
+      "type": "feature.fillet",
+      "params": {
+        "radius": "1.5",
+        "body": "ext216",
+        "edges": {
+          "inPlane": {
+            "plane": "YZ",
+            "offset": -21
+          }
+        },
+        "name": "Clamp edge"
+      },
+      "createdIds": [
+        "fil357"
+      ],
+      "label": "Fillet edges",
+      "at": 1793561612893
+    },
+    {
+      "opId": "op358",
+      "type": "feature.fillet",
+      "params": {
+        "radius": "1.5",
+        "body": "ext216",
+        "edges": {
+          "inPlane": {
+            "plane": "YZ",
+            "offset": 21
+          }
+        },
+        "name": "Clamp edge"
+      },
+      "createdIds": [
+        "fil359"
+      ],
+      "label": "Fillet edges",
+      "at": 1793561612899
+    },
+    {
+      "opId": "op360",
+      "type": "component.create",
+      "params": {
+        "name": "Faceplate",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp361"
+      ],
+      "label": "New component",
+      "at": 1793561612906
+    },
+    {
+      "opId": "op362",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp361",
+        "name": "Faceplate"
+      },
+      "createdIds": [
+        "sketch363",
+        "pt364"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612915
+    },
+    {
+      "opId": "op365",
+      "type": "sketch.addRectangle",
+      "params": {
+        "sketch": "sketch363",
+        "corner": {
+          "x": 1,
+          "y": -23.5
+        },
+        "opposite": {
+          "x": 19,
+          "y": 23.5
+        },
+        "cornerRadius": 6
+      },
+      "createdIds": [
+        "pt366",
+        "pt367",
+        "pt368",
+        "pt369",
+        "ln370",
+        "ln371",
+        "ln372",
+        "ln373",
+        "c374",
+        "c375",
+        "c376",
+        "c377",
+        "pt378",
+        "pt379",
+        "pt380",
+        "ar381",
+        "pt382",
+        "pt383",
+        "pt384",
+        "ar385",
+        "pt386",
+        "pt387",
+        "pt388",
+        "ar389",
+        "pt390",
+        "pt391",
+        "pt392",
+        "ar393"
+      ],
+      "label": "Add rectangle",
+      "at": 1793561612921
+    },
+    {
+      "opId": "op394",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch363",
+        "distance": "42",
+        "symmetric": true,
+        "name": "Faceplate"
+      },
+      "createdIds": [
+        "ext395"
+      ],
+      "label": "Extrude",
+      "at": 1793561612929
+    },
+    {
+      "opId": "op396",
+      "type": "feature.fillet",
+      "params": {
+        "radius": "1.5",
+        "body": "ext395",
+        "edges": {
+          "inPlane": {
+            "plane": "YZ",
+            "offset": -21
+          }
+        },
+        "name": "Faceplate edge"
+      },
+      "createdIds": [
+        "fil397"
+      ],
+      "label": "Fillet edges",
+      "at": 1793561612937
+    },
+    {
+      "opId": "op398",
+      "type": "feature.fillet",
+      "params": {
+        "radius": "1.5",
+        "body": "ext395",
+        "edges": {
+          "inPlane": {
+            "plane": "YZ",
+            "offset": 21
+          }
+        },
+        "name": "Faceplate edge"
+      },
+      "createdIds": [
+        "fil399"
+      ],
+      "label": "Fillet edges",
+      "at": 1793561612945
+    },
+    {
+      "opId": "op400",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp205",
+        "name": "Bar bore"
+      },
+      "createdIds": [
+        "sketch401",
+        "pt402"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612953
+    },
+    {
+      "opId": "op403",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch401",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 15.950000000000001
+      },
+      "createdIds": [
+        "pt404",
+        "ci405"
+      ],
+      "label": "Add circle",
+      "at": 1793561612962
+    },
+    {
+      "opId": "op406",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch401",
+        "distance": "1",
+        "extent": "throughAll",
+        "symmetric": true,
+        "operation": "cut",
+        "body": "ext216",
+        "name": "Bar bore"
+      },
+      "createdIds": [
+        "ext407"
+      ],
+      "label": "Extrude",
+      "at": 1793561612969
+    },
+    {
+      "opId": "op408",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp205",
+        "name": "Bolt holes"
+      },
+      "createdIds": [
+        "sketch409",
+        "pt410"
+      ],
+      "label": "Create sketch",
+      "at": 1793561612975
+    },
+    {
+      "opId": "op411",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch409",
+        "center": {
+          "x": -14,
+          "y": -19.5
+        },
+        "radius": 2.7
+      },
+      "createdIds": [
+        "pt412",
+        "ci413"
+      ],
+      "label": "Add circle",
+      "at": 1793561612981
+    },
+    {
+      "opId": "op414",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch409",
+        "center": {
+          "x": -14,
+          "y": 19.5
+        },
+        "radius": 2.7
+      },
+      "createdIds": [
+        "pt415",
+        "ci416"
+      ],
+      "label": "Add circle",
+      "at": 1793561612989
+    },
+    {
+      "opId": "op417",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch409",
+        "center": {
+          "x": 14,
+          "y": -19.5
+        },
+        "radius": 2.7
+      },
+      "createdIds": [
+        "pt418",
+        "ci419"
+      ],
+      "label": "Add circle",
+      "at": 1793561613002
+    },
+    {
+      "opId": "op420",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch409",
+        "center": {
+          "x": 14,
+          "y": 19.5
+        },
+        "radius": 2.7
+      },
+      "createdIds": [
+        "pt421",
+        "ci422"
+      ],
+      "label": "Add circle",
+      "at": 1793561613011
+    },
+    {
+      "opId": "op423",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch409",
+        "distance": "16",
+        "operation": "cut",
+        "body": "ext216",
+        "name": "Bolt holes"
+      },
+      "createdIds": [
+        "ext424"
+      ],
+      "label": "Extrude",
+      "at": 1793561613017
+    },
+    {
+      "opId": "op425",
+      "type": "sketch.create",
+      "params": {
+        "plane": "YZ",
+        "component": "cmp361",
+        "name": "Bar bore"
+      },
+      "createdIds": [
+        "sketch426",
+        "pt427"
+      ],
+      "label": "Create sketch",
+      "at": 1793561613023
+    },
+    {
+      "opId": "op428",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch426",
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "radius": 15.950000000000001
+      },
+      "createdIds": [
+        "pt429",
+        "ci430"
+      ],
+      "label": "Add circle",
+      "at": 1793561613029
+    },
+    {
+      "opId": "op431",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch426",
+        "distance": "1",
+        "extent": "throughAll",
+        "symmetric": true,
+        "operation": "cut",
+        "body": "ext395",
+        "name": "Bar bore"
+      },
+      "createdIds": [
+        "ext432"
+      ],
+      "label": "Extrude",
+      "at": 1793561613034
+    },
+    {
+      "opId": "op433",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "component": "cmp361",
+        "name": "Bolt holes"
+      },
+      "createdIds": [
+        "sketch434",
+        "pt435"
+      ],
+      "label": "Create sketch",
+      "at": 1793561613041
+    },
+    {
+      "opId": "op436",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch434",
+        "center": {
+          "x": -14,
+          "y": -19.5
+        },
+        "radius": 2.7
+      },
+      "createdIds": [
+        "pt437",
+        "ci438"
+      ],
+      "label": "Add circle",
+      "at": 1793561613056
+    },
+    {
+      "opId": "op439",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch434",
+        "center": {
+          "x": -14,
+          "y": 19.5
+        },
+        "radius": 2.7
+      },
+      "createdIds": [
+        "pt440",
+        "ci441"
+      ],
+      "label": "Add circle",
+      "at": 1793561613071
+    },
+    {
+      "opId": "op442",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch434",
+        "center": {
+          "x": 14,
+          "y": -19.5
+        },
+        "radius": 2.7
+      },
+      "createdIds": [
+        "pt443",
+        "ci444"
+      ],
+      "label": "Add circle",
+      "at": 1793561613083
+    },
+    {
+      "opId": "op445",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch434",
+        "center": {
+          "x": 14,
+          "y": 19.5
+        },
+        "radius": 2.7
+      },
+      "createdIds": [
+        "pt446",
+        "ci447"
+      ],
+      "label": "Add circle",
+      "at": 1793561613093
+    },
+    {
+      "opId": "op448",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch434",
+        "distance": "20",
+        "direction": "reverse",
+        "operation": "cut",
+        "body": "ext395",
+        "name": "Bolt holes"
+      },
+      "createdIds": [
+        "ext449"
+      ],
+      "label": "Extrude",
+      "at": 1793561613106
+    },
+    {
+      "opId": "op450",
+      "type": "sketch.create",
+      "params": {
+        "datum": "pl207",
+        "component": "cmp205",
+        "name": "Steerer bore"
+      },
+      "createdIds": [
+        "sketch451",
+        "pt452"
+      ],
+      "label": "Create sketch",
+      "at": 1793561613111
+    },
+    {
+      "opId": "op453",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch451",
+        "x": 0,
+        "y": "-stemLen"
+      },
+      "createdIds": [
+        "pt454"
+      ],
+      "label": "Add point",
+      "at": 1793561613117
+    },
+    {
+      "opId": "op455",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch451",
+        "center": {
+          "ref": "pt454"
+        },
+        "radius": 14.4
+      },
+      "createdIds": [
+        "ci456"
+      ],
+      "label": "Add circle",
+      "at": 1793561613130
+    },
+    {
+      "opId": "op457",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch451",
+        "distance": "1",
+        "extent": "throughAll",
+        "symmetric": true,
+        "operation": "cut",
+        "body": "ext216",
+        "name": "Steerer bore"
+      },
+      "createdIds": [
+        "ext458"
+      ],
+      "label": "Extrude",
+      "at": 1793561613136
+    },
+    {
+      "opId": "op459",
+      "type": "component.create",
+      "params": {
+        "name": "Faceplate bolts",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp460"
+      ],
+      "label": "New component",
+      "at": 1793561613145
+    },
+    {
+      "opId": "op461",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "offset": -19,
+        "component": "cmp460",
+        "name": "Bolt heads"
+      },
+      "createdIds": [
+        "sketch462",
+        "pt463"
+      ],
+      "label": "Create sketch",
+      "at": 1793561613157
+    },
+    {
+      "opId": "op464",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch462",
+        "center": {
+          "x": -14,
+          "y": -19.5
+        },
+        "radius": 4
+      },
+      "createdIds": [
+        "pt465",
+        "ci466"
+      ],
+      "label": "Add circle",
+      "at": 1793561613169
+    },
+    {
+      "opId": "op467",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch462",
+        "center": {
+          "x": -14,
+          "y": 19.5
+        },
+        "radius": 4
+      },
+      "createdIds": [
+        "pt468",
+        "ci469"
+      ],
+      "label": "Add circle",
+      "at": 1793561613183
+    },
+    {
+      "opId": "op470",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch462",
+        "center": {
+          "x": 14,
+          "y": -19.5
+        },
+        "radius": 4
+      },
+      "createdIds": [
+        "pt471",
+        "ci472"
+      ],
+      "label": "Add circle",
+      "at": 1793561613195
+    },
+    {
+      "opId": "op473",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch462",
+        "center": {
+          "x": 14,
+          "y": 19.5
+        },
+        "radius": 4
+      },
+      "createdIds": [
+        "pt474",
+        "ci475"
+      ],
+      "label": "Add circle",
+      "at": 1793561613206
+    },
+    {
+      "opId": "op476",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch462",
+        "distance": "5",
+        "direction": "reverse",
+        "name": "Faceplate bolts"
+      },
+      "createdIds": [
+        "ext477"
+      ],
+      "label": "Extrude",
+      "at": 1793561613211
+    },
+    {
+      "opId": "op478",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "offset": -19,
+        "component": "cmp460",
+        "name": "Bolt shanks"
+      },
+      "createdIds": [
+        "sketch479",
+        "pt480"
+      ],
+      "label": "Create sketch",
+      "at": 1793561613223
+    },
+    {
+      "opId": "op481",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch479",
+        "center": {
+          "x": -14,
+          "y": -19.5
+        },
+        "radius": 2.5
+      },
+      "createdIds": [
+        "pt482",
+        "ci483"
+      ],
+      "label": "Add circle",
+      "at": 1793561613231
+    },
+    {
+      "opId": "op484",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch479",
+        "center": {
+          "x": -14,
+          "y": 19.5
+        },
+        "radius": 2.5
+      },
+      "createdIds": [
+        "pt485",
+        "ci486"
+      ],
+      "label": "Add circle",
+      "at": 1793561613237
+    },
+    {
+      "opId": "op487",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch479",
+        "center": {
+          "x": 14,
+          "y": -19.5
+        },
+        "radius": 2.5
+      },
+      "createdIds": [
+        "pt488",
+        "ci489"
+      ],
+      "label": "Add circle",
+      "at": 1793561613243
+    },
+    {
+      "opId": "op490",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch479",
+        "center": {
+          "x": 14,
+          "y": 19.5
+        },
+        "radius": 2.5
+      },
+      "createdIds": [
+        "pt491",
+        "ci492"
+      ],
+      "label": "Add circle",
+      "at": 1793561613249
+    },
+    {
+      "opId": "op493",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch479",
+        "distance": "30",
+        "operation": "join",
+        "body": "ext477",
+        "name": "Bolt shanks"
+      },
+      "createdIds": [
+        "ext494"
+      ],
+      "label": "Extrude",
+      "at": 1793561613258
+    },
+    {
+      "opId": "op495",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XZ",
+        "offset": -24,
+        "component": "cmp460",
+        "name": "Bolt sockets"
+      },
+      "createdIds": [
+        "sketch496",
+        "pt497"
+      ],
+      "label": "Create sketch",
+      "at": 1793561613265
+    },
+    {
+      "opId": "op498",
+      "type": "sketch.addPolygon",
+      "params": {
+        "sketch": "sketch496",
+        "center": {
+          "x": -14,
+          "y": -19.5
+        },
+        "vertex": {
+          "x": -11.7,
+          "y": -19.5
+        },
+        "sides": 6
+      },
+      "createdIds": [
+        "pt499",
+        "ci500",
+        "pt501",
+        "pt502",
+        "pt503",
+        "pt504",
+        "pt505",
+        "pt506",
+        "ln507",
+        "ln508",
+        "ln509",
+        "ln510",
+        "ln511",
+        "ln512",
+        "c513",
+        "c514",
+        "c515",
+        "c516",
+        "c517",
+        "c518",
+        "c519",
+        "c520",
+        "c521",
+        "c522",
+        "c523"
+      ],
+      "label": "Add polygon",
+      "at": 1793561613271
+    },
+    {
+      "opId": "op524",
+      "type": "sketch.addPolygon",
+      "params": {
+        "sketch": "sketch496",
+        "center": {
+          "x": -14,
+          "y": 19.5
+        },
+        "vertex": {
+          "x": -11.7,
+          "y": 19.5
+        },
+        "sides": 6
+      },
+      "createdIds": [
+        "pt525",
+        "ci526",
+        "pt527",
+        "pt528",
+        "pt529",
+        "pt530",
+        "pt531",
+        "pt532",
+        "ln533",
+        "ln534",
+        "ln535",
+        "ln536",
+        "ln537",
+        "ln538",
+        "c539",
+        "c540",
+        "c541",
+        "c542",
+        "c543",
+        "c544",
+        "c545",
+        "c546",
+        "c547",
+        "c548",
+        "c549"
+      ],
+      "label": "Add polygon",
+      "at": 1793561613278
+    },
+    {
+      "opId": "op550",
+      "type": "sketch.addPolygon",
+      "params": {
+        "sketch": "sketch496",
+        "center": {
+          "x": 14,
+          "y": -19.5
+        },
+        "vertex": {
+          "x": 16.3,
+          "y": -19.5
+        },
+        "sides": 6
+      },
+      "createdIds": [
+        "pt551",
+        "ci552",
+        "pt553",
+        "pt554",
+        "pt555",
+        "pt556",
+        "pt557",
+        "pt558",
+        "ln559",
+        "ln560",
+        "ln561",
+        "ln562",
+        "ln563",
+        "ln564",
+        "c565",
+        "c566",
+        "c567",
+        "c568",
+        "c569",
+        "c570",
+        "c571",
+        "c572",
+        "c573",
+        "c574",
+        "c575"
+      ],
+      "label": "Add polygon",
+      "at": 1793561613295
+    },
+    {
+      "opId": "op576",
+      "type": "sketch.addPolygon",
+      "params": {
+        "sketch": "sketch496",
+        "center": {
+          "x": 14,
+          "y": 19.5
+        },
+        "vertex": {
+          "x": 16.3,
+          "y": 19.5
+        },
+        "sides": 6
+      },
+      "createdIds": [
+        "pt577",
+        "ci578",
+        "pt579",
+        "pt580",
+        "pt581",
+        "pt582",
+        "pt583",
+        "pt584",
+        "ln585",
+        "ln586",
+        "ln587",
+        "ln588",
+        "ln589",
+        "ln590",
+        "c591",
+        "c592",
+        "c593",
+        "c594",
+        "c595",
+        "c596",
+        "c597",
+        "c598",
+        "c599",
+        "c600",
+        "c601"
+      ],
+      "label": "Add polygon",
+      "at": 1793561613316
+    },
+    {
+      "opId": "op602",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch496",
+        "distance": "3",
+        "operation": "cut",
+        "body": "ext477",
+        "name": "Bolt sockets"
+      },
+      "createdIds": [
+        "ext603"
+      ],
+      "label": "Extrude",
+      "at": 1793561613328
+    },
+    {
+      "opId": "op604",
+      "type": "component.create",
+      "params": {
+        "name": "Steerer",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp605"
+      ],
+      "label": "New component",
+      "at": 1793561613341
+    },
+    {
+      "opId": "op606",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": -75,
+        "component": "cmp605",
+        "name": "Steerer"
+      },
+      "createdIds": [
+        "sketch607",
+        "pt608"
+      ],
+      "label": "Create sketch",
+      "at": 1793561613357
+    },
+    {
+      "opId": "op609",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch607",
+        "x": 0,
+        "y": "-stemLen"
+      },
+      "createdIds": [
+        "pt610"
+      ],
+      "label": "Add point",
+      "at": 1793561613377
+    },
+    {
+      "opId": "op611",
+      "type": "sketch.addRing",
+      "params": {
+        "sketch": "sketch607",
+        "center": {
+          "ref": "pt610"
+        },
+        "outerRadius": 14.3,
+        "innerRadius": 12.6
+      },
+      "createdIds": [
+        "ci612",
+        "ci613"
+      ],
+      "label": "Ring",
+      "at": 1793561613395
+    },
+    {
+      "opId": "op614",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch607",
+        "distance": "92",
+        "name": "Steerer"
+      },
+      "createdIds": [
+        "ext615"
+      ],
+      "label": "Extrude",
+      "at": 1793561613412
+    },
+    {
+      "opId": "op616",
+      "type": "component.create",
+      "params": {
+        "name": "Spacer",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp617"
+      ],
+      "label": "New component",
+      "at": 1793561613427
+    },
+    {
+      "opId": "op618",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": -30,
+        "component": "cmp617",
+        "name": "Spacer"
+      },
+      "createdIds": [
+        "sketch619",
+        "pt620"
+      ],
+      "label": "Create sketch",
+      "at": 1793561613446
+    },
+    {
+      "opId": "op621",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch619",
+        "x": 0,
+        "y": "-stemLen"
+      },
+      "createdIds": [
+        "pt622"
+      ],
+      "label": "Add point",
+      "at": 1793561613455
+    },
+    {
+      "opId": "op623",
+      "type": "sketch.addRing",
+      "params": {
+        "sketch": "sketch619",
+        "center": {
+          "ref": "pt622"
+        },
+        "outerRadius": 17.5,
+        "innerRadius": 14.4
+      },
+      "createdIds": [
+        "ci624",
+        "ci625"
+      ],
+      "label": "Ring",
+      "at": 1793561613474
+    },
+    {
+      "opId": "op626",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch619",
+        "distance": "10",
+        "name": "Spacer"
+      },
+      "createdIds": [
+        "ext627"
+      ],
+      "label": "Extrude",
+      "at": 1793561613488
+    },
+    {
+      "opId": "op628",
+      "type": "component.create",
+      "params": {
+        "name": "Top cap",
+        "parent": "cmp32"
+      },
+      "createdIds": [
+        "cmp629"
+      ],
+      "label": "New component",
+      "at": 1793561613498
+    },
+    {
+      "opId": "op630",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "offset": 20,
+        "component": "cmp629",
+        "name": "Top cap"
+      },
+      "createdIds": [
+        "sketch631",
+        "pt632"
+      ],
+      "label": "Create sketch",
+      "at": 1793561613509
+    },
+    {
+      "opId": "op633",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch631",
+        "x": 0,
+        "y": "-stemLen"
+      },
+      "createdIds": [
+        "pt634"
+      ],
+      "label": "Add point",
+      "at": 1793561613517
+    },
+    {
+      "opId": "op635",
+      "type": "sketch.addCircle",
+      "params": {
+        "sketch": "sketch631",
+        "center": {
+          "ref": "pt634"
+        },
+        "radius": 17
+      },
+      "createdIds": [
+        "ci636"
+      ],
+      "label": "Add circle",
+      "at": 1793561613524
+    },
+    {
+      "opId": "op637",
+      "type": "feature.extrude",
+      "params": {
+        "sketch": "sketch631",
+        "distance": "5",
+        "name": "Top cap"
+      },
+      "createdIds": [
+        "ext638"
+      ],
+      "label": "Extrude",
+      "at": 1793561613534
+    },
+    {
+      "opId": "op639",
+      "type": "feature.fillet",
+      "params": {
+        "radius": "2",
+        "body": "ext638",
+        "edges": {
+          "inPlane": {
+            "plane": "XY",
+            "offset": 25
+          }
+        },
+        "name": "Top cap round"
+      },
+      "createdIds": [
+        "fil640"
+      ],
+      "label": "Fillet edges",
+      "at": 1793561613550
+    },
+    {
+      "opId": "op641",
+      "type": "material.create",
+      "params": {
+        "name": "Brushed aluminium",
+        "kind": "metal",
+        "finish": "brushed",
+        "color": "#d3d6da",
+        "textureAxis": "x"
+      },
+      "createdIds": [
+        "mat642"
+      ],
+      "label": "Create material",
+      "at": 1793561613565
+    },
+    {
+      "opId": "op643",
+      "type": "material.create",
+      "params": {
+        "name": "Black anodised aluminium",
+        "kind": "metal",
+        "finish": "satin",
+        "color": "#2a2c30",
+        "roughness": 0.3
+      },
+      "createdIds": [
+        "mat644"
+      ],
+      "label": "Create material",
+      "at": 1793561613581
+    },
+    {
+      "opId": "op645",
+      "type": "material.create",
+      "params": {
+        "name": "Red anodised aluminium",
+        "kind": "metal",
+        "finish": "satin",
+        "color": "#c0261c",
+        "roughness": 0.24
+      },
+      "createdIds": [
+        "mat646"
+      ],
+      "label": "Create material",
+      "at": 1793561613598
+    },
+    {
+      "opId": "op647",
+      "type": "material.create",
+      "params": {
+        "name": "Titanium",
+        "kind": "metal",
+        "finish": "satin",
+        "color": "#b9b3a8",
+        "roughness": 0.2
+      },
+      "createdIds": [
+        "mat648"
+      ],
+      "label": "Create material",
+      "at": 1793561613608
+    },
+    {
+      "opId": "op649",
+      "type": "material.create",
+      "params": {
+        "name": "Grip rubber",
+        "kind": "rubber",
+        "color": "#232427",
+        "texture": "hex",
+        "textureScale": 3.2,
+        "textureWrap": true
+      },
+      "createdIds": [
+        "mat650"
+      ],
+      "label": "Create material",
+      "at": 1793561613615
+    },
+    {
+      "opId": "op651",
+      "type": "material.assign",
+      "params": {
+        "material": "mat642",
+        "component": "cmp34"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613624
+    },
+    {
+      "opId": "op652",
+      "type": "material.assign",
+      "params": {
+        "material": "mat644",
+        "component": "cmp605"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613636
+    },
+    {
+      "opId": "op653",
+      "type": "material.assign",
+      "params": {
+        "material": "mat644",
+        "component": "cmp617"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613651
+    },
+    {
+      "opId": "op654",
+      "type": "material.assign",
+      "params": {
+        "material": "mat650",
+        "component": "cmp47"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613658
+    },
+    {
+      "opId": "op655",
+      "type": "material.assign",
+      "params": {
+        "material": "mat646",
+        "component": "cmp99"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613666
+    },
+    {
+      "opId": "op656",
+      "type": "material.assign",
+      "params": {
+        "material": "mat646",
+        "component": "cmp113"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613673
+    },
+    {
+      "opId": "op657",
+      "type": "material.assign",
+      "params": {
+        "material": "mat650",
+        "component": "cmp126"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613681
+    },
+    {
+      "opId": "op658",
+      "type": "material.assign",
+      "params": {
+        "material": "mat646",
+        "component": "cmp178"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613692
+    },
+    {
+      "opId": "op659",
+      "type": "material.assign",
+      "params": {
+        "material": "mat646",
+        "component": "cmp192"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613714
+    },
+    {
+      "opId": "op660",
+      "type": "material.assign",
+      "params": {
+        "material": "mat646",
+        "component": "cmp205"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613728
+    },
+    {
+      "opId": "op661",
+      "type": "material.assign",
+      "params": {
+        "material": "mat646",
+        "component": "cmp361"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613741
+    },
+    {
+      "opId": "op662",
+      "type": "material.assign",
+      "params": {
+        "material": "mat646",
+        "component": "cmp629"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613748
+    },
+    {
+      "opId": "op663",
+      "type": "material.assign",
+      "params": {
+        "material": "mat648",
+        "component": "cmp460"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793561613756
+    }
+  ],
+  "timelineGroups": [],
+  "hidden": [
+    "sketch36",
+    "sketch39",
+    "sketch49",
+    "sketch52",
+    "sketch61",
+    "sketch70",
+    "sketch79",
+    "sketch88",
+    "sketch101",
+    "sketch104",
+    "sketch115",
+    "sketch118",
+    "sketch128",
+    "sketch131",
+    "sketch140",
+    "sketch149",
+    "sketch158",
+    "sketch167",
+    "sketch180",
+    "sketch183",
+    "sketch194",
+    "sketch197",
+    "sketch209",
+    "sketch222",
+    "sketch225",
+    "sketch257",
+    "sketch289",
+    "sketch323",
+    "sketch363",
+    "sketch401",
+    "sketch409",
+    "sketch426",
+    "sketch434",
+    "sketch451",
+    "sketch462",
+    "sketch479",
+    "sketch496",
+    "sketch607",
+    "sketch619",
+    "sketch631",
+    "pl207"
+  ]
+}

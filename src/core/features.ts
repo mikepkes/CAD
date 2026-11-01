@@ -10,15 +10,16 @@ import {
   CadDocument, ExtrudeFeature, FeatureDef, GearFeature, GearDim, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
-import { extractRegions, extractOpenPath, extractChains, regionAt, Region, Profile, Loop } from "./geometry/profile";
+import { extractRegions, extractOpenPath, extractChains, regionAt, loopPolygon, Region, Profile, Loop } from "./geometry/profile";
 import { FaceRef } from "../sketch/types";
 import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
   faceGeoms, faceKinds, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape, keepHalfSpace,
-  readNurbsBrep, chainWire, surfaceExtrude, surfaceRevolve, surfaceLoft, surfaceSweep, planarPatch, sewShapes, thickenShape, offsetSurface, untrimFaces, hasSolid,
+  readNurbsBrep, chainWire, surfaceExtrude, surfaceRevolve, surfaceLoft, surfaceSweep, planarPatch, sewShapes, thickenShape, offsetSurface, untrimFaces, hasSolid, buildSpineSweep, SpineSweepSpec,
 } from "./occ/kernel";
+import { controlSpine, throughSpine, spineTable, paramAtLength, sectionPlane, easedLaw, curveDerivs } from "./geometry/spine";
 import { genericNames, extrudeNames, revolveNames, holeCutterNames, inheritNames, copyNames, edgeNamesOf } from "./naming";
 import { stableJson, contentHash } from "./contentKey";
 import { standardProfile, profileLabel, profileReach, profileHalfWidth, memberLines, memberJoints, ProfileDims } from "./weldment";
@@ -356,10 +357,11 @@ function combineBody(op: BooleanOp, target: Body, tool: Named, f: FeatureDef & {
 }
 
 /** Start a new body, or fold the tool into the target per the feature's boolean op. */
-function addOrCombine(f: FeatureDef & { operation?: BooleanOp; body?: string; requireEffect?: boolean }, tool: Named, bodies: Body[], out: Record<string, SolidEval>, label: string) {
+function addOrCombine(f: FeatureDef & { operation?: BooleanOp; body?: string; requireEffect?: boolean }, tool: Named, bodies: Body[], out: Record<string, SolidEval>, label: string, sketchId = "") {
   const op = f.operation ?? "new";
   const target = op !== "new" && bodies.length ? pickBody(bodies, f.body, label) : undefined;
-  if (!target) { bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape: tool.shape, faceNames: tool.names }); return; }
+  // a new body belongs to the component of the sketch it was built from (its material, its visibility)
+  if (!target) { bodies.push({ id: f.id, name: f.name, sketchId, distance: 0, shape: tool.shape, faceNames: tool.names }); return; }
   combineBody(op, target, tool, f, label, out);
 }
 
@@ -1115,8 +1117,17 @@ function applyHole(scope: Scope, f: HoleFeature, bodies: Body[], out: Record<str
 }
 
 /** Sweep the feature's profile along its path sketch, then combine it. */
-function applySweep(doc: CadDocument, f: SweepFeature, bodies: Body[], out: Record<string, SolidEval>) {
+function applySweep(doc: CadDocument, scope: Scope, f: SweepFeature, bodies: Body[], out: Record<string, SolidEval>) {
   let tool: Named;
+  if (f.path3d) {
+    let spec: SpineSweepSpec;
+    try { spec = spineSweepSpec(doc, scope, f); tool = named(buildSpineSweep(spec), f.id); }
+    catch (e) { out[f.id] = { ...modifierRow(f), sketchId: f.profileSketch, error: kernelErrorMessage(e) }; return; }
+    const parts = (f.operation ?? "new") === "new" ? straightSweepHull(spec) : undefined;
+    if (parts) { bodies.push({ id: f.id, name: f.name, sketchId: f.profileSketch, distance: 0, shape: tool.shape, faceNames: tool.names, hull: { shape: tool.shape, parts } }); return; }
+    addOrCombine(f, tool, bodies, out, "sweep", f.profileSketch);
+    return;
+  }
   try {
     const profileSk = doc.sketches[f.profileSketch];
     const pathSk = doc.sketches[f.pathSketch];
@@ -1131,7 +1142,103 @@ function applySweep(doc: CadDocument, f: SweepFeature, bodies: Body[], out: Reco
     out[f.id] = { ...modifierRow(f), error: kernelErrorMessage(e) };
     return;
   }
-  addOrCombine(f, tool, bodies, out, "sweep");
+  addOrCombine(f, tool, bodies, out, "sweep", f.profileSketch);
+}
+
+/** The annulus that holds a sweep along a STRAIGHT 3D path (a grip, a collar, a
+ *  plug), for the collision check to rule pairs out without a boolean: its
+ *  sections are drawn about the axis, so out to their farthest point, in to the
+ *  nearest point of a hole the axis runs through (scaled by the law's extremes).
+ *  Undefined for a bent path. */
+function straightSweepHull(spec: SpineSweepSpec): Hull[] | undefined {
+  const P = spec.spine.poles, n = P.length / 3;
+  const a = { x: P[0], y: P[1], z: P[2] }, b = { x: P[3 * n - 3], y: P[3 * n - 2], z: P[3 * n - 1] };
+  const L = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+  if (!(L > 1e-9)) return undefined;
+  const d = { x: (b.x - a.x) / L, y: (b.y - a.y) / L, z: (b.z - a.z) / L };
+  for (let i = 0; i < n; i++) {
+    const w = { x: P[3 * i] - a.x, y: P[3 * i + 1] - a.y, z: P[3 * i + 2] - a.z }, t = w.x * d.x + w.y * d.y + w.z * d.z;
+    if (Math.hypot(w.x - t * d.x, w.y - t * d.y, w.z - t * d.z) > 1e-6) return undefined;
+  }
+  const kMax = spec.law ? Math.max(...spec.law.value) : 1, kMin = spec.law ? Math.min(...spec.law.value) : 1;
+  let rOut = 0, rIn = Infinity;
+  for (const s of spec.sections) {
+    for (const p of loopPolygon(s.region.outer)) rOut = Math.max(rOut, Math.hypot(p.x, p.y));
+    const bore = s.region.holes.map(loopPolygon).find((poly) => pointInPolygon({ x: 0, y: 0 }, poly));
+    rIn = Math.min(rIn, bore ? Math.min(...bore.map((p) => Math.hypot(p.x, p.y))) : 0);
+  }
+  // the polygons are sampled on the curves: allow for what runs between the samples
+  return [{ o: a, d, rIn: Math.max(0, rIn * kMin * Math.cos(Math.PI / 24) - 0.01), rOut: rOut * kMax * 1.01 + 0.01, z0: 0, z1: L }];
+}
+
+function pointInPolygon(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/** A sweep's 3D path resolved: its spine in world space (the points framed by
+ *  the path sketch's plane), the sections placed square to it, the scale law. */
+export function spineSweepSpec(doc: CadDocument, scope: Scope, f: SweepFeature): SpineSweepSpec {
+  const p3 = f.path3d!;
+  const frameSk = doc.sketches[f.pathSketch];
+  if (!frameSk) throw new Error(`sweep: no path sketch "${f.pathSketch}"`);
+  const wp = resolveSketchPlane(frameSk);
+  const num = (e: string, what: string, extra?: Scope): number => {
+    const v = compileExpr(e).eval(extra ? { ...scope, ...extra } : scope);
+    if (!Number.isFinite(v)) throw new Error(`sweep: ${what} "${e}" is not a number`);
+    return v;
+  };
+  const pts = p3.points.map((q, i) => {
+    const x = num(q.x, `point ${i + 1} x`), y = num(q.y, `point ${i + 1} y`), z = num(q.z, `point ${i + 1} z`);
+    return { x: wp.origin.x + x * wp.u.x + y * wp.v.x + z * wp.normal.x, y: wp.origin.y + x * wp.u.y + y * wp.v.y + z * wp.normal.y, z: wp.origin.z + x * wp.u.z + y * wp.v.z + z * wp.normal.z };
+  });
+  if (pts.length < 2) throw new Error("sweep: a 3D path needs at least two points");
+  const spine = p3.through ? throughSpine(pts) : controlSpine(pts);
+  const tab = spineTable(spine);
+  const extra = { pathLength: tab.length };
+  const up = p3.up ?? wp.normal;
+  const regionOf = (sid: string) => {
+    const sk = doc.sketches[sid];
+    if (!sk) throw new Error(`sweep: no section sketch "${sid}"`);
+    const regions = extractRegions(sk);
+    if (!regions.length) throw new Error(`sweep: section sketch "${sk.name}" has no closed region`);
+    return regions[0];
+  };
+  const placed = (f.sections?.length ? f.sections : [{ sketch: f.profileSketch, at: "0" }])
+    .map((s, i) => ({ s: num(s.at, `section ${i + 1} position`, extra), region: regionOf(s.sketch) }))
+    .sort((a, b) => a.s - b.s);
+  for (let i = 1; i < placed.length; i++) if (placed[i].s - placed[i - 1].s < 1e-3) throw new Error("sweep: two sections sit at the same place on the path");
+  let prev: WorkPlane | undefined;
+  const sections = placed.map((p) => { prev = sectionPlane(spine, paramAtLength(tab, p.s), up, prev); return { wp: prev, region: p.region }; });
+  let law: SpineSweepSpec["law"];
+  if (f.scale?.length) {
+    if (placed.length > 1) throw new Error("sweep: a scale law takes one profile, not several sections");
+    const stations = f.scale.map((st, i) => ({ at: num(st.at, `scale station ${i + 1}`, extra), value: num(st.value, `scale ${i + 1}`, extra) }));
+    if (stations.some((st) => !(st.value > 0))) throw new Error("sweep: a scale must be above zero");
+    const value = easedLaw(stations);
+    const n = 160, t: number[] = [], v: number[] = [];
+    for (let k = 0; k <= n; k++) { const s = (tab.length * k) / n; t.push(paramAtLength(tab, s)); v.push(value(s)); }
+    // the single profile sits at the path's start, at the law's first scale
+    law = { t, value: v };
+  }
+  // the frame the sections ride: a guide curve a fixed height "up" off the spine (C2 like it),
+  // so every section stays square to the spine, upright, and the surface stays C2
+  // (lifted by half the tightest bend's radius at most, so the guide never folds over itself)
+  const guidePts: Vec3[] = [];
+  let gp: WorkPlane | undefined, kMax = 0;
+  const nG = Math.max(24, 6 * (spine.poles.length / 3));
+  for (let k = 0; k <= 4 * nG; k++) {
+    const { d1, d2 } = curveDerivs(spine, k / (4 * nG));
+    const c = { x: d1.y * d2.z - d1.z * d2.y, y: d1.z * d2.x - d1.x * d2.z, z: d1.x * d2.y - d1.y * d2.x };
+    kMax = Math.max(kMax, Math.hypot(c.x, c.y, c.z) / Math.max(1e-12, Math.hypot(d1.x, d1.y, d1.z) ** 3));
+  }
+  const lift = Math.max(0.5, Math.min(50, kMax > 0 ? 0.5 / kMax : 50));
+  for (let k = 0; k <= nG; k++) { gp = sectionPlane(spine, paramAtLength(tab, (tab.length * k) / nG), up, gp); guidePts.push({ x: gp.origin.x + lift * gp.v.x, y: gp.origin.y + lift * gp.v.y, z: gp.origin.z + lift * gp.v.z }); }
+  return { spine, up, sections, law, guide: throughSpine(guidePts) };
 }
 
 /** Loft a solid through the feature's ordered profile sketches, then combine it. */
@@ -1151,7 +1258,7 @@ function applyLoft(doc: CadDocument, f: LoftFeature, bodies: Body[], out: Record
     out[f.id] = { ...modifierRow(f), error: kernelErrorMessage(e) };
     return;
   }
-  addOrCombine(f, tool, bodies, out, "loft");
+  addOrCombine(f, tool, bodies, out, "loft", f.sketchIds[0]);
 }
 
 /** Topological names of a body's edges (aligned with its shape's edges). */
@@ -1381,7 +1488,7 @@ function featureSketches(f: FeatureDef): string[] {
   switch (f.kind) {
     case "extrude": case "revolve": case "gear": return [f.sketchId];
     case "loft": return f.sketchIds;
-    case "sweep": return [f.profileSketch, f.pathSketch];
+    case "sweep": return [f.profileSketch, f.pathSketch, ...(f.sections ?? []).map((s) => s.sketch)];
     case "member": return f.profile.sketch ? [f.sketchId, f.profile.sketch] : [f.sketchId];
     case "sheet": case "fold": return [f.sketchId];
     case "surface": return [...(f.sketchId ? [f.sketchId] : []), ...(f.sketchIds ?? []), ...(f.pathSketch ? [f.pathSketch] : [])];
@@ -1554,7 +1661,7 @@ function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Bod
     case "hole": applyHole(scope, f, bodies, out); break;
     case "thread": applyThread(f, bodies, out); break;
     case "loft": applyLoft(doc, f, bodies, out); break;
-    case "sweep": applySweep(doc, f, bodies, out); break;
+    case "sweep": applySweep(doc, scope, f, bodies, out); break;
     case "mirror": applyMirror(doc, f, bodies, out); break;
     case "fillet":
     case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;

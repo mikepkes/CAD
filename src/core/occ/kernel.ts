@@ -214,6 +214,130 @@ export function buildLoftSolid(profiles: { wp: WorkPlane; region: Profile }[], r
   return first.loftWith(rest, { ruled });
 }
 
+/** What a sweep along a 3D spine is built from: the spine (a B-spline), the
+ *  direction the sections keep upright toward, the sections — each a region on
+ *  the plane square to the spine where it sits — and, for a single section, an
+ *  optional scale law (samples of value against spine parameter). */
+export interface SpineSweepSpec {
+  spine: NurbsCurveData;
+  up: Vec3;
+  sections: { wp: WorkPlane; region: Profile }[];
+  law?: { t: number[]; value: number[] };
+  /** A guide curve the sections' up points toward: the spine lifted along each section's up (sectionPlane's v). */
+  guide?: NurbsCurveData;
+}
+
+/** Sweep along a 3D spine (BRepOffsetAPI_MakePipeShell). Each section stays
+ *  square to the spine with its up toward the guide curve (the spine lifted
+ *  along each section's up), so nothing twists and the surface is C2; several
+ *  sections morph smoothly into each other, one section can be scaled by a law.
+ *  Not OCC's other trihedra: a fixed binormal keeps every section parallel to
+ *  it (upright), so where the spine climbs the sections lean off square, a round
+ *  tube thins and its end cuts slant; the corrected Frenet frame loses its way
+ *  on straight runs (no normal there) and swells or fails; the discrete one is
+ *  square but only C0 between its spans. Each loop runs
+ *  as its own pipe: the outer one is the solid, every hole (matched by order
+ *  across the sections) is swept the same way and cut out. */
+const SWEEP_TOL = 0.01;
+
+/** A section loop as a wire on its plane. A circle or an ellipse is ONE closed
+ *  edge (the exact conic) starting on its major axis — the drawing API makes
+ *  two halves — so the swept tube is one smooth face with a seam, not two faces
+ *  meeting along a drawn edge, and every round section starts at the same place. */
+function sectionWire(oc: OcAny, loop: Loop, wp: WorkPlane, keep: { delete(): void }[]): unknown {
+  const round = loop.circle ?? loop.ellipse;
+  if (round) {
+    const c = round.center, rot = loop.ellipse?.rotation ?? 0;
+    let rx = loop.circle ? loop.circle.r : loop.ellipse!.rx, ry = loop.circle ? loop.circle.r : loop.ellipse!.ry;
+    // the major axis is the curve's x (and where it starts)
+    let ang = rot;
+    if (ry > rx) { [rx, ry] = [ry, rx]; ang += Math.PI / 2; }
+    const ux = Math.cos(ang), uy = Math.sin(ang);
+    const P = new oc.gp_Pnt(wp.origin.x + c.x * wp.u.x + c.y * wp.v.x, wp.origin.y + c.x * wp.u.y + c.y * wp.v.y, wp.origin.z + c.x * wp.u.z + c.y * wp.v.z);
+    const N = new oc.gp_Dir(wp.normal.x, wp.normal.y, wp.normal.z);
+    const X = new oc.gp_Dir(ux * wp.u.x + uy * wp.v.x, ux * wp.u.y + uy * wp.v.y, ux * wp.u.z + uy * wp.v.z);
+    const ax = new oc.gp_Ax2(P, N, X);
+    const geom = Math.abs(rx - ry) < 1e-9 ? new oc.gp_Circ(ax, rx) : new oc.gp_Elips(ax, rx, ry);
+    const mkE = new oc.BRepBuilderAPI_MakeEdge(geom);
+    const mkW = new oc.BRepBuilderAPI_MakeWire(mkE.Edge());
+    const w = mkW.Wire();
+    for (const x of [P, N, X, ax, geom, mkE, mkW]) x.delete();
+    keep.push(w);
+    return w;
+  }
+  const w = (loopToDrawing(loop).sketchOnPlane(planeFor(wp)) as unknown as { wire: Wire }).wire;
+  keep.push(w as unknown as { delete(): void });
+  return (w as unknown as { wrapped: unknown }).wrapped;
+}
+export function buildSpineSweep(spec: SpineSweepSpec): Shape3D {
+  const oc = getOC() as OcAny;
+  const { sections } = spec;
+  if (!sections.length) throw new Error("a sweep needs a section");
+  if (spec.law && sections.length > 1) throw new Error("a scale law takes one section, not several");
+  const holes = sections[0].region.holes.length;
+  if (sections.some((s) => s.region.holes.length !== holes)) throw new Error("every section needs the same number of holes");
+
+  const curve = ocCurve(oc, spec.spine);
+  const mkEdge = new oc.BRepBuilderAPI_MakeEdge(curve);
+  const mkWire = new oc.BRepBuilderAPI_MakeWire(mkEdge.Edge());
+  const spine = mkWire.Wire();
+  mkEdge.delete(); mkWire.delete();
+
+  const law = (() => {
+    if (!spec.law) return undefined;
+    const n = spec.law.t.length;
+    const pts = new oc.NCollection_Array1_gp_Pnt2d(1, n);
+    for (let i = 0; i < n; i++) { const q = new oc.gp_Pnt2d(spec.law.t[i], spec.law.value[i]); pts.SetValue(i + 1, q); q.delete(); }
+    const L = new oc.Law_Interpol();
+    L.Set(pts, false);
+    pts.delete();
+    return L;
+  })();
+
+  // the sections' frame: the guide curve when there is one (smooth: the surface comes out C2),
+  // else OCC's discrete trihedron (square too, but only C0 between its spans)
+  const guide = (() => {
+    if (!spec.guide) return undefined;
+    const gc = ocCurve(oc, spec.guide), ge = new oc.BRepBuilderAPI_MakeEdge(gc), gw = new oc.BRepBuilderAPI_MakeWire(ge.Edge());
+    const w = gw.Wire();
+    gc.delete(); ge.delete(); gw.delete();
+    return w;
+  })();
+
+  const pipe = (loopOf: (r: Profile) => Loop): Shape3D => {
+    const b = new oc.BRepOffsetAPI_MakePipeShell(spine);
+    const wires: { delete(): void }[] = [];
+    try {
+      if (guide) b.SetMode(guide, true, oc.BRepFill_TypeOfContact.BRepFill_NoContact);
+      else b.SetDiscreteMode();
+      // to 10 µm, not OCC's 0.1 µm: a surface a fifth the size, that booleans run through in a second, not tens
+      b.SetTolerance(SWEEP_TOL, SWEEP_TOL, 1e-3);
+      for (const s of sections) {
+        const raw = sectionWire(oc, loopOf(s.region), s.wp, wires);
+        if (law) b.SetLaw(raw, law, false, false);
+        else b.Add(raw, false, false);
+      }
+      b.Build();
+      if (!b.IsDone()) throw new Error("the sweep along the 3D path failed: check that the sections fit the path's bends");
+      if (!b.MakeSolid()) throw new Error("the swept sections don't close into a solid");
+      return outwardSolid(cast(b.Shape() as never) as unknown as Shape3D);
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : `the sweep along the 3D path failed (${kernelErrorMessage(e)})`);
+    } finally { b.delete(); freeAll(wires); }
+  };
+
+  try {
+    let solid = pipe((r) => r.outer);
+    for (let h = 0; h < holes; h++) {
+      const inner = pipe((r) => r.holes[h]);
+      const next = (solid as unknown as { cut: (o: Shape3D) => Shape3D }).cut(inner);
+      solid.delete(); inner.delete();
+      solid = next;
+    }
+    return solid;
+  } finally { law?.delete(); curve.delete(); guide?.delete(); }
+}
+
 /** Boolean-combine two solids. Consumes neither operand (caller frees them). */
 export function fuseShapes(a: Shape3D, b: Shape3D): Shape3D {
   return (a as unknown as { fuse: (o: Shape3D, opts?: unknown) => Shape3D }).fuse(b);
@@ -270,15 +394,99 @@ export function mirrorShape(shape: Shape3D, wp: WorkPlane): Shape3D {
  *  surface. */
 const EDGE_MESH = { tolerance: 0.05, angularTolerance: 0.25 };
 
+/** Seam edges — where a closed face (a cylinder's side, a swept tube) meets
+ *  itself — sampled as polylines. Not a crease: nothing to draw. */
+function seamPolylines(solid: Shape3D): number[][][] {
+  const oc = getOC() as OcAny;
+  const out: number[][][] = [];
+  const faces = new oc.TopExp_Explorer((solid as unknown as { wrapped: unknown }).wrapped, oc.TopAbs_ShapeEnum.TopAbs_FACE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  try {
+    for (; faces.More(); faces.Next()) {
+      const face = oc.TopoDS.Face(faces.Current());
+      const edges = new oc.TopExp_Explorer(face, oc.TopAbs_ShapeEnum.TopAbs_EDGE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+      try {
+        for (; edges.More(); edges.Next()) {
+          const edge = oc.TopoDS.Edge(edges.Current());
+          if (!oc.BRep_Tool.IsClosed(edge, face)) continue;
+          const c = new oc.BRepAdaptor_Curve(edge);
+          try {
+            const a = c.FirstParameter(), b = c.LastParameter(), pts: number[][] = [];
+            for (let i = 0; i <= 48; i++) { const p = c.Value(a + ((b - a) * i) / 48); pts.push([p.X(), p.Y(), p.Z()]); p.delete(); }
+            out.push(pts);
+          } finally { c.delete(); }
+        }
+      } finally { edges.delete(); }
+    }
+  } catch { return out; } finally { faces.delete(); }
+  return out;
+}
+
+/** The edge polylines without the seams (each edge's segments are a group; a group whose
+ *  every point lies on a seam goes). */
+function withoutSeams(solid: Shape3D, e: { lines: number[]; edgeGroups?: { start: number; count: number }[] }): Float32Array {
+  const seams = e.edgeGroups?.length ? seamPolylines(solid) : [];
+  if (!seams.length) return Float32Array.from(e.lines);
+  const L = e.lines;
+  const near = (x: number, y: number, z: number) => seams.some((s) => {
+    for (let i = 0; i + 1 < s.length; i++) {
+      const [a, b] = [s[i], s[i + 1]];
+      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [x - a[0], y - a[1], z - a[2]];
+      const dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+      const t = dd > 0 ? Math.max(0, Math.min(1, (w[0] * d[0] + w[1] * d[1] + w[2] * d[2]) / dd)) : 0;
+      if (Math.hypot(w[0] - t * d[0], w[1] - t * d[1], w[2] - t * d[2]) < 0.1) return true;
+    }
+    return false;
+  });
+  const keep: number[] = [];
+  for (const g of e.edgeGroups!) {
+    const pts = [g.start, g.start + Math.floor(g.count / 2), g.start + g.count - 1];
+    if (pts.every((k) => near(L[3 * k], L[3 * k + 1], L[3 * k + 2]))) continue;
+    for (let k = 3 * g.start; k < 3 * (g.start + g.count); k++) keep.push(L[k]);
+  }
+  return Float32Array.from(keep);
+}
+
+/** Vertex normals with the seams healed: the mesher gives each side of a seam
+ *  (where a closed face meets itself) its own vertices, and each takes its
+ *  normal from its own side's triangles only, so a smooth tube shades with a
+ *  faint crease along its seam. Vertices at one position whose normals agree to
+ *  within 20° (a seam, or two faces meeting tangentially) share their mean; a
+ *  real edge (normals further apart) keeps its crease. */
+function smoothSeamNormals(vertices: ArrayLike<number>, normals: ArrayLike<number>): Float32Array {
+  const out = Float32Array.from(normals);
+  const n = Math.floor(vertices.length / 3);
+  if (normals.length !== vertices.length) return out;
+  const at = new Map<string, number[]>();
+  for (let i = 0; i < n; i++) {
+    const key = `${Math.round(vertices[3 * i] * 1e4)},${Math.round(vertices[3 * i + 1] * 1e4)},${Math.round(vertices[3 * i + 2] * 1e4)}`;
+    const list = at.get(key);
+    if (list) list.push(i); else at.set(key, [i]);
+  }
+  const COS = Math.cos((20 * Math.PI) / 180);
+  for (const list of at.values()) {
+    if (list.length < 2) continue;
+    for (const i of list) {
+      let x = 0, y = 0, z = 0;
+      for (const j of list) {
+        const d = normals[3 * i] * normals[3 * j] + normals[3 * i + 1] * normals[3 * j + 1] + normals[3 * i + 2] * normals[3 * j + 2];
+        if (d >= COS) { x += normals[3 * j]; y += normals[3 * j + 1]; z += normals[3 * j + 2]; }
+      }
+      const m = Math.hypot(x, y, z) || 1;
+      out[3 * i] = x / m; out[3 * i + 1] = y / m; out[3 * i + 2] = z / m;
+    }
+  }
+  return out;
+}
+
 /** Tessellate a solid into a display mesh. Does NOT free the shape. */
 export function meshShape(solid: Shape3D): SolidMesh {
   const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 }) as ReturnType<Shape3D["mesh"]> & { faceGroups?: { start: number; count: number }[] };
-  const e = solid.meshEdges(EDGE_MESH);
+  const e = solid.meshEdges(EDGE_MESH) as { lines: number[]; edgeGroups?: { start: number; count: number }[] };
   return {
     positions: Float32Array.from(m.vertices),
-    normals: Float32Array.from(m.normals),
+    normals: smoothSeamNormals(m.vertices, m.normals),
     indices: Uint32Array.from(m.triangles),
-    edges: Float32Array.from(e.lines),
+    edges: withoutSeams(solid, e),
     triangleCount: m.triangles.length / 3,
     faceRanges: (m.faceGroups ?? []).flatMap((g) => [g.start, g.count]),
   };
@@ -1377,6 +1585,32 @@ export function analyzeShape(shape: Shape3D, mesh: SolidMesh, opts: { combs?: bo
       } finally { proj.delete(); }
     } catch { return undefined; } finally { P.delete(); }
   };
+  /** The mesher's surface parameters for a face's vertices (its triangulation's
+   *  UV nodes, in vertex order from the face's first vertex), when it kept them:
+   *  far cheaper than projecting every vertex back onto a complex surface. */
+  type UVNodes = { first: number; nodes: number; tri: { UVNode(i: number): { X(): number; Y(): number; delete(): void } } };
+  const meshUV = (fi: number, ranges: number[]): UVNodes | undefined => {
+    try {
+      const o = oc as unknown as { TopLoc_Location: new () => { delete(): void }; BRep_Tool: { Triangulation(f: unknown, l: unknown, purpose: number): ({ isNull?(): boolean; HasUVNodes(): boolean; NbNodes(): number } & UVNodes["tri"]) | null } };
+      const loc = new o.TopLoc_Location();
+      const tri = o.BRep_Tool.Triangulation(faces[fi].wrapped, loc, 0);
+      loc.delete();
+      if (!tri || tri.isNull?.() || !tri.HasUVNodes()) return undefined;
+      let first = Infinity;
+      for (let k = ranges[2 * fi]; k < ranges[2 * fi] + ranges[2 * fi + 1]; k++) first = Math.min(first, mesh.indices[k]);
+      return Number.isFinite(first) ? { first, nodes: tri.NbNodes(), tri } : undefined;
+    } catch { return undefined; }
+  };
+  const fromUV = (fi: number, m: UVNodes, vi: number, x: number, y: number, z: number): SurfacePoint | undefined => {
+    const node = vi - m.first + 1;
+    if (node < 1 || node > m.nodes) return undefined;
+    const q = m.tri.UVNode(node);
+    const sp = surfacePoint(adaptors[fi], oc, q.X(), q.Y(), reversed[fi]);
+    q.delete();
+    // it must be the vertex (the mesh is float32: allow 1e-3 relative)
+    if (!sp || Math.hypot(sp.p[0] - x, sp.p[1] - y, sp.p[2] - z) > 1e-3 * Math.max(1, Math.abs(x), Math.abs(y), Math.abs(z))) return undefined;
+    return sp;
+  };
   try {
     // ---- per-vertex principal curvature (each face's vertices are its own)
     const nv = mesh.positions.length / 3;
@@ -1387,14 +1621,18 @@ export function analyzeShape(shape: Shape3D, mesh: SolidMesh, opts: { combs?: bo
       if (planar[fi]) continue;
       const seen = new Set<number>();
       let s1 = 0, s2 = 0, n = 0;
+      const uv = meshUV(fi, ranges);
       for (let k = ranges[2 * fi]; k < ranges[2 * fi] + ranges[2 * fi + 1]; k++) {
         const vi = mesh.indices[k];
         if (seen.has(vi)) continue;
         seen.add(vi);
-        const sp = at(fi, mesh.positions[vi * 3], mesh.positions[vi * 3 + 1], mesh.positions[vi * 3 + 2]);
+        const x = mesh.positions[vi * 3], y = mesh.positions[vi * 3 + 1], z = mesh.positions[vi * 3 + 2];
+        // the vertex's own (u, v) from the mesher when it matches; else find it by projection
+        const sp = (uv ? fromUV(fi, uv, vi, x, y, z) : undefined) ?? at(fi, x, y, z);
         if (sp) { curvature[vi * 2] = sp.k1; curvature[vi * 2 + 1] = sp.k2; s1 += sp.k1; s2 += sp.k2; n++; }
         else singular.add(vi);
       }
+      try { (uv?.tri as unknown as { delete?(): void } | undefined)?.delete?.(); } catch { /* a borrowed handle */ }
       // show a singular vertex with its face's average (it doesn't count in the stats)
       for (const vi of seen) if (singular.has(vi) && n) { curvature[vi * 2] = s1 / n; curvature[vi * 2 + 1] = s2 / n; }
     }
@@ -1468,6 +1706,22 @@ export function analyzeShape(shape: Shape3D, mesh: SolidMesh, opts: { combs?: bo
     for (const a of adaptors) a.delete();
     freeAll(edges); freeAll(faces);
   }
+}
+
+/** How smooth each curved face is inside: whether its surface is C2 all over
+ *  (no knot where the curvature jumps), per face; planes count as smooth. */
+export function facesC2(shape: Shape3D): { type: string; c2: boolean }[] {
+  const oc = getOC() as OcAny;
+  const faces = facesOf(shape);
+  try {
+    return faces.map((f) => {
+      const type = String(f.geomType).toUpperCase();
+      if (type === "PLANE") return { type, c2: true };
+      const ad = new oc.BRepAdaptor_Surface(f.wrapped, true);
+      try { return { type, c2: ad.NbUIntervals(oc.GeomAbs_Shape.GeomAbs_C2) === 1 && ad.NbVIntervals(oc.GeomAbs_Shape.GeomAbs_C2) === 1 }; }
+      finally { ad.delete(); }
+    });
+  } finally { freeAll(faces); }
 }
 
 /** Exact (B-rep, not mesh) mass properties of a solid: volume (mm³), surface

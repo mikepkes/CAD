@@ -23,7 +23,16 @@ function rigidMat(R: Rigid): THREE.Matrix4 {
     0, 0, 0, 1,
   );
 }
-import { createMaterial, MaterialSpec, WoodFrame } from "./material";
+import { createMaterial, MaterialSpec, WoodFrame, wrapsTexture, wrapCoords } from "./material";
+
+/** Wrapped-texture coordinates per body mesh (see wrapCoords), computed once per mesh. */
+const WRAP = new WeakMap<Float32Array, Float32Array>();
+function addWrapCoords(geo: THREE.BufferGeometry, positions: Float32Array, normals: Float32Array, material: MaterialSpec | undefined) {
+  if (!wrapsTexture(material)) return;
+  let w = WRAP.get(positions);
+  if (!w) { w = wrapCoords(positions, normals); WRAP.set(positions, w); }
+  geo.setAttribute("aWrap", new THREE.BufferAttribute(w, 4));
+}
 import type { ThreadDecal } from "../core/document";
 import { fitDistance, fitTangent, orbitDirection } from "./orbitCamera";
 import { prefersReducedMotion } from "./motion";
@@ -1372,6 +1381,9 @@ export class SceneManager {
   private renderSolid(s: SolidView, faded: boolean, index: number) {
     const geo = this.solidGeometry(s);
     if (geo.getAttribute("color")) geo.deleteAttribute("color"); // a curvature display's colours, from an earlier update
+    // a texture wrapped round the part needs its wrap coordinates (cached per mesh); another material, none
+    if (wrapsTexture(s.material)) { if (!geo.getAttribute("aWrap")) addWrapCoords(geo, s.positions, s.normals, s.material); }
+    else if (geo.getAttribute("aWrap")) geo.deleteAttribute("aWrap");
     const clip = this.clipPlane ? [this.clipPlane] : null;
     // In section view each body gets its own colour so parts read apart; the
     // normal (un-sectioned) view keeps the assigned material, else a uniform tint.
@@ -1540,6 +1552,7 @@ export class SceneManager {
         this.animBuildInv.set(componentId, (W ? rigidMat(W) : new THREE.Matrix4()).invert());
       }
       const geo = solidGeometry(solid);
+      addWrapCoords(geo, solid.positions, solid.normals, solid.material);
       const mat = solid.material ? this.materialFor(solid) : new THREE.MeshStandardMaterial({ color: 0x7b86e0, metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide });
       const mesh = new THREE.Mesh(geo, mat);
       g.add(mesh);

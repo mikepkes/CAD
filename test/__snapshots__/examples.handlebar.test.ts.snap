@@ -1,0 +1,201 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bundled examples > public/examples/handlebar.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext216",
+    "max": [
+      22,
+      -1,
+      23.5,
+    ],
+    "min": [
+      -22,
+      -72,
+      -23.5,
+    ],
+    "name": "Stem",
+    "volume": 59686.7,
+  },
+  {
+    "body": "ext395",
+    "max": [
+      21,
+      19,
+      23.5,
+    ],
+    "min": [
+      -21,
+      1,
+      -23.5,
+    ],
+    "name": "Faceplate",
+    "volume": 17155.1,
+  },
+  {
+    "body": "ext477",
+    "max": [
+      18,
+      24,
+      23.5,
+    ],
+    "min": [
+      -18,
+      -11,
+      -23.5,
+    ],
+    "name": "Faceplate bolts",
+    "volume": 3196.6,
+  },
+  {
+    "body": "ext615",
+    "max": [
+      14.3,
+      -35.7,
+      17,
+    ],
+    "min": [
+      -14.3,
+      -64.3,
+      -75,
+    ],
+    "name": "Steerer",
+    "volume": 13217.2,
+  },
+  {
+    "body": "ext627",
+    "max": [
+      17.5,
+      -32.5,
+      -20,
+    ],
+    "min": [
+      -17.5,
+      -67.5,
+      -30,
+    ],
+    "name": "Spacer",
+    "volume": 3106.7,
+  },
+  {
+    "body": "ext638",
+    "max": [
+      17,
+      -33,
+      25,
+    ],
+    "min": [
+      -17,
+      -67,
+      20,
+    ],
+    "name": "Top cap",
+    "volume": 4450.3,
+  },
+  {
+    "body": "swp111",
+    "max": [
+      249.9,
+      6.4,
+      33.5,
+    ],
+    "min": [
+      235.6,
+      -25.2,
+      2.2,
+    ],
+    "name": "Collar R",
+    "volume": 3072,
+  },
+  {
+    "body": "swp124",
+    "max": [
+      386.2,
+      -19.1,
+      42.3,
+    ],
+    "min": [
+      377.8,
+      -43.5,
+      17.8,
+    ],
+    "name": "End plug R",
+    "volume": 1801.7,
+  },
+  {
+    "body": "swp176",
+    "max": [
+      -244.4,
+      5.3,
+      45.5,
+    ],
+    "min": [
+      -382.5,
+      -64.8,
+      2.7,
+    ],
+    "name": "Grip L",
+    "volume": 79350.3,
+  },
+  {
+    "body": "swp190",
+    "max": [
+      -235.6,
+      6.4,
+      33.5,
+    ],
+    "min": [
+      -249.9,
+      -25.2,
+      2.2,
+    ],
+    "name": "Collar L",
+    "volume": 3072,
+  },
+  {
+    "body": "swp203",
+    "max": [
+      -377.8,
+      -19.1,
+      42.3,
+    ],
+    "min": [
+      -386.2,
+      -43.5,
+      17.8,
+    ],
+    "name": "End plug L",
+    "volume": 1801.7,
+  },
+  {
+    "body": "swp45",
+    "max": [
+      382,
+      15.9,
+      41.1,
+    ],
+    "min": [
+      -382,
+      -42.1,
+      -15.9,
+    ],
+    "name": "Bar",
+    "volume": 407653,
+  },
+  {
+    "body": "swp97",
+    "max": [
+      382.5,
+      5.3,
+      45.5,
+    ],
+    "min": [
+      244.4,
+      -64.8,
+      2.7,
+    ],
+    "name": "Grip R",
+    "volume": 79350.3,
+  },
+]
+`;
