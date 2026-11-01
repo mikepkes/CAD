@@ -159,6 +159,7 @@ export function iconForCommand(type: string, params?: Record<string, unknown> | 
 const ACTIONS: Record<string, IconName> = {
   // global
   "view.frame": "view-frame",
+  "help.shortcuts": "keyboard",
   "view.iso": "view-iso",
   "view.front": "view-front",
   "view.top": "view-top",

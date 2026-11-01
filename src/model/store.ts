@@ -166,6 +166,8 @@ export interface AppState {
 
   // embedded agent (BYO Claude API key, stored in the browser only)
   settingsOpen: boolean;
+  /** The Settings field to open at ("apiKey" from the Agent drawer's "connect your key"). */
+  settingsFocus: "apiKey" | null;
   hotkeysOpen: boolean;
   agentOpen: boolean;
   apiKey: string;
@@ -354,7 +356,7 @@ export interface AppState {
   shareModel: (name?: string) => Promise<void>;
 
   // agent
-  setSettingsOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean, focus?: "apiKey") => void;
   setHotkeysOpen: (open: boolean) => void;
   toggleAgent: () => void;
   setApiKey: (key: string) => void;
@@ -665,6 +667,7 @@ export const useStore = create<AppState>((set, get) => {
     lastMessage: "Pick an origin plane to start a sketch.",
     activeComponentId: session.doc.rootComponentId,
     settingsOpen: false,
+    settingsFocus: null,
     hotkeysOpen: false,
     extrudeActive: false,
     extrudeTarget: null,
@@ -1016,7 +1019,7 @@ export const useStore = create<AppState>((set, get) => {
     openContextMenu: (x, y) => set({ contextMenu: { x, y } }),
     closeContextMenu: () => set({ contextMenu: null }),
 
-    setSettingsOpen: (open) => set({ settingsOpen: open }),
+    setSettingsOpen: (open, focus) => set({ settingsOpen: open, settingsFocus: open ? focus ?? null : null }),
     setHotkeysOpen: (open) => set({ hotkeysOpen: open }),
     ...agentActions,
     ...mcpActions,

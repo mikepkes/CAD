@@ -1218,10 +1218,16 @@ body.side-resizing { cursor: col-resize; user-select: none; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--line);
   font-weight: 600;
+  flex: none;
 }
+.modal-title { flex: 1; min-width: 0; margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.modal-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.modal-close { flex: none; }
+.modal:focus { outline: none; }
 .modal-body { padding: 14px; overflow-y: auto; min-height: 0; }
 .modal-foot {
   padding: 12px 14px;
@@ -1566,6 +1572,20 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .drawing-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 300px; gap: 14px; padding: 14px; }
 .drawing-sheet { min-height: 0; background: var(--paper); box-shadow: 0 0 0 1px var(--paper-edge); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .drawing-sheet svg { width: 100%; height: 100%; }
+/* A phone: the dialog fills the screen, ✕ stays on the title row, the actions wrap
+   onto their own row, and the sheet sits above the cut list (both scroll as one). */
+@media (max-width: 720px) {
+  .modal-backdrop:has(> .drawing-view) { align-items: stretch; }
+  .modal.drawing-view { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: none; }
+  .drawing-view .modal-head { flex-wrap: wrap; padding: 10px 12px; }
+  .drawing-view .modal-title { order: 0; }
+  .drawing-view .modal-close { order: 1; width: 40px; height: 40px; }
+  .drawing-view .modal-actions { order: 2; flex: 1 0 100%; justify-content: flex-start; }
+  .drawing-view .drawing-actions { flex-wrap: wrap; }
+  .drawing-body { display: flex; flex-direction: column; overflow-y: auto; padding: 10px; gap: 10px; }
+  .drawing-sheet { flex: none; aspect-ratio: 1120 / 790; height: auto; } /* the sheet's own proportions (core/drawings.ts) */
+  .drawing-parts { flex: none; overflow: visible; }
+}
 .drawing-parts { min-height: 0; overflow: auto; font-size: 12.5px; }
 .drawing-parts table { width: 100%; border-collapse: collapse; }
 .drawing-parts th { text-align: left; color: var(--text-dim); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); }
