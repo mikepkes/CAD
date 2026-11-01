@@ -26,3 +26,4 @@
 .wb-range { width: 100%; margin: 0; accent-color: var(--k-accent); }
 .wb-strip-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; min-height: 26px; }
 .wb-named { font-size: 11px; white-space: nowrap; }
+.wb-formula { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }

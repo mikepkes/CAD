@@ -281,6 +281,39 @@ body {
   padding-right: 8px;
   border-right: 1px solid var(--line);
 }
+.doc-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+}
+.doc-name input {
+  width: 120px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 3px 6px;
+}
+.doc-name input:hover,
+.doc-name input:focus {
+  border-color: var(--line);
+  background: var(--panel-2);
+  outline: none;
+}
+.doc-name input::placeholder {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.dirty-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
 .btn.ghost {
   background: transparent;
   border: 1px solid transparent;
@@ -294,15 +327,150 @@ body {
 }
 
 /* ---------- Constraint bar ---------- */
+/* the sketch toolbar on one row: drawing tools show their icon (the active one its name too; every one its name on
+   hover), and the row never wraps */
+.toolbar.sketching {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+/* narrower than it fits: wrap rather than push Finish Sketch off screen (the row height is still fixed while sketching) */
+@media (max-width: 1420px) {
+  .toolbar.sketching { flex-wrap: wrap; }
+}
+.toolbar.sketching .tool-group { gap: 3px; }
+.toolbar.sketching .construction-toggle .tool-label { display: none; }
+.toolbar.sketching .construction-toggle { padding: 7px 8px; }
+.toolbar.sketching .grid-controls { gap: 6px; }
+.toolbar.sketching .grid-size { width: 44px; }
+.toolbar.sketching .tool-group .tool:not(.active) .tool-label {
+  display: none;
+}
+.toolbar.sketching .tool-group .tool {
+  padding: 7px 7px;
+}
+.toolbar.sketching > * {
+  flex: none;
+}
+/* the file buttons are icons while sketching (their names stay as tooltips and accessible names) */
+.toolbar.sketching .file-menu .btn.with-icon,
+.toolbar.sketching > .btn.ghost.with-icon {
+  font-size: 0;
+  gap: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.toolbar.sketching .file-menu { gap: 0; margin-right: 0; padding-right: 4px; }
+.toolbar.sketching .doc-name input {
+  width: 84px;
+}
+.toolbar.sketching .brand-dim,
+.toolbar.sketching .brand {
+  font-size: 0;
+  margin-right: 0;
+}
+.toolbar.sketching .brand .logo {
+  font-size: 16px;
+}
+.toolbar.sketching .spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* the view cube, in the viewport's lower right corner */
+.view-cube {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 15;
+  user-select: none;
+}
+.view-cube svg { display: block; overflow: visible; }
+.vc-face polygon {
+  fill: var(--panel);
+  fill-opacity: 0.92;
+  stroke: var(--line);
+  stroke-width: 1;
+  cursor: pointer;
+}
+.vc-face text {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  fill: var(--text-dim);
+  pointer-events: none;
+}
+.vc-face:hover polygon, .vc-face:focus polygon { fill: var(--accent); fill-opacity: 0.25; outline: none; }
+.vc-face:focus { outline: none; }
+.vc-edge {
+  stroke: transparent;
+  stroke-width: 7;
+  stroke-linecap: round;
+  cursor: pointer;
+}
+.vc-edge:hover { stroke: var(--accent); stroke-opacity: 0.6; }
+.vc-corner {
+  fill: var(--panel-2);
+  stroke: var(--line);
+  cursor: pointer;
+}
+.vc-corner:hover { fill: var(--accent); }
+.constraint-bar-wrap {
+  position: relative;
+  z-index: 20;
+}
+/* one row, always the same height: the canvas below never moves when the selection changes */
 .constraint-bar {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 7px 12px;
+  padding: 0 12px;
   background: var(--panel-2);
   border-bottom: 1px solid var(--line);
+  flex-wrap: nowrap;
+  height: 44px;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.constraint-bar .cb-section { flex-wrap: nowrap; }
+.constraint-bar .chip { white-space: nowrap; flex: none; padding: 4px 9px; font-size: 12px; gap: 4px; }
+.constraint-bar .cb-section { gap: 4px; }
+.chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.chip:disabled:hover {
+  border-color: var(--line);
+  background: var(--panel);
+}
+/* what fits the selection floats over the canvas, under the bar */
+.cb-float {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 12px;
+  max-width: calc(50% - 90px);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+.cb-float > * {
+  pointer-events: auto;
+}
+.center-view > .cb-float {
+  top: 10px;
+}
+.cb-float .cb-section {
   flex-wrap: wrap;
-  min-height: 44px;
+}
+.cb-actions {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 5px 8px;
+  box-shadow: var(--shadow-toast);
 }
 .cb-section {
   display: flex;
@@ -370,6 +538,10 @@ body {
 }
 .active-hint {
   color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 10px;
 }
 .active-hint kbd {
   background: var(--panel-2);
@@ -685,6 +857,15 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .dof-dot.bad {
   background: var(--bad);
 }
+.tree-row.picked {
+  background: var(--hover);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.dof-dot.empty {
+  background: transparent;
+  border: 1px solid var(--text-dim);
+}
 
 /* parameters */
 .param-table {
@@ -865,6 +1046,12 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .solve-status.bad .status-dot {
   background: var(--bad);
 }
+.solve-status.empty {
+  color: var(--text-dim);
+}
+.solve-status.empty .status-dot {
+  border: 1px solid var(--text-dim);
+}
 .inspector-section {
   padding: 8px 12px;
   border-top: 1px solid var(--line);
@@ -1004,6 +1191,9 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 }
 .status-dof.bad {
   color: var(--bad);
+}
+.status-dof.empty {
+  color: var(--text-dim);
 }
 
 /* ---------- Timeline ---------- */
@@ -1194,6 +1384,11 @@ body.side-resizing { cursor: col-resize; user-select: none; }
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--line);
+}
+.toast-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 /* conflict highlighting */

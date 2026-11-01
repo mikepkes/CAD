@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { activeSketch, useStore } from "../model/store";
 import { availableOps, Op } from "../model/selectionOps";
 
@@ -22,6 +24,9 @@ const CONSTRAINT_TOOLS: { type: string; glyph: string; label: string; hint: stri
 ];
 
 export function ConstraintBar() {
+  // the selection's actions float over the canvas: drawn into the viewport's box once it exists
+  const [host, setHost] = useState<Element | null>(null);
+  useEffect(() => { setHost(document.querySelector(".center-view")); }, []);
   const mode = useStore((s) => s.mode);
   const dispatch = useStore((s) => s.dispatch);
   const clearSelection = useStore((s) => s.clearSelection);
@@ -53,8 +58,13 @@ export function ConstraintBar() {
   };
 
   const active = constraintTool ? CONSTRAINT_TOOLS.find((c) => c.type === constraintTool) : null;
+  // With something selected, only the constraints that fit it can be pressed; with nothing, each arms a pick mode.
+  const fits = (type: string) => selection.length === 0 || !!geoFor(type) || constraintTool === type;
 
+  // One row of fixed height: what depends on the selection floats over the canvas below it, so selecting never
+  // moves the canvas under the cursor (M8).
   return (
+    <div className="constraint-bar-wrap">
     <div className="constraint-bar">
       <div className="cb-section">
         <span className="cb-title">Constrain</span>
@@ -62,7 +72,8 @@ export function ConstraintBar() {
           <button
             key={c.type}
             className={`chip ${constraintTool === c.type ? "armed" : geoFor(c.type) ? "ready" : ""}`}
-            title={`${c.label} — ${c.hint}`}
+            title={fits(c.type) ? `${c.label} — ${c.hint}` : `${c.label} doesn't fit the selection (Esc clears it, then ${c.hint})`}
+            disabled={!fits(c.type)}
             onClick={() => clickConstraint(c.type)}
           >
             <span className="chip-glyph">{c.glyph}</span>
@@ -70,8 +81,11 @@ export function ConstraintBar() {
           </button>
         ))}
       </div>
+    </div>
+    {(() => { const float = (
+    <div className="cb-float" aria-live="polite">
       {(dimensions.length > 0 || modify.length > 0) && (
-        <div className="cb-section">
+        <div className="cb-section cb-actions" role="toolbar" aria-label="For the selection">
           {dimensions.length > 0 && <span className="cb-title">Dimension</span>}
           {dimensions.map((op) => (
             <button key={op.id} className="chip dim" title={op.hint} onClick={() => applyDim(op)}>
@@ -91,6 +105,7 @@ export function ConstraintBar() {
           <b>{active.label}</b>: {active.hint} · {selection.length} picked · <kbd>Esc</kbd> to stop
         </div>
       )}
+    </div>); return host ? createPortal(float, host) : float; })()}
     </div>
   );
 }

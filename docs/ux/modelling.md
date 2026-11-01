@@ -44,17 +44,23 @@ Reviewed by driving the running app with real clicks and keys (Playwright, 1440�
    - **Cause:** `pushTargetOf` ignores the face normal (workbench.ts:253-272). `pushTo` overwrites expressions (:292-301). The catalog clamps to 0.5 (featureCatalog.ts:55).
    - **Fix:** offer Push/Pull only on caps parallel to the extrude direction. Show formulas read-only with "edit formula…", or edit the referenced parameter. Allow negative values or add a Reverse toggle.
 
+   _Status (M4): Fixed. Push/Pull shows only on an extrude's caps and moves the cap clicked (a start cap moves via a new `startOffset`); negative distances, no zero crossing; formulas are read-only with "edit formula…"; the card has Reverse._
+
    ![M4: One ＋ press on the top face card.](review/img/m4.jpg)
 
 5. **Destructive actions have no guard. Major.**
    - **What happens:** Open replaces the document with no prompt and no undo, and overwrites the autosave. Deleting a parameter that's in use has no confirmation and collapses the model.
    - **Fix:** confirm Open, like New (or make it undoable). Deleting a parameter in use lists what uses it and offers to inline its value. Add a dirty indicator.
 
+   _Status (M5): Fixed. Open asks first; deleting a used parameter lists its users and can keep its value (one undo step); a dirty dot beside the document name._
+
    ![M5: Parameter deleted while in use. (The Open case has no screenshot.)](review/img/m5.jpg)
 
 6. **Revolve, shell, pattern and edge-picked fillet/chamfer have no UI entry point. Major.**
    - **What happens:** they're reachable only through the agent and MCP, though the README lists them.
    - **Fix:** a Revolve panel (profile plus an axis: a sketch line or X/Y/Z), and an edge-pick mode for fillet and chamfer.
+
+   _Status (M6): Fixed. Revolve, Shell, Pattern and edge-pick Fillet/Chamfer panels, reachable from the toolbar (Revolve, Modify ▾), the model ring and ⌘K._
 
    ![M6: Toolbar and ring in the model context.](review/img/m6.jpg)
 
@@ -63,11 +69,15 @@ Reviewed by driving the running app with real clicks and keys (Playwright, 1440�
    - **Cause:** LiveNumber.tsx (no click or double-click path) and numberMath.ts:66-71 (literals only, clamped).
    - **Fix:** a click without drag, or a digit key, starts typing. Accept expressions. Show limits instead of clamping silently.
 
+   _Status (M7): Fixed. A click or a digit starts typing; expressions are stored; an out-of-range value keeps the field open and states the limits._
+
    ![M7: Box card: the keys went nowhere.](review/img/m7.jpg)
 
 8. **In a sketch, selecting something shifts the whole canvas by 25–50 px. Major.**
    - **What happens:** the ConstraintBar grows a row, so the next click lands on something else. Sketch chrome uses about 300–370 px of 900. Clicking a line's endpoint selects the line, not the point.
    - **Fix:** give the constraint bar a fixed height (or float the selection actions), put the sketch toolbar on one row, and prefer points within a few pixels over curves when picking.
+
+   _Status (M8): Fixed. One fixed-height constraint row; selection actions float over the canvas; the sketch toolbar is one row at 1440 px (it wraps when narrower); points win over curves._
 
    ![M8: Nothing selected.](review/img/m8a.jpg)
 
@@ -78,11 +88,15 @@ Reviewed by driving the running app with real clicks and keys (Playwright, 1440�
    - **Cause:** `handleRectClick` drops `snap.ref` (interactions.ts:750-760). The same goes for the shape variants and the polygon.
    - **Fix:** carry each corner's snap and add coincident or on-curve constraints, as the line tool does. Enable long-press in sketches.
 
+   _Status (M9): Fixed for rectangles (all variants), polygons, slots, ellipses, 3-point arcs and 2/3-point circles, in one undo step; long press works in a sketch._
+
    ![M9: Rectangle drawn from the origin.](review/img/m9.jpg)
 
 10. **You often can't see what you picked or where you're looking. Major.**
     - **What happens:** no face highlight on hover or selection, and the face card covers the face. The face card lacks Sketch and Extrude (they exist only as hotkeys and on the ring). There's no mouse way to orient the view: no view cube, and the view hotkeys are unbound. After Finish Sketch the camera stays face-on, hiding the extrude depth.
     - **Fix:** hover and selected-face highlights (reuse `setPickHighlight`), Sketch and Extrude on the face card, a view cube, and easing back to a three-quarter view on Finish Sketch.
+
+    _Status (M10): Fixed. Hover tint and lit selection, Sketch/Extrude on the face card (now beside the click), a view cube, and a three-quarter view after Finish Sketch. The view hotkeys stay unbound (the cube covers mouse use)._
 
     ![M10: After clicking the top face.](review/img/m10a.jpg)
 
@@ -156,6 +170,10 @@ Reviewed by driving the running app with real clicks and keys (Playwright, 1440�
 
   ![M24: A new empty sketch.](review/img/m24b.jpg)
 - **Lead, not verified:** "Round edges" stores its edges as a coordinate plane, so they may be lost when the geometry moves.
+
+  _Status (M25): Confirmed (a box made taller lost its rounded top: "no edge was selected") and fixed: Round edges and Round corners store edges by name._
+
+_Status (M11–M21, M24): Fixed: M11 (names, extrudable sketches only, Reverse, Through all, refusal), M12, M13, M14, M15, M16, M17, M18, M19, M20, M21. M24: the empty-sketch status, disabled constraint buttons, the ring hint icon and short ring labels; the browser header, the Analysis select and the assist panel overlap are left to the panels work. M22 and M23 belong to the viewer and panels work._
 
 ## What works well
 

@@ -86,6 +86,7 @@ const FACE_SELECTOR_SCHEMA: JSONSchema = {
     parallelTo: { type: "string", enum: PLANE_ENUM, description: "Planar faces parallel to an origin plane." },
     inPlane: { ...IN_PLANE_SCHEMA, description: "Faces lying in an origin plane offset along its normal." },
     nearPoint: { ...V3_SCHEMA, description: "The face containing this world point." },
+    names: { type: "array", items: { type: "string" }, description: "Faces by topological name (see body_topology), e.g. [\"ext3:end\"]; stable across upstream edits." },
   },
 };
 
@@ -2024,6 +2025,7 @@ export const BUILTINS: CommandDef<any>[] = [
         distance: { type: "string", description: "Distance expression, e.g. '10' or 'height*2'." },
         symmetric: { type: "boolean", description: "Extrude symmetrically about the plane." },
         direction: { type: "string", enum: ["normal", "reverse"], description: "Along the sketch normal (default) or against it." },
+        startOffset: { type: "string", description: "Start this far from the sketch plane along its normal (expression; default 0). Push/Pull on a start cap sets it." },
         extent: { type: "string", enum: ["blind", "throughAll", "toFace"], description: "blind (default): `distance`. throughAll: past every existing body. toFace: up to the face `toFace` names (a planar face parallel to the sketch), following it when it moves; `distance` is ignored." },
         toFace: { type: "object", description: "For extent toFace: the face to stop at, as {normal, point, name?} (name = its topological name, e.g. \"prim2:-X\"; point = a point on it).", properties: { normal: { type: "object" }, point: { type: "object" }, name: { type: "string" } }, required: ["normal", "point"] },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"], description: "Combine with existing bodies: new (default), join, or cut." },
@@ -2044,7 +2046,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A through-hole from a face sketch", params: { sketch: "sketch4", distance: "0", operation: "cut", direction: "reverse", extent: "throughAll" } },
       { note: "A side profile extruded across a body, up to its far face (it follows that face when the body changes)", params: { sketch: "sketch5", distance: "0", operation: "join", extent: "toFace", toFace: { normal: { x: -1, y: 0, z: 0 }, point: { x: -45, y: 0, z: 3 } } } },
     ],
-    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; extent?: "blind" | "throughAll" | "toFace"; toFace?: { normal: { x: number; y: number; z: number }; point: { x: number; y: number; z: number }; name?: string }; operation?: "new" | "join" | "cut" | "intersect"; region?: { x: number; y: number }; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; distance: string | number; symmetric?: boolean; direction?: "normal" | "reverse"; startOffset?: string; extent?: "blind" | "throughAll" | "toFace"; toFace?: { normal: { x: number; y: number; z: number }; point: { x: number; y: number; z: number }; name?: string }; operation?: "new" | "join" | "cut" | "intersect"; region?: { x: number; y: number }; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       const id = ctx.alloc("ext");
       draft.features[id] = {
@@ -2056,6 +2058,7 @@ export const BUILTINS: CommandDef<any>[] = [
         distanceValue: 0,
         symmetric: !!p.symmetric,
         ...(p.direction === "reverse" ? { direction: "reverse" as const } : {}),
+        ...(p.startOffset != null && String(p.startOffset).trim() && String(p.startOffset).trim() !== "0" ? { startOffsetExpr: String(p.startOffset), startOffsetValue: 0 } : {}),
         ...(p.extent === "throughAll" ? { extent: "throughAll" as const } : {}),
         ...(p.extent === "toFace" ? (() => { if (!p.toFace) throw new Error("extent toFace needs `toFace` (the face to stop at)"); return { extent: "toFace" as const, toFace: p.toFace }; })() : {}),
         operation: p.operation ?? "new",
@@ -2063,7 +2066,7 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(p.body ? { body: p.body } : {}),
         ...(p.requireEffect ? { requireEffect: true } : {}),
       };
-      return { createdIds: [id], message: `Extrude ${p.sketch}` };
+      return { createdIds: [id], message: `Extrude ${draft.sketches[p.sketch]?.name ?? p.sketch}` };
     },
   },
   {
@@ -2071,10 +2074,10 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Revolve",
     summary: "Revolve a sketch region about an axis in its plane into a solid (cylinders, domes, hoops, turned parts in one feature).",
     description:
-      "Revolves the sketch's closed region(s) about the line through `axis.p1`→`axis.p2` (sketch u,v coordinates; e.g. the v axis is {p1:{x:0,y:0},p2:{x:0,y:1}}) by `angle` degrees (expression; default 360). The profile must lie on one side of the axis. `operation` and `region` behave as in feature.extrude. Returns the feature id.",
+      "Revolves the sketch's closed region(s) about the line through `axis.p1`→`axis.p2` (sketch u,v coordinates; e.g. the v axis is {p1:{x:0,y:0},p2:{x:0,y:1}}) by `angle` degrees (expression; default 360). Or give `axisLine`, a line of the sketch (often a construction line): the axis then follows that line when the sketch changes. The profile must lie on one side of the axis. `operation` and `region` behave as in feature.extrude. Returns the feature id.",
     paramsSchema: {
       type: "object",
-      required: ["sketch", "axis"],
+      required: ["sketch"],
       additionalProperties: false,
       properties: {
         sketch: { type: "string" },
@@ -2087,6 +2090,7 @@ export const BUILTINS: CommandDef<any>[] = [
             p2: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
           },
         },
+        axisLine: { type: "string", description: "A line of the sketch to revolve about (instead of `axis`); the axis follows it." },
         angle: { type: "string", description: "Sweep angle in degrees (expression). Default 360." },
         operation: { type: "string", enum: ["new", "join", "cut", "intersect"] },
         region: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
@@ -2099,15 +2103,24 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A drum from its half profile sketched on XZ, revolved about the sketch v (world Z) axis", params: { sketch: "sketch2", axis: { p1: { x: 0, y: 0 }, p2: { x: 0, y: 1 } } } },
       { note: "A quarter-turn boss joined to the body", params: { sketch: "sketch5", axis: { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } }, angle: "90", operation: "join" } },
     ],
-    apply(draft, p: { sketch: string; axis: { p1: Vec; p2: Vec }; angle?: string | number; operation?: "new" | "join" | "cut" | "intersect"; region?: Vec; body?: string; requireEffect?: boolean; name?: string }, ctx) {
-      if (!draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
+    apply(draft, p: { sketch: string; axis?: { p1: Vec; p2: Vec }; axisLine?: string; angle?: string | number; operation?: "new" | "join" | "cut" | "intersect"; region?: Vec; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      const sk = draft.sketches[p.sketch];
+      if (!sk) throw new Error(`No sketch "${p.sketch}"`);
+      let axis = p.axis;
+      if (p.axisLine) {
+        const ln = sk.entities[p.axisLine];
+        if (!ln || ln.kind !== "line") throw new Error(`No line "${p.axisLine}" in ${sk.name}`);
+        const a = sk.entities[ln.p1], b = sk.entities[ln.p2];
+        if (a?.kind === "point" && b?.kind === "point") axis = { p1: { x: a.x, y: a.y }, p2: { x: b.x, y: b.y } };
+      }
+      if (!axis) throw new Error("revolve needs an axis: `axis` (two sketch points) or `axisLine`");
       const id = ctx.alloc("rev");
       draft.features[id] = {
-        id, kind: "revolve", name: p.name ?? "Revolve", sketchId: p.sketch, axis: p.axis,
+        id, kind: "revolve", name: p.name ?? "Revolve", sketchId: p.sketch, axis, ...(p.axisLine ? { axisLine: p.axisLine } : {}),
         angleExpr: String(p.angle ?? 360), angleValue: 360, operation: p.operation ?? "new", regionPoint: p.region,
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
-      return { createdIds: [id], message: `Revolve ${p.sketch}` };
+      return { createdIds: [id], message: `Revolve ${draft.sketches[p.sketch]?.name ?? p.sketch}` };
     },
   },
   {
@@ -2155,7 +2168,7 @@ export const BUILTINS: CommandDef<any>[] = [
         shape: p.shape, dims, at: p.at, operation: p.operation ?? "new",
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
-      return { createdIds: [id], message: `${p.shape}` };
+      return { createdIds: [id], message: `Added ${p.name ?? `a ${p.shape}`}` };
     },
   },
   {

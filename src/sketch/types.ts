@@ -139,6 +139,34 @@ export type NewGeometricConstraint = DistributiveOmit<GeometricConstraint, "id">
 export const isDimension = (c: Constraint): c is DimensionConstraint =>
   (c as DimensionConstraint).expr !== undefined;
 
+const DIM_WORDS: Record<DimensionType, string> = {
+  distance: "Length", distanceX: "Horizontal distance", distanceY: "Vertical distance", pointLineDistance: "Distance",
+  radius: "Radius", diameter: "Diameter", angle: "Angle",
+};
+const GEO_WORDS: Record<GeometricConstraint["type"], string> = {
+  coincident: "Coincident", horizontal: "Horizontal", vertical: "Vertical", parallel: "Parallel", perpendicular: "Perpendicular",
+  collinear: "Collinear", equal: "Equal", pointOnLine: "Point on line", midpoint: "Midpoint", pointOnCircle: "Point on circle",
+  concentric: "Concentric", tangent: "Tangent", symmetric: "Symmetric", fix: "Fixed",
+};
+const round2 = (v: number) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : "?");
+
+/** A constraint as a person would name it: "Length 80 mm", "Angle 30°", "Horizontal" (never its id). */
+export function describeConstraint(c: Constraint | undefined): string {
+  if (!c) return "a constraint";
+  if (isDimension(c)) {
+    const v = c.type === "angle" ? `${round2((c.value * 180) / Math.PI)}°` : `${round2(c.value)} mm`;
+    const shown = /^[-+0-9.\s]+$/.test(c.expr) ? v : `${c.expr} (${v})`;
+    return `${DIM_WORDS[c.type] ?? "Dimension"} ${shown}`;
+  }
+  return GEO_WORDS[c.type] ?? c.type;
+}
+
+/** "A", "A and B", "A, B and C". */
+export function listWords(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
 export interface Sketch {
   id: string;
   name: string;

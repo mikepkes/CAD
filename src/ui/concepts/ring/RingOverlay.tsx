@@ -112,7 +112,7 @@ export function RingOverlay() {
         <div className="ring-track" style={{ width: 2 * RING_R, height: 2 * RING_R }} aria-hidden="true" />
         <div className="ring-centre" aria-hidden="true">
           <span className="k-label ring-context">{context}</span>
-          <span className="k-dim ring-hint">configure in ⌨</span>
+          <span className="k-dim ring-hint">configure in <Icon name="keyboard" size={12} /> Shortcuts</span>
         </div>
         {slots.map((s) => {
           const o = slotOffset(s.index, RING_R);

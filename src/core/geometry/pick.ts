@@ -20,7 +20,7 @@ export interface FacePick {
 }
 
 /** The name of the face a triangle (index into `indices`, a multiple of 3) belongs to. */
-function faceNameAt(mesh: SolidMesh, tri: number): string | undefined {
+export function faceNameAt(mesh: SolidMesh, tri: number): string | undefined {
   const r = mesh.faceRanges, n = mesh.faceNames;
   if (!r || !n) return undefined;
   for (let k = 0; k * 2 < r.length; k++) if (tri >= r[2 * k] && tri < r[2 * k] + r[2 * k + 1]) return n[k];

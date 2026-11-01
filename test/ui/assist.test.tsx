@@ -57,7 +57,7 @@ describe("the status-bar inbox", () => {
     await sketch("Named already");
     render(<AssistChip />);
     const chip = await screen.findByRole("button", { name: "Organizational assist" });
-    expect(chip.textContent).toMatch(/2 to name/);
+    expect(chip.textContent).toMatch(/2 names to review/);
     await userEvent.click(chip);
     const card = screen.getByRole("dialog", { name: "Organizational assist inbox" });
     const waiting = within(card).getByRole("list", { name: "Waiting for a name" });

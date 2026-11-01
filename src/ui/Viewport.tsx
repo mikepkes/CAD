@@ -13,6 +13,7 @@ import { materialForComponent } from "../core/document";
 import { materialSpec, woodFrameFromBounds } from "../viewport/material";
 import { ghostSolidViews, useGhost } from "../model/concepts/ghostVariant";
 import { ContextMenu } from "./ContextMenu";
+import { sketchIsEmpty } from "./sketchStatus";
 import { onViewportTheme, viewportColors } from "../viewport/palette";
 
 function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
@@ -58,9 +59,9 @@ function updateExtrudeHandle(scene: SceneManager, s: AppState) {
     id: "extrude-distance",
     anchor,
     dir: ctx.plane.normal,
-    value: evalDistance(s.extrudeDistanceExpr, s),
+    value: evalDistance(s.extrudeDistanceExpr, s) * (s.extrudeReverse && !s.extrudeSymmetric ? -1 : 1),
     color: s.extrudeOperation === "cut" ? viewportColors().extrudeCut : viewportColors().extrudeJoin,
-    onChange: (v) => useStore.getState().setExtrudeDistanceExpr(String(Math.round(v * 100) / 100)),
+    onChange: (v) => { const st = useStore.getState(); st.setExtrudeDistanceExpr(String(Math.round((st.extrudeReverse && !st.extrudeSymmetric ? -v : v) * 100) / 100)); },
   }]);
 }
 
@@ -119,7 +120,7 @@ function buildView(s: AppState): ViewData {
       ? "under"
       : sketch.status.conflicting
         ? "conflict"
-        : sketch.status.fullyConstrained
+        : sketch.status.fullyConstrained && !sketchIsEmpty(sketch)
           ? "full"
           : "under",
     solids,
@@ -135,7 +136,8 @@ function buildView(s: AppState): ViewData {
 function buildExtrudePreview(s: AppState): ViewData["extrudePreview"] {
   const ctx = chosenRegions(s);
   if (!ctx) return undefined;
-  const distance = evalDistance(s.extrudeDistanceExpr, s);
+  if (s.extrudeExtent === "throughAll") return undefined; // its depth is the bodies', known on commit
+  const distance = evalDistance(s.extrudeDistanceExpr, s) * (s.extrudeReverse && !s.extrudeSymmetric ? -1 : 1);
   if (Math.abs(distance) < 1e-6) return undefined;
   return {
     plane: ctx.plane,

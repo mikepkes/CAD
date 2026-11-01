@@ -1,5 +1,6 @@
 import { activeSketch, useStore } from "../model/store";
 import { EyeToggle } from "./EyeToggle";
+import { sketchStatus } from "./sketchStatus";
 import { groupCutList, cutListCsv } from "../core/weldment";
 import { flatPatternSvg, flatPatternDxf } from "../core/sheet";
 import { saveOutput, sanitizeOutputName } from "../model/saveOutput";
@@ -168,19 +169,16 @@ export function InspectorPanel() {
   const dims = constraints.filter(isDimension) as DimensionConstraint[];
   const geoms = constraints.filter((c) => !isDimension(c));
   const status = sk.status;
-  const statusClass = status.fullyConstrained ? "ok" : status.conflicting ? "bad" : "warn";
+  const solve = sketchStatus(sk, true);
+  void status;
 
   return (
     <div className="panel inspector">
       <div className="panel-head"><span>Inspector</span></div>
 
-      <div className={`solve-status ${statusClass}`}>
+      <div className={`solve-status ${solve.cls}`}>
         <span className="status-dot" />
-        <span>
-          {status.fullyConstrained ? "Fully constrained"
-            : status.conflicting ? "Over-constrained / conflicting"
-            : `${status.dof} degree${status.dof === 1 ? "" : "s"} of freedom`}
-        </span>
+        <span>{solve.text}</span>
       </div>
 
       <div className="inspector-section">

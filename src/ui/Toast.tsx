@@ -11,7 +11,8 @@ export function Toast() {
   const dismiss = useStore((s) => s.dismissToast);
   useEffect(() => {
     if (toast) {
-      const t = setTimeout(dismiss, 4000);
+      // a toast that offers a way forward stays long enough to take it
+      const t = setTimeout(dismiss, toast.action ? 10000 : 4000);
       return () => clearTimeout(t);
     }
   }, [toast, dismiss]);
@@ -20,6 +21,12 @@ export function Toast() {
       {toast && (
         <div className={`toast ${toast.kind}`} role={toast.kind === "error" ? "alert" : undefined} onClick={dismiss}>
           {toast.text}
+          {toast.action && (
+            <span className="toast-actions">
+              <button className="btn primary" onClick={(e) => { e.stopPropagation(); toast.action!.run(); }}>{toast.action.label}</button>
+              <button className="btn ghost" onClick={(e) => { e.stopPropagation(); dismiss(); }}>Cancel</button>
+            </span>
+          )}
         </div>
       )}
     </div>

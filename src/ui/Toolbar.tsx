@@ -6,19 +6,62 @@ import { addPrimitive, addGear } from "./concepts/contextActions";
 import { Icon, iconForAction } from "./icons";
 import { ExamplesMenu } from "./ExamplesMenu";
 
+/** Open a file in place of the current document, asking first (as New does) when there is something to lose. */
+export async function confirmOpen(file: File): Promise<void> {
+  const st = useStore.getState();
+  if (st.session.doc.operations.length) {
+    const ok = await ask({
+      title: `Open ${file.name}?`,
+      text: st.dirty
+        ? "It replaces the current document, which has changes not saved to a file. Save first (⌘S) to keep them."
+        : "It replaces the current document (saved, and autosaved in this browser or app).",
+      confirmLabel: "Open", danger: st.dirty,
+    });
+    if (!ok) return;
+  }
+  await useStore.getState().openFile(file);
+}
+
+/** The document's name (Save names the file after it) and a dot while it has unsaved changes. */
+function DocName() {
+  const name = useStore((s) => s.session.doc.name);
+  const dirty = useStore((s) => s.dirty);
+  useStore((s) => s.rev);
+  const commit = (el: HTMLInputElement) => { if (el.value.trim() !== (name ?? "")) void useStore.getState().renameDocument(el.value); };
+  return (
+    <span className="doc-name">
+      <input
+        aria-label="Document name"
+        placeholder="Untitled"
+        title="The document's name: Save names the file after it"
+        defaultValue={name ?? ""}
+        key={name ?? ""}
+        spellCheck={false}
+        onBlur={(e) => commit(e.target)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          else if (e.key === "Escape") { (e.target as HTMLInputElement).value = name ?? ""; (e.target as HTMLInputElement).blur(); }
+        }}
+      />
+      {dirty && <span className="dirty-dot" role="img" aria-label="Unsaved changes" title="Unsaved changes: Save (⌘S) keeps them in a file" />}
+    </span>
+  );
+}
+
 function FileMenu() {
   const newDocument = useStore((s) => s.newDocument);
   const saveToFile = useStore((s) => s.saveToFile);
-  const openFile = useStore((s) => s.openFile);
   const importFile = useStore((s) => s.importFile);
   const inputRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   return (
     <div className="file-menu">
+      <DocName />
       <button className="btn ghost with-icon" title="New document" onClick={() => void ask({ title: "New document", text: "Start a new document? The current one is replaced; unsaved work is autosaved in this browser or app only.", confirmLabel: "New document", danger: true }).then((ok) => { if (ok) newDocument(); })}><Icon name="file-new" />New</button>
       <button className="btn ghost with-icon" title="Open a .vibecad.json file" onClick={() => inputRef.current?.click()}><Icon name="folder" />Open</button>
       <ExamplesMenu />
-      <button className="btn ghost with-icon" title="Save to a .vibecad.json file" onClick={saveToFile}><Icon name="save" />Save</button>
+      <button className="btn ghost with-icon" title="Save to a .vibecad.json file named after the document (⌘S)" onClick={saveToFile}><Icon name="save" />Save</button>
       <button className="btn ghost with-icon" title="Import STEP, BREP, STL, FreeCAD (.FCStd) or Rhino (.3dm) as bodies" onClick={() => importRef.current?.click()}><Icon name="import" />Import</button>
       <ExportMenu />
       <input
@@ -26,7 +69,7 @@ function FileMenu() {
         type="file"
         accept=".json,application/json"
         style={{ display: "none" }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) openFile(f); e.target.value = ""; }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void confirmOpen(f); e.target.value = ""; }}
       />
       <input
         ref={importRef}
@@ -192,7 +235,7 @@ export function Toolbar() {
   const lastSketch = root?.sketches[root.sketches.length - 1];
 
   return (
-    <div className="toolbar">
+    <div className={`toolbar${mode === "sketch" ? " sketching" : ""}`}>
       <div className="brand">
         <span className="logo">◆</span> Vibe<span className="brand-dim">CAD</span>
       </div>
@@ -352,6 +395,15 @@ export function Toolbar() {
             >
               {kernelLoading ? "⏳ Loading 3D…" : <><Icon name="extrude" />Extrude</>}
             </button>
+            <button
+              className="btn with-icon"
+              disabled={!lastSketch || kernelLoading}
+              title={lastSketch ? "Revolve a sketch profile about a line or an axis" : "Create a sketch first"}
+              onClick={() => useStore.getState().openFeatureTool("revolve")}
+            >
+              <Icon name="revolve" />Revolve
+            </button>
+            <ModifyMenu disabled={!hasSolids || kernelLoading} />
             {hasSolids && (
               <>
                 <select
@@ -379,6 +431,41 @@ export function Toolbar() {
         </>
       )}
     </div>
+  );
+}
+
+/** The modelling tools that change a body: fillet or chamfer picked edges, shell, pattern. */
+function ModifyMenu({ disabled }: { disabled: boolean }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); setOpen(false); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
+  const S = useStore.getState;
+  const items: { label: string; note: string; icon: Parameters<typeof Icon>[0]["name"]; run: () => void }[] = [
+    { label: "Fillet edges", note: "round the edges you click", icon: "fillet", run: () => S().openFeatureTool("edges", "fillet") },
+    { label: "Chamfer edges", note: "bevel the edges you click", icon: "chamfer", run: () => S().openFeatureTool("edges", "chamfer") },
+    { label: "Shell", note: "hollow a body, opening faces", icon: "shell", run: () => S().openFeatureTool("shell") },
+    { label: "Pattern", note: "copies along a line or around an axis", icon: "pattern-linear", run: () => S().openFeatureTool("pattern") },
+  ];
+  return (
+    <span className="export-menu">
+      <button className="btn with-icon" aria-haspopup="menu" aria-expanded={open} disabled={disabled} title={disabled ? "Make a body first" : "Fillet, chamfer, shell or pattern a body"} onClick={() => setOpen((o) => !o)}><Icon name="fillet" />Modify ▾</button>
+      {open && (
+        <>
+          <div className="export-scrim" onPointerDown={() => setOpen(false)} />
+          <div className="export-list" role="menu" aria-label="Modify">
+            {items.map((it) => (
+              <button key={it.label} role="menuitem" className="export-item" onClick={() => { setOpen(false); it.run(); }}>
+                <b>{it.label}</b><span>{it.note}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
   );
 }
 

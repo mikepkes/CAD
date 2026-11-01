@@ -46,11 +46,11 @@ async function scrubFace(d, dx) {
   await d.drag({ x: n.cx, y: n.cy }, { x: n.cx + dx, y: n.cy }, Math.min(1600, 500 + Math.abs(dx) * 3));
   await d.settle();
 }
-/** Type a face's number: click it, Enter, the value, Enter. */
+/** Type a face's number: click it (a click starts typing, the value selected), the value, Enter. */
 async function typeFace(d, value) {
   const n = await d.rect(".wb-verbs .k-live");
   await d.click(n.cx, n.cy);
-  await d.key("Enter");
+  await d.wait(150);
   await d.type(String(value), 8);
   await d.wait(250);
   await d.key("Enter");
@@ -71,14 +71,13 @@ async function clickFace(d, which) {
   await d.shot(`face${which}`);
 }
 
-/** Draw a closed outline with the line tool: click each corner, then the first again, then Escape. */
+/** Draw a closed outline with the line tool: click each corner, then the first again (closing the loop ends the chain). */
 async function drawOutline(d, pts) {
   for (const p of [...pts, pts[0]]) {
     const s = await d.api("sketchWorldToScreen", p);
     await d.click(s.x, s.y, { ms: 380 });
     await d.wait(120);
   }
-  await d.key("Escape");
   await d.settle();
 }
 /** Extrude the open sketch across the base up to its far side: Extent "To face", then press and hold over that hidden

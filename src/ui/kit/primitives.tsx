@@ -2,7 +2,7 @@
 // beyond what the props say, no store access, so concepts compose them and
 // never restyle them.
 
-import { ReactNode, CSSProperties, ChangeEvent, forwardRef } from "react";
+import React, { ReactNode, CSSProperties, ChangeEvent, forwardRef } from "react";
 
 const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
 
@@ -66,6 +66,8 @@ export interface CardProps {
   /** Extra controls in the head, after the title (a remove button, a pill). */
   headActions?: ReactNode;
   onClose?: () => void;
+  /** A double-click on the title (renaming what the card is about). */
+  onTitleDoubleClick?: () => void;
   children?: ReactNode;
   foot?: ReactNode;
   role?: string;
@@ -80,7 +82,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(p, ref) 
       {(p.title || p.num != null || p.onClose || p.headActions) && (
         <div className="k-card-head">
           {p.num != null && <span className="k-num">{p.num}</span>}
-          {p.title && <span className="k-title">{p.title}</span>}
+          {p.title && <span className="k-title" onDoubleClick={p.onTitleDoubleClick} title={p.onTitleDoubleClick ? "Double-click to rename" : undefined}>{p.title}</span>}
           {p.headActions}
           {p.onClose && <Button icon ghost size="sm" ariaLabel="Close" onClick={p.onClose}>×</Button>}
         </div>
@@ -129,7 +131,8 @@ export interface ChipProps {
   err?: boolean;
   /** The feature is hot (hovered somewhere else): the kit's one hover-sync look. */
   hot?: boolean;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onDoubleClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   /** Hover in/out, so the strip can light the feature elsewhere. */
   onHover?: (on: boolean) => void;
   title?: string;
@@ -139,7 +142,7 @@ export interface ChipProps {
 /** One stop on a history strip. */
 export function Chip(p: ChipProps) {
   return (
-    <button type="button" className={cx("k-chip", p.state === "at" && "at", p.state === "ghost" && "ghost", p.off && "off", p.err && "err", p.hot && "k-hot", p.className)} onClick={p.onClick} title={p.title}
+    <button type="button" className={cx("k-chip", p.state === "at" && "at", p.state === "ghost" && "ghost", p.off && "off", p.err && "err", p.hot && "k-hot", p.className)} onClick={p.onClick} onDoubleClick={p.onDoubleClick} title={p.title}
       onMouseEnter={p.onHover ? () => p.onHover!(true) : undefined} onMouseLeave={p.onHover ? () => p.onHover!(false) : undefined}>
       {p.icon}
       {p.num != null && <span className="k-num">{p.num}</span>}

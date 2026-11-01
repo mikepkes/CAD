@@ -38,10 +38,13 @@ import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane
 import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
 import type { CutPart } from "../core/drawings";
-import { pickItems, type PickItem } from "./pickMenu";
+import { pickItems, sketchPickItems, type PickItem } from "./pickMenu";
 import { exampleTitle, exampleUrl } from "./examples";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
 import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
+import { renameViaEdit } from "./assist";
+import { sketchIsEmpty } from "../ui/sketchStatus";
+import { FeatureTool, FeatureToolKind, defaultRevolveAxis, hasClosedRegion, profileChoices, toggled, toolCommand, toolExpressions } from "./featureTools";
 
 /** The geometry backend: a Web Worker when available (keeps the OCC kernel off
  *  the main thread), else inline on this thread. */
@@ -91,6 +94,14 @@ export function printFormat(doc: CadDocument, solids: Record<string, SolidEval>)
 export type SaveState = { stage: "updating" } | { stage: "preparing"; format: "stl" | "3mf" };
 
 const AUTOSAVE_KEY = "vibecad.autosave.v1";
+/** Whether the autosaved document has changes not yet saved to a file ("1"), kept beside it. */
+const AUTOSAVE_DIRTY_KEY = "vibecad.autosave.dirty";
+
+/** The file name Save uses for a document: its name made file-safe, else "model". */
+export function documentFileName(name: string | undefined): string {
+  const base = (name ?? "").normalize("NFKD").replace(/[^\w\s.-]+/g, "").trim().replace(/\s+/g, "-").replace(/^[-.]+|[-.]+$/g, "").toLowerCase();
+  return `${base || "model"}.vibecad.json`;
+}
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 
@@ -125,6 +136,8 @@ export interface FaceSelection {
 export interface Toast {
   kind: "error" | "info";
   text: string;
+  /** A way forward the toast offers (a button): "Make it a reference dimension". */
+  action?: { label: string; run: () => void };
 }
 
 const registry = createDefaultRegistry();
@@ -292,7 +305,11 @@ export interface AppState {
   renderSketch: () => Sketch | null;
 
   // parameters
-  addParameter: (name?: string, expr?: string) => Promise<void>;
+  /** Add a parameter (a unique name from `name`); resolves to the name it got, null when it couldn't. */
+  addParameter: (name?: string, expr?: string) => Promise<string | null>;
+  /** A typed value checked against the parameters: the expression to store, or null (with a toast saying why).
+   *  "name = expr" makes the parameter and gives its name. */
+  resolveTyped: (expr: string) => Promise<string | null>;
   /** Create a parameter from a dimension's current value and point the dimension at it. */
   promoteDimension: (cid: string) => Promise<void>;
   setParameterExpr: (name: string, expr: string) => Promise<void>;
@@ -303,7 +320,8 @@ export interface AppState {
   updateConfiguration: (ref: string, change: { name?: string; values?: Record<string, string | null>; suppress?: string[]; hide?: string[] }) => Promise<void>;
   deleteConfiguration: (ref: string) => Promise<void>;
   renameParameter: (name: string, newName: string) => Promise<void>;
-  deleteParameter: (name: string) => Promise<void>;
+  /** Delete a parameter; with `inline`, everything that used it keeps its current value (one undo step). */
+  deleteParameter: (name: string, opts?: { inline?: boolean }) => Promise<void>;
   /** Set or clear a parameter's extents (min/max) or acceptable values (enum). */
   setParameterBounds: (name: string, bounds: { min?: number; max?: number; values?: number[]; boolean?: boolean; options?: string[]; clear?: boolean }) => Promise<void>;
 
@@ -338,7 +356,7 @@ export interface AppState {
   // features (3D)
   ensureKernel: () => Promise<void>;
   rebuildSolids: () => Promise<void>;
-  extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut" | "intersect"; symmetric?: boolean; region?: { x: number; y: number }; toFace?: { normal: Vec3; point: Vec3; name?: string } }) => Promise<void>;
+  extrudeSketch: (sketchId: string, distanceExpr?: string, opts?: { operation?: "new" | "join" | "cut" | "intersect"; symmetric?: boolean; region?: { x: number; y: number }; toFace?: { normal: Vec3; point: Vec3; name?: string }; reverse?: boolean; throughAll?: boolean }) => Promise<void>;
   /** Extrude session (model mode): active flag, target profile sketch, chosen region, live params. */
   extrudeActive: boolean;
   extrudeTarget: string | null;
@@ -346,14 +364,27 @@ export interface AppState {
   extrudeDistanceExpr: string;
   extrudeOperation: "new" | "join" | "cut" | "intersect";
   extrudeSymmetric: boolean;
-  /** How far the extrude goes: a distance, or up to a face picked in the viewport. */
-  extrudeExtent: "distance" | "toFace";
+  /** How far the extrude goes: a distance, through everything, or up to a face picked in the viewport. */
+  extrudeExtent: "distance" | "toFace" | "throughAll";
+  /** Extrude to the other side of the sketch. */
+  extrudeReverse: boolean;
   /** The face a "to face" extrude stops at (picked while the session is open). */
   extrudeToFace: { normal: Vec3; point: Vec3; name?: string } | null;
-  setExtrudeExtent: (e: "distance" | "toFace") => void;
+  setExtrudeExtent: (e: "distance" | "toFace" | "throughAll") => void;
   /** Pick the face a "to face" extrude stops at; the distance field shows how far that is. */
   pickExtrudeToFace: (point: Vec3, normal: Vec3) => void;
   openExtrude: (sketchId?: string) => void;
+  /** A modelling panel's session (Revolve, Shell, Pattern, edge-pick Fillet/Chamfer): its choices so far; null when none is open. */
+  featureTool: FeatureTool | null;
+  openFeatureTool: (kind: FeatureToolKind, blend?: "fillet" | "chamfer") => void;
+  patchFeatureTool: (patch: Record<string, unknown>) => void;
+  closeFeatureTool: () => void;
+  /** Run the open session's command; resolves to the new feature's id (null when it couldn't run). */
+  commitFeatureTool: () => Promise<string | null>;
+  /** A face clicked during a session: Shell opens or closes it; any session takes its body when it has none yet. */
+  toolPickFace: (point: Vec3, normal: Vec3, bodyId: string, faceName?: string) => void;
+  /** An edge clicked during an edge-pick Fillet/Chamfer session: picked, or dropped when it was. */
+  toolPickEdge: (bodyId: string, name: string) => void;
   mirrorModel: (plane: string) => Promise<void>;
   closeExtrude: () => void;
   setExtrudeRegion: (p: { x: number; y: number } | null) => void;
@@ -383,6 +414,8 @@ export interface AppState {
   /** The long-press selection picker: everything under the cursor, nearest first; null when closed. */
   pickMenu: { screen: { x: number; y: number }; items: PickItem[] } | null;
   openPickMenu: (screen: { x: number; y: number }, hits: Parameters<typeof pickItems>[0]) => void;
+  /** The picker for a long press in a sketch: the entities under the cursor (ids, points first). */
+  openSketchPickMenu: (screen: { x: number; y: number }, hits: { id: string }[]) => void;
   closePickMenu: () => void;
   /** Act on a picker entry exactly as clicking that face (or plane) would, in whatever session is open. */
   choosePick: (item: PickItem) => void;
@@ -409,6 +442,12 @@ export interface AppState {
   setDesktopMcpPort: (port: number) => void;
 
   // persistence
+  /** Changes since the document was last saved to (or opened from) a file. */
+  dirty: boolean;
+  /** Name the document (Save names its file after it). Undoable. */
+  renameDocument: (name: string) => Promise<void>;
+  /** Rename a sketch or feature (by id) where it shows: the browser, the strip, the card. Undoable. */
+  renameEntity: (id: string, name: string) => Promise<void>;
   initApp: () => Promise<void>;
   newDocument: () => Promise<void>;
   loadDocument: (doc: CadDocument) => Promise<void>;
@@ -420,20 +459,22 @@ export interface AppState {
   importFile: (file: File) => Promise<void>;
 }
 
+// The error names the conflicting constraints in words (session.ts); their ids stay in r.conflicting for agents.
 function toastFor(r: DispatchResult): Toast | null {
   if (r.ok) return null;
-  const extra = r.conflicting && r.conflicting.length ? ` — conflicts: ${r.conflicting.join(", ")}` : "";
-  return { kind: "error", text: (r.error ?? "Rejected") + extra };
+  return { kind: "error", text: r.error ?? "Rejected" };
 }
 
 export const useStore = create<AppState>((set, get) => {
   const bump = (extra: Partial<AppState> = {}) => set((s) => ({ rev: s.rev + 1, ...extra }));
 
   const scheduleAutosave = () => {
+    if (!get().dirty) set({ dirty: true });
     if (autosaveTimer) clearTimeout(autosaveTimer);
     autosaveTimer = setTimeout(() => {
       try {
         localStorage.setItem(AUTOSAVE_KEY, serializeDocument(get().session.doc));
+        localStorage.setItem(AUTOSAVE_DIRTY_KEY, get().dirty ? "1" : "0");
       } catch {
         /* storage unavailable (private mode, quota) — non-fatal */
       }
@@ -723,6 +764,7 @@ export const useStore = create<AppState>((set, get) => {
     extrudeOperation: "new",
     extrudeSymmetric: false,
     extrudeExtent: "distance",
+    extrudeReverse: false,
     extrudeToFace: null,
     agentOpen: false,
     apiKey: readLS(AGENT_KEY_LS),
@@ -843,8 +885,26 @@ export const useStore = create<AppState>((set, get) => {
       const r = await runDispatch("sketch.create", { planeDef: { origin, normal }, faceRef: faceRefOf(normal, hit), ...scopeComponent() });
       if (r.ok) set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "line", selection: [], sketchPlacing: false, lastMessage: "Sketching on face." });
     },
-    finishSketch: () => set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null }),
-    editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [] }),
+    finishSketch: () => {
+      const sk = activeSketch(get());
+      set({ mode: "model", activeSketchId: null, tool: "select", selection: [], hover: null, transient: null, dragging: null, inlineEdit: null, contextMenu: null, constraintTool: null, lastMessage: sk ? `Finished ${sk.name}.` : "" });
+      // a sketch finished with nothing in it isn't left behind (M18): its ops go, in one undo step
+      if (sk && sketchIsEmpty(sk)) {
+        const tl = get().session.timeline;
+        const used = tl.some((o) => o.params.sketch === sk.id && o.type !== "sketch.create" && !o.type.startsWith("sketch."))
+          || tl.some((o) => Array.isArray(o.params.sketches) && (o.params.sketches as unknown[]).includes(sk.id));
+        const own = tl.filter((o) => (o.type === "sketch.create" && o.createdIds[0] === sk.id) || o.params.sketch === sk.id);
+        if (!used && own.length) void (async () => {
+          const s = get().session;
+          const cp = s.checkpoint();
+          for (const o of [...own].reverse()) await s.deleteOperation(o.opId);
+          s.squash(cp, `Remove the empty ${sk.name}`);
+          bump({ lastMessage: `Removed the empty ${sk.name}.` });
+          scheduleAutosave();
+        })();
+      }
+    },
+    editSketch: (id) => set({ mode: "sketch", activeSketchId: id, tool: "select", selection: [], lastMessage: `Editing ${get().session.doc.sketches[id]?.name ?? "the sketch"}.` }),
 
     placePoint: (x, y) => runDispatch("sketch.addPoint", { sketch: activeId(), x, y }),
     placeLine: (start, end) => runDispatch("sketch.addLine", { sketch: activeId(), start, end, construction: get().constructionMode }),
@@ -940,8 +1000,10 @@ export const useStore = create<AppState>((set, get) => {
       const names = new Set(get().session.doc.parameters.map((p) => p.name));
       let n = base, i = 1;
       while (names.has(n)) n = `${base}${i++}`;
-      await runDispatch("parameter.add", { name: n, expression: expr ?? "10" });
+      const r = await runDispatch("parameter.add", { name: n, expression: expr ?? "10" });
+      return r.ok ? n : null;
     },
+    resolveTyped: (expr) => typedExpression(expr),
     promoteDimension: async (cid) => {
       const sk = activeSketch(get());
       if (!sk) return;
@@ -955,12 +1017,15 @@ export const useStore = create<AppState>((set, get) => {
       while (names.has(name)) name = `${base}${i++}`;
       const v = dim.value;
       const valueStr = Number.isInteger(v) ? String(v) : String(Math.round(v * 1000) / 1000);
+      // the parameter and the dimension pointing at it are one undo step (M17)
+      const cp = get().session.checkpoint();
       const r = await runDispatch("parameter.add", { name, expression: valueStr });
       if (!r.ok) return;
       // Point the dimension's expression at the new parameter.
       const op = get().session.timeline.find((o) => o.type === "sketch.addDimension" && o.createdIds.includes(cid));
       if (op) await get().editOperation(op.opId, { ...op.params, expression: name });
-      set({ lastMessage: `Promoted dimension to parameter "${name}".` });
+      get().session.squash(cp, `Name ${name}`);
+      bump({ lastMessage: `Named the dimension ${name}.` });
     },
     setParameterExpr: async (name, expr) => {
       // While a configuration supplies this parameter, an edit changes its cell.
@@ -1015,10 +1080,10 @@ export const useStore = create<AppState>((set, get) => {
       if (op) await get().editOperation(op.opId, { name: op.params.name, expression, ...extra });
       else await runDispatch("parameter.setBounds", { name, ...(bounds.clear ? { clear: true } : extra) });
     },
-    deleteParameter: async (name) => {
-      const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
-      if (op) await get().deleteOperation(op.opId);
-      else await runDispatch("parameter.delete", { name });
+    deleteParameter: async (name, opts) => {
+      const r = await get().session.deleteParameter(name, opts ?? {});
+      bump({ toast: toastFor(r), lastMessage: r.ok ? (opts?.inline ? `Deleted ${name}; what used it keeps its value` : `Deleted ${name}`) : r.error ?? "" });
+      afterMutate();
     },
 
     editDimension: async (cid, expr) => {
@@ -1058,7 +1123,14 @@ export const useStore = create<AppState>((set, get) => {
       set({ inlineEdit: null });
       const value = await typedExpression(expr);
       if (!value) return;
-      if (edit.mode === "new") await runDispatch("sketch.addDimension", { ...edit.params, expression: value });
+      if (edit.mode === "new") {
+        const params = { ...edit.params, expression: value };
+        const r = await runDispatch("sketch.addDimension", params);
+        // Over-constrained: the way forward is a reference (driven) dimension that measures without constraining.
+        if (!r.ok && r.conflicting?.length) {
+          set({ toast: { kind: "error", text: r.error ?? "That would over-constrain the sketch", action: { label: "Make it a reference dimension", run: () => { set({ toast: null }); void runDispatch("sketch.addDimension", { ...params, driven: true }); } } } });
+        }
+      }
       else await get().editDimension(edit.cid, value);
     },
     cancelInlineEdit: () => set({ inlineEdit: null }),
@@ -1095,8 +1167,16 @@ export const useStore = create<AppState>((set, get) => {
       bump(); scheduleAutosave();
     },
 
-    undo: () => { get().session.undo(); bump(); afterMutate(); },
-    redo: () => { get().session.redo(); bump(); afterMutate(); },
+    undo: () => {
+      const label = get().session.undoLabel();
+      if (!get().session.undo()) { set({ lastMessage: "Nothing to undo" }); return; }
+      bump({ lastMessage: `Undid ${label ?? "the last change"}`, toast: null, faceSelection: null }); afterMutate();
+    },
+    redo: () => {
+      const label = get().session.redoLabel();
+      if (!get().session.redo()) { set({ lastMessage: "Nothing to redo" }); return; }
+      bump({ lastMessage: `Redid ${label ?? "the last change"}`, toast: null, faceSelection: null }); afterMutate();
+    },
     editOperation: async (opId, params) => {
       // a changed value that should be an expression must read and name only real parameters
       const was = get().session.timeline.find((o) => o.opId === opId)?.params as Record<string, unknown> | undefined;
@@ -1223,9 +1303,15 @@ export const useStore = create<AppState>((set, get) => {
     // an edit: the verdict so far becomes "before your change" until the new one is in
     cancelMotionStudy: () => { motionToken++; set((s) => ({ motionStatus: "idle", motionProgress: 0, motionCoarse: null, motionEta: null, motionPrevious: s.motionResult ?? s.motionPrevious, motionResult: null })); },
     extrudeSketch: async (sketchId, distanceExpr, opts) => {
-      if (distanceExpr != null && !opts?.toFace) {
+      if (distanceExpr != null && !opts?.toFace && !opts?.throughAll) {
         const problem = expressionProblem(distanceExpr, get().session.doc.parameters.map((p) => p.name));
         if (problem) { set({ toast: { kind: "error", text: `Distance: ${problem}` } }); return; }
+      }
+      // a sketch with no closed region has nothing to extrude: say so rather than add a feature that fails (M11)
+      const sk = get().session.doc.sketches[sketchId];
+      if (sk && !opts?.region && !hasClosedRegion(sk)) {
+        set({ toast: { kind: "error", text: `${sk.name} has no closed region to extrude: close its outline first` } });
+        return;
       }
       await get().ensureKernel();
       await runDispatch("feature.extrude", {
@@ -1235,6 +1321,8 @@ export const useStore = create<AppState>((set, get) => {
         ...(opts?.symmetric ? { symmetric: true } : {}),
         ...(opts?.region ? { region: opts.region } : {}),
         ...(opts?.toFace ? { extent: "toFace", toFace: opts.toFace, distance: "0" } : {}),
+        ...(opts?.throughAll ? { extent: "throughAll" } : {}),
+        ...(opts?.reverse && !opts?.symmetric && !opts?.toFace ? { direction: "reverse" } : {}),
       });
     },
     mirrorModel: async (plane) => {
@@ -1246,19 +1334,91 @@ export const useStore = create<AppState>((set, get) => {
     },
     openExtrude: (sketchId) => {
       const s = get();
-      const sketches = Object.values(s.session.doc.sketches);
+      const sketches = profileChoices(s.session.doc);
       const hasBody = Object.keys(s.session.doc.features).length > 0;
+      // the sketch asked for, else the open one, else the latest that has a closed region
       const target = sketchId ?? s.activeSketchId ?? (sketches.length ? sketches[sketches.length - 1].id : null);
       if (!target && !hasBody) { set({ toast: { kind: "info", text: "Draw a sketch first, then extrude." } }); return; }
       const onFace = !!target && s.session.doc.sketches[target]?.planeId === "custom";
       // Enter an extrude session: click a profile region or a face to pick what to extrude.
       set({
         extrudeActive: true, extrudeTarget: target, extrudeRegion: null,
-        extrudeDistanceExpr: "10", extrudeOperation: hasBody && onFace ? "join" : "new", extrudeSymmetric: false, extrudeExtent: "distance", extrudeToFace: null,
-        mode: "model", activeSketchId: null, selection: [],
+        extrudeDistanceExpr: "10", extrudeOperation: hasBody && onFace ? "join" : "new", extrudeSymmetric: false, extrudeExtent: "distance", extrudeReverse: false, extrudeToFace: null,
+        mode: "model", activeSketchId: null, selection: [], featureTool: null,
       });
     },
     closeExtrude: () => set({ extrudeActive: false, extrudeTarget: null, extrudeRegion: null }),
+
+    featureTool: null,
+    openFeatureTool: (kind, blend) => {
+      const s = get();
+      const doc = s.session.doc;
+      const bodies = Object.values(s.solids).filter((b) => b.mesh && !b.error);
+      const lastBody = bodies.length ? bodies[bodies.length - 1].featureId : null;
+      const face = s.faceSelection;
+      let tool: FeatureTool;
+      if (kind === "revolve") {
+        const choices = profileChoices(doc);
+        if (!choices.length) { set({ toast: { kind: "info", text: "Draw a closed profile in a sketch first (and a line to turn it about), then revolve it." } }); return; }
+        const sid = s.activeSketchId && choices.some((c) => c.id === s.activeSketchId) ? s.activeSketchId : choices[choices.length - 1].id;
+        tool = { kind, sketch: sid, axis: defaultRevolveAxis(doc.sketches[sid]), angle: "360", operation: bodies.length && doc.sketches[sid]?.planeId === "custom" ? "join" : "new" };
+      } else {
+        if (!bodies.length) { set({ toast: { kind: "info", text: "Make a body first." } }); return; }
+        const body = face?.bodyId || lastBody;
+        if (kind === "shell") tool = { kind, body, faces: face?.faceName ? [{ name: face.faceName, point: face.point, normal: face.normal }] : [], thickness: "2" };
+        else if (kind === "pattern") {
+          const b = (body && s.solids[body]?.bounds) || null;
+          const spacing = b ? String(Math.ceil(b.max.x - b.min.x + 5)) : "20";
+          tool = { kind, body, mode: "linear", count: "3", direction: "X", spacing, axis: "Z", angle: "" };
+        } else tool = { kind: "edges", blend: blend ?? "fillet", body, edges: [], size: blend === "chamfer" ? "1" : "2" };
+      }
+      set({
+        featureTool: tool, extrudeActive: false, extrudeTarget: null, sketchPlacing: false, faceSelection: null,
+        mode: "model", activeSketchId: null, selection: [],
+        lastMessage: kind === "shell" ? "Shell: click the faces to open, set the wall, then Shell."
+          : kind === "edges" ? `${tool.kind === "edges" && tool.blend === "chamfer" ? "Chamfer" : "Fillet"}: click the edges on the model, then ${tool.kind === "edges" && tool.blend === "chamfer" ? "Chamfer" : "Fillet"}.`
+          : kind === "pattern" ? "Pattern: choose how many and how far apart, then Pattern."
+          : "Revolve: choose the profile and the axis, then Revolve.",
+      });
+    },
+    patchFeatureTool: (patch) => { const t = get().featureTool; if (t) set({ featureTool: { ...t, ...patch } as FeatureTool }); },
+    closeFeatureTool: () => { if (get().featureTool) set({ featureTool: null, lastMessage: "" }); },
+    commitFeatureTool: async () => {
+      const tool = get().featureTool;
+      if (!tool) return null;
+      const cmd = toolCommand(tool, get().session.doc);
+      if ("problem" in cmd) { set({ toast: { kind: "info", text: cmd.problem } }); return null; }
+      for (const [label, expr] of Object.entries(toolExpressions(tool))) {
+        const problem = typedProblem(expr);
+        if (problem) { set({ toast: { kind: "error", text: `${label}: ${problem}` } }); return null; }
+      }
+      await get().ensureKernel();
+      const r = await runDispatch(cmd.type, cmd.params);
+      if (!r.ok) return null;
+      set({ featureTool: null });
+      await get().rebuildSolids();
+      const sol = get().solids[r.createdIds[0]];
+      if (sol?.error) set({ toast: { kind: "error", text: sol.error } });
+      return r.createdIds[0] ?? null;
+    },
+    toolPickFace: (point, normal, bodyId, faceName) => {
+      const t = get().featureTool;
+      if (!t) return;
+      if (t.kind === "shell") {
+        if (!faceName) { set({ lastMessage: "That face has no name to remember it by; try another" }); return; }
+        if (t.body && bodyId && bodyId !== t.body && t.faces.length) { set({ lastMessage: "Pick faces of one body" }); return; }
+        set({ featureTool: { ...t, body: t.body ?? bodyId, faces: toggled(t.faces, { name: faceName, point, normal }, (a, b) => a.name === b.name) } });
+      } else if ((t.kind === "pattern" || t.kind === "edges") && bodyId && t.body !== bodyId && !(t.kind === "edges" && t.edges.length)) {
+        set({ featureTool: { ...t, body: bodyId } as FeatureTool });
+      }
+    },
+    toolPickEdge: (bodyId, name) => {
+      const t = get().featureTool;
+      if (!t || t.kind !== "edges") return;
+      if (t.body && t.body !== bodyId && t.edges.length) { set({ lastMessage: "Pick edges of one body" }); return; }
+      const edges = toggled(t.edges, name);
+      set({ featureTool: { ...t, body: bodyId, edges }, lastMessage: `${edges.length} edge${edges.length === 1 ? "" : "s"} picked` });
+    },
     setExtrudeRegion: (p) => set({ extrudeRegion: p }),
     setExtrudeDistanceExpr: (expr) => set({ extrudeDistanceExpr: expr }),
     setExtrudeOperation: (op) => set({ extrudeOperation: op }),
@@ -1276,10 +1436,12 @@ export const useStore = create<AppState>((set, get) => {
       const s = get();
       if (!s.extrudeTarget) return;
       if (s.extrudeExtent === "toFace" && !s.extrudeToFace) { set({ lastMessage: "Click the face to extrude up to." }); return; }
-      await s.extrudeSketch(s.extrudeTarget, s.extrudeDistanceExpr.trim() || "10", {
+      await s.extrudeSketch(s.extrudeTarget, s.extrudeExtent === "throughAll" ? "0" : s.extrudeDistanceExpr.trim() || "10", {
         operation: s.extrudeOperation,
         symmetric: s.extrudeSymmetric,
         region: s.extrudeRegion ?? undefined,
+        reverse: s.extrudeReverse,
+        throughAll: s.extrudeExtent === "throughAll",
         ...(s.extrudeExtent === "toFace" && s.extrudeToFace ? { toFace: s.extrudeToFace } : {}),
       });
       get().closeExtrude();
@@ -1371,10 +1533,16 @@ export const useStore = create<AppState>((set, get) => {
       const items = pickItems(hits, get().solids, get().session.doc);
       if (items.length) set({ pickMenu: { screen, items } });
     },
-    closePickMenu: () => set({ pickMenu: null }),
+    openSketchPickMenu: (screen, hits) => {
+      const sk = activeSketch(get());
+      if (!sk || !hits.length) return;
+      set({ pickMenu: { screen, items: sketchPickItems(sk, hits) } });
+    },
+    closePickMenu: () => set({ pickMenu: null, hover: null }),
     choosePick: (item) => {
       const s = get();
       set({ pickMenu: null });
+      if (item.kind === "entity") { s.select([item.id]); set({ hover: null }); return; }
       if (item.kind === "plane") { if (s.sketchPlacing) void s.startSketch(item.planeId); return; }
       if (s.extrudeActive && s.extrudeExtent === "toFace" && s.extrudeTarget) s.pickExtrudeToFace(item.point, item.normal);
       else if (s.extrudeActive) void s.startFaceExtrude(item.point, item.normal);
@@ -1475,6 +1643,9 @@ export const useStore = create<AppState>((set, get) => {
       if (saved) {
         try {
           await get().loadDocument(deserializeDocument(saved));
+          let dirty = false;
+          try { dirty = localStorage.getItem(AUTOSAVE_DIRTY_KEY) === "1"; } catch { /* ignore */ }
+          set({ dirty });
         } catch {
           /* corrupt autosave — start fresh */
         }
@@ -1483,6 +1654,7 @@ export const useStore = create<AppState>((set, get) => {
     loadDocument: async (doc) => {
       const s = new CadSession(doc, registry, solver);
       set({
+        dirty: false,
         session: s,
         mode: "model",
         activeSketchId: null,
@@ -1494,13 +1666,33 @@ export const useStore = create<AppState>((set, get) => {
         inlineEdit: null,
         solids: {},
         toast: null,
+        faceSelection: null,
+        extrudeActive: false, extrudeTarget: null, extrudeRegion: null,
+        sketchPlacing: false, featureTool: null,
+        // a stale hint from the last document ("Pick an origin plane…") must not outlive it
+        lastMessage: doc.operations.length ? "" : "Pick an origin plane to start a sketch.",
       });
       await s.recompute();
       bump();
       if (Object.keys(s.doc.features).length) await get().rebuildSolids();
     },
+    dirty: false,
+    renameDocument: async (name) => {
+      const r = await get().session.renameDocument(name);
+      if (!r.ok) return;
+      bump({ lastMessage: get().session.doc.name ? `Named the document ${get().session.doc.name}` : "The document is untitled" });
+      scheduleAutosave();
+    },
+    renameEntity: async (id, name) => {
+      const clean = name.replace(/\s+/g, " ").trim();
+      if (!clean) return;
+      const r = await renameViaEdit(get().session.doc, id, clean, (opId, params) => get().editOperation(opId, params), () => get().session.doc);
+      if (r.ok) set({ lastMessage: `Renamed to ${clean}` });
+      else set({ toast: { kind: "error", text: r.error ?? "Couldn't rename that" } });
+    },
     newDocument: async () => {
       await get().loadDocument(createDocument());
+      set({ lastMessage: "New document. Pick an origin plane to start a sketch." });
       try {
         localStorage.removeItem(AUTOSAVE_KEY);
       } catch {
@@ -1508,19 +1700,27 @@ export const useStore = create<AppState>((set, get) => {
       }
     },
     saveToFile: () => {
-      const blob = new Blob([serializeDocument(get().session.doc)], { type: "application/json" });
+      const doc = get().session.doc;
+      const blob = new Blob([serializeDocument(doc)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "model.vibecad.json";
+      a.download = documentFileName(doc.name);
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
+      set({ dirty: false, lastMessage: `Saved ${a.download}` });
+      try { localStorage.setItem(AUTOSAVE_DIRTY_KEY, "0"); } catch { /* ignore */ }
     },
     openFile: async (file) => {
       try {
         const text = await file.text();
-        await get().loadDocument(deserializeDocument(text));
-        bump({ toast: { kind: "info", text: `Opened ${file.name}` } });
+        const doc = deserializeDocument(text);
+        // a file saved before documents had names is named after the file
+        if (!doc.name) { const base = file.name.replace(/(\.vibecad)?\.json$/i, "").trim(); if (base && base !== "model") doc.name = base; }
+        await get().loadDocument(doc);
+        // the opened file is now the autosave too (not the document it replaced), and it starts clean
+        try { localStorage.setItem(AUTOSAVE_KEY, serializeDocument(get().session.doc)); localStorage.setItem(AUTOSAVE_DIRTY_KEY, "0"); } catch { /* ignore */ }
+        bump({ dirty: false, toast: { kind: "info", text: `Opened ${file.name}` }, lastMessage: `Opened ${doc.name ?? file.name}` });
       } catch (e) {
         bump({ toast: { kind: "error", text: `Open failed: ${(e as Error).message}` } });
       }

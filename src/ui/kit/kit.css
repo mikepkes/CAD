@@ -189,7 +189,14 @@
 }
 .k-live:focus-visible { outline: 2px solid var(--k-select); outline-offset: 1px; }
 .k-live.hot, .k-live:hover { background: var(--k-accent); color: var(--k-accent-ink); }
-.k-live-input { font: inherit; font-family: var(--k-mono); width: 6ch; background: var(--field); color: var(--text); border: 1px solid var(--k-accent); border-radius: 3px; padding: 0 3px; }
+.k-live-input { font: inherit; font-family: var(--k-mono); width: 9ch; background: var(--field); color: var(--text); border: 1px solid var(--k-accent); border-radius: 3px; padding: 0 3px; }
+.k-live-input.bad { border-color: var(--bad); }
+.k-live-edit { position: relative; display: inline-flex; }
+.k-live-problem {
+  position: absolute; left: 0; top: calc(100% + 3px); z-index: 5; white-space: nowrap;
+  font-size: 11px; padding: 2px 6px; border-radius: 4px;
+  background: var(--toast-error-bg); color: var(--toast-error-ink); border: 1px solid var(--bad);
+}
 
 /* ---- pin on the part ---- */
 .k-pin {

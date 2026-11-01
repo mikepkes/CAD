@@ -40,7 +40,7 @@ beforeAll(async () => {
   const sk = await s.dispatch("sketch.create", { plane: "XY" });
   const sid = sk.createdIds[0];
   await s.dispatch("sketch.addRectangle", { sketch: sid, corner: { x: 0, y: 0 }, opposite: { x: 40, y: 20 } });
-  extrudeId = (await s.dispatch("feature.extrude", { sketch: sid, distance: "h*2", name: "Base" })).createdIds[0];
+  extrudeId = (await s.dispatch("feature.extrude", { sketch: sid, distance: "24", name: "Base" })).createdIds[0]; // a plain number: a formula is read-only (M4)
   await s.dispatch("feature.fillet", { radius: "1.5", name: "Edges" });
   // a second component with its own body
   const comp = await s.dispatch("component.create", { name: "Outer ring" });
@@ -324,7 +324,10 @@ describe("HistoryStrip", () => {
     // a value on an op the strip does not show (the ring's sketch) snaps to the nearest stop
     fireEvent.change(range, { target: { value: String(rows[2].index - 1) } });
     expect(a.moveRollback).toHaveBeenLastCalledWith(s.timeline.findIndex((op) => op.type === "component.create") + 1);
+    // a plain click opens the feature's card (M15); ⌥-click rolls the history back to just after it
     await userEvent.click(chips[1]);
+    expect(useUi.getState().openFeature).toBe(rows[1].featureId);
+    fireEvent.click(chips[1], { altKey: true });
     expect(a.moveRollback).toHaveBeenCalledWith(rows[1].index + 1);
     await userEvent.click(step);
     expect(a.moveRollback).toHaveBeenLastCalledWith(s.timeline.findIndex((op) => op.type === "component.create") + 1);

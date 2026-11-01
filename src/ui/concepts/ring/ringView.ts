@@ -47,6 +47,10 @@ export function shortLabel(label: string, max = 20): string {
   if (colon > 0 && colon < s.length - 2) s = s.slice(colon + 2); // "View: Top", "Lens: Zebra"
   s = s.replace(/^toggle\s+(the\s+)?/i, ""); // "Toggle the lens"
   s = s.replace(/\s+tool$/i, ""); // "Line tool"
+  // say it short enough to read in a slot: "Round this face's edges" → "Round edges", "Round the corners behind this
+  // face" → "Round corners", "Up to the parent component" → "Up to parent"
+  s = s.replace(/\s+this face's\b/i, "").replace(/\s+(from|on|behind)\s+this face$/i, "").replace(/\s+the\b/gi, "");
+  s = s.replace(/^Up to parent component$/i, "Up to parent").replace(/^Back to root component$/i, "Root component");
   s = s.charAt(0).toUpperCase() + s.slice(1);
   return s.length > max ? s.slice(0, max - 1).trimEnd() + "…" : s;
 }

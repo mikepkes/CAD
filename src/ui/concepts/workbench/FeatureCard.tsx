@@ -11,8 +11,9 @@ import { LiveNumber } from "../../kit/LiveNumber";
 import { useFeatureRows } from "../../kit/useFeatureRows";
 import { createEditQueue } from "../../kit/editQueue";
 import { useCardSize } from "../../kit/useCardSize";
-import { cardHeight, cardParams, namedParam, pinAnchors, pushTo, quadrantDir } from "./workbench";
-import { applyPush, deleteFeature, nameThisNumber, pushKey } from "../contextActions";
+import { cardHeight, cardParams, isFormula, namedParam, pinAnchors, pushTo, quadrantDir } from "./workbench";
+import { applyPush, deleteFeature, editFormula, nameThisNumber, pushKey, renameThing, reverseExtrude, typeExpression } from "../contextActions";
+import { formatValue } from "../../kit/numberMath";
 
 export function FeatureCard() {
   const rows = useFeatureRows();
@@ -46,6 +47,8 @@ export function FeatureCard() {
       width={CARD_W}
       num={row.num}
       title={row.name}
+      onTitleDoubleClick={() => void renameThing(row.featureId, row.name)}
+      headActions={<Button size="sm" ghost icon ariaLabel={`Rename ${row.name}`} title="Rename (F2)" onClick={() => void renameThing(row.featureId, row.name)}>✎</Button>}
       onClose={() => setOpenFeature(null)}
       className="wb-card"
       foot={
@@ -69,6 +72,16 @@ export function FeatureCard() {
       {params.map((p) => {
         // a number that is a named parameter is a dial: scrubbing it moves the parameter (pushTo), never the link
         const named = namedParam(p.expr, names);
+        // a formula is read-only here: scrubbing would replace it with a number
+        if (p.numeric && isFormula(p.expr, names)) {
+          return (
+            <div key={p.key} className="wb-param">
+              <span className="k-label">{p.label}</span>
+              <span className="k-mono wb-formula" title={`The formula ${p.expr}: edit it as text`}>{p.expr} = {formatValue(p.value, p.spec, p.unit)}</span>
+              <Button size="sm" ghost ariaLabel={`Edit formula (${p.label})`} title="Edit the formula as text" onClick={() => void editFormula(row, p)}>edit formula…</Button>
+            </div>
+          );
+        }
         return (
           <div key={p.key} className="wb-param">
             <span className="k-label">{p.label}</span>
@@ -80,6 +93,7 @@ export function FeatureCard() {
                 name={`${row.name} ${p.label.toLowerCase()}`}
                 onChange={(v) => queue.live(pushTo(row, { param: p }, v, names))}
                 onCommit={(v) => queue.commit(pushTo(row, { param: p }, v, names))}
+                onExpression={(text) => void typeExpression(row, p.key, text)}
                 onHover={(hot) => setHotParam(hot ? { featureId: row.featureId, key: p.key } : null)}
               />
             ) : (
@@ -93,6 +107,12 @@ export function FeatureCard() {
           </div>
         );
       })}
+      {row.spec.kind === "extrude" && !row.rolledBack && (row.op.params.extent ?? "blind") !== "toFace" && (
+        <div className="wb-param">
+          <span className="k-label">Side</span>
+          <Button size="sm" on={row.op.params.direction === "reverse"} title="Extrude to the other side of the sketch" onClick={() => void reverseExtrude(row)}>Reverse</Button>
+        </div>
+      )}
     </Card>
   );
 }

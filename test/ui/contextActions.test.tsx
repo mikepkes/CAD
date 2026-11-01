@@ -25,7 +25,7 @@ beforeAll(async () => {
   const sk = await s.dispatch("sketch.create", { plane: "XY" });
   const sid = sk.createdIds[0];
   await s.dispatch("sketch.addRectangle", { sketch: sid, corner: { x: 0, y: 0 }, opposite: { x: 40, y: 20 } });
-  extrudeId = (await s.dispatch("feature.extrude", { sketch: sid, distance: "h*2", name: "Base" })).createdIds[0];
+  extrudeId = (await s.dispatch("feature.extrude", { sketch: sid, distance: "24", name: "Base" })).createdIds[0]; // a plain number: a formula is read-only (M4)
   await s.dispatch("feature.fillet", { radius: "1.5", name: "Edges" });
   compId = (await s.dispatch("component.create", { name: "Outer ring" })).createdIds[0];
   const sk2 = await s.dispatch("sketch.create", { plane: "XY", component: compId });

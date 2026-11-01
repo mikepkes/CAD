@@ -27,6 +27,8 @@ export interface SerializedDocument {
   activeConfiguration?: string;
   /** Ids hidden in the viewport (optional). */
   hidden?: string[];
+  /** The document's name (optional; absent = untitled). */
+  name?: string;
   /** The design intents in effect when saved (optional; absent = none). Like
    *  `parameters` they are derived from the intent.* operations, so replay
    *  rebuilds them — the copy here lets a reader see them without replaying. */
@@ -93,6 +95,7 @@ export function serializeDocument(doc: CadDocument): string {
     timelineGroups: doc.timelineGroups,
     ...(doc.activeConfiguration ? { activeConfiguration: doc.activeConfiguration } : {}),
     ...(doc.hidden?.length ? { hidden: doc.hidden } : {}),
+    ...(doc.name ? { name: doc.name } : {}),
     ...(doc.intents?.length ? { intents: doc.intents } : {}),
   };
   return JSON.stringify(out, null, 2);
@@ -110,6 +113,7 @@ export function deserializeDocument(json: string): CadDocument {
   doc.rollbackIndex = typeof d.rollbackIndex === "number" ? d.rollbackIndex : doc.operations.length;
   doc.timelineGroups = Array.isArray(d.timelineGroups) ? d.timelineGroups : [];
   if (typeof d.activeConfiguration === "string") doc.activeConfiguration = d.activeConfiguration;
+  if (typeof d.name === "string" && d.name.trim()) doc.name = d.name.trim();
   if (Array.isArray(d.hidden)) doc.hidden = d.hidden.filter((x): x is string => typeof x === "string");
   // Files from before intents were part of the document have none: default [].
   doc.intents = Array.isArray(d.intents) ? d.intents.filter((i) => i && typeof i === "object" && typeof (i as Intent).id === "string") : [];

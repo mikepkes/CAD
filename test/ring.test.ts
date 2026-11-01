@@ -39,7 +39,7 @@ describe("ring resolution", () => {
     expect(ownRow("face", o)[0]).toBe("view.top");
     const r = resolveRing(["global", "model", "face"], o);
     expect(r[0].actionId).toBe("view.top");
-    expect(r[2]).toEqual({ index: 2, actionId: "view.right", from: "global" });
+    expect(r[2]).toEqual({ index: 2, actionId: "model.revolve", from: "model" });
     expect(inheritedSlot(["global", "model"], 0, o).actionId).toBe("model.sketch");
     expect(isCustomized("face", o)).toBe(true);
     expect(isCustomized("model", o)).toBe(false);

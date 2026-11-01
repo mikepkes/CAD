@@ -124,7 +124,7 @@ If a constraint/dimension would over-constrain a sketch, the call is **rejected*
 and returns the conflicting constraint ids, so the agent can self-correct:
 
 ```json
-{ "ok": false, "error": "Change would over-constrain sketch sketch6",
+{ "ok": false, "error": "That would over-constrain Sketch 2: it conflicts with Length 40 mm",
   "conflicting": ["d28", "d32"] }
 ```
 

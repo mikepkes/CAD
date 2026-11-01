@@ -54,6 +54,7 @@ const ACTIONS: HotkeyAction[] = [
   },
   { id: RING_ACTION_ID, label: "Action ring (hold, point, release)", context: "global", defaultPrimary: "space", run: () => useRing.getState().openRing() },
   { id: "edit.undo", label: "Undo", context: "global", defaultPrimary: "mod+z", run: () => st().undo() },
+  { id: "file.save", label: "Save to a file", context: "global", defaultPrimary: "mod+s", run: () => st().saveToFile() },
   { id: "edit.redo", label: "Redo", context: "global", defaultPrimary: "mod+shift+z", defaultSecondary: "mod+y", run: () => st().redo() },
   {
     id: "edit.cancel",
@@ -64,6 +65,7 @@ const ACTIONS: HotkeyAction[] = [
       const s = st();
       if (s.contextMenu) { s.closeContextMenu(); return; }
       if (s.extrudeActive) { s.closeExtrude(); return; }
+      if (s.featureTool) { s.closeFeatureTool(); return; }
       if (s.sketchPlacing) { s.setSketchPlacing(false); return; }
       if (s.constraintTool) { s.setConstraintTool(null); return; }
       if (s.faceSelection) { s.selectFace(null); return; }
@@ -77,6 +79,11 @@ const ACTIONS: HotkeyAction[] = [
   { id: "model.sketch", label: "New sketch (pick a plane)", context: "model", defaultPrimary: "s", when: () => !st().sketchPlacing, run: () => st().setSketchPlacing(true) },
   { id: "model.extrude", label: "Extrude", context: "model", defaultPrimary: "e", when: canExtrude, run: () => st().openExtrude() },
   { id: "model.component", label: "New component", context: "model", run: () => void st().createComponent() },
+  { id: "model.revolve", label: "Revolve", context: "model", when: () => !st().kernelLoading, run: () => st().openFeatureTool("revolve") },
+  { id: "model.fillet", label: "Fillet edges", context: "model", when: () => hasSolid() && !st().kernelLoading, run: () => st().openFeatureTool("edges", "fillet") },
+  { id: "model.chamfer", label: "Chamfer edges", context: "model", when: () => hasSolid() && !st().kernelLoading, run: () => st().openFeatureTool("edges", "chamfer") },
+  { id: "model.shell", label: "Shell", context: "model", when: () => hasSolid() && !st().kernelLoading, run: () => st().openFeatureTool("shell") },
+  { id: "model.pattern", label: "Pattern", context: "model", when: () => hasSolid() && !st().kernelLoading, run: () => st().openFeatureTool("pattern") },
   { id: "model.exportStep", label: "Export STEP", context: "model", when: hasSolid, run: () => void st().exportSolid("step") },
   { id: "model.exportStl", label: "Export STL", context: "model", when: hasSolid, run: () => void st().exportSolid("stl") },
 

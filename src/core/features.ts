@@ -108,8 +108,15 @@ function buildFeatureSolid(doc: CadDocument, scope: Scope, f: SketchFeature, tar
   if (f.kind === "revolve") {
     const angle = resolveExpr(f.angleExpr, f.angleValue, scope);
     f.angleValue = angle;
-    const o = to3d(wp0, f.axis.p1.x, f.axis.p1.y);
-    const q = to3d(wp0, f.axis.p2.x, f.axis.p2.y);
+    // about a sketch line: its solved ends now, so the axis follows the line
+    let ax = f.axis;
+    const ln = f.axisLine ? sketch.entities[f.axisLine] : undefined;
+    if (ln?.kind === "line") {
+      const a = sketch.entities[ln.p1], b = sketch.entities[ln.p2];
+      if (a?.kind === "point" && b?.kind === "point") ax = { p1: { x: a.x, y: a.y }, p2: { x: b.x, y: b.y } };
+    }
+    const o = to3d(wp0, ax.p1.x, ax.p1.y);
+    const q = to3d(wp0, ax.p2.x, ax.p2.y);
     const dir = { x: q.x - o.x, y: q.y - o.y, z: q.z - o.z };
     if (Math.hypot(dir.x, dir.y, dir.z) < 1e-9) throw new Error("revolve axis points coincide");
     const shape = buildRegionsRevolved(wp0, regions, o, dir, Math.abs(angle) < 1e-9 ? 360 : angle);
@@ -120,9 +127,13 @@ function buildFeatureSolid(doc: CadDocument, scope: Scope, f: SketchFeature, tar
   if (f.extent === "throughAll") distance = throughAllLength(targetBounds) * (f.symmetric ? 2 : 1);
   if (f.direction === "reverse") distance = -distance;
   // To a face: the signed distance along the sketch normal to that face's plane, re-found on every rebuild.
-  if (f.extent === "toFace") distance = toFaceDistance(f, wp0, bodies);
+  // A start offset slides the whole extrude along the sketch normal (Push/Pull on a start cap); a "to face" extrude
+  // still ends at its face.
+  const off = f.startOffsetExpr ? (f.startOffsetValue = resolveExpr(f.startOffsetExpr, f.startOffsetValue ?? 0, scope)) : 0;
+  if (f.extent === "toFace") distance = toFaceDistance(f, wp0, bodies) - off;
   const d = Math.abs(distance) < 1e-9 ? 1e-6 : distance;
-  const wp = f.symmetric ? offsetPlane(wp0, -d / 2) : wp0;
+  const base = off ? offsetPlane(wp0, off) : wp0;
+  const wp = f.symmetric ? offsetPlane(base, -d / 2) : base;
   const shape = buildRegionsSolid(wp, regions, d);
   const n = wp0.normal, dir = d >= 0 ? n : { x: -n.x, y: -n.y, z: -n.z };
   return { shape, names: nameSafely(shape, f.id, (g) => extrudeNames(f.id, g, sketch, wp0, dir)) };
@@ -312,8 +323,8 @@ function roundExtrudeHull(doc: CadDocument, f: ExtrudeFeature, distance: number)
   if (!regions.length || !regions.every((r) => r.outer.circle && r.holes.length <= 1 && r.holes.every((h) => h.circle && Math.hypot(h.circle.center.x - r.outer.circle!.center.x, h.circle.center.y - r.outer.circle!.center.y) < 1e-9))) return undefined;
   const wp = resolveSketchPlane(sketch);
   let d = f.direction === "reverse" ? -distance : distance;
-  let z0 = 0;
-  if (f.symmetric) z0 = -Math.abs(d) / 2, d = Math.abs(d);
+  let z0 = f.startOffsetValue ?? 0;
+  if (f.symmetric) z0 -= Math.abs(d) / 2, d = Math.abs(d);
   const lo = Math.min(z0, z0 + d), hi = Math.max(z0, z0 + d);
   return regions.map((r) => {
     const c = r.outer.circle!;
@@ -1186,7 +1197,7 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
     f.thicknessValue = t;
     if (!(t > 0)) throw new Error("shell thickness must be positive");
     const before = volumeOfShape(target.shape);
-    const hollowed = shellShape(target.shape, t, f.openFaces);
+    const hollowed = shellShape(target.shape, t, f.openFaces, f.openFaces.names?.length ? target.faceNames : undefined);
     const after = volumeOfShape(hollowed);
     // An un-measurable result means OCC produced an invalid solid (usually the
     // wall is thicker than the body allows, or no face matched): keep the body.

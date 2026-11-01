@@ -9,6 +9,9 @@ import { StatusBar } from "./StatusBar";
 import { SettingsPanel } from "./SettingsPanel";
 import { AgentPanel } from "./AgentPanel";
 import { ExtrudePanel } from "./ExtrudePanel";
+import { FeatureToolPanel } from "./FeatureToolPanel";
+import { SelectionHighlight } from "./SelectionHighlight";
+import { ViewCube } from "./ViewCube";
 import { HotkeyPanel } from "./HotkeyPanel";
 import { useStore } from "../model/store";
 import { installHotkeys } from "../model/hotkeyActions";
@@ -69,6 +72,9 @@ export function App() {
             <Toast />
             <BuildProgress />
             <ExtrudePanel />
+            <FeatureToolPanel />
+            <SelectionHighlight />
+            <ViewCube />
             <AgentPanel />
           </div>
           {workbench && mode === "model" && <div className="center-dock"><HistoryStrip /></div>}

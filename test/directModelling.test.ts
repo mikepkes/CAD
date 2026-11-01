@@ -69,7 +69,7 @@ describe("direct modelling: Push/Pull moves the face you grabbed", () => {
     expect(bounds(built(s)[0]).max.x - bounds(built(s)[0]).min.x).toBeCloseTo(55, 6);
   });
 
-  it("leaves other features to their own push param", async () => {
+  it("leaves other features (named by no face) to their own push param", async () => {
     const s = realSession();
     const sk = await s.dispatch("sketch.create", { plane: "XY" });
     await s.dispatch("sketch.addRectangle", { sketch: sk.createdIds[0], corner: { x: 0, y: 0 }, opposite: { x: 40, y: 20 } });
@@ -77,6 +77,78 @@ describe("direct modelling: Push/Pull moves the face you grabbed", () => {
     const row = rowsOf(s)[0];
     expect(pushTargetOf(row, { x: 1, y: 0, z: 0 })).toMatchObject({ param: { key: "distance" } });
     expect(pushTargetOf(row, { x: 1, y: 0, z: 0 })!.shift).toBeUndefined();
+  });
+});
+
+describe("Push/Pull on an extrude (M4)", () => {
+  async function plate(distance: string, extra: Record<string, unknown> = {}) {
+    const s = realSession();
+    await s.dispatch("parameter.add", { name: "t", expression: "6" });
+    const sk = await s.dispatch("sketch.create", { plane: "XY" });
+    await s.dispatch("sketch.addRectangle", { sketch: sk.createdIds[0], corner: { x: 0, y: 0 }, opposite: { x: 40, y: 20 } });
+    const ex = await s.dispatch("feature.extrude", { sketch: sk.createdIds[0], distance, ...extra });
+    return { s, id: ex.createdIds[0] };
+  }
+  const zs = (s: CadSession) => { const b = bounds(built(s)[0]); return [Math.round(b.min.z * 1000) / 1000, Math.round(b.max.z * 1000) / 1000]; };
+
+  it("is offered on the caps only, not on a side face", async () => {
+    const { s, id } = await plate("10");
+    const row = rowsOf(s)[0];
+    expect(pushTargetOf(row, { x: 0, y: 0, z: 1 }, `${id}:end`)).toMatchObject({ param: { key: "distance" } });
+    expect(pushTargetOf(row, { x: 0, y: 0, z: -1 }, `${id}:start`)).toMatchObject({ param: { key: "distance" }, moves: "start" });
+    expect(pushTargetOf(row, { x: 1, y: 0, z: 0 }, `${id}:side:ln5`)).toBeNull();
+    expect(pushEdit(row, 1, { x: 1, y: 0, z: 0 }, [], `${id}:side:ln5`)).toBeNull();
+  });
+
+  it("the end cap moves the end; the start stays", async () => {
+    const { s, id } = await plate("10");
+    await apply(s, pushEdit(rowsOf(s)[0], 1, { x: 0, y: 0, z: 1 }, [], `${id}:end`)!);
+    expect(zs(s)).toEqual([0, 10.5]);
+  });
+
+  it("the start cap moves the start; the end stays", async () => {
+    const { s, id } = await plate("10");
+    await apply(s, pushEdit(rowsOf(s)[0], 1, { x: 0, y: 0, z: -1 }, [], `${id}:start`)!);
+    expect(zs(s)).toEqual([-0.5, 10]);
+    await apply(s, pushEdit(rowsOf(s)[0], -1, { x: 0, y: 0, z: -1 }, [], `${id}:start`)!);
+    await apply(s, pushEdit(rowsOf(s)[0], -1, { x: 0, y: 0, z: -1 }, [], `${id}:start`)!);
+    expect(zs(s)).toEqual([0.5, 10]);
+    // and the start keeps its name through the offset
+    const row = rowsOf(s)[0];
+    expect(pushTargetOf(row, { x: 0, y: 0, z: -1 }, `${id}:start`)?.moves).toBe("start");
+  });
+
+  it("works the same on a reversed extrude and on a negative distance", async () => {
+    const rev = await plate("10", { direction: "reverse" });
+    expect(zs(rev.s)).toEqual([-10, 0]);
+    await apply(rev.s, pushEdit(rowsOf(rev.s)[0], 1, { x: 0, y: 0, z: 1 }, [], `${rev.id}:start`)!);
+    expect(zs(rev.s)).toEqual([-10, 0.5]);
+    const neg = await plate("-10");
+    await apply(neg.s, pushEdit(rowsOf(neg.s)[0], 1, { x: 0, y: 0, z: -1 }, [], `${neg.id}:end`)!);
+    expect(zs(neg.s)).toEqual([-10.5, 0]); // pushed out: more negative, never flipped to the other side
+    expect(rowsOf(neg.s)[0].op.params.distance).toBe("-10.5");
+  });
+
+  it("never crosses zero: pulling a thin plate in stops a step short", async () => {
+    const { s, id } = await plate("0.5");
+    const e = pushEdit(rowsOf(s)[0], -1, { x: 0, y: 0, z: 1 }, [], `${id}:end`)!;
+    expect(e.kind === "op" && e.params.distance).toBe("0.5");
+  });
+
+  it("a formula is never overwritten; a named parameter moves the parameter", async () => {
+    const f = await plate("t*2");
+    expect(pushEdit(rowsOf(f.s)[0], 1, { x: 0, y: 0, z: 1 }, ["t"], `${f.id}:end`)).toBeNull();
+    const n = await plate("t");
+    const e = pushEdit(rowsOf(n.s)[0], 1, { x: 0, y: 0, z: 1 }, ["t"], `${n.id}:end`)!;
+    expect(e).toEqual({ kind: "param", name: "t", expr: "6.5" });
+    // the start cap of a parameter-deep extrude: the parameter grows and the offset follows, the link stays
+    const st = pushEdit(rowsOf(n.s)[0], 1, { x: 0, y: 0, z: -1 }, ["t"], `${n.id}:start`)!;
+    expect(st.kind).toBe("op");
+    if (st.kind === "op") {
+      expect(st.params.distance).toBe("t");
+      expect(st.params.startOffset).toBe("-0.5");
+      expect(st.also).toEqual({ name: "t", expr: "6.5" });
+    }
   });
 });
 

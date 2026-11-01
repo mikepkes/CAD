@@ -65,7 +65,7 @@ describe("ring config", () => {
     expect(v[0]).toMatchObject({ name: "N", own: "face.sketch", default: "face.sketch", overridden: false });
     expect(v[5]).toMatchObject({ name: "SW", own: "edit.undo", default: null, overridden: true });
     expect(v[7]).toMatchObject({ own: null, overridden: false, inherited: { actionId: "model.component", from: "model" } });
-    expect(v[6].inherited).toMatchObject({ actionId: "edit.undo", from: "global" }); // W: model inherits too
+    expect(v[6].inherited).toMatchObject({ actionId: "model.fillet", from: "model" }); // W: the face ring inherits the model ring's Fillet
   });
 
   it("lays the editor's slots out like the ring", () => {

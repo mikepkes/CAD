@@ -144,7 +144,7 @@ describe("with a real session", () => {
   it("lists a card's params with values, and flags a failed expression", () => {
     const p = cardParams(rows[0]);
     expect(p.map((x) => [x.key, x.value, x.expr, x.unit, x.numeric])).toEqual([["distance", 24, "h*2", "mm", true]]);
-    expect(p[0].spec).toEqual({ min: 0.5, max: 500, step: 0.5 });
+    expect(p[0].spec).toEqual({ min: -500, max: 500, step: 0.5 }); // negative extrudes the other way (M4)
     const bad = cardParams(rows[2]);
     expect(bad[0].numeric).toBe(false); expect(bad[0].expr).toBe("nope+1");
     expect(cardHeight(1)).toBeGreaterThan(cardHeight(0));
@@ -178,7 +178,7 @@ describe("with a real session", () => {
     const push = pushParamOf(rows[0])!;
     expect(push.key).toBe("distance");
     expect(pushed(push.value, 1, push.spec)).toBe(24.5);
-    expect(pushed(0.5, -1, push.spec)).toBe(0.5);
+    expect(pushed(-500, -1, push.spec)).toBe(-500);
     expect(pushParamOf(undefined)).toBeNull();
     // the catalog's choice falls back to the first param the op carries; none carried, no push
     expect(pushParamOf({ ...rows[0], spec: { ...rows[0].spec, pushParam: undefined } })?.key).toBe("distance");

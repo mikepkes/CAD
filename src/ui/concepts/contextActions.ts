@@ -10,12 +10,13 @@
 import { hotkeys, type HotkeyAction } from "../../model/hotkeys";
 import { useStore, type FaceSelection } from "../../model/store";
 import { useUi } from "../../model/concepts/uiState";
-import { featureRows, type FeatureRow } from "../../model/concepts/featureCatalog";
+import { featureRows, evalParam, type FeatureRow } from "../../model/concepts/featureCatalog";
 import { createEditQueue } from "../kit/editQueue";
-import { pushEdit, rowForFace, shouldDelete, namedParam, paramNameProblem, suggestParamName, type CardParam, type PushEdit } from "./workbench/workbench";
+import { pushEdit, pushToExpr, rowForFace, shouldDelete, namedParam, paramNameProblem, suggestParamName, type CardParam, type PushEdit, type PushTarget } from "./workbench/workbench";
 import { useLens, MODES, type LensMode } from "./lens/lens";
 import { cycleFeature, cycleRows, faceCornerSelector, faceEdgeSelector, historyRange, newSolidCentre, nextLensSize, otherShape, parentComponent, stepRollback } from "./contextActions.logic";
 import { ask, askText } from "../kit/askDialog";
+import { edgesAroundFace, edgesBehindFace } from "../../model/edgePick";
 
 const st = () => useStore.getState();
 const ui = () => useUi.getState();
@@ -46,7 +47,7 @@ const faceRow = (): FeatureRow | undefined => { const f = face(); return f ? row
 /** The document's parameter names (a number that is one of them is a dial: Push/Pull moves the parameter). */
 const paramNames = () => st().session.doc.parameters.map((p) => p.name);
 /** The Push/Pull step for the selected face: face-aware on a box or cylinder, the parameter itself when the number is named. */
-const facePush = (dir: -1 | 1) => pushEdit(faceRow(), dir, face()?.normal, paramNames());
+const facePush = (dir: -1 | 1) => pushEdit(faceRow(), dir, face()?.normal, paramNames(), face()?.faceName);
 
 /** The open feature card's row (the card shows only with the workbench panel on, in model mode). */
 function openRow(): FeatureRow | undefined {
@@ -77,9 +78,70 @@ export async function deleteFeature(row: Pick<FeatureRow, "name" | "opId">): Pro
   return true;
 }
 
-/** Send one Push/Pull edit: the op, or the named parameter it reads. */
-export function applyPush(e: PushEdit): Promise<void> {
-  return e.kind === "param" ? st().setParameterExpr(e.name, e.expr) : st().editOperation(e.opId, e.params);
+/** Send one Push/Pull edit: the op, or the named parameter it reads (both, as one undo step, when a start cap
+ *  moves an extrude whose depth is a parameter). */
+export async function applyPush(e: PushEdit): Promise<void> {
+  if (e.kind === "param") return st().setParameterExpr(e.name, e.expr);
+  if (!e.also) return st().editOperation(e.opId, e.params);
+  const cp = st().session.checkpoint();
+  await st().setParameterExpr(e.also.name, e.also.expr);
+  await st().editOperation(e.opId, e.params);
+  st().session.squash(cp, "Push/Pull");
+}
+
+/** A typed expression for a card's number ("w*2", or "w = 40" to make the parameter): stored as the expression. */
+export async function typeExpression(row: FeatureRow, key: string, text: string): Promise<void> {
+  const expr = await st().resolveTyped(text);
+  if (!expr) return;
+  const op = st().session.timeline.find((o) => o.opId === row.opId);
+  await st().editOperation(row.opId, { ...(op?.params ?? row.op.params), [key]: expr });
+}
+
+/** A typed expression for a face's Push/Pull number: the face moves as for that value, and the number stays the expression. */
+export async function pushExpression(row: FeatureRow, target: PushTarget, text: string): Promise<void> {
+  const expr = await st().resolveTyped(text);
+  if (!expr) return;
+  const v = evalParam(st().session.doc, expr);
+  if (!Number.isFinite(v)) return;
+  await applyPush(pushToExpr(row, target, expr, v, paramNames()));
+}
+
+/** Edit a number that is a formula as text (the card's and the face verbs' "edit formula…"): the formula is kept
+ *  as an expression, never replaced by the number it gives. */
+export async function editFormula(row: FeatureRow, p: CardParam): Promise<boolean> {
+  const value = Number.isFinite(p.value) ? `${Math.round(p.value * 1000) / 1000}${p.unit ? ` ${p.unit}` : ""}` : "no value";
+  const expr = await askText({
+    title: `Edit formula: ${row.name} ${p.label.toLowerCase()}`,
+    text: `Now ${p.expr} = ${value}. Type a number or an expression that uses parameters (like ${paramNames()[0] ?? "width"}*2).`,
+    label: p.label, initial: p.expr, confirmLabel: "Set",
+  });
+  if (!expr || expr.trim() === p.expr) return false;
+  const op = st().session.timeline.find((o) => o.opId === row.opId);
+  await st().editOperation(row.opId, { ...(op?.params ?? row.op.params), [p.key]: expr.trim() });
+  return true;
+}
+
+/** Rename a feature or a sketch where it shows (a strip chip's or a card title's double-click, F2): asks for the
+ *  new name, then renames it in one undo step. */
+export async function renameThing(id: string, current: string, what = "feature"): Promise<boolean> {
+  const name = await askText({ title: `Rename ${what}`, label: "Name", initial: current, confirmLabel: "Rename" });
+  if (!name || name.trim() === current) return false;
+  await st().renameEntity(id, name);
+  return true;
+}
+
+/** Open a feature's card (a strip chip's plain click). */
+export function openFeatureCard(featureId: string): void {
+  if (!ui().panels.workbench) ui().togglePanel("workbench", true);
+  ui().setOpenFeature(featureId);
+}
+
+/** Flip an extrude to the other side of its sketch (the card's Reverse). */
+export function reverseExtrude(row: FeatureRow): Promise<void> {
+  const op = st().session.timeline.find((o) => o.opId === row.opId);
+  const params = { ...(op?.params ?? row.op.params) };
+  if (params.direction === "reverse") delete params.direction; else params.direction = "reverse";
+  return st().editOperation(row.opId, params);
 }
 export const pushKey = (e: PushEdit) => JSON.stringify(e);
 
@@ -103,10 +165,14 @@ export async function nameThisNumber(row: FeatureRow, p: CardParam): Promise<boo
   if (!name) return false;
   const problem = paramNameProblem(name, paramNames());
   if (problem) { st().setMessage(problem); return false; }
+  // the parameter and the feature pointing at it are one undo step (M17)
+  const cp = st().session.checkpoint();
   const r = await st().dispatch("parameter.add", { name, expression: p.expr });
   if (!r.ok) return false;
   const op = st().session.timeline.find((o) => o.opId === row.opId);
   await st().editOperation(row.opId, { ...(op?.params ?? row.op.params), [p.key]: name });
+  st().session.squash(cp, `Name ${name}`);
+  st().setMessage(`Named ${row.name}'s ${p.label.toLowerCase()} ${name}.`);
   return true;
 }
 
@@ -142,8 +208,13 @@ export async function addGear(): Promise<void> {
  *  its size can be scrubbed or named. Faces square to an axis only (the edge selector names planes by axis). */
 export async function edgeFace(kind: "fillet" | "chamfer", which: "outline" | "corners" = "outline"): Promise<void> {
   const f = face();
-  const sel = f ? (which === "corners" ? faceCornerSelector(f.point, f.normal) : faceEdgeSelector(f.point, f.normal)) : null;
-  if (!f || !sel) return;
+  if (!f) return;
+  // By name (the faces each edge separates), so the edges follow the body when it moves or resizes (M25); the
+  // coordinate-plane selector is only the fallback for a mesh without face names.
+  const mesh = st().solids[f.bodyId]?.mesh;
+  const names = mesh && f.faceName ? (which === "corners" ? edgesBehindFace(mesh, f.point, f.normal) : edgesAroundFace(mesh, f.faceName)) : [];
+  const sel = names.length ? { names } : which === "corners" ? faceCornerSelector(f.point, f.normal) : faceEdgeSelector(f.point, f.normal);
+  if (!sel) return;
   const params = kind === "fillet"
     ? { radius: which === "corners" ? "5" : "2", edges: sel, body: f.bodyId, requireEffect: true }
     : { distance: "1", edges: sel, body: f.bodyId, requireEffect: true };
@@ -154,7 +225,12 @@ export async function edgeFace(kind: "fillet" | "chamfer", which: "outline" | "c
     ui().setOpenFeature(r.createdIds[0]);
   }
 }
-const canEdgeFace = () => { const f = face(); return !!f && !!faceEdgeSelector(f.point, f.normal) && !st().kernelLoading; };
+/** Whether "Round edges" can name the face's edges: by name (any face of a named mesh), else by its axis plane. */
+export const faceHasEdges = (f: Pick<FaceSelection, "bodyId" | "faceName" | "point" | "normal">): boolean => {
+  const mesh = st().solids[f.bodyId]?.mesh;
+  return (!!mesh && !!f.faceName && edgesAroundFace(mesh, f.faceName).length > 0) || !!faceEdgeSelector(f.point, f.normal);
+};
+const canEdgeFace = () => { const f = face(); return !!f && faceHasEdges(f) && !st().kernelLoading; };
 
 // ---- the actions ----
 
@@ -252,6 +328,11 @@ export const CONTEXT_ACTIONS: HotkeyAction[] = [
     id: "feature.suppress", label: "Suppress / unsuppress", context: "feature", defaultPrimary: "h",
     when: () => !!openRow(),
     run: () => { const row = openRow(); if (row) void st().suppressOperation(row.opId, !row.suppressed); },
+  },
+  {
+    id: "feature.rename", label: "Rename feature", context: "feature", defaultPrimary: "f2",
+    when: () => !!openRow(),
+    run: () => { const row = openRow(); if (row) void renameThing(row.featureId, row.name); },
   },
   {
     id: "feature.delete", label: "Delete feature", context: "feature", defaultPrimary: "delete", defaultSecondary: "backspace",

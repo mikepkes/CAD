@@ -89,6 +89,10 @@ export interface ExtrudeFeature {
   symmetric?: boolean;
   /** Extrude against the sketch normal (equivalent to a negative distance). */
   direction?: "normal" | "reverse";
+  /** Where the extrude starts, along the sketch normal from the sketch plane (expression; default 0). Push/Pull on
+   *  a start cap moves the start by this, keeping the end face where it is. */
+  startOffsetExpr?: string;
+  startOffsetValue?: number;
   /** "blind" (default): `distance`. "throughAll": far past every existing body in the chosen direction(s) — for cuts/joins that must go all the way through.
    *  "toFace": up to the face `toFace` names, re-found on every rebuild (Fusion's "To object"), so the extrude follows that face when it moves. */
   extent?: "blind" | "throughAll" | "toFace";
@@ -112,6 +116,8 @@ export interface RevolveFeature {
   sketchId: string;
   /** Axis in sketch (u,v) coordinates: through p1 and p2. */
   axis: { p1: { x: number; y: number }; p2: { x: number; y: number } };
+  /** A line of the sketch to revolve about instead (its current ends, so the axis follows the line when it moves). */
+  axisLine?: string;
   /** Sweep angle expression in degrees (360 = full). */
   angleExpr: string;
   angleValue: number;
@@ -395,6 +401,8 @@ export interface FaceSelector {
   inPlane?: { plane: "XY" | "XZ" | "YZ"; offset?: number };
   /** The face containing (within tolerance of) a world point. */
   nearPoint?: { x: number; y: number; z: number };
+  /** Faces by topological name (as picked in the viewport): stable across upstream edits. */
+  names?: string[];
 }
 
 /** Round or bevel selected edges of the most recent body. */
@@ -896,6 +904,9 @@ export interface CadDocument {
   /** Ids hidden in the viewport (bodies by feature id, sketches, components,
    *  datum planes). Display-only document state, like activeConfiguration. */
   hidden?: string[];
+  /** The document's own name ("Phone stand"): what Save names the file after. Document state like `hidden`
+   *  (renaming is undoable, not a timeline step); absent = untitled. */
+  name?: string;
 
   // ---- derived state (a cache, always reproducible from `operations`) ----
   /** The design publishes its shop drawing (drawing.publish): the customize

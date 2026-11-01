@@ -31,7 +31,7 @@ const NAMES_A_PARAMETER: Record<string, string[]> = {
   "material.assign": ["by"],
 };
 
-function renameValue(v: unknown, key: string | null, from: string, to: string): unknown {
+export function renameValue(v: unknown, key: string | null, from: string, to: string): unknown {
   if (typeof v === "string") return key !== null && NOT_EXPRESSIONS.has(key) ? v : renameInExpression(v, from, to);
   if (Array.isArray(v)) return v.map((x) => renameValue(x, null, from, to));
   if (v && typeof v === "object") {
@@ -52,6 +52,48 @@ export function renameInOperation(op: OperationRecord, from: string, to: string)
     const values = { ...(out.values as Record<string, unknown>) };
     values[to] = values[from];
     delete values[from];
+    out = { ...out, values };
+  }
+  return JSON.stringify(out) === JSON.stringify(p) ? p : out;
+}
+
+// ---- a parameter's uses, and inlining it ----
+
+/** What uses a parameter: each operation (other than the ones that define or bound it) with an expression that
+ *  names it, and what that is in words ("Extrude 1", "Sketch 1: Length w (40 mm)", "parameter depth"). */
+export function parameterUses(doc: { operations: OperationRecord[]; features: Record<string, { name?: string }>; sketches: Record<string, { name: string; constraints: Record<string, unknown> }> }, name: string): { opId: string; what: string }[] {
+  const out: { opId: string; what: string }[] = [];
+  for (const op of doc.operations) {
+    if (NAMES_A_PARAMETER[op.type] && (op.params as { name?: unknown }).name === name) continue;
+    if (renameInOperation(op, name, `${name}__probe`) === op.params) continue;
+    out.push({ opId: op.opId, what: describeUse(doc, op) });
+  }
+  return out;
+}
+
+function describeUse(doc: Parameters<typeof parameterUses>[0], op: OperationRecord): string {
+  const p = op.params as Record<string, unknown>;
+  if (op.type === "parameter.add") return `parameter ${String(p.name)}`;
+  if (op.type === "sketch.addDimension") {
+    const sk = doc.sketches[String(p.sketch)];
+    return `${sk?.name ?? "a sketch"}: a dimension (${String(p.expression)})`;
+  }
+  if (op.type.startsWith("sketch.")) return `${doc.sketches[String(p.sketch)]?.name ?? "a sketch"}: ${op.label}`;
+  const made = op.createdIds[0];
+  const named = (made && doc.features[made]?.name) || (typeof p.name === "string" && p.name) || op.label;
+  return named;
+}
+
+/** `op`'s params with every expression use of `name` replaced by the literal `value` (configuration cells for it
+ *  dropped): what deleting a parameter "and keep its value" does to its users. Same object when nothing changes. */
+export function inlineInOperation(op: OperationRecord, name: string, value: number): Record<string, unknown> {
+  const p = op.params as Record<string, unknown>;
+  const rounded = Math.round(value * 1e6) / 1e6;
+  const literal = rounded < 0 ? `(${rounded})` : String(rounded);
+  let out = renameValue(p, null, name, literal) as Record<string, unknown>;
+  if (op.type.startsWith("configuration.") && out.values && typeof out.values === "object" && name in (out.values as object)) {
+    const values = { ...(out.values as Record<string, unknown>) };
+    delete values[name];
     out = { ...out, values };
   }
   return JSON.stringify(out) === JSON.stringify(p) ? p : out;

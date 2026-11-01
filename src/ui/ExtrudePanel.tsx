@@ -1,4 +1,5 @@
 import { useStore } from "../model/store";
+import { profileChoices } from "../model/featureTools";
 
 // Unified extrude session. Invoke Extrude, then click a sketch region or a
 // planar face in the viewport to choose what to extrude; drag the arrow handle
@@ -17,7 +18,9 @@ export function ExtrudePanel() {
   const doc = useStore((s) => s.session.doc);
   useStore((s) => s.rev);
   const hasBody = Object.keys(doc.features).length > 0;
-  const sketches = Object.values(doc.sketches);
+  const reverse = useStore((s) => s.extrudeReverse);
+  // only sketches that can be extruded, by the names the browser shows (M11)
+  const profiles = profileChoices(doc, target);
 
   if (!active) return null;
   const S = useStore.getState;
@@ -32,9 +35,7 @@ export function ExtrudePanel() {
           <label className="extrude-row">
             <span>Profile</span>
             <select value={target} onChange={(e) => useStore.setState({ extrudeTarget: e.target.value, extrudeRegion: null })}>
-              {sketches.map((s) => (
-                <option key={s.id} value={s.id}>{s.id} · {s.planeId === "custom" ? "face" : s.planeId}</option>
-              ))}
+              {profiles.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
           </label>
           <div className="extrude-row">
@@ -46,8 +47,9 @@ export function ExtrudePanel() {
           </div>
           <label className="extrude-row">
             <span>Extent</span>
-            <select value={extent} onChange={(e) => S().setExtrudeExtent(e.target.value as "distance" | "toFace")} title="A distance, or up to a face that it then follows">
+            <select value={extent} onChange={(e) => S().setExtrudeExtent(e.target.value as "distance" | "toFace" | "throughAll")} title="A distance, through everything, or up to a face that it then follows">
               <option value="distance">Distance</option>
+              <option value="throughAll">Through all</option>
               <option value="toFace">To face</option>
             </select>
           </label>
@@ -57,10 +59,15 @@ export function ExtrudePanel() {
               <input value={distance} onChange={(e) => S().setExtrudeDistanceExpr(e.target.value)} spellCheck={false}
                 onKeyDown={(e) => { if (e.key === "Enter") void S().commitExtrude(); e.stopPropagation(); }} autoFocus />
             </label>
-          ) : (
+          ) : extent === "toFace" ? (
             <div className="extrude-row">
               <span>To</span>
               <span className="extrude-region">{toFace ? `the face, ${distance} mm` : "click a face"}</span>
+            </div>
+          ) : (
+            <div className="extrude-row">
+              <span>Depth</span>
+              <span className="extrude-region">past every body</span>
             </div>
           )}
           <label className="extrude-row">
@@ -72,10 +79,16 @@ export function ExtrudePanel() {
               <option value="intersect" disabled={!hasBody}>Intersect</option>
             </select>
           </label>
-          {extent === "distance" && (
+          {extent !== "toFace" && (
             <label className="extrude-row checkbox">
               <input type="checkbox" checked={symmetric} onChange={(e) => S().setExtrudeSymmetric(e.target.checked)} />
               <span>Symmetric</span>
+            </label>
+          )}
+          {extent !== "toFace" && !symmetric && (
+            <label className="extrude-row checkbox">
+              <input type="checkbox" checked={reverse} onChange={(e) => useStore.setState({ extrudeReverse: e.target.checked })} />
+              <span>Reverse (the other side of the sketch)</span>
             </label>
           )}
         </>

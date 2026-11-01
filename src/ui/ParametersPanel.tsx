@@ -1,8 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../model/store";
 import { isValidParamName } from "../core/parameters";
 import type { Parameter } from "../core/document";
-import { askText } from "./kit/askDialog";
+import { askChoice, askText } from "./kit/askDialog";
+import { parameterUses } from "../core/parameterRename";
+import { listWords } from "../sketch/types";
+
+/** Delete a parameter, asking first when something uses it: list the users, and offer to keep its value in them
+ *  (so nothing collapses) or to delete it anyway. Unused, it goes at once (undo brings it back). */
+export async function confirmDeleteParameter(name: string): Promise<void> {
+  const st = useStore.getState();
+  const p = st.session.doc.parameters.find((x) => x.name === name);
+  if (!p) return;
+  const uses = parameterUses(st.session.doc, name);
+  if (!uses.length) { await st.deleteParameter(name); return; }
+  const shown = uses.slice(0, 6).map((u) => u.what);
+  const more = uses.length > shown.length ? [`${uses.length - shown.length} more`] : [];
+  const value = fmt(p.value);
+  const choice = await askChoice({
+    title: `Delete ${name}?`,
+    text: `${name} (${value}) is used by ${listWords([...shown, ...more])}. Keep ${value} where it is used, or delete it and leave those without a value?`,
+    confirmLabel: `Delete, keep ${value}`,
+    alternateLabel: "Delete anyway",
+  });
+  if (choice === "confirm") await useStore.getState().deleteParameter(name, { inline: true });
+  else if (choice === "alternate") await useStore.getState().deleteParameter(name);
+}
 
 /** Whether a parameter gets a slider: it has both extents (and isn't a switch or a list). */
 const hasSlider = (p: Parameter) => !p.boolean && !p.values?.length && p.min != null && p.max != null;
@@ -136,9 +159,15 @@ export function ParametersPanel() {
   useStore((s) => s.rev);
   const addParameter = useStore((s) => s.addParameter);
   const renameParameter = useStore((s) => s.renameParameter);
-  const deleteParameter = useStore((s) => s.deleteParameter);
   const [editing, setEditing] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  // a new parameter's name is ready to type over once its row is there (M17)
+  const [focusName, setFocusName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusName) return;
+    const el = document.querySelector<HTMLInputElement>(`.param-name[data-name="${focusName}"]`);
+    if (el) { el.focus(); el.select(); setFocusName(null); }
+  });
 
   const hiddenCount = session.doc.parameters.filter((p) => p.hidden).length;
   const parameters = showHidden ? session.doc.parameters : session.doc.parameters.filter((p) => !p.hidden);
@@ -147,7 +176,7 @@ export function ParametersPanel() {
     <div className="panel parameters">
       <div className="panel-head">
         <span>Parameters</span>
-        <button className="icon-btn" title="Add parameter" onClick={() => addParameter("d")}>＋</button>
+        <button className="icon-btn" title="Add parameter" aria-label="Add parameter" onClick={() => void addParameter("d").then((n) => setFocusName(n))}>＋</button>
       </div>
       <div className="param-table">
         <div className="param-row header">
@@ -167,12 +196,20 @@ export function ParametersPanel() {
             <div className={`param-row ${p.error ? "error" : p.warning ? "warn" : ""}`}>
               <input
                 className="param-name"
+                aria-label={`Name of ${p.name}`}
+                data-name={p.name}
                 defaultValue={p.name}
                 key={`n${p.id}${p.name}`}
                 onBlur={(e) => {
                   const v = e.target.value.trim();
                   if (v && v !== p.name && isValidParamName(v)) renameParameter(p.name, v);
                   else e.target.value = p.name;
+                }}
+                // Enter commits the name, Escape puts the old one back (M17)
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  else if (e.key === "Escape") { (e.target as HTMLInputElement).value = p.name; (e.target as HTMLInputElement).blur(); }
                 }}
               />
               <ParamControl p={p} />
@@ -185,7 +222,7 @@ export function ParametersPanel() {
                   title="Set extents / acceptable values"
                   onClick={() => setEditing(editing === p.id ? null : p.id)}
                 >⋯</button>
-                <button className="icon-btn danger" title="Delete" onClick={() => deleteParameter(p.name)}>✕</button>
+                <button className="icon-btn danger" title="Delete" aria-label={`Delete ${p.name}`} onClick={() => void confirmDeleteParameter(p.name)}>✕</button>
               </span>
             </div>
             {hasSlider(p) && <ParamSlider p={p} />}
