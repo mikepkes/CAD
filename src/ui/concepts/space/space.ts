@@ -44,11 +44,23 @@ export function axisOf(p: Parameter): Axis {
   return { name: p.name, min: p.min as number, max: p.max as number, step: p.step && p.step > 0 ? p.step : undefined, unit: (p as { unit?: string }).unit };
 }
 
-/** Snap to the axis step (anchored at min, as the parameter panel does) and clamp to [min, max]. */
-export function quantizeTo(a: Axis, v: number): number {
-  let q = a.step ? snapToStep(v, a.step, a.min) : v;
+/** A round step for a range: 1, 2 or 5 × a power of ten, near a hundredth of it. */
+export function niceStep(range: number, divisions = 100): number {
+  const raw = Math.abs(range) / divisions;
+  if (!(raw > 0) || !Number.isFinite(raw)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const m = raw / p;
+  return +((m >= 5 ? 5 : m >= 2 ? 2 : 1) * p).toPrecision(6);
+}
+
+/** Snap to the axis step (anchored at min, as the parameter panel does) and clamp to [min, max]. With `free`
+ *  (a drag or a key on the map), an axis without a step snaps to a round one (niceStep), so the map never
+ *  writes 59.3292. */
+export function quantizeTo(a: Axis, v: number, free = false): number {
+  const step = a.step ?? (free ? niceStep(a.max - a.min) : undefined);
+  let q = a.step ? snapToStep(v, a.step, a.min) : step ? Math.round(v / step) * step : v;
   q = Math.max(a.min, Math.min(a.max, q));
-  const digits = a.step ? decimals(a.step) : 4;
+  const digits = step ? decimals(step) : 4;
   return Number(q.toFixed(digits));
 }
 
@@ -72,7 +84,7 @@ export function axisIndex(a: Axis, v: number, n: number): number {
 /** Value from a continuous grid coordinate (what a pointer position maps to), quantized. */
 export function axisFromCoord(a: Axis, c: number, n: number): number {
   const t = n <= 1 ? 0 : c / (n - 1);
-  return quantizeTo(a, a.min + (a.max - a.min) * t);
+  return quantizeTo(a, a.min + (a.max - a.min) * t, true);
 }
 
 /** One arrow-key step: the parameter's own step when it has one, else one grid cell. */
@@ -83,7 +95,7 @@ export function keyStepOf(a: Axis, n: number): number {
 /** The step a key press takes from v along the axis, in direction d (±1); shift moves one cell. */
 export function stepValue(a: Axis, v: number, d: number, n: number, shift = false): number {
   const s = shift ? (a.max - a.min) / Math.max(1, n - 1) : keyStepOf(a, n);
-  return quantizeTo(a, v + d * s);
+  return quantizeTo(a, v + d * s, true);
 }
 
 /** The design point after an arrow key on the map (null for any other key): x on ←/→, y on ↑/↓. */
@@ -297,13 +309,39 @@ export const frontierColor = (k: number) => FRONTIER_COLORS[k % FRONTIER_COLORS.
 /** The k-th of `count` frontiers is one intent's; the one after them is the overall pass/fail line. */
 export const frontierStroke = (k: number, intentCount: number) => (k < intentCount ? frontierColor(k) : "var(--k-bad)");
 
-/** The map's legend: what a pass / fail cell means, then one row per frontier. */
-export function mapLegend(metric: MetricKey, fronts: { label: string }[], intentCount: number): { color: string; label: string }[] {
+/** The map's legend: what a pass / fail cell means, then one row per frontier that is drawn (none for an
+ *  intent whose verdict never flips on the map, and no "All intents" row without intents). */
+export function mapLegend(metric: MetricKey, fronts: { label: string; segments?: unknown[] }[], intentCount: number): { color: string; label: string }[] {
   return [
     { color: "var(--k-ok)", label: `passes (brighter = lower ${metricInfo(metric).label.toLowerCase()})` },
     { color: "var(--k-bad)", label: "fails / did not build" },
-    ...fronts.map((f, k) => ({ color: frontierStroke(k, intentCount), label: f.label })),
+    ...fronts.flatMap((f, k) => ((f.segments && f.segments.length === 0) || (k >= intentCount && intentCount === 0) ? [] : [{ color: frontierStroke(k, intentCount), label: f.label }])),
   ];
+}
+
+/** What "the best" cell is for each metric (the map marks the lowest): the jump button and the mark say it. */
+const BEST: Record<MetricKey, string> = { mass: "lightest", volume: "smallest", width: "narrowest", depth: "shallowest", height: "lowest" };
+export const bestWord = (m: MetricKey) => BEST[m];
+/** "Jump to lightest", "Jump to narrowest": the button follows the metric the map is shaded by. */
+export const jumpLabel = (m: MetricKey) => `Jump to ${BEST[m]}`;
+
+// ---- sampling time -------------------------------------------------------------
+
+/** Above this estimated time for the cells left, a grid finer than 5×5 starts at 5×5 (unless picked). */
+export const SLOW_GRID_MS = 45_000;
+/** Whether to fall back to 5×5: the first cell built shows the rest would take too long, and the size was not picked. */
+export function shouldCoarsen(n: number, perCellMs: number, cellsLeft: number, picked: boolean): boolean {
+  return !picked && n > 5 && perCellMs * cellsLeft > SLOW_GRID_MS;
+}
+/** Time left at the pace so far (null until a cell has been built this run). */
+export function etaMs(built: number, elapsedMs: number, left: number): number | null {
+  return built > 0 ? (elapsedMs / built) * left : null;
+}
+/** "about 4 min left", "about 40 s left", "a few seconds left". */
+export function etaText(ms: number): string {
+  if (ms < 10_000) return "a few seconds left";
+  if (ms < 90_000) return `about ${Math.round(ms / 10_000) * 10} s left`;
+  return `about ${Math.round(ms / 60_000)} min left`;
 }
 
 // ---- SVG layout ----------------------------------------------------------------
@@ -314,6 +352,12 @@ const MARGIN = { left: 64, right: 16, top: 16, bottom: 48 };
 
 export function layout(n: number): Layout {
   return { left: MARGIN.left, top: MARGIN.top, w: VIEW_W - MARGIN.left - MARGIN.right, h: VIEW_H - MARGIN.top - MARGIN.bottom, n };
+}
+
+/** A font size in viewBox units that reads `px` on screen when the map is drawn `renderedWidth` px wide (11 units before it is laid out). */
+export function mapFontSize(renderedWidth: number, px: number): number {
+  if (!(renderedWidth > 0)) return px + 1;
+  return Math.round((px * VIEW_W * 10) / renderedWidth) / 10;
 }
 
 /** Width/height of one cell in viewBox units. */
@@ -394,10 +438,10 @@ export function intentsText(results: IntentResult[]): string {
 export type SampleStatus = "idle" | "starting" | "sampling" | "done" | "error";
 
 /** The progress line under the map. */
-export function statusText(status: SampleStatus, progress: { done: number; total: number }, error: string | null): string {
+export function statusText(status: SampleStatus, progress: { done: number; total: number }, error: string | null, eta: number | null = null): string {
   switch (status) {
     case "starting": return "starting kernel…";
-    case "sampling": return `sampling ${progress.done} / ${progress.total}`;
+    case "sampling": return `sampling ${progress.done} / ${progress.total}${eta != null ? ` · ${etaText(eta)}` : ""}`;
     case "done": return `${progress.total} cells`;
     case "error": return `sampling failed: ${error}`;
     default: return progress.total ? `${progress.done} / ${progress.total} cells` : "";

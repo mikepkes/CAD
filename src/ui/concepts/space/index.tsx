@@ -19,7 +19,7 @@ import { Button, Pills, Readout, Select } from "../../kit/primitives";
 import { createEditQueue } from "../../kit/editQueue";
 import {
   GRID_SIZES, METRICS, boundedParams, pickAxes, axisOf, judgeCell, mappableIntents, lightestPassing, formatMetric, metricInfo, verdictOf, docSignature, gridKey, cellKey,
-  resultsFor, readoutState, intentsText, statusText, swapAxes, pinMove,
+  resultsFor, readoutState, intentsText, statusText, swapAxes, pinMove, jumpLabel, bestWord, shouldCoarsen, etaMs,
   type CellSample, type CellVerdict, type GridSize, type GridSpec, type MetricKey, type Move, type Pin, type SampleStatus,
 } from "./space";
 import { GridCache, disposeSamplerBackend, getSamplerBackend, sampleGrid } from "./sampler";
@@ -82,6 +82,10 @@ export function DesignSpacePanel(p: DesignSpacePanelProps = {}) {
   const [samples, setSamples] = useState<Map<number, CellSample>>(() => new Map());
   const [status, setStatus] = useState<SampleStatus>("idle");
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  // the pace of this run (cells built and time since the first started), for the time left
+  const [pace, setPace] = useState<{ built: number; elapsed: number } | null>(null);
+  // set when a slow model made the panel start at 5×5: says why, and what a finer grid would take
+  const [coarsened, setCoarsened] = useState<{ from: GridSize; perCellMs: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const runToken = useRef(0);
   const [runId, setRunId] = useState(0);
@@ -93,13 +97,16 @@ export function DesignSpacePanel(p: DesignSpacePanelProps = {}) {
     setSamples(new Map(store));
     const total = spec.n * spec.n;
     if (store.size >= total) { setStatus("done"); setProgress({ done: total, total }); return; }
-    setStatus("starting"); setError(null); setProgress({ done: store.size, total });
+    setStatus("starting"); setError(null); setProgress({ done: store.size, total }); setPace(null);
     const docSnapshot = doc;
+    const picked = useSpace.getState().nPicked;
     (async () => {
       try {
         const backend = await getSamplerBackend(p.createBackend);
         if (token !== runToken.current) return;
         setStatus("sampling");
+        const t0 = Date.now();
+        let built = 0;
         const res = await sampleGrid(backend, docSnapshot, spec, {
           skip: (i, j) => store.has(cellKey(i, j, spec.n)),
           cancelled: () => token !== runToken.current,
@@ -107,6 +114,15 @@ export function DesignSpacePanel(p: DesignSpacePanelProps = {}) {
             store.set(cellKey(cell.i, cell.j, spec.n), cell);
             setSamples(new Map(store));
             setProgress({ done, total: tot });
+            built++;
+            const elapsed = Date.now() - t0;
+            setPace({ built, elapsed });
+            // the first cell says how slow this model builds: a fine grid that would take too long starts at 5×5
+            if (built === 1 && shouldCoarsen(spec.n, elapsed, tot - done, picked)) {
+              runToken.current++;
+              setCoarsened({ from: spec.n as GridSize, perCellMs: elapsed });
+              setN(5);
+            }
           },
         });
         if (token !== runToken.current) return;
@@ -184,6 +200,7 @@ export function DesignSpacePanel(p: DesignSpacePanelProps = {}) {
   const goTo = (m: Move) => { begin(); queue.current.live(m); commit(); };
 
   const cancel = () => { runToken.current++; setStatus("idle"); };
+  const pickN = (k: GridSize) => { setCoarsened(null); setN(k, true); };
   const resample = () => { cache.open(key).clear(); setRunId((r) => r + 1); };
 
   if (!spec || !current) {
@@ -209,17 +226,34 @@ export function DesignSpacePanel(p: DesignSpacePanelProps = {}) {
         <label className="k-label">X <Select className="space-select" ariaLabel="X parameter" value={spec.x.name} options={paramOptions} onChange={(v) => selectAxis("x", v)} /></label>
         <label className="k-label">Y <Select className="space-select" ariaLabel="Y parameter" value={spec.y.name} options={paramOptions} onChange={(v) => selectAxis("y", v)} /></label>
         <label className="k-label">Shade <Select className="space-select" ariaLabel="Metric" value={metric} title={info.estimate ? `Estimated: volume × density, ${densitySource}` : "From the kernel"} options={METRICS.map((m) => ({ key: m.key, label: m.label }))} onChange={(v) => setMetric(v as MetricKey)} /></label>
-        <Pills ariaLabel="Grid size" value={String(n) as `${GridSize}`} options={GRID_SIZES.map((g) => ({ key: String(g) as `${GridSize}`, label: `${g}×${g}` }))} onChange={(k) => setN(Number(k) as GridSize)} />
+        <Pills ariaLabel="Grid size" value={String(n) as `${GridSize}`} options={GRID_SIZES.map((g) => ({ key: String(g) as `${GridSize}`, label: `${g}×${g}` }))} onChange={(k) => pickN(Number(k) as GridSize)} />
       </div>
       <DesignSpaceMap spec={spec} cells={cells} metric={metric} intents={intents} current={current} verdict={verdict} currentMetric={`${info.label} ${currentMetric}`} lightest={lightest} pins={pins} onMove={move} onCommit={commit} />
       <div className="space-row">
         <Readout label={info.label} value={currentMetric} state={readoutState(verdict)} title={info.estimate ? `Estimate: ${densitySource}` : "From the kernel"} />
         <Readout label="Intents" value={intentsText(currentResults)} state={intents.length ? readoutState(verdict) : undefined} title={allIntents.length > intents.length ? `${allIntents.length - intents.length} intent(s) use names the map cannot evaluate and are not drawn` : "Intents from the Ledger"} />
-        <span className="k-num k-dim space-progress" aria-live="polite">{statusText(status, progress, error)}</span>
       </div>
+      {(status === "sampling" || status === "starting") ? (
+        <div className="space-progress-row" role="status" aria-live="polite">
+          <span className="space-progress-bar" role="progressbar" aria-label="Sampling" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}>
+            <span style={{ width: `${progress.total ? (100 * progress.done) / progress.total : 0}%` }} />
+          </span>
+          <span className="k-num space-progress">{statusText(status, progress, error, pace ? etaMs(pace.built, pace.elapsed, progress.total - progress.done) : null)}</span>
+          <Button size="sm" onClick={cancel} title="Stop sampling; the cells sampled so far stay">Stop</Button>
+        </div>
+      ) : (
+        <div className="space-row">
+          <span className="k-num k-dim space-progress" aria-live="polite">{statusText(status, progress, error)}</span>
+        </div>
+      )}
+      {coarsened && n === 5 && (
+        <p className="k-dim space-note" data-testid="space-coarsened">
+          This model takes about {(coarsened.perCellMs / 1000).toFixed(1)} s a build, so the map starts at 5×5. {coarsened.from}×{coarsened.from} would take about {Math.max(1, Math.round((coarsened.perCellMs * coarsened.from * coarsened.from) / 60000))} min: pick it to sample it anyway.
+        </p>
+      )}
       <div className="space-row">
-        {status === "sampling" || status === "starting" ? <Button size="sm" onClick={cancel}>Cancel</Button> : <Button size="sm" onClick={resample} title="Discard the cached grid and sample again">Resample</Button>}
-        <Button size="sm" accent disabled={!lightest} onClick={() => lightest && goTo({ xName: spec.x.name, yName: spec.y.name, x: lightest.x, y: lightest.y })} title={lightest ? `${spec.x.name} ${lightest.x}, ${spec.y.name} ${lightest.y}: ${formatMetric(lightest.metrics?.[metric], metric)}` : "No passing cell sampled yet"}>Jump to lightest</Button>
+        {status === "sampling" || status === "starting" ? null : <Button size="sm" onClick={resample} title="Discard the cached grid and sample again">Resample</Button>}
+        <Button size="sm" accent disabled={!lightest} onClick={() => lightest && goTo({ xName: spec.x.name, yName: spec.y.name, x: lightest.x, y: lightest.y })} title={lightest ? `${spec.x.name} ${lightest.x}, ${spec.y.name} ${lightest.y}: ${formatMetric(lightest.metrics?.[metric], metric)}` : `No passing cell sampled yet: the ${bestWord(metric)} one by ${info.label.toLowerCase()}`}>{jumpLabel(metric)}</Button>
         <Button size="sm" disabled={pins.length >= 3} onClick={pinCurrent} title="Keep this design as a pin (A, B, C)">Pin</Button>
       </div>
       <Pinned pins={pins} metric={metric} current={currentMetrics} compare={compare} ghost={ghostStatus} onGo={onGo} onCompare={setCompare} onRemove={unpin} />

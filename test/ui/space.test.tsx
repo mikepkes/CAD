@@ -59,7 +59,7 @@ describe("DesignSpacePanel", () => {
     clearGridCache();
     s.doc.intents = []; // intents are document state; `mount` bumps the store, which re-reads them
     useIntents.setState({ docId: s.doc.id, intents: [], results: [], scope: {} });
-    useSpace.setState({ xName: null, yName: null, n: 5, metric: "mass", pins: [], compare: null });
+    useSpace.setState({ xName: null, yName: null, n: 5, nPicked: false, metric: "mass", pins: [], compare: null });
   });
 
   it("shows an empty state when fewer than two parameters have bounds", async () => {
@@ -317,10 +317,46 @@ describe("DesignSpacePanel", () => {
     useSpace.setState({ n: 9 }); // a fresh key, not in the cache
     mount(s, { backend: slow });
     await waitFor(() => expect(screen.getByText(/sampling 0 \/ 81/)).toBeTruthy());
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("progressbar", { name: "Sampling" }).getAttribute("aria-valuemax")).toBe("81");
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
     release();
     expect(screen.getByRole("button", { name: "Resample" })).toBeTruthy();
     expect(screen.queryByText(/sampling/)).toBeNull();
+  });
+});
+
+describe("DesignSpacePanel, pace and labels", () => {
+  let s: CadSession;
+  beforeAll(async () => { s = await twoBounded(); });
+  beforeEach(() => {
+    clearGridCache();
+    s.doc.intents = [];
+    useIntents.setState({ docId: s.doc.id, intents: [], results: [], scope: {} });
+    useSpace.setState({ xName: null, yName: null, n: 9, nPicked: false, metric: "mass", pins: [], compare: null });
+  });
+
+  it("times the first cell: a slow model starts at 5×5 and says why, unless the size was picked", async () => {
+    const now = vi.spyOn(Date, "now");
+    let t = 1_000_000;
+    now.mockImplementation(() => t);
+    let budget = 1; // builds allowed before the backend stalls (so the run stays "sampling")
+    const slow: GeometryBackend = { ...boxBackend(), evaluate: (doc) => { if (budget <= 0) return new Promise(() => {}); budget--; t += 4000; return boxBackend().evaluate(doc); } }; // 4 s a build
+    mount(s, { backend: slow, solids: currentSolids });
+    await waitFor(() => expect(useSpace.getState().n).toBe(5));
+    expect(screen.getByTestId("space-coarsened").textContent).toMatch(/about 4\.0 s a build, so the map starts at 5×5\. 9×9 would take about 5 min/);
+    // picked by hand, the finer grid is sampled anyway, with the time left at its pace
+    budget = 2;
+    await userEvent.click(screen.getByRole("button", { name: "9×9" }));
+    expect(useSpace.getState()).toMatchObject({ n: 9, nPicked: true });
+    expect(screen.queryByTestId("space-coarsened")).toBeNull();
+    await waitFor(() => expect(screen.getByText(/sampling \d+ \/ 81 · about \d+ min left/)).toBeTruthy());
+    now.mockRestore();
+  });
+
+  it("names the jump after the metric it shades by", async () => {
+    useSpace.setState({ n: 5, metric: "width" });
+    mount(s, { solids: currentSolids });
+    expect(await screen.findByRole("button", { name: "Jump to narrowest" })).toBeTruthy();
   });
 });
 
