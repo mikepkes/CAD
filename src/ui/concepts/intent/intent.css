@@ -27,7 +27,7 @@
 }
 .intent-option {
   display: grid;
-  grid-template-columns: 64px 1fr;
+  grid-template-columns: 64px 16px 1fr;
   column-gap: 10px;
   align-items: baseline;
   padding: 6px 8px;
@@ -36,6 +36,7 @@
 }
 .intent-option.on { background: var(--k-select-tint); }
 .intent-kind { align-self: center; }
-.intent-detail { grid-column: 2; font-size: 12px; }
+.intent-icon { align-self: center; }
+.intent-detail { grid-column: 3; font-size: 12px; }
 .intent-empty { padding: 6px 8px; font-size: 12px; }
 .intent-hint { display: flex; justify-content: flex-end; font-size: 11px; }

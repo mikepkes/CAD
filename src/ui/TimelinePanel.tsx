@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../model/store";
 import { OperationRecord } from "../core/command/types";
+import { Icon, iconForCommand } from "./icons";
 
 // Which sketch an operation belongs to (for context grouping). Features and
 // parameters stay top-level; a sketch.create heads its own group, and the
@@ -47,6 +48,7 @@ export function TimelinePanel() {
       <div className={`op-row ${cls} ${nested ? "grouped" : ""}`} key={op.opId}>
         <span className="op-idx">{i + 1}</span>
         <span className="op-dot" />
+        <Icon name={iconForCommand(op.type, op.params)} size={14} className="op-icon" />
         <span className="op-label" title={`${op.type} — click to roll back to here`} onClick={() => moveRollback(i + 1)}>
           {op.label}
           {op.error && <span className="op-err"> ⚠</span>}
@@ -91,7 +93,7 @@ export function TimelinePanel() {
                 <button className="group-caret" onClick={() => toggle(sid)} title={openNow ? "Collapse" : "Expand"}>
                   {openNow ? "▾" : "▸"}
                 </button>
-                <span className="group-glyph">✎</span>
+                <Icon name="sketch" size={14} className="group-glyph" />
                 <span className="group-name" onClick={() => toggle(sid)}>
                   Sketch {sketchNum.get(sid)} <span className="group-sub">· {planeLabel}</span>
                   {anyErr && <span className="op-err"> ⚠</span>}

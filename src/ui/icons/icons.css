@@ -1,0 +1,6 @@
+/* Command icons: inline SVGs in currentColor. Layout only. */
+.icon { display: inline-block; flex: none; vertical-align: -0.2em; }
+
+/* a text button with a leading icon (toolbar) */
+.with-icon { display: inline-flex; align-items: center; gap: 6px; }
+.tool .icon { margin: -1px 0; }

@@ -9,6 +9,7 @@ import { useStore } from "../../../model/store";
 import { useUi } from "../../../model/concepts/uiState";
 import { Button, Chip, Track } from "../../kit/primitives";
 import { useFeatureRows, useActiveComponent } from "../../kit/useFeatureRows";
+import { Icon, iconForCommand } from "../../icons";
 import { moreLabel, rangeValue, rowsInScope, snapRollback, stripEntries, stripRange, stripState } from "./workbench";
 
 export function HistoryStrip() {
@@ -27,6 +28,8 @@ export function HistoryStrip() {
   const hidden = rowsInScope(rows, doc, active).hidden;
   const st = stripState(entries, session.rollbackIndex, timelineLength);
   const range = stripRange(entries);
+  /** A chip's icon: its op's command (the feature's, or the assembly step's). */
+  const chipIcon = (index: number) => { const op = session.timeline[index]; return op ? iconForCommand(op.type, op.params) : "box"; };
 
   return (
     <div className="k-dock wb-strip" role="region" aria-label="History">
@@ -35,7 +38,7 @@ export function HistoryStrip() {
           {st.chips.map((c, i) => (
             <Fragment key={c.row.opId}>
               {i > 0 && <Track ghost={c.state === "ghost"} />}
-              <Chip num={c.row.num} label={c.row.name} state={c.state} off={c.off} err={c.err} hot={c.row.featureId != null && hotFeature === c.row.featureId}
+              <Chip icon={<Icon name={chipIcon(c.row.index)} size={14} />} num={c.row.num} label={c.row.name} state={c.state} off={c.off} err={c.err} hot={c.row.featureId != null && hotFeature === c.row.featureId}
                 className={c.row.step ? "wb-step" : undefined}
                 title={c.row.error ?? (c.state === "ghost" ? "Rolled back — click to build up to here" : c.row.step ? `${c.row.step.label} — click to roll the history to just after this step` : "Click to roll the history to just after this feature")}
                 onClick={() => void moveRollback(c.row.index + 1)}
