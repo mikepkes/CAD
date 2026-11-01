@@ -1,0 +1,246 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bundled examples > public/examples/bistable.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext72",
+    "max": [
+      40,
+      30.7,
+      6,
+    ],
+    "min": [
+      -40,
+      -23,
+      0,
+    ],
+    "name": "Bottom bar",
+    "volume": 14229.6,
+  },
+  {
+    "body": "ext899",
+    "max": [
+      3,
+      19.7,
+      14,
+    ],
+    "min": [
+      -3,
+      -2,
+      0,
+    ],
+    "name": "Shuttle",
+    "volume": 1019.4,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/fourbar.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext168",
+    "max": [
+      3,
+      40,
+      6,
+    ],
+    "min": [
+      -36,
+      0,
+      0,
+    ],
+    "name": "Hinge O2 (crank half)",
+    "volume": 3120,
+  },
+  {
+    "body": "ext273",
+    "max": [
+      64,
+      58,
+      6,
+    ],
+    "min": [
+      -4,
+      40,
+      0,
+    ],
+    "name": "Hinge A (coupler half)",
+    "volume": 2515.6,
+  },
+  {
+    "body": "ext378",
+    "max": [
+      102,
+      50,
+      6,
+    ],
+    "min": [
+      57,
+      0,
+      0,
+    ],
+    "name": "Hinge O4 (rocker half)",
+    "volume": 2442.6,
+  },
+  {
+    "body": "ext63",
+    "max": [
+      72,
+      0,
+      6,
+    ],
+    "min": [
+      -12,
+      -16,
+      0,
+    ],
+    "name": "Base",
+    "volume": 4632,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/gripper.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "ext1001",
+    "max": [
+      -15,
+      40,
+      6,
+    ],
+    "min": [
+      -21,
+      16,
+      0,
+    ],
+    "name": "Hinge rod (rod, plunger end)",
+    "volume": 744,
+  },
+  {
+    "body": "ext1086",
+    "max": [
+      -3,
+      90,
+      6,
+    ],
+    "min": [
+      -35,
+      40,
+      0,
+    ],
+    "name": "Hinge rod (lever half)",
+    "volume": 3192,
+  },
+  {
+    "body": "ext1257",
+    "max": [
+      21,
+      40,
+      6,
+    ],
+    "min": [
+      15,
+      16,
+      0,
+    ],
+    "name": "Hinge rod (rod, plunger end)",
+    "volume": 744,
+  },
+  {
+    "body": "ext1342",
+    "max": [
+      35,
+      90,
+      6,
+    ],
+    "min": [
+      3,
+      40,
+      0,
+    ],
+    "name": "Hinge rod (lever half)",
+    "volume": 3192,
+  },
+  {
+    "body": "ext618",
+    "max": [
+      22,
+      16,
+      6,
+    ],
+    "min": [
+      -22,
+      -60,
+      0,
+    ],
+    "name": "Stem",
+    "volume": 5328,
+  },
+  {
+    "body": "ext75",
+    "max": [
+      35,
+      40,
+      6,
+    ],
+    "min": [
+      -35,
+      -80,
+      0,
+    ],
+    "name": "Base",
+    "volume": 10872,
+  },
+  {
+    "body": "ext831",
+    "max": [
+      -6,
+      -37,
+      6,
+    ],
+    "min": [
+      -27,
+      -43,
+      0,
+    ],
+    "name": "Hinge guide -40 (link, frame end)",
+    "volume": 636,
+  },
+  {
+    "body": "ext916",
+    "max": [
+      -6,
+      -17,
+      6,
+    ],
+    "min": [
+      -27,
+      -23,
+      0,
+    ],
+    "name": "Hinge guide -20 (link, frame end)",
+    "volume": 636,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/origami.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet55",
+    "max": [
+      105.3,
+      297.1,
+      0.6,
+    ],
+    "min": [
+      -0.3,
+      -17.6,
+      -57.6,
+    ],
+    "name": "Paper airplane",
+    "volume": 0,
+  },
+]
+`;
