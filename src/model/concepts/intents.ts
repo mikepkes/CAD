@@ -70,6 +70,7 @@ export function densityOf(m: Material | undefined): Density {
     case "wood": return { density: 0.7, source: `${m.name} (wood, 0.7 g/cm³ assumed)` };
     case "plastic": case "printed": return { density: 1.2, source: `${m.name} (plastic, 1.2 g/cm³ assumed)` };
     case "rubber": return { density: 1.15, source: `${m.name} (rubber, 1.15 g/cm³ assumed)` };
+    case "paper": return { density: 0.8, source: `${m.name} (paper, 0.8 g/cm³ assumed)` };
     case "metal": case "painted": return { density: DEFAULT_DENSITY, source: `${m.name} (metal, ${DEFAULT_DENSITY} g/cm³ assumed)` };
     default: return { density: DEFAULT_DENSITY, source: `no material: aluminium ${DEFAULT_DENSITY} g/cm³ assumed` };
   }

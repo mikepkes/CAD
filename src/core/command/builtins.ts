@@ -23,7 +23,7 @@ import { expressionProblem } from "../expressionCheck";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 /** A material's appearance fields, as material.create and material.update take them. */
-const MATERIAL_FIELDS = ["species", "finish", "color", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength", "texture", "textureScale", "textureAxis", "layerHeight", "printAxis"] as const;
+const MATERIAL_FIELDS = ["species", "finish", "color", "backColor", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength", "texture", "textureScale", "textureAxis", "layerHeight", "printAxis"] as const;
 
 // A point given either as coordinates (creates a new point) or a ref to an
 // existing point id (reuses it — which is how coincidence is expressed).
@@ -867,14 +867,14 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Create material",
     summary: "Define a material (wood / metal / plastic) assignable to components.",
     description:
-      "Adds a material to the document's appearance library. kind \"wood\" uses a procedural 3D grain shader driven by `species` (white-oak, red-oak, walnut, maple, hard-maple, cherry, southern-pine, mahogany, beech, ash) with optional ringScale/grainContrast/poreStrength overrides; \"metal\"/\"plastic\"/\"painted\" use PBR (color, roughness, metalness, finish). Assign it with material.assign. Returns the material id.",
+      "Adds a material to the document's appearance library. kind \"wood\" uses a procedural 3D grain shader driven by `species` (white-oak, red-oak, walnut, maple, hard-maple, cherry, southern-pine, mahogany, beech, ash) with optional ringScale/grainContrast/poreStrength overrides; \"metal\"/\"plastic\"/\"painted\" use PBR (color, roughness, metalness, finish); \"paper\" is matte and fibrous, with `backColor` on its other side (origami paper). Assign it with material.assign. Returns the material id.",
     paramsSchema: {
       type: "object",
       required: ["name", "kind"],
       additionalProperties: false,
       properties: {
         name: { type: "string" },
-        kind: { type: "string", enum: ["wood", "metal", "plastic", "painted", "rubber", "printed"], description: "printed: an FDM print, drawn with layer lines and weaker across them." },
+        kind: { type: "string", enum: ["wood", "metal", "plastic", "painted", "rubber", "printed", "paper"], description: "printed: an FDM print, drawn with layer lines and weaker across them. paper: matte, fibrous, a little translucent; `backColor` colours its other side." },
         species: { type: "string", description: "wood species preset key." },
         finish: { type: "string", description: "metal/plastic: polished|brushed|satin|matte|gloss; printed: matte|satin|silk." },
         texture: { type: "string", enum: ["none", "stipple", "dimples", "knurl", "ribs"], description: "A procedural surface texture (drawn, not modelled)." },
@@ -884,6 +884,7 @@ export const BUILTINS: CommandDef<any>[] = [
         printAxis: { type: "string", enum: ["x", "y", "z"], description: "printed: the build direction (layers stack along it), default z." },
         layerFactor: { type: "number", exclusiveMinimum: 0, maximum: 1, description: "printed: the share of allowableStrain left when pulled across the layers (e.g. 0.5)." },
         color: { type: "string", description: "base/tint hex override, e.g. \"#8a6b3f\"." },
+        backColor: { type: "string", description: "The other side's colour (hex) — paper coloured on one side, white on the other (a surface's back; the sheet's underside)." },
         roughness: { type: "number", minimum: 0, maximum: 1 },
         metalness: { type: "number", minimum: 0, maximum: 1 },
         ringScale: { type: "number", exclusiveMinimum: 0, description: "wood: growth-ring spacing (mm)." },
@@ -899,6 +900,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A steel screw", params: { name: "Steel", kind: "metal", finish: "satin", color: "#8a8f96" } },
       { note: "A rubber grip", params: { name: "Grip rubber", kind: "rubber", texture: "knurl", textureScale: 2 } },
       { note: "PLA printed on its side (layers stack along X)", params: { name: "PLA, on its side", kind: "printed", color: "#e8e4dc", printAxis: "x", youngsModulus: 3500, allowableStrain: 0.02, layerFactor: 0.5 } },
+      { note: "Origami paper: white on top, red underneath", params: { name: "Origami paper", kind: "paper", color: "#f3f0e8", backColor: "#c8323c" } },
     ],
     apply(draft, p: { name: string; kind: Material["kind"]; [k: string]: unknown }, ctx) {
       const id = ctx.alloc("mat");
@@ -946,10 +948,11 @@ export const BUILTINS: CommandDef<any>[] = [
       properties: {
         material: { type: "string" },
         name: { type: "string" },
-        kind: { type: "string", enum: ["wood", "metal", "plastic", "painted", "rubber", "printed"] },
+        kind: { type: "string", enum: ["wood", "metal", "plastic", "painted", "rubber", "printed", "paper"] },
         species: { type: "string" },
         finish: { type: "string" },
         color: { type: "string" },
+        backColor: { type: "string" },
         roughness: { type: "number", minimum: 0, maximum: 1 },
         metalness: { type: "number", minimum: 0, maximum: 1 },
         ringScale: { type: "number", exclusiveMinimum: 0 },
@@ -2304,6 +2307,7 @@ export const BUILTINS: CommandDef<any>[] = [
     description:
       "`mode` base (default): the closed region(s) of `sketch` are the flat blank; `folds` lists lines of the same sketch (draw them as construction lines) to fold along, each with `angle` in degrees (+ folds toward the sheet's top — a valley seen from the top; − away, a mountain) and optionally its own `radius`. " +
       "Paper and origami: `thickness` 0 (a surface body) or a small one, `radius` 0 so folds are sharp creases. Creases may meet at vertices; a crease given no `angle` (just `direction` valley or mountain) is solved so every vertex closes up — drive one crease and the rest follow (rigid origami). An error names the vertex when the angles given can't all fold at once. " +
+      "Folding in steps (origami as diagrammed: a fold through layers an earlier one stacked up): give every fold a `step` (1, 2, …). Draw each line on the flat sheet where it crosses one layer; at its step it is carried to where that layer lies, every layer of the flap stacked there is creased, and the flap — the paper beyond the line from the held point (`fixed`; `flip` folds the held side), plus any layers it would pass through — turns by `angle` (+ valley toward the top of the layer the line is on, − mountain; 180 = flat). Folds of one step move together. `turn: true` makes a step that turns the whole model about the line (turn over: 180) without creasing. `progress` (an expression, e.g. a `fold` parameter) runs the steps: 0 flat, k = step k done, fractions part-way. Layers stack `thickness` apart (at least 0.02) and the paper is drawn as a surface; the paper never passes through itself, and a fold that would tear it (the flap joined across the line elsewhere) is an error. " +
       "`mode` contour: `sketch` holds one open run of straight lines (the bottom face of the profile; a bend rounds each corner) swept `width` along the sketch normal; `flip` puts the material on the run's left. " +
       "Rules for the part and everything added to it: `thickness`, `radius` (inner bend radius, default the thickness), `kFactor` (neutral layer, default 0.5), `reliefWidth`. The flat length is Σ straights + Σ bend allowances, BA = angle·(radius + kFactor·thickness). " +
       "The body (id = this feature's id) carries its flat pattern (flat_pattern / get_state); add flanges (feature.flange), sketched bends and jogs (feature.fold), and unfold/refold to cut it flat. Returns the feature id.",
@@ -2328,9 +2332,13 @@ export const BUILTINS: CommandDef<any>[] = [
               angle: { type: ["string", "number"], description: "Degrees: + valley (toward the top), − mountain. Omit to solve (creases)." },
               direction: { type: "string", enum: ["valley", "mountain"] },
               radius: { type: ["string", "number"] },
+              step: { type: "integer", minimum: 1, description: "Fold in steps: the step this fold is made in." },
+              turn: { type: "boolean", description: "Steps: turn the whole model about this line instead (+ turns its left side toward the top)." },
+              flip: { type: "boolean", description: "Steps: fold the held side of the line instead." },
             },
           },
         },
+        progress: { type: ["string", "number"], description: "Steps: how far along (0 = flat, k = step k done); default all done. Usually a parameter, e.g. \"fold\"." },
         width: { type: ["string", "number"], description: "contour: how far the profile runs along the sketch normal." },
         flip: { type: "boolean", description: "Material on the other side (below the sketch plane; left of a contour)." },
         fixed: { type: "object", required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } }, description: "A point (sketch coords) on the panel that stays put." },
@@ -2341,21 +2349,30 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A 2 mm bracket blank with one 90° bend along construction line l9", params: { sketch: "sketch1", thickness: 2, folds: [{ line: "l9", angle: 90 }] } },
       { note: "Paper, sharp creases: drive one, solve the rest", params: { sketch: "sketch1", thickness: 0, radius: 0, folds: [{ line: "l5", angle: 60 }, { line: "l6", direction: "mountain" }, { line: "l7", direction: "valley" }, { line: "l8", direction: "valley" }] } },
       { note: "A U-channel from an open three-line profile, 1.5 mm, 40 deep", params: { sketch: "sketch2", mode: "contour", thickness: 1.5, width: 40 } },
+      { note: "Paper folded in steps: in half, then in half again through both layers, driven by a `fold` parameter (0…2)", params: { sketch: "sketch1", thickness: 0.1, radius: 0, folds: [{ line: "l5", angle: 180, step: 1 }, { line: "l6", angle: 180, step: 2 }], progress: "fold" } },
     ],
-    apply(draft, p: { sketch: string; mode?: "base" | "contour"; thickness: unknown; radius?: unknown; kFactor?: unknown; reliefWidth?: unknown; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown }[]; width?: unknown; flip?: boolean; fixed?: { x: number; y: number }; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; mode?: "base" | "contour"; thickness: unknown; radius?: unknown; kFactor?: unknown; reliefWidth?: unknown; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown; step?: number; turn?: boolean; flip?: boolean }[]; progress?: unknown; width?: unknown; flip?: boolean; fixed?: { x: number; y: number }; name?: string }, ctx) {
       const sk = draft.sketches[p.sketch];
       if (!sk) throw new Error(`No sketch "${p.sketch}"`);
       const ex = (v: unknown) => (v == null ? undefined : String(v));
       const folds: SheetFoldDef[] | undefined = p.folds?.map((f) => {
         if (sk.entities[f.line]?.kind !== "line") throw new Error(`fold "${f.line}" isn't a line of ${sk.name}`);
-        return { line: f.line, ...(f.angle != null ? { angleExpr: String(f.angle) } : {}), ...(f.direction ? { direction: f.direction } : {}), ...(f.radius != null ? { radiusExpr: String(f.radius) } : {}) };
+        return {
+          line: f.line, ...(f.angle != null ? { angleExpr: String(f.angle) } : {}), ...(f.direction ? { direction: f.direction } : {}), ...(f.radius != null ? { radiusExpr: String(f.radius) } : {}),
+          ...(f.step != null ? { step: f.step } : {}), ...(f.turn ? { turn: true } : {}), ...(f.flip ? { flip: true } : {}),
+        };
       });
+      const stepped = folds?.filter((f) => f.step != null).length ?? 0;
+      if (stepped && stepped !== folds!.length) throw new Error("folding in steps: give every fold a `step`");
+      if (stepped && folds!.some((f) => f.angleExpr == null)) throw new Error("folding in steps: give every fold an `angle`");
+      if (p.progress != null && !stepped) throw new Error("`progress` runs folds made in steps: give the folds a `step`");
       const id = ctx.alloc("sheet");
       draft.features[id] = {
         id, kind: "sheet", name: p.name ?? (p.mode === "contour" ? "Contour flange" : "Sheet"), mode: p.mode ?? "base", sketchId: p.sketch,
         thicknessExpr: String(p.thickness), ...(p.radius != null ? { radiusExpr: String(p.radius) } : {}), ...(p.kFactor != null ? { kFactorExpr: String(p.kFactor) } : {}),
         ...(p.reliefWidth != null ? { reliefWidthExpr: String(p.reliefWidth) } : {}), ...(folds?.length ? { folds } : {}),
         ...(ex(p.width) ? { widthExpr: ex(p.width) } : {}), ...(p.flip ? { flip: true } : {}), ...(p.fixed ? { fixed: { x: p.fixed.x, y: p.fixed.y } } : {}),
+        ...(ex(p.progress) ? { progressExpr: ex(p.progress) } : {}),
       };
       return { createdIds: [id], message: `${p.mode === "contour" ? "Contour flange" : "Sheet"} from ${sk.name}` };
     },

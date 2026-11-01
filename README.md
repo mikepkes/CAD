@@ -63,6 +63,17 @@ between the hooks, and `wall` and `arm` set the cheek and jaw thicknesses.
 There are eleven parts, and each prints without supports. Untick `board` to
 hide the board and the object before you save it for printing. The viewer also
 offers the drawing.
+And **https://mikepkes.github.io/CAD/?mode=customize&example=origami** — a
+**paper airplane folded from a flat sheet**, step by step, on one `fold`
+slider: 0 is a sheet of A4, 1 folds the top corners in, 2 the new edges in
+again, 3 turns it over, 4 folds it in half, 5 stands it on its keel and 6
+folds the wings out level. It's one `feature.sheet` folded *in steps*: each
+fold is a line drawn once on the flat sheet with a step number, and at its step
+it goes through every layer the earlier folds stacked there (the wing folds
+crease the flaps inside them too), the layers kept a paper's thickness apart so
+they never pass through each other. The paper material is matte and fibrous,
+white on one side and red on the other, so folding turns the colour out.
+`width` and `length` size the sheet.
 
 ### Compliant mechanisms
 
@@ -432,6 +443,7 @@ straight from a URL:
 ?mode=customize&example=gimbal         # two-axis flexure gimbal: eight cross-blade flexures, alpha/beta steer the mirror; blade, platform and range sliders
 ?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm) and a Geneva drive, driven by `turn`
 ?mode=customize&example=skadis         # SKÅDIS gravity holder: the object's weight swings two pendulum jaws shut; jaw angle, object size, hook spacing, wall and arm sliders
+?mode=customize&example=origami        # a paper airplane folded step by step from a flat sheet on one `fold` slider (0 flat … 6 done); width + length size the paper
 ?mode=customize&model=<url-to.json>    # any VibeCAD model file
 ```
 

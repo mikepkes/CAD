@@ -530,6 +530,26 @@ exports[`bundled examples > public/examples/gyroscope.json > replays, builds on 
 ]
 `;
 
+exports[`bundled examples > public/examples/origami.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet55",
+    "max": [
+      105.3,
+      297.1,
+      0.6,
+    ],
+    "min": [
+      -0.3,
+      -17.6,
+      -57.6,
+    ],
+    "name": "Paper airplane",
+    "volume": 0,
+  },
+]
+`;
+
 exports[`bundled examples > public/examples/roubo.json > is clear at rest and while its joints are driven 1`] = `
 [
   "rest: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",

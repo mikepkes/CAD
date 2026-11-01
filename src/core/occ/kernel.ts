@@ -23,6 +23,8 @@ export interface SolidMesh {
   faceRanges?: number[];
   /** Topological name of each face (aligned with faceRanges), when known. */
   faceNames?: string[];
+  /** Per vertex, the point's coordinates on the flat sheet (mm; paper folded in steps), for materials drawn on the paper. */
+  uvs?: Float32Array;
 }
 
 /** A B-rep edge, classified and sampled in 3D world space (for projection). */

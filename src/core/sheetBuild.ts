@@ -2,14 +2,16 @@
 // into panels and bend pieces, planned, folded — and its flat pattern.
 
 import type { Shape3D } from "replicad";
-import { SheetState, SheetFold, FlatPattern, FlatFoldLine, planFold, cornerReliefs, outlineItem, flatBounds, bendAllowance, insideSegs } from "./sheet";
-import { blankFace, splitBlank, foldedSheet, flatSheet, faceEdges, Strip, BendPlacement, WedgePlacement } from "./occ/sheet";
+import { SheetState, SheetFold, FlatPattern, FlatFoldLine, planFold, cornerReliefs, outlineItem, flatBounds, bendAllowance, insideSegs, isSequenced } from "./sheet";
+import { blankFace, splitBlank, foldedSheet, flatSheet, faceEdges, loopsFace, Strip, BendPlacement, WedgePlacement } from "./occ/sheet";
+import { planSequence, sequenceAngles, poseSequence, sequenceFaces } from "./sheetSequence";
 
 export interface SheetBuild { shape: Shape3D; state: SheetState; pattern: FlatPattern; warnings: string[] }
 
 const deg = (r: number) => (r * 180) / Math.PI;
 
 export function buildSheet(s: SheetState): SheetBuild {
+  if (isSequenced(s)) return buildSequenced(s);
   const blank = blankFace(s.base, [...s.ops, ...cornerReliefs(s.folds)]);
   let split: ReturnType<typeof splitBlank> | undefined;
   try {
@@ -68,6 +70,57 @@ export function buildSheet(s: SheetState): SheetBuild {
     };
   } finally {
     for (const x of [...(split?.panels ?? []), ...(split?.pieces ?? [])]) { try { x.face.delete(); } catch { /* shared with the blank */ } }
+    blank.delete();
+  }
+}
+
+/** Least space between stacked layers of paper folded in steps: enough that they never share a depth. */
+export const MIN_LAYER_GAP = 0.02;
+
+/**
+ * Paper folded in steps (core/sheetSequence.ts): planned in pure geometry, then
+ * each flat face — facets joined across creases not made yet — placed as a face
+ * (paper is drawn as its surface; the thickness spaces the layers).
+ */
+function buildSequenced(s: SheetState): SheetBuild {
+  const blank = blankFace(s.base, s.ops);
+  const faces: { delete?(): void }[] = [];
+  try {
+    const edges = faceEdges(blank);
+    const outline = edges.map((e) => outlineItem(e.type, e.pts));
+    const { min, max } = flatBounds(outline);
+    if (edges.some((e) => e.type !== "LINE")) throw new Error("folding in steps needs a sheet with straight edges (a convex polygon)");
+    // the blank's outline in order: each edge's start, walking the loop
+    const segs = edges.map((e) => [e.pts[0], e.pts[e.pts.length - 1]] as const);
+    const loop = [segs[0][0], segs[0][1]];
+    const left = segs.slice(1);
+    while (left.length) {
+      const end = loop[loop.length - 1];
+      const k = left.findIndex(([a, b]) => Math.hypot(a.x - end.x, a.y - end.y) < 1e-6 || Math.hypot(b.x - end.x, b.y - end.y) < 1e-6);
+      if (k < 0) throw new Error("folding in steps needs a sheet of one piece, without holes");
+      const [a, b] = left.splice(k, 1)[0];
+      loop.push(Math.hypot(a.x - end.x, a.y - end.y) < 1e-6 ? b : a);
+    }
+    loop.pop(); // back at the start
+    const gap = Math.max(s.thickness, MIN_LAYER_GAP);
+    for (const f of s.folds) if (f.angle == null) throw new Error(`fold "${f.id}" needs an angle (folds made in steps aren't solved)`);
+    const seq = planSequence(loop, s.folds.map((f) => ({ id: f.id, a: f.a, b: f.b, angle: f.angle!, step: f.step!, turn: f.turn, flip: f.flip })), s.fixed, gap);
+    const crease = seq.creases.map((c) => ({ id: seq.folds[c.folds[c.folds.length - 1]].id, a: c.a, b: c.b, angle: deg(c.angle), radius: 0, allowance: 0 }));
+    const pattern: FlatPattern = { outline, folds: crease, min, max, thickness: s.thickness, kFactor: s.kFactor };
+    const angles = sequenceAngles(seq, s.unfolded ? 0 : s.progress);
+    const T = poseSequence(seq, angles);
+    const parts = sequenceFaces(seq, angles).map((g) => { const face = loopsFace(g.loops); faces.push(face); return { face, T: T[g.facets[0]] }; });
+    const shape = foldedSheet(parts, [], [], 0, s.frame);
+    const named: Record<string, number> = {};
+    seq.folds.forEach((f, j) => { named[f.turn ? `${f.id}:turn` : named[f.id] != null ? `${f.id}@${f.step}` : f.id] = angles[j]; });
+    return {
+      shape,
+      state: { ...s, edited: false, seq, angles: named, panels: seq.facets.map((f, i) => ({ T: T[i], segs: f.poly.map((p, k) => [p, f.poly[(k + 1) % f.poly.length]] as [typeof p, typeof p]) })) },
+      pattern,
+      warnings: [],
+    };
+  } finally {
+    for (const f of faces) { try { f.delete?.(); } catch { /* freed with the shape */ } }
     blank.delete();
   }
 }

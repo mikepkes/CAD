@@ -26,7 +26,8 @@ import type { Shape3D } from "replicad";
 import { Vec3 } from "../math/vec";
 import { Rigid, IDENTITY, axisAngle, compose, invert, applyPoint, applyVec } from "../math/transform";
 import { resolveComponentWorld } from "./recompute";
-import { SheetState, SheetFold, SheetRow, blankEdges, contourBlank, addFlange, jogFolds, flatPointOf, chordAcross } from "./sheet";
+import { SheetState, SheetFold, SheetRow, blankEdges, contourBlank, addFlange, jogFolds, flatPointOf, chordAcross, isSequenced } from "./sheet";
+import { sequenceAngles, sequenceUVs } from "./sheetSequence";
 import { buildSheet, SheetBuild } from "./sheetBuild";
 import { flatBlankOf } from "./occ/sheet";
 import { localGearSolid, peekLocalGear, placeShape, gearExtent, Annulus } from "./occ/gear";
@@ -705,10 +706,13 @@ function applySheet(doc: CadDocument, scope: Scope, f: SheetFeature, bodies: Bod
         const angle = fd.angleExpr != null && fd.angleExpr !== "" ? rad(strictExpr(fd.angleExpr, `fold ${fd.line} angle`, scope)) : undefined;
         const radius = fd.radiusExpr != null && fd.radiusExpr !== "" ? strictExpr(fd.radiusExpr, `fold ${fd.line} radius`, scope) : r;
         const direction: 1 | -1 = fd.direction === "mountain" ? -1 : fd.direction === "valley" ? 1 : angle != null && angle < 0 ? -1 : 1;
+        // folds made in steps are sharp creases; a line may serve two steps (turn about it, then fold along it)
+        if (fd.step != null) return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle, direction, radius: 0, step: fd.step, ...(fd.turn ? { turn: true } : {}), ...(fd.flip ? { flip: true } : {}) };
         return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle, direction, radius, extend: radius > 0 };
       });
       const origin = f.flip ? { x: wp.origin.x - N.x * t, y: wp.origin.y - N.y * t, z: wp.origin.z - N.z * t } : wp.origin;
       state = { frame: { origin, x: wp.u, y: wp.v, z: N }, base: { regions }, ops: [], edges: blankEdges(regions, lines), folds, ...rules, fixed: f.fixed ?? regions[0].interior };
+      if (f.progressExpr != null && f.progressExpr !== "") state.progress = strictExpr(f.progressExpr, "progress", scope);
     }
     const built = buildSheet(state);
     bodies.push({ id: f.id, name: f.name, sketchId: f.sketchId, distance: t, shape: built.shape, faceNames: genericNames(f.id, faceGeoms(built.shape)), sheet: { ...built.state, pattern: built.pattern } });
@@ -723,6 +727,7 @@ function applyFlange(scope: Scope, f: FlangeFeature, bodies: Body[], out: Record
   try {
     const b = sheetBody(bodies, f.body, "flange");
     if (b.sheet.unfolded) throw new Error("flange: refold the sheet first");
+    if (isSequenced(b.sheet)) throw new Error("flange: this sheet is folded in steps (paper) — add the fold as another step instead");
     const angle = rad(strictExpr(f.angleExpr ?? (f.hem ? "180" : "90"), "flange angle", scope));
     const radius = f.radiusExpr != null && f.radiusExpr !== "" ? strictExpr(f.radiusExpr, "flange radius", scope) : f.hem ? 0 : b.sheet.radius;
     const length = strictExpr(f.lengthExpr, "flange length", scope);
@@ -742,6 +747,7 @@ function applyFold(doc: CadDocument, scope: Scope, f: FoldFeature, bodies: Body[
     const b = sheetBody(bodies, f.body, "fold");
     const s = b.sheet;
     if (s.unfolded) throw new Error("fold: refold the sheet first");
+    if (isSequenced(s)) throw new Error("fold: this sheet is folded in steps — add the fold to it as another step instead");
     const sk = doc.sketches[f.sketchId];
     if (!sk) throw new Error(`no sketch "${f.sketchId}"`);
     const line = (f.line ? sk.entities[f.line] : Object.values(sk.entities).find((e) => e.kind === "line")) as { kind: string; p1: string; p2: string } | undefined;
@@ -1325,7 +1331,7 @@ export class GeometryCache {
 }
 
 function cloneMesh(m: SolidMesh): SolidMesh {
-  return { positions: m.positions.slice(), normals: m.normals.slice(), indices: m.indices.slice(), edges: m.edges.slice(), triangleCount: m.triangleCount, faceRanges: m.faceRanges?.slice(), faceNames: m.faceNames?.slice() };
+  return { positions: m.positions.slice(), normals: m.normals.slice(), indices: m.indices.slice(), edges: m.edges.slice(), triangleCount: m.triangleCount, faceRanges: m.faceRanges?.slice(), faceNames: m.faceNames?.slice(), ...(m.uvs ? { uvs: m.uvs.slice() } : {}) };
 }
 
 /** Sketches a feature reads. */
@@ -1576,6 +1582,12 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
         if (body.sheet?.pattern) {
           const sh = body.sheet;
           row.sheet = { thickness: sh.thickness, kFactor: sh.kFactor, unfolded: !!sh.unfolded, ...(sh.edited && !sh.unfolded ? { stale: true } : {}), angles: Object.fromEntries(Object.entries(sh.angles ?? {}).map(([k, v]) => [k, Math.round(v * 180 / Math.PI * 1e6) / 1e6])), edges: sh.edges.map((e) => e.name), flat: sh.pattern! };
+          if (sh.seq && !(sh.edited && !sh.unfolded)) {
+            const progress = sh.unfolded ? 0 : sh.progress;
+            row.sheet.sequence = { plan: sh.seq, ...(progress != null ? { progress } : {}), frame: sh.frame };
+            // the paper's own coordinates on its mesh, so a material drawn on it stays put as it folds
+            row.mesh.uvs = sequenceUVs(sh.seq, sequenceAngles(sh.seq, progress), sh.frame, row.mesh.positions);
+          }
         }
       } catch (e) {
         row.error = kernelErrorMessage(e);

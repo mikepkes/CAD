@@ -259,6 +259,13 @@ export interface SheetFoldDef {
   direction?: "valley" | "mountain";
   /** Inner bend radius (default the sheet's); 0 = a sharp crease. */
   radiusExpr?: string;
+  /** Folded in steps (paper): the step (1, 2, …) this fold is made in. The line is drawn on the
+   *  flat sheet where it crosses one layer; at its step it folds every layer of the flap stacked there. */
+  step?: number;
+  /** A step that turns the whole model about the line (turn it over, stand it up) instead of folding. */
+  turn?: boolean;
+  /** Fold the side of the line the sheet is held by instead (the other side stays put). */
+  flip?: boolean;
 }
 
 /** A sheet-metal (or paper) part: a flat blank of uniform thickness folded
@@ -285,6 +292,8 @@ export interface SheetFeature {
   flip?: boolean;
   /** A point on the panel that stays put (sketch coords; default inside the blank). */
   fixed?: { x: number; y: number };
+  /** Folded in steps: how far along (0 = flat, k = step k done; fractions part-way). Default: every step done. */
+  progressExpr?: string;
 }
 
 /** An edge flange (or hem) on a sheet: material added off a straight edge of the blank and folded up. */
@@ -772,12 +781,12 @@ export interface ComponentPattern {
 
 /** An appearance assigned to components/bodies. Wood is procedural (species +
  *  params); metal/plastic are PBR. Rendering turns this into a three.js material. */
-export type MaterialKind = "wood" | "metal" | "plastic" | "painted" | "rubber" | "printed";
+export type MaterialKind = "wood" | "metal" | "plastic" | "painted" | "rubber" | "printed" | "paper";
 /** A procedural surface texture drawn in the shader (no geometry): stipple (fine grain),
  *  dimples, knurl (diamonds), ribs (rings across `textureAxis`). */
 export type SurfaceTexture = "none" | "stipple" | "dimples" | "knurl" | "ribs";
 export type MaterialAxis = "x" | "y" | "z";
-export const MATERIAL_KINDS: MaterialKind[] = ["metal", "plastic", "printed", "rubber", "painted", "wood"];
+export const MATERIAL_KINDS: MaterialKind[] = ["metal", "plastic", "printed", "rubber", "painted", "wood", "paper"];
 export const SURFACE_TEXTURES: SurfaceTexture[] = ["none", "stipple", "dimples", "knurl", "ribs"];
 
 export interface Material {
@@ -798,6 +807,8 @@ export interface Material {
   printAxis?: MaterialAxis;
   /** base/tint colour override (hex). */
   color?: string;
+  /** The colour of a surface's other side (hex): paper coloured on one side, white on the other. Default: `color`. */
+  backColor?: string;
   roughness?: number;
   metalness?: number;
   /** wood grain overrides. */
