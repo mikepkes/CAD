@@ -23,7 +23,7 @@ import { rebuild } from "../build";
 import { CommandRegistry } from "./registry";
 import { CommandApplyInfo, OperationRecord } from "./types";
 import { validate } from "./validate";
-import { renameInOperation } from "../parameterRename";
+import { renameInOperation, inlineInOperation } from "../parameterRename";
 import { isValidParamName } from "../parameters";
 import { describeConstraint, listWords } from "../../sketch/types";
 
@@ -241,6 +241,44 @@ export class CadSession {
     const list = [...new Set(ids)];
     draft.hidden = list.length ? list : undefined;
     return this.finish(before, evalsBefore, draft, undefined, false, {}, "Show or hide");
+  }
+
+  /** Delete a parameter. With `inline`, everything that used it keeps its current value as a plain number first,
+   *  so nothing collapses; in one undoable step either way. Removes the op that added it (or records a
+   *  parameter.delete when no op of this history added it). */
+  async deleteParameter(name: string, opts: { inline?: boolean } = {}): Promise<DispatchResult> {
+    const param = this.doc.parameters.find((p) => p.name === name);
+    if (!param) return this.fail(`No parameter called ${name}`);
+    const addOp = this.doc.operations.find((o) => o.type === "parameter.add" && (o.params as { name?: unknown }).name === name);
+    if (!addOp) {
+      if (!opts.inline) return this.dispatch("parameter.delete", { name });
+    }
+    const before = this.doc;
+    const evalsBefore = this.evaluations;
+    const draft = clone(before);
+    if (opts.inline) for (const op of draft.operations) if (op.opId !== addOp?.opId) op.params = inlineInOperation(op, name, param.value);
+    if (addOp) {
+      const idx = draft.operations.findIndex((o) => o.opId === addOp.opId);
+      draft.operations.splice(idx, 1);
+      if (draft.rollbackIndex > idx) draft.rollbackIndex--;
+    } else {
+      // parameter.add came from elsewhere (a template): record the delete as a step after the inlining
+      const op: OperationRecord = { opId: `op${draft.nextId++}`, type: "parameter.delete", params: { name }, createdIds: [], label: "Delete parameter", at: Date.now() };
+      draft.operations.splice(draft.rollbackIndex, 0, op);
+      draft.rollbackIndex++;
+    }
+    return this.finish(before, evalsBefore, draft, undefined, false, {}, opts.inline ? `Delete ${name}, keeping its value` : `Delete ${name}`);
+  }
+
+  /** Name the document (what Save names its file after); empty clears it. Undoable, not a timeline step. */
+  async renameDocument(name: string): Promise<DispatchResult> {
+    const clean = name.replace(/\s+/g, " ").trim().slice(0, 80);
+    if ((this.doc.name ?? "") === clean) return this.fail("That's already its name");
+    const before = this.doc;
+    const evalsBefore = this.evaluations;
+    const draft = clone(before);
+    if (clean) draft.name = clean; else delete draft.name;
+    return this.finish(before, evalsBefore, draft, undefined, false, {}, clean ? `Name the document ${clean}` : "Clear the document's name");
   }
 
   /** Show or hide some ids, leaving the rest of the hidden list as it is. */

@@ -53,6 +53,7 @@ const ACTIONS: HotkeyAction[] = [
   },
   { id: RING_ACTION_ID, label: "Action ring (hold, point, release)", context: "global", defaultPrimary: "space", run: () => useRing.getState().openRing() },
   { id: "edit.undo", label: "Undo", context: "global", defaultPrimary: "mod+z", run: () => st().undo() },
+  { id: "file.save", label: "Save to a file", context: "global", defaultPrimary: "mod+s", run: () => st().saveToFile() },
   { id: "edit.redo", label: "Redo", context: "global", defaultPrimary: "mod+shift+z", defaultSecondary: "mod+y", run: () => st().redo() },
   {
     id: "edit.cancel",

@@ -21,14 +21,21 @@ export interface AskTextOptions extends AskOptions {
   initial?: string;
 }
 
+export interface AskChoiceOptions extends AskOptions {
+  /** A second way to go, beside the confirming one (e.g. "Delete anyway" next to "Delete, keep the value"). */
+  alternateLabel: string;
+}
+
 export type DialogRequest =
   | (AskOptions & { kind: "confirm"; settle: (ok: boolean) => void })
+  | (AskChoiceOptions & { kind: "choice"; settle: (v: "confirm" | "alternate" | null) => void })
   | (AskTextOptions & { kind: "text"; settle: (value: string | null) => void });
 
 interface DialogState {
   current: DialogRequest | null;
   ask: (o: AskOptions) => Promise<boolean>;
   askText: (o: AskTextOptions) => Promise<string | null>;
+  askChoice: (o: AskChoiceOptions) => Promise<"confirm" | "alternate" | null>;
   /** Close the open request with "cancel" (false / null). */
   cancel: () => void;
 }
@@ -43,15 +50,18 @@ export const useDialog = create<DialogState>((set, get) => {
     current: null,
     ask: (o) => open<boolean>((settle) => ({ ...o, kind: "confirm", settle })),
     askText: (o) => open<string | null>((settle) => ({ ...o, kind: "text", settle })),
+    askChoice: (o) => open<"confirm" | "alternate" | null>((settle) => ({ ...o, kind: "choice", settle })),
     cancel: () => {
       const c = get().current;
       if (!c) return;
-      if (c.kind === "confirm") c.settle(false); else c.settle(null);
+      if (c.kind === "confirm") c.settle(false); else c.settle(null as never);
     },
   };
 });
 
 /** Ask a yes/no question in the app. */
 export const ask = (o: AskOptions) => useDialog.getState().ask(o);
+/** Ask with two ways forward: "confirm", "alternate", or null when cancelled. */
+export const askChoice = (o: AskChoiceOptions) => useDialog.getState().askChoice(o);
 /** Ask for a line of text in the app: null when cancelled. */
 export const askText = (o: AskTextOptions) => useDialog.getState().askText(o);

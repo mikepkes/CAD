@@ -41,6 +41,7 @@ import type { CutPart } from "../core/drawings";
 import { pickItems, type PickItem } from "./pickMenu";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
 import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
+import { renameViaEdit } from "./assist";
 
 /** The geometry backend: a Web Worker when available (keeps the OCC kernel off
  *  the main thread), else inline on this thread. */
@@ -63,6 +64,14 @@ let buildToken = 0;          // the latest build started: measurements of an old
 export const whenRebuilt = (): Promise<void> => rebuildInFlight ?? Promise.resolve();
 
 const AUTOSAVE_KEY = "vibecad.autosave.v1";
+/** Whether the autosaved document has changes not yet saved to a file ("1"), kept beside it. */
+const AUTOSAVE_DIRTY_KEY = "vibecad.autosave.dirty";
+
+/** The file name Save uses for a document: its name made file-safe, else "model". */
+export function documentFileName(name: string | undefined): string {
+  const base = (name ?? "").normalize("NFKD").replace(/[^\w\s.-]+/g, "").trim().replace(/\s+/g, "-").replace(/^[-.]+|[-.]+$/g, "").toLowerCase();
+  return `${base || "model"}.vibecad.json`;
+}
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 
@@ -265,7 +274,8 @@ export interface AppState {
   updateConfiguration: (ref: string, change: { name?: string; values?: Record<string, string | null>; suppress?: string[]; hide?: string[] }) => Promise<void>;
   deleteConfiguration: (ref: string) => Promise<void>;
   renameParameter: (name: string, newName: string) => Promise<void>;
-  deleteParameter: (name: string) => Promise<void>;
+  /** Delete a parameter; with `inline`, everything that used it keeps its current value (one undo step). */
+  deleteParameter: (name: string, opts?: { inline?: boolean }) => Promise<void>;
   /** Set or clear a parameter's extents (min/max) or acceptable values (enum). */
   setParameterBounds: (name: string, bounds: { min?: number; max?: number; values?: number[]; boolean?: boolean; options?: string[]; clear?: boolean }) => Promise<void>;
 
@@ -369,6 +379,12 @@ export interface AppState {
   setDesktopMcpPort: (port: number) => void;
 
   // persistence
+  /** Changes since the document was last saved to (or opened from) a file. */
+  dirty: boolean;
+  /** Name the document (Save names its file after it). Undoable. */
+  renameDocument: (name: string) => Promise<void>;
+  /** Rename a sketch or feature (by id) where it shows: the browser, the strip, the card. Undoable. */
+  renameEntity: (id: string, name: string) => Promise<void>;
   initApp: () => Promise<void>;
   newDocument: () => Promise<void>;
   loadDocument: (doc: CadDocument) => Promise<void>;
@@ -388,10 +404,12 @@ export const useStore = create<AppState>((set, get) => {
   const bump = (extra: Partial<AppState> = {}) => set((s) => ({ rev: s.rev + 1, ...extra }));
 
   const scheduleAutosave = () => {
+    if (!get().dirty) set({ dirty: true });
     if (autosaveTimer) clearTimeout(autosaveTimer);
     autosaveTimer = setTimeout(() => {
       try {
         localStorage.setItem(AUTOSAVE_KEY, serializeDocument(get().session.doc));
+        localStorage.setItem(AUTOSAVE_DIRTY_KEY, get().dirty ? "1" : "0");
       } catch {
         /* storage unavailable (private mode, quota) — non-fatal */
       }
@@ -970,10 +988,10 @@ export const useStore = create<AppState>((set, get) => {
       if (op) await get().editOperation(op.opId, { name: op.params.name, expression, ...extra });
       else await runDispatch("parameter.setBounds", { name, ...(bounds.clear ? { clear: true } : extra) });
     },
-    deleteParameter: async (name) => {
-      const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
-      if (op) await get().deleteOperation(op.opId);
-      else await runDispatch("parameter.delete", { name });
+    deleteParameter: async (name, opts) => {
+      const r = await get().session.deleteParameter(name, opts ?? {});
+      bump({ toast: toastFor(r), lastMessage: r.ok ? (opts?.inline ? `Deleted ${name}; what used it keeps its value` : `Deleted ${name}`) : r.error ?? "" });
+      afterMutate();
     },
 
     editDimension: async (cid, expr) => {
@@ -1407,6 +1425,9 @@ export const useStore = create<AppState>((set, get) => {
       if (saved) {
         try {
           await get().loadDocument(deserializeDocument(saved));
+          let dirty = false;
+          try { dirty = localStorage.getItem(AUTOSAVE_DIRTY_KEY) === "1"; } catch { /* ignore */ }
+          set({ dirty });
         } catch {
           /* corrupt autosave — start fresh */
         }
@@ -1415,6 +1436,7 @@ export const useStore = create<AppState>((set, get) => {
     loadDocument: async (doc) => {
       const s = new CadSession(doc, registry, solver);
       set({
+        dirty: false,
         session: s,
         mode: "model",
         activeSketchId: null,
@@ -1436,6 +1458,20 @@ export const useStore = create<AppState>((set, get) => {
       bump();
       if (Object.keys(s.doc.features).length) await get().rebuildSolids();
     },
+    dirty: false,
+    renameDocument: async (name) => {
+      const r = await get().session.renameDocument(name);
+      if (!r.ok) return;
+      bump({ lastMessage: get().session.doc.name ? `Named the document ${get().session.doc.name}` : "The document is untitled" });
+      scheduleAutosave();
+    },
+    renameEntity: async (id, name) => {
+      const clean = name.replace(/\s+/g, " ").trim();
+      if (!clean) return;
+      const r = await renameViaEdit(get().session.doc, id, clean, (opId, params) => get().editOperation(opId, params), () => get().session.doc);
+      if (r.ok) set({ lastMessage: `Renamed to ${clean}` });
+      else set({ toast: { kind: "error", text: r.error ?? "Couldn't rename that" } });
+    },
     newDocument: async () => {
       await get().loadDocument(createDocument());
       set({ lastMessage: "New document. Pick an origin plane to start a sketch." });
@@ -1446,19 +1482,27 @@ export const useStore = create<AppState>((set, get) => {
       }
     },
     saveToFile: () => {
-      const blob = new Blob([serializeDocument(get().session.doc)], { type: "application/json" });
+      const doc = get().session.doc;
+      const blob = new Blob([serializeDocument(doc)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "model.vibecad.json";
+      a.download = documentFileName(doc.name);
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
+      set({ dirty: false, lastMessage: `Saved ${a.download}` });
+      try { localStorage.setItem(AUTOSAVE_DIRTY_KEY, "0"); } catch { /* ignore */ }
     },
     openFile: async (file) => {
       try {
         const text = await file.text();
-        await get().loadDocument(deserializeDocument(text));
-        bump({ toast: { kind: "info", text: `Opened ${file.name}` } });
+        const doc = deserializeDocument(text);
+        // a file saved before documents had names is named after the file
+        if (!doc.name) { const base = file.name.replace(/(\.vibecad)?\.json$/i, "").trim(); if (base && base !== "model") doc.name = base; }
+        await get().loadDocument(doc);
+        // the opened file is now the autosave too (not the document it replaced), and it starts clean
+        try { localStorage.setItem(AUTOSAVE_KEY, serializeDocument(get().session.doc)); localStorage.setItem(AUTOSAVE_DIRTY_KEY, "0"); } catch { /* ignore */ }
+        bump({ dirty: false, toast: { kind: "info", text: `Opened ${file.name}` }, lastMessage: `Opened ${doc.name ?? file.name}` });
       } catch (e) {
         bump({ toast: { kind: "error", text: `Open failed: ${(e as Error).message}` } });
       }

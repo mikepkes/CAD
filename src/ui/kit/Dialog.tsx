@@ -24,7 +24,7 @@ export function Dialog() {
   }, [req, cancel]);
 
   if (!req) return null;
-  const confirm = () => { if (req.kind === "confirm") req.settle(true); else if (value.trim()) req.settle(value.trim()); };
+  const confirm = () => { if (req.kind === "confirm") req.settle(true); else if (req.kind === "choice") req.settle("confirm"); else if (value.trim()) req.settle(value.trim()); };
 
   return (
     <div className="modal-backdrop" onPointerDown={cancel}>
@@ -48,6 +48,7 @@ export function Dialog() {
         </div>
         <div className="modal-foot k-dialog-foot">
           <Button ghost onClick={cancel}>Cancel</Button>
+          {req.kind === "choice" && <Button ghost className="k-danger" onClick={() => req.settle("alternate")}>{req.alternateLabel}</Button>}
           <Button ref={okRef} type="submit" accent className={req.danger ? "k-danger" : undefined} disabled={req.kind === "text" && !value.trim()}>
             {req.confirmLabel ?? "OK"}
           </Button>

@@ -890,6 +890,9 @@ export interface CadDocument {
   /** Ids hidden in the viewport (bodies by feature id, sketches, components,
    *  datum planes). Display-only document state, like activeConfiguration. */
   hidden?: string[];
+  /** The document's own name ("Phone stand"): what Save names the file after. Document state like `hidden`
+   *  (renaming is undoable, not a timeline step); absent = untitled. */
+  name?: string;
 
   // ---- derived state (a cache, always reproducible from `operations`) ----
   /** The design publishes its shop drawing (drawing.publish): the customize

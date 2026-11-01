@@ -269,6 +269,39 @@ body {
   padding-right: 8px;
   border-right: 1px solid var(--line);
 }
+.doc-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+}
+.doc-name input {
+  width: 120px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 3px 6px;
+}
+.doc-name input:hover,
+.doc-name input:focus {
+  border-color: var(--line);
+  background: var(--panel-2);
+  outline: none;
+}
+.doc-name input::placeholder {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.dirty-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
 .btn.ghost {
   background: transparent;
   border: 1px solid transparent;
