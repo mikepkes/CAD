@@ -8,16 +8,18 @@
 // Everything is driven by a species preset plus overridable parameters, and the
 // same factory handles the physically based kinds (metal, plastic, painted,
 // rubber, printed), which share one surface layer: micro-roughness, procedural
-// textures, brushing and printed layer lines.
+// textures, brushing and printed layer lines. Paper has a shader of its own:
+// drawn in the sheet's flat coordinates, so its fibres stay put as it folds.
 import * as THREE from "three";
 
 export type MaterialAxis = "x" | "y" | "z";
 
 export interface MaterialSpec {
-  kind: "wood" | "metal" | "plastic" | "painted" | "rubber" | "printed";
+  kind: "wood" | "metal" | "plastic" | "painted" | "rubber" | "printed" | "paper";
   species?: string;      // wood: a SPECIES key
   finish?: string;       // metal/plastic: polished | brushed | satin | matte | gloss (printed: matte | satin | silk)
   color?: string;        // base/tint override (hex)
+  backColor?: string;    // the other side of a surface (paper coloured one side)
   roughness?: number;
   metalness?: number;
   ringScale?: number;    // wood: growth-ring spacing (mm)
@@ -438,6 +440,103 @@ function makePrinted(spec: MaterialSpec): THREE.Material {
   return withSurface(mat, { texture: spec.texture, textureScale: spec.textureScale, textureAxis: spec.textureAxis, micro: 0.04, layer: spec.layerHeight ?? 0.2, layerAxis: spec.printAxis });
 }
 
+// ---- paper ---------------------------------------------------------------------
+// Matte, fibrous and a little translucent, and (origami paper) coloured on one
+// side only: `color` on the front of a surface (the sheet's top), `backColor` on
+// its back. The texture lives in the paper's own flat coordinates (the mesh's
+// sheetUV attribute: x, y in mm and 1, set for paper folded in steps) so the
+// fibres travel with every facet as it folds; anything else falls back to the
+// body's coordinates, projected along its dominant normal axis. Three scales,
+// each faded out before it's finer than a couple of pixels (no moire at any
+// zoom): formation (the cloudy look of paper against the light, ~1 cm), fibre
+// flecks (~1 mm) and fibres (a fraction of a mm, seen only up close). Light
+// from behind shows through, tinted by both sides' colours.
+const PAPER_GLSL = /* glsl */`
+uniform vec3 uFront; uniform vec3 uBack; uniform float uFibre; uniform float uTrans;
+varying vec3 vSheet; varying vec3 vPLPos; varying vec3 vPLN;
+struct Paper { float tone; float h; };
+vec2 paperCoord(){
+  if (vSheet.z > 0.5) return vSheet.xy;
+  vec3 a = abs(vPLN);
+  return a.z >= a.x && a.z >= a.y ? vPLPos.xy : a.y >= a.x ? vPLPos.xz : vPLPos.yz;
+}
+// fibres: noise stretched along a direction (they lie every which way, so three directions overlaid)
+float fibres(vec2 q, float ang, float seed){
+  vec2 d = vec2(cos(ang), sin(ang));
+  vec2 r = vec2(dot(q, d), dot(q, vec2(-d.y, d.x)));
+  return snoise(vec3(r.x * 0.9, r.y * 7.0, seed));
+}
+Paper paperField(vec2 q){
+  float px = length(fwidth(q));                         // mm per pixel
+  float form = fbm(vec3(q * 0.09, 3.7));                 // formation: soft clouds
+  float fleckAA = 1.0 - smoothstep(0.25, 0.7, px);
+  float fleck = snoise(vec3(q * 1.3, 11.0)) * fleckAA;
+  float fibreAA = 1.0 - smoothstep(0.04, 0.16, px);
+  float f = (fibres(q, 0.3, 1.0) + fibres(q, 2.2, 5.0) + fibres(q, 4.1, 9.0)) / 3.0;
+  float fib = smoothstep(0.25, 0.75, f * 0.5 + 0.5) * fibreAA;
+  Paper P;
+  P.tone = 1.0 + uFibre * (0.06 * form + 0.04 * fleck + 0.12 * (fib - 0.25));
+  P.h = uFibre * (0.006 * fleck + 0.01 * fib);
+  return P;
+}`;
+
+function makePaper(spec: MaterialSpec): THREE.Material {
+  const front = lin(spec.color ?? "#f2efe8");
+  const back = spec.backColor ? lin(spec.backColor) : front.clone();
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff, metalness: 0, roughness: spec.roughness ?? 0.88,
+    specularIntensity: 0.35, sheen: 0.35, sheenRoughness: 0.8, sheenColor: new THREE.Color(1, 1, 1),
+    polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: 2, // a hair back: its own crease lines draw over it, not into it (the layer above still hides them)
+    side: THREE.DoubleSide,
+  });
+  const uniforms = {
+    uFront: { value: front }, uBack: { value: back },
+    uFibre: { value: 1 }, uTrans: { value: 0.22 },
+  };
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute vec3 sheetUV; varying vec3 vSheet; varying vec3 vPLPos; varying vec3 vPLN;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSheet = sheetUV; vPLPos = transformed; vPLN = objectNormal;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\n" + NOISE_GLSL + "\n" + PAPER_GLSL + "\nPaper gPaper; vec3 gOther;")
+      .replace("#include <map_fragment>", /* glsl */`
+        #include <map_fragment>
+        gPaper = paperField(paperCoord());
+        diffuseColor.rgb *= (gl_FrontFacing ? uFront : uBack) * gPaper.tone;
+        gOther = gl_FrontFacing ? uBack : uFront;
+      `)
+      .replace("#include <normal_fragment_maps>", /* glsl */`
+        #include <normal_fragment_maps>
+        {
+          vec3 pos = -vViewPosition;
+          vec3 dpx = dFdx(pos), dpy = dFdy(pos);
+          float dhx = dFdx(gPaper.h), dhy = dFdy(gPaper.h);
+          vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
+          float det = dot(dpx, r1);
+          normal = normalize(abs(det) * normal - sign(det) * (dhx * r1 + dhy * r2));
+        }
+      `)
+      .replace("#include <lights_fragment_maps>", /* glsl */`
+        #include <lights_fragment_maps>
+        {
+          // light through the sheet: what falls on its other side, through both sides' colour
+          vec3 through = vec3(0.0);
+          #ifdef USE_ENVMAP
+            through += getIBLIrradiance(-geometryNormal);
+          #endif
+          #if NUM_DIR_LIGHTS > 0
+            for (int i = 0; i < NUM_DIR_LIGHTS; i++) through += directionalLights[i].color * max(dot(-geometryNormal, directionalLights[i].direction), 0.0);
+          #endif
+          reflectedLight.indirectDiffuse += uTrans * through * BRDF_Lambert(diffuseColor.rgb * gOther);
+        }
+      `);
+  };
+  mat.customProgramCacheKey = () => "paper";
+  mat.userData.paperUniforms = uniforms;
+  return mat;
+}
+
 function hash01(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -472,7 +571,7 @@ export function woodFrameFromBounds(b: { min: { x: number; y: number; z: number 
 /** The render spec of a document material: its appearance fields, nothing else. */
 export function materialSpec(m: MaterialSpec & { name?: string }): MaterialSpec {
   const out: MaterialSpec = { kind: m.kind };
-  for (const k of ["species", "finish", "color", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength", "texture", "textureScale", "textureAxis", "layerHeight", "printAxis"] as const) {
+  for (const k of ["species", "finish", "color", "backColor", "roughness", "metalness", "ringScale", "grainContrast", "poreStrength", "texture", "textureScale", "textureAxis", "layerHeight", "printAxis"] as const) {
     if (m[k] !== undefined) (out as unknown as Record<string, unknown>)[k] = m[k];
   }
   return out;
@@ -487,6 +586,7 @@ export function createMaterial(spec: MaterialSpec, frame?: WoodFrame): THREE.Mat
     case "painted": return makePainted(spec);
     case "rubber": return makeRubber(spec);
     case "printed": return makePrinted(spec);
+    case "paper": return makePaper(spec);
     default: return makePlastic(spec);
   }
 }

@@ -19,6 +19,9 @@ import { buildBodies } from "../viewport/turntableRecorder";
 import { resolveComponentWorld } from "../core/recompute";
 import { resolveParameters } from "../core/parameters";
 import { resolveSketchPlane } from "../geometry/plane";
+import { compileExpr } from "../math/expr";
+import { sequenceAngles, sequenceMesh } from "../core/sheetSequence";
+import type { SolidEval } from "../core/features";
 import { setAgentClientFactory } from "../model/agent";
 import { replayClient, recordingClient, type AgentCache } from "./agentReplay";
 import * as stand from "./stand";
@@ -92,7 +95,7 @@ const turn = { rate: 0, target: 0, raf: 0 };
 
 /** The director's handle on the app. Every method is plain data in, plain data out (it crosses Playwright). */
 /** The pose sweeps' running state: which document's parts are posed, and the parameter values they're posed at. */
-let pose: { doc: unknown; scope: Record<string, number> } | null = null;
+let pose: { doc: unknown; scope: Record<string, number>; sheets: { id: string; seq: NonNullable<NonNullable<SolidEval["sheet"]>["sequence"]>; progress: string; last?: number }[] } | null = null;
 
 const api = {
   // ---- waiting ----
@@ -212,17 +215,33 @@ const api = {
     return new Promise<void>((done) => setTimeout(done, (opts.ms ?? 1500) + 50));
   },
   /** Drive a parameter from `from` to `to` over `ms` by moving the built parts (as the motion study and the
-   *  turntable recorder do), not by rebuilding each step, so a mechanism moves smoothly at real speed. Joints only:
+   *  turntable recorder do), not by rebuilding each step, so a mechanism moves smoothly at real speed. Joints,
+   *  and paper folded in steps (its `progress`: the sheet is re-posed from its fold plan, no kernel); other
    *  geometry that depends on the parameter doesn't change. The parts stay posed (sweeps chain) until `poseEnd`. */
   poseSweep(name: string, from: number, to: number, ms: number, opts: { ease?: boolean } = {}): Promise<void> {
     const scene = getActiveScene(), st = useStore.getState(), doc = st.session.doc;
     if (!scene) return Promise.resolve();
     if (!pose || pose.doc !== doc) {
-      pose = { doc, scope: { ...resolveParameters(doc.parameters).scope } };
+      // sheets folded in steps, and the expression that runs their steps
+      const sheets = Object.values(st.solids as Record<string, SolidEval>).flatMap((sol) => {
+        const f = doc.features[sol.featureId], seq = sol.sheet?.sequence;
+        return f?.kind === "sheet" && f.progressExpr && seq && sol.mesh ? [{ id: sol.featureId, seq, progress: f.progressExpr }] : [];
+      });
+      pose = { doc, scope: { ...resolveParameters(doc.parameters).scope }, sheets };
       scene.beginAnimation(buildBodies(doc, st.solids as never), resolveComponentWorld(doc, pose.scope), true);
     }
     const p = pose;
-    const at = (v: number) => { p.scope[name] = v; scene.setAnimationPose(resolveComponentWorld(doc, p.scope)); };
+    const at = (v: number) => {
+      p.scope[name] = v;
+      scene.setAnimationPose(resolveComponentWorld(doc, p.scope));
+      for (const sh of p.sheets) {
+        let k: number;
+        try { k = compileExpr(sh.progress).eval(p.scope); } catch { continue; }
+        if (!Number.isFinite(k) || k === sh.last) continue;
+        sh.last = k;
+        scene.setAnimationMesh(sh.id, sequenceMesh(sh.seq.plan, sequenceAngles(sh.seq.plan, k), sh.seq.frame));
+      }
+    };
     at(from); // before the next frame draws, so a chained sweep never shows the built pose
     const t0 = performance.now();
     return new Promise((done) => {

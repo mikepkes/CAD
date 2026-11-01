@@ -65,6 +65,8 @@ export interface SolidView {
   material?: MaterialSpec;
   /** Per-body wood grain frame (grain axis + pith), for the procedural shader. */
   woodFrame?: WoodFrame;
+  /** Per vertex, its point on the flat sheet (mm): paper folded in steps, so the paper's texture stays put as it folds. */
+  uvs?: Float32Array;
   /** A hidden body drawn as a faint, unpickable ghost ("show hidden" mode). */
   ghost?: boolean;
   /** A ghost that is another design (a compared Design Space pin): the kit's ghost accent, dashed edges. Implies `ghost`. */
@@ -509,6 +511,7 @@ export class SceneManager {
 
   /** Draw the scene, then the lens over it: redraw the solids under the lens with the analysis material (no-op when unset). */
   private drawFrame() {
+    this.fitNear();
     this.renderer.render(this.scene, this.camera);
     this.lensPass.render(this.renderer, this.scene, this.camera, this.solidsGroup, this.lastData?.solids);
   }
@@ -791,10 +794,11 @@ export class SceneManager {
       ? new THREE.Vector3(...orbitDirection(opts.azimuthDeg ?? -60, opts.elevationDeg ?? 30))
       : new THREE.Vector3(...DIRS[view]).normalize();
     const fov = Math.max(1, Math.min(opts.fovDeg ?? 45, 120));
-    const cam = new THREE.PerspectiveCamera(fov, width / height, 0.1, 1e6);
+    const dist = fitDistance(radius, fov, width / height);
+    const cam = new THREE.PerspectiveCamera(fov, width / height, Math.max(0.1, Math.min(dist - radius, dist / 200)), 1e6);
     cam.up.set(0, 0, 1);
     if (view === "top" || view === "bottom") cam.up.set(0, 1, 0);
-    cam.position.copy(center).addScaledVector(dir, fitDistance(radius, fov, width / height));
+    cam.position.copy(center).addScaledVector(dir, dist);
     cam.lookAt(center);
     if (opts.rollDeg) cam.rotateZ((opts.rollDeg * Math.PI) / 180); // about the view axis
     cam.updateProjectionMatrix();
@@ -1044,7 +1048,8 @@ export class SceneManager {
     this.renderDatumPlanes(data.datumPlanes ?? []);
     this.clearGroup(this.sketchGroup);
     this.clearGroup(this.previewGroup);
-    this.clearGroup(this.solidsGroup);
+    // posed parts (beginAnimation) are the view until endAnimation, which redraws from lastData
+    if (!this.animating) this.clearGroup(this.solidsGroup);
     this.clearGroup(this.ghostGroup);
     this.clearGroup(this.regionGroup);
     this.clearGroup(this.previewSolidGroup);
@@ -1061,8 +1066,10 @@ export class SceneManager {
     this.clipPlane = data.mode === "model" && data.section ? sectionPlane(data.section) : null;
 
     // Solids render in model mode (and faded while sketching).
-    this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
-    if (data.solids) data.solids.forEach((s, i) => this.renderSolid(s, data.mode === "sketch" || !!s.ghost, i));
+    if (!this.animating) {
+      this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
+      if (data.solids) data.solids.forEach((s, i) => this.renderSolid(s, data.mode === "sketch" || !!s.ghost, i));
+    }
 
     if (data.sketch && data.plane) {
       this.renderSketch(data.sketch, data.plane, data);
@@ -1098,11 +1105,7 @@ export class SceneManager {
   }
 
   private renderSolid(s: SolidView, faded: boolean, index: number) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(s.positions, 3));
-    if (s.normals.length === s.positions.length) geo.setAttribute("normal", new THREE.BufferAttribute(s.normals, 3));
-    else geo.computeVertexNormals();
-    geo.setIndex(new THREE.BufferAttribute(s.indices, 1));
+    const geo = solidGeometry(s);
     const clip = this.clipPlane ? [this.clipPlane] : null;
     // In section view each body gets its own colour so parts read apart; the
     // normal (un-sectioned) view keeps the assigned material, else a uniform tint.
@@ -1160,7 +1163,9 @@ export class SceneManager {
         egeo,
         s.variant
           ? new THREE.LineDashedMaterial({ color: COLORS.variant, dashSize: 1.5, gapSize: 1, transparent: true, opacity: 0.85, clippingPlanes: clip ?? undefined }) // variant ghost: dashed accent edges
-          : new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1, clippingPlanes: clip ?? undefined })
+          : s.material?.kind === "paper" && !clip
+            ? paperEdgeMaterial(faded)
+            : new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1, clippingPlanes: clip ?? undefined })
       );
       if (s.variant) { eseg.computeLineDistances(); eseg.userData.ghost = true; } // dashes need distances; the lens skips ghosts
       eseg.userData.edges = true; // the body's B-rep edges (the lens redraws these)
@@ -1242,6 +1247,8 @@ export class SceneManager {
   // on every frame (e.g. during a slider drag). Wood keeps one material per body
   // and updates its grain-frame uniforms in place, so grain travels with a part.
   private matCache = new Map<string, THREE.Material>();
+  /** While animating: each body's mesh and edge lines, by body id (for setAnimationMesh). */
+  private animMeshes = new Map<string, { mesh: THREE.Mesh; lines: THREE.LineSegments }>();
   // ---- transform-driven animation (turntable / mechanism recording) ----
 
   /** Begin animation: build `bodies` into per-component groups (world-baked at the
@@ -1252,7 +1259,7 @@ export class SceneManager {
     this.animating = true;
     this.recording = !live; // live: the normal loop keeps rendering (and the camera keeps moving) while poses change
     this.clearGroup(this.solidsGroup);
-    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = [];
+    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = []; this.animMeshes.clear();
     this.solidsGroup.visible = true;
     for (const { solid, componentId } of bodies) {
       let g = this.animGroups.get(componentId);
@@ -1262,17 +1269,14 @@ export class SceneManager {
         const W = buildWorld.get(componentId);
         this.animBuildInv.set(componentId, (W ? rigidMat(W) : new THREE.Matrix4()).invert());
       }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.BufferAttribute(solid.positions, 3));
-      if (solid.normals.length === solid.positions.length) geo.setAttribute("normal", new THREE.BufferAttribute(solid.normals, 3));
-      else geo.computeVertexNormals();
-      geo.setIndex(new THREE.BufferAttribute(solid.indices, 1));
+      const geo = solidGeometry(solid);
       const mat = solid.material ? this.materialFor(solid) : new THREE.MeshStandardMaterial({ color: 0x7b86e0, metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide });
-      g.add(new THREE.Mesh(geo, mat));
-      if (solid.edges.length) {
-        const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(solid.edges, 3));
-        g.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x20242e })));
-      }
+      const mesh = new THREE.Mesh(geo, mat);
+      g.add(mesh);
+      const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(solid.edges, 3));
+      const lines = new THREE.LineSegments(eg, solid.material?.kind === "paper" ? paperEdgeMaterial(false) : new THREE.LineBasicMaterial({ color: 0x20242e }));
+      g.add(lines);
+      if (solid.id) this.animMeshes.set(solid.id, { mesh, lines });
       if (solid.material?.kind === "wood" && solid.woodFrame) {
         this.animWood.push({ mat, axis: new THREE.Vector3(...solid.woodFrame.axis), pith: new THREE.Vector3(...solid.woodFrame.pith), cid: componentId });
       }
@@ -1295,6 +1299,18 @@ export class SceneManager {
       const u = w.mat.userData.woodUniforms as { uAxis: { value: THREE.Vector3 }; uPith: { value: THREE.Vector3 } } | undefined;
       if (u) { u.uPith.value.copy(w.pith).applyMatrix4(G); u.uAxis.value.copy(w.axis).transformDirection(G); }
     }
+  }
+
+  /** Swap one animated body's geometry (its id, in its build-pose frame): a sheet folding in steps
+   *  reshapes as it poses (sequenceMesh), where a joint only moves a part. */
+  setAnimationMesh(id: string, m: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; edges: Float32Array; uvs?: Float32Array }) {
+    const a = this.animMeshes.get(id);
+    if (!a) return;
+    a.mesh.geometry.dispose();
+    a.mesh.geometry = solidGeometry(m);
+    a.lines.geometry.dispose();
+    const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(m.edges, 3));
+    a.lines.geometry = eg;
   }
 
   /** Set an exact output size (pixelRatio 1) for recording, so captured frames
@@ -1324,7 +1340,19 @@ export class SceneManager {
   }
 
   /** Render one frame now (recorder-driven; the RAF loop is paused while recording). */
-  renderFrame() { this.renderer.render(this.scene, this.camera); }
+  renderFrame() { this.fitNear(); this.renderer.render(this.scene, this.camera); }
+
+  /** Keep the perspective camera's near plane in step with how far it stands off: a fixed 0.1 mm near
+   *  plane leaves the depth buffer a fraction of a millimetre to tell surfaces apart 700 mm away, so
+   *  close layers (folded paper, a part on a plate) flicker through each other. A 200th of the distance
+   *  to the orbit target keeps them apart at any zoom and clips only what's hard against the lens. */
+  private fitNear() {
+    if (this.camera !== this.perspCam) return;
+    const near = Math.min(50, Math.max(0.1, this.perspCam.position.distanceTo(this.controls.target) / 200));
+    if (Math.abs(near - this.perspCam.near) <= this.perspCam.near * 0.05) return;
+    this.perspCam.near = near;
+    this.perspCam.updateProjectionMatrix();
+  }
 
   /** The canvas the recorder reads VideoFrames from. */
   get recordCanvas(): HTMLCanvasElement { return this.renderer.domElement; }
@@ -1335,7 +1363,7 @@ export class SceneManager {
     this.animating = false;
     this.recording = false;
     this.clearGroup(this.solidsGroup);
-    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = [];
+    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = []; this.animMeshes.clear();
     if (this.lastData) this.update(this.lastData);
   }
 
@@ -2077,4 +2105,25 @@ function circleFrom3(a: { x: number; y: number }, b: { x: number; y: number }, c
   const ux = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d;
   const uy = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
   return { x: ux, y: uy, r: Math.hypot(a.x - ux, a.y - uy) };
+}
+
+/** A body's triangles as a three.js geometry: positions, normals, indices and, for paper folded in
+ *  steps, each vertex's point on the flat sheet (the paper shader's sheetUV: x, y and 1 = set). */
+function solidGeometry(s: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; uvs?: Float32Array }): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(s.positions, 3));
+  if (s.normals.length === s.positions.length) geo.setAttribute("normal", new THREE.BufferAttribute(s.normals, 3));
+  else geo.computeVertexNormals();
+  geo.setIndex(new THREE.BufferAttribute(s.indices, 1));
+  if (s.uvs && s.uvs.length * 3 === s.positions.length * 2) {
+    const n = s.uvs.length / 2, a = new Float32Array(3 * n);
+    for (let i = 0; i < n; i++) { a[3 * i] = s.uvs[2 * i]; a[3 * i + 1] = s.uvs[2 * i + 1]; a[3 * i + 2] = 1; }
+    geo.setAttribute("sheetUV", new THREE.BufferAttribute(a, 3));
+  }
+  return geo;
+}
+
+/** Paper's edges and creases: a soft grey line, a crease rather than a drawn outline. */
+function paperEdgeMaterial(faded: boolean): THREE.LineBasicMaterial {
+  return new THREE.LineBasicMaterial({ color: 0x55534f, transparent: true, opacity: faded ? 0.2 : 0.5 });
 }

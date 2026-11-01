@@ -54,6 +54,30 @@ function polygon3(pts: { x: number; y: number; z: number }[]): OcAny {
 /** A flat polygon (local z = 0) as a face. */
 const polyFace = (pts: Pt[]): OcAny => polygon3(pts.map((p) => ({ x: p.x, y: p.y, z: 0 })));
 
+/** A flat face (local z = 0, facing +z) from boundary loops: the first the outside (CCW), the rest holes (CW). */
+export function loopsFace(loops: Pt[][]): OcAny {
+  const oc = OC();
+  const wire = (pts: Pt[]) => {
+    const mw = new oc.BRepBuilderAPI_MakeWire();
+    const owned: { delete?(): void }[] = [mw];
+    pts.forEach((p, i) => {
+      const q = pts[(i + 1) % pts.length];
+      const a = pnt(p.x, p.y, 0), b = pnt(q.x, q.y, 0);
+      const me = new oc.BRepBuilderAPI_MakeEdge(a, b);
+      mw.Add(me.Edge());
+      owned.push(a, b, me);
+    });
+    const w = mw.Wire();
+    free(...owned);
+    return w;
+  };
+  const mf = new oc.BRepBuilderAPI_MakeFace(wire(loops[0]), true);
+  for (const h of loops.slice(1)) mf.Add(wire(h));
+  const f = mf.Face();
+  free(mf);
+  return f;
+}
+
 type Kind = "fuse" | "cut" | "common";
 function boolean(kind: Kind, a: OcAny, b: OcAny): OcAny {
   const oc = OC();

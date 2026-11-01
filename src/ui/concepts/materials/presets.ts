@@ -33,4 +33,8 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
   { group: "Wood", name: "Oak", params: { kind: "wood", species: "white-oak" } },
   { group: "Wood", name: "Walnut", params: { kind: "wood", species: "walnut" } },
   { group: "Wood", name: "Maple", params: { kind: "wood", species: "maple" } },
+  // paper is drawn on both sides of a surface: `color` on the front (a sheet's top), `backColor` underneath
+  { group: "Paper", name: "Paper", params: { kind: "paper", color: "#f3f1ec" } },
+  { group: "Paper", name: "Origami paper", params: { kind: "paper", color: "#c8323c", backColor: "#f3f0e8" } },
+  { group: "Paper", name: "Kraft paper", params: { kind: "paper", color: "#b08a5e", roughness: 0.92 } },
 ];

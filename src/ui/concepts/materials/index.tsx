@@ -34,7 +34,7 @@ export function Swatch(p: { spec: Parameters<typeof materialSwatch>[0]; px?: num
 }
 
 const usedBy = (doc: CadDocument, id: string) => Object.values(doc.components).filter((c) => c.materialId === id).length;
-const kindLine = (m: Material) => [m.kind, m.kind === "wood" ? m.species : m.finish, m.texture && m.texture !== "none" ? m.texture : null, m.kind === "printed" ? `${m.layerHeight ?? 0.2} mm layers along ${(m.printAxis ?? "z").toUpperCase()}` : null].filter(Boolean).join(" · ");
+const kindLine = (m: Material) => [m.kind, m.kind === "wood" ? m.species : m.finish, m.texture && m.texture !== "none" ? m.texture : null, m.kind === "printed" ? `${m.layerHeight ?? 0.2} mm layers along ${(m.printAxis ?? "z").toUpperCase()}` : null, m.kind === "paper" && m.backColor && m.backColor !== m.color ? "two-sided" : null].filter(Boolean).join(" · ");
 
 export function MaterialsPanel() {
   useStore((s) => s.rev);
@@ -85,7 +85,7 @@ export function MaterialsPanel() {
       )}
 
       <div className="mats-presets" aria-label="Add a material">
-        {(["Metal", "Plastic", "3D print", "Rubber", "Paint", "Wood"] as const).map((g) => (
+        {(["Metal", "Plastic", "3D print", "Rubber", "Paint", "Wood", "Paper"] as const).map((g) => (
           <div key={g} className="mats-group">
             <span className="k-label">{g}</span>
             <div className="mats-grid">
@@ -120,11 +120,14 @@ function MaterialEditor({ m }: { m: Material }) {
       {m.kind === "wood"
         ? <label><span>Species</span><Select ariaLabel="Species" value={m.species ?? "white-oak"} options={SPECIES_KEYS.map((k) => ({ key: k, label: k }))} onChange={(k) => set({ species: k })} /></label>
         : <label><span>Colour</span><input type="color" aria-label="Colour" defaultValue={m.color ?? "#888888"} onChange={(e) => set({ color: e.target.value }, 250)} /></label>}
+      {m.kind === "paper" && (
+        <label title="The other side of the sheet (origami paper is coloured on one side)"><span>Back colour</span><input type="color" aria-label="Back colour" defaultValue={m.backColor ?? m.color ?? "#f3f1ec"} onChange={(e) => set({ backColor: e.target.value }, 250)} /></label>
+      )}
       {finishes && <label><span>Finish</span><Select ariaLabel="Finish" value={m.finish ?? finishes[1] ?? finishes[0]} options={finishes.map((f) => ({ key: f, label: f }))} onChange={(f) => set({ finish: f })} /></label>}
       {m.kind !== "wood" && (
         <label><span>Roughness</span><input type="range" aria-label="Roughness" min={0} max={1} step={0.01} defaultValue={m.roughness ?? 0.4} onChange={(e) => set({ roughness: Number(e.target.value) }, 200)} /></label>
       )}
-      {m.kind !== "wood" && (
+      {m.kind !== "wood" && m.kind !== "paper" && (
         <label><span>Texture</span><Select ariaLabel="Texture" value={m.texture ?? (m.kind === "rubber" ? "stipple" : "none")} options={SURFACE_TEXTURES.map((t) => ({ key: t, label: t }))} onChange={(t) => set({ texture: t })} /></label>
       )}
       {m.texture && m.texture !== "none" && (

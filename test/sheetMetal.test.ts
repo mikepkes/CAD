@@ -257,3 +257,64 @@ describe("paper and origami", () => {
     expect(b.bounds!.max.x).toBeCloseTo(60.5, 6);
   });
 });
+
+describe("paper folded in steps", () => {
+  beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
+
+  /** A 100 × 60 sheet folded in half (x = 50), then in half again (y = 30), on a `fold` parameter. */
+  async function twice(s: CadSession) {
+    await ok(s, "parameter.add", { name: "fold", expression: "2", min: 0, max: 2 });
+    const [sk] = await rectSketch(s, 100, 60);
+    const half = await constructionLine(s, sk, [50, 0], [50, 60]);
+    const quarter = await constructionLine(s, sk, [0, 30], [50, 30]);
+    const id = await ok(s, "feature.sheet", { sketch: sk, thickness: 0.1, radius: 0, fixed: { x: 10, y: 10 }, progress: "fold", folds: [{ line: half, angle: 180, step: 1 }, { line: quarter, angle: 180, step: 2 }] });
+    return { id, half, quarter };
+  }
+  const setFold = async (s: CadSession, v: number) => { const r = await s.dispatch("parameter.set", { name: "fold", expression: String(v) }); if (!r.ok) throw new Error(r.error); };
+
+  it("folds through the stacked layers: paper kept, layers a thickness apart, a crease on every layer", async () => {
+    const s = realSession();
+    const { id, quarter } = await twice(s);
+    const b = body(s, id);
+    expect(b.surface).toBe(true);
+    expect(b.area).toBeCloseTo(6000, 4);
+    expect([b.bounds!.min.x, b.bounds!.max.x, b.bounds!.min.y, b.bounds!.max.y].map((v) => Math.round(v * 1e3) / 1e3)).toEqual([0, 50, 0, 30]);
+    expect(b.bounds!.max.z).toBeGreaterThan(0.29); // four layers, 0.1 apart
+    expect(b.bounds!.max.z).toBeLessThan(0.5);
+    // the flat pattern: the second fold's line on both layers, one valley and one mountain
+    const lines = b.sheet!.flat.folds.filter((f) => f.id === quarter);
+    expect(lines.length).toBe(2);
+    expect(lines.map((f) => Math.sign(f.angle)).sort()).toEqual([-1, 1]);
+    expect(b.sheet!.sequence!.plan.facets.length).toBe(4);
+    expect(b.mesh!.uvs).toBeTruthy();
+  });
+
+  it("the progress parameter runs the steps: flat at 0, half way through a step, done at its number", async () => {
+    const s = realSession();
+    const { id, half } = await twice(s);
+    await setFold(s, 0);
+    let b = body(s, id);
+    expect([b.bounds!.max.x, b.bounds!.max.y, b.bounds!.max.z].map((v) => Math.round(v * 1e3) / 1e3)).toEqual([100, 60, 0]);
+    await setFold(s, 0.5);
+    b = body(s, id);
+    expect(b.bounds!.max.z).toBeCloseTo(50, 0); // the right half stands up
+    expect(b.sheet!.angles[half]).toBeCloseTo(90, 6);
+    await setFold(s, 1);
+    b = body(s, id);
+    expect(b.bounds!.max.x).toBeCloseTo(50, 3);
+    expect(b.bounds!.max.y).toBeCloseTo(60, 3);
+  });
+
+  it("asks for a step on every fold, and keeps flanges off it", async () => {
+    const s = realSession();
+    const [sk, , right] = await rectSketch(s, 100, 60);
+    const l1 = await constructionLine(s, sk, [50, 0], [50, 60]);
+    const l2 = await constructionLine(s, sk, [0, 30], [50, 30]);
+    const r = await s.dispatch("feature.sheet", { sketch: sk, thickness: 0.1, folds: [{ line: l1, angle: 180, step: 1 }, { line: l2, angle: 180 }] });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/every fold a `step`/);
+    await ok(s, "feature.sheet", { sketch: sk, thickness: 0.1, radius: 0, folds: [{ line: l1, angle: 180, step: 1 }] });
+    await ok(s, "feature.flange", { edge: right, length: 10 });
+    expect(Object.values(rows(s)).find((x) => x.error)?.error).toMatch(/folded in steps/);
+  });
+});

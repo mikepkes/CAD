@@ -10,13 +10,13 @@ import { resolveComponentWorld } from "../core/recompute";
 import { resolveParameters } from "../core/parameters";
 import { hiddenIds, bodyVisible } from "../core/visibility";
 import { materialForComponent, type CadDocument } from "../core/document";
-import { woodFrameFromBounds } from "./material";
+import { materialSpec, woodFrameFromBounds } from "./material";
 import { fitDistance, orbitDirection } from "./orbitCamera";
 import type { SceneManager, SolidView } from "./SceneManager";
 
 interface SolidEvalLike {
   featureId: string; sketchId: string;
-  mesh?: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; edges: Float32Array };
+  mesh?: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; edges: Float32Array; uvs?: Float32Array };
   bounds?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
   threadDecals?: SolidView["threadDecals"];
 }
@@ -49,9 +49,9 @@ export function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEva
     // live in the root component, so they'd otherwise drop out of the recording.
     const componentId = (sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
     const mat = materialForComponent(doc, componentId);
-    const material = mat ? { kind: mat.kind, species: mat.species, finish: mat.finish, color: mat.color, roughness: mat.roughness, metalness: mat.metalness, ringScale: mat.ringScale, grainContrast: mat.grainContrast, poreStrength: mat.poreStrength } : undefined;
+    const material = mat ? materialSpec(mat) : undefined;
     const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;
-    out.push({ solid: { id: sol.featureId, positions: sol.mesh.positions, normals: sol.mesh.normals, indices: sol.mesh.indices, edges: sol.mesh.edges, threadDecals: sol.threadDecals, material, woodFrame }, componentId });
+    out.push({ solid: { id: sol.featureId, positions: sol.mesh.positions, normals: sol.mesh.normals, indices: sol.mesh.indices, edges: sol.mesh.edges, ...(sol.mesh.uvs ? { uvs: sol.mesh.uvs } : {}), threadDecals: sol.threadDecals, material, woodFrame }, componentId });
   }
   return out;
 }

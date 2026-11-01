@@ -20,6 +20,7 @@
 
 import { loopPolygon, Profile, Pt } from "./geometry/profile";
 import { Rigid, IDENTITY, compose, invert, rotationAbout, translation } from "../math/transform";
+import type { SheetSequence } from "./sheetSequence";
 
 export type Seg = [Pt, Pt];
 
@@ -48,6 +49,10 @@ export interface SheetFold {
    *  along the edge): a flange meeting it at a corner is trimmed out of it, so
    *  the two walls don't run into each other. */
   setbackBand?: Pt[];
+  /** Folded in steps (core/sheetSequence.ts): the step it's made in; a turn of the whole model; the held side folds. */
+  step?: number;
+  turn?: boolean;
+  flip?: boolean;
 }
 
 /** Material added to (a flange) or cut from (a relief) the blank, in order. */
@@ -78,7 +83,14 @@ export interface SheetState {
   angles?: Record<string, number>;
   /** Derived: the flat pattern as last built. */
   pattern?: FlatPattern;
+  /** Folded in steps (its folds have a `step`): how far along (0 flat, k = step k done; undefined = all). */
+  progress?: number;
+  /** Derived, folded in steps: the plan (facets, folds, creases) the last build posed. */
+  seq?: SheetSequence;
 }
+
+/** A sheet folded in steps (every fold has a step). */
+export const isSequenced = (s: Pick<SheetState, "folds">) => s.folds.length > 0 && s.folds.every((f) => f.step != null);
 
 // ---- 2D helpers --------------------------------------------------------------
 
@@ -705,6 +717,9 @@ export interface SheetRow {
   angles: Record<string, number>;
   edges: string[];
   flat: FlatPattern;
+  /** Folded in steps: the plan, where the build posed it (progress; undefined = all done) and the sheet's frame — what the
+   *  viewport poses a fold animation from without a rebuild (sequenceMesh). */
+  sequence?: { plan: SheetSequence; progress?: number; frame: Rigid };
 }
 
 /** A sheet's flat pattern in brief (for agents): size, folds, edges. */
