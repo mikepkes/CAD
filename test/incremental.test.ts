@@ -122,4 +122,66 @@ describe("incremental evaluation", () => {
     expect(cache.misses - m0).toBe(3);
     expect(out[a.createdIds[0]].volume).toBeCloseTo(30 * 20 * 20 - Math.PI * 9 * 20 - 4 * 0.5 * 20, 6);
   });
+
+  // A joint drive moves a component; the bodies drawn in it are the same bodies
+  // somewhere else, so nothing is rebuilt: the recorded shapes are moved.
+  describe("a moved component replays its bodies in the new pose", () => {
+    /** A link on a revolute joint driven by `theta`: a plate (new), a boss joined
+     *  to it from a second sketch, a bore cut through-all, and a hole at a world
+     *  point (which must NOT follow the link). */
+    async function link() {
+      const s = realSession();
+      await s.dispatch("parameter.add", { name: "theta", expression: "0" });
+      const c = (await s.dispatch("component.create", { name: "Link" })).createdIds[0];
+      await s.dispatch("joint.create", { kind: "revolute", moved: c, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "theta" });
+      const plate = (await s.dispatch("sketch.create", { plane: "XY", component: c })).createdIds[0];
+      await s.dispatch("sketch.addRectangle", { sketch: plate, corner: { x: 0, y: -8 }, opposite: { x: 60, y: 8 } });
+      const body = (await s.dispatch("feature.extrude", { sketch: plate, distance: "6" })).createdIds[0];
+      const boss = (await s.dispatch("sketch.create", { plane: "XY", component: c })).createdIds[0];
+      await s.dispatch("sketch.addCircle", { sketch: boss, center: { x: 50, y: 0 }, radius: 7 });
+      await s.dispatch("feature.extrude", { sketch: boss, distance: "12", operation: "join" });
+      const bore = (await s.dispatch("sketch.create", { plane: "XY", component: c })).createdIds[0];
+      await s.dispatch("sketch.addCircle", { sketch: bore, center: { x: 50, y: 0 }, radius: 3 });
+      await s.dispatch("feature.extrude", { sketch: bore, distance: "1", operation: "cut", extent: "throughAll", symmetric: true });
+      await s.dispatch("feature.hole", { at: [{ x: 10, y: 0, z: 6 }], diameter: "4", throughAll: true });
+      return { s, body };
+    }
+    const turn = async (s: CadSession, deg: number) => { await s.dispatch("parameter.set", { name: "theta", expression: String(deg) }); };
+    const near = (a: ArrayLike<number>, b: ArrayLike<number>, tol: number) => { expect(a.length).toBe(b.length); for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > tol) throw new Error(`[${i}] ${a[i]} vs ${b[i]}`); };
+
+    it("rebuilds nothing but the world-anchored hole, and matches a cold build", async () => {
+      const { s, body } = await link();
+      const cache = new GeometryCache();
+      evaluateFeatures(s.doc, scopeOf(s), cache);
+      for (const deg of [35, -120, 35]) {
+        await turn(s, deg);
+        const [h0, m0] = [cache.hits, cache.misses];
+        const out = evaluateFeatures(s.doc, scopeOf(s), cache);
+        expect(cache.misses - m0, `theta ${deg}: only the hole re-runs`).toBe(1);
+        expect(cache.hits - h0).toBe(3);
+        const cold = evaluateFeatures(s.doc, scopeOf(s));
+        const a = out[body], b = cold[body];
+        expect(a.error).toBeUndefined();
+        expect(a.volume).toBeCloseTo(b.volume!, 6);
+        expect(a.area).toBeCloseTo(b.area!, 6);
+        near([a.centroid!.x, a.centroid!.y, a.centroid!.z], [b.centroid!.x, b.centroid!.y, b.centroid!.z], 1e-6);
+        near([a.bounds!.min.x, a.bounds!.min.y, a.bounds!.min.z, a.bounds!.max.x, a.bounds!.max.y, a.bounds!.max.z], [b.bounds!.min.x, b.bounds!.min.y, b.bounds!.min.z, b.bounds!.max.x, b.bounds!.max.y, b.bounds!.max.z], 1e-6);
+        expect(a.mesh!.faceNames).toEqual(b.mesh!.faceNames);
+        near(a.mesh!.positions, b.mesh!.positions, 1e-4);
+      }
+    });
+
+    it("a mesh measured in one pose is moved to the next, not re-meshed", async () => {
+      const { s } = await link();
+      const cache = new GeometryCache();
+      evaluateFeatures(s.doc, scopeOf(s), cache);
+      await turn(s, 90);
+      const size0 = cache.size;
+      const out = evaluateFeatures(s.doc, scopeOf(s), cache);
+      expect(cache.size).toBe(size0); // the hole step re-ran, so its body was re-measured; nothing else was
+      const b = Object.values(out).find((r) => r.mesh)!;
+      expect(b.bounds!.min.x).toBeCloseTo(-8, 3); // the link now lies along +Y
+      expect(b.bounds!.max.y).toBeCloseTo(60, 3);
+    });
+  });
 });

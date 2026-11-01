@@ -108,7 +108,7 @@ async function benchExample(browser, file) {
       return { name: p.name, values: values.filter((x) => Number(x) !== v), original: p.expr };
     };
     const g = pick(doc.parameters.filter((p) => reads(geomText, p) && !reads(jointText, p))) ?? pick(doc.parameters.filter((p) => reads(geomText, p)));
-    const j = pick(doc.parameters.filter((p) => reads(jointText, p)));
+    const j = pick(doc.parameters.filter((p) => reads(jointText, p) && !reads(geomText, p))) ?? pick(doc.parameters.filter((p) => reads(jointText, p)));
     return { geom: g ? sweep(g) : null, pose: j ? sweep(j) : null };
   }, repeats);
   const edit = async (slider) => {

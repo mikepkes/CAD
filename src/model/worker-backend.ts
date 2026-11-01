@@ -19,7 +19,8 @@ export class WorkerGeometryBackend implements GeometryBackend {
   private readyPromise: Promise<void> | null = null;
   private readyResolve: (() => void) | null = null;
   private seq = 1;
-  private pending = new Map<number, (r: GeometryResponse) => void>();
+  /** Per request: handles an answer, returning true once the request is done. */
+  private pending = new Map<number, (r: GeometryResponse) => boolean>();
   private progress = new Map<number, (fraction: number) => void>();
 
   constructor() {
@@ -28,9 +29,9 @@ export class WorkerGeometryBackend implements GeometryBackend {
       const msg = e.data as { kind: "ready" } | GeometryResponse;
       if (msg.kind === "ready") { this.isReady = true; this.readyResolve?.(); return; }
       if (msg.kind === "progress") { this.progress.get(msg.id)?.(msg.fraction); return; }
-      const resolve = this.pending.get(msg.id);
-      this.progress.delete(msg.id);
-      if (resolve) { this.pending.delete(msg.id); resolve(msg); }
+      // a request's handler hears every answer to it and says when it is done (a staged evaluate has two)
+      const handle = this.pending.get(msg.id);
+      if (handle && handle(msg)) { this.pending.delete(msg.id); this.progress.delete(msg.id); }
     };
   }
 
@@ -43,18 +44,30 @@ export class WorkerGeometryBackend implements GeometryBackend {
   }
   ready(): boolean { return this.isReady; }
 
-  private send(req: GeometryRequestInit, onProgress?: (fraction: number) => void): Promise<GeometryResponse> {
+  private send(req: GeometryRequestInit, onProgress?: (fraction: number) => void, onEarly?: (r: GeometryResponse) => void): Promise<GeometryResponse> {
     const id = this.seq++;
     if (onProgress) this.progress.set(id, onProgress);
     return new Promise((resolve) => {
-      this.pending.set(id, resolve);
+      this.pending.set(id, (r) => {
+        // a staged evaluate's first answer (its meshes) comes early; its last one settles the request
+        if (onEarly && r.kind === "evaluate") { onEarly(r); return false; }
+        resolve(r);
+        return true;
+      });
       this.worker.postMessage({ ...req, id } as GeometryRequest);
     });
   }
 
-  async evaluate(doc: CadDocument, onProgress?: (fraction: number) => void): Promise<EvaluateResult> {
-    const r = await this.send({ kind: "evaluate", doc }, onProgress);
-    if (r.kind === "evaluate") return { solids: r.solids, facePlanes: r.facePlanes };
+  async evaluate(doc: CadDocument, onProgress?: (fraction: number) => void, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult> {
+    if (!onMeshes) {
+      const r = await this.send({ kind: "evaluate", doc }, onProgress);
+      if (r.kind === "evaluate") return { solids: r.solids, facePlanes: r.facePlanes, complete: true };
+      throw new Error(r.kind === "error" ? r.message : "evaluate failed");
+    }
+    const r = await this.send({ kind: "evaluate", doc, staged: true }, onProgress, (early) => {
+      if (early.kind === "evaluate") onMeshes({ solids: early.solids, facePlanes: early.facePlanes });
+    });
+    if (r.kind === "measured") return { solids: r.solids, facePlanes: {}, complete: r.complete };
     throw new Error(r.kind === "error" ? r.message : "evaluate failed");
   }
   async edges(doc: CadDocument, featureId: string): Promise<Edge3D[]> {

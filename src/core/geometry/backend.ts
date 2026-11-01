@@ -9,7 +9,7 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D, kernelErrorMessage } from "../occ/kernel";
-import { evaluateFeatures, withBuildProgress, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
+import { evaluateFeaturesStaged, StagedEvaluation, withBuildProgress, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
 import { meshesTo3mf } from "../export/threemf";
 import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
@@ -26,6 +26,9 @@ export type ExportFormat = "stl" | "step" | "3mf";
 export interface EvaluateResult {
   solids: Record<string, SolidEval>;
   facePlanes: Record<string, WorkPlane>;
+  /** False when the measuring was given up because a newer evaluation superseded this one
+   *  (the rows then carry their meshes' boxes and lack the mass properties). */
+  complete?: boolean;
 }
 
 /** The current planes of sketches that re-resolve to a body face (set by evaluate). */
@@ -45,8 +48,12 @@ export interface GeometryBackend {
   /** True once the kernel is loaded and jobs will produce geometry. */
   ready(): boolean;
   /** Evaluate every feature into display meshes, plus re-resolved face-sketch planes;
-   *  `onProgress` hears how far it has got (0…1) as it goes. */
-  evaluate(doc: CadDocument, onProgress?: (fraction: number) => void): Promise<EvaluateResult>;
+   *  `onProgress` hears how far it has got (0…1) as it goes. With `onMeshes`, the rows
+   *  are delivered to it as soon as their meshes exist — before the exact measuring
+   *  (box, volume, area, centroid) of the bodies not measured before, which only the
+   *  returned promise waits for; until then such a row carries its mesh's box and no
+   *  mass properties. The promise's rows carry no meshes then (they were delivered). */
+  evaluate(doc: CadDocument, onProgress?: (fraction: number) => void, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult>;
   /** World-space B-rep edges of one feature's solid (for projection into a sketch). */
   edges(doc: CadDocument, featureId: string): Promise<Edge3D[]>;
   /** STL/STEP bytes for one feature's solid, or (featureId null) the whole model
@@ -91,11 +98,32 @@ function geometryDoc(doc: CadDocument, scope: Scope): CadDocument {
  *  once (cacheable — they don't depend on the joint-drive params) and instance
  *  them by transforming the mesh; otherwise the plain feature evaluation. */
 function evaluateForRender(doc: CadDocument, scope: Scope, cache?: GeometryCache): Record<string, SolidEval> {
-  if (!hasAssemblyPatterns(doc)) return evaluateFeatures(doc, scope, cache);
-  placeComponentSketches(doc, scope); // place the source sketches in their component frames
-  const source = evaluateFeatures(doc, scope, cache);
-  return instanceSolids(doc, scope, source);
+  const staged = evaluateForRenderStaged(doc, scope, cache);
+  while (staged.measureNext()) { /* every body, exactly */ }
+  return staged.render();
 }
+
+/** evaluateForRender in stages (see StagedEvaluation): `render()` gives the rows to show —
+ *  with their meshes — as they stand, before or after the measuring. */
+function evaluateForRenderStaged(doc: CadDocument, scope: Scope, cache?: GeometryCache): StagedEvaluation & { render(): Record<string, SolidEval> } {
+  if (!hasAssemblyPatterns(doc)) {
+    const staged = evaluateFeaturesStaged(doc, scope, cache);
+    return { ...staged, get pending() { return staged.pending; }, render: () => staged.solids };
+  }
+  placeComponentSketches(doc, scope); // place the source sketches in their component frames
+  const staged = evaluateFeaturesStaged(doc, scope, cache);
+  return { ...staged, get pending() { return staged.pending; }, render: () => instanceSolids(doc, scope, staged.solids) };
+}
+
+/** The rows without their meshes (delivered already): what the measuring adds. */
+function measuredRows(solids: Record<string, SolidEval>): Record<string, SolidEval> {
+  return Object.fromEntries(Object.entries(solids).map(([id, r]) => [id, { ...r, mesh: undefined }]));
+}
+
+/** Let the event loop run (so a worker can hear a newer request between two measurements). */
+const breathe = () => new Promise<void>((r) => setTimeout(r, 0));
+/** How long to measure before breathing (ms). */
+const MEASURE_SLICE_MS = 12;
 
 /** A pose of `doc` for a collision check: parameter expressions overridden and
  *  sketches re-placed in their components' frames for those values, with their
@@ -158,7 +186,8 @@ function analyzeOf(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }
 // ---- shared job protocol (used by both worker adapters) --------------------
 
 export type GeometryRequest =
-  | { id: number; kind: "evaluate"; doc: CadDocument }
+  /** `staged`: answer with the meshes first (an "evaluate" response), then the measurements (a "measured" one). */
+  | { id: number; kind: "evaluate"; doc: CadDocument; staged?: boolean }
   | { id: number; kind: "edges"; doc: CadDocument; featureId: string }
   | { id: number; kind: "export"; doc: CadDocument; featureId: string | null; format: ExportFormat }
   | { id: number; kind: "collide"; doc: CadDocument; overrides?: Record<string, string> }
@@ -169,6 +198,9 @@ export type GeometryRequest =
 
 export type GeometryResponse =
   | { id: number; kind: "evaluate"; solids: Record<string, SolidEval>; facePlanes: Record<string, WorkPlane> }
+  /** A staged evaluation's second answer: every row measured (without its mesh), or — `complete` false —
+   *  as far as it got before a newer evaluation superseded it. */
+  | { id: number; kind: "measured"; solids: Record<string, SolidEval>; complete: boolean }
   | { id: number; kind: "edges"; edges: Edge3D[] }
   | { id: number; kind: "export"; bytes: Uint8Array | null }
   | { id: number; kind: "collide"; result: CollisionResult }
@@ -198,17 +230,39 @@ export function meshTransferables(solids: Record<string, SolidEval>): ArrayBuffe
   return out;
 }
 
+/** How a job handler talks back beyond its one answer: `emit` posts an earlier answer (a staged
+ *  evaluation's meshes), `stale` says a newer evaluation has arrived (so stop measuring for this one). */
+export interface JobChannel {
+  emit?: (res: GeometryResponse, transfer: ArrayBuffer[]) => void;
+  stale?: () => boolean;
+}
+
 /**
  * The pure, environment-agnostic job handler both workers run. No `self`, no
  * `parentPort` — just a request in, a response plus its transfer list out. The
  * kernel must already be initialized in whatever realm this runs in.
  */
-export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache, onProgress?: (fraction: number) => void): Promise<{ res: GeometryResponse; transfer: ArrayBuffer[] }> {
+export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache, onProgress?: (fraction: number) => void, channel: JobChannel = {}): Promise<{ res: GeometryResponse; transfer: ArrayBuffer[] }> {
   try {
     const scope = scopeOf(req.doc);
     if (req.kind === "evaluate") {
-      const solids = withBuildProgress(onProgress, () => evaluateForRender(req.doc, scope, cache));
-      return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(req.doc) }, transfer: meshTransferables(solids) };
+      if (!req.staged || !channel.emit) {
+        const solids = withBuildProgress(onProgress, () => evaluateForRender(req.doc, scope, cache));
+        return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(req.doc) }, transfer: meshTransferables(solids) };
+      }
+      // staged: the meshes go out as soon as they exist; the measuring follows, breathing between
+      // slices so a newer evaluation can be heard — and supersede it
+      const staged = withBuildProgress(onProgress, () => evaluateForRenderStaged(req.doc, scope, cache));
+      const shown = staged.render();
+      channel.emit({ id: req.id, kind: "evaluate", solids: shown, facePlanes: collectFacePlanes(req.doc) }, meshTransferables(shown));
+      let complete = true;
+      while (staged.pending) {
+        if (channel.stale?.()) { staged.dispose(); complete = false; break; }
+        const t = performance.now();
+        while (staged.pending && performance.now() - t < MEASURE_SLICE_MS) staged.measureNext();
+        if (staged.pending) await breathe();
+      }
+      return { res: { id: req.id, kind: "measured", solids: measuredRows(complete ? staged.render() : shown), complete }, transfer: [] };
     }
     if (req.kind === "edges") {
       const edges = featureEdges(geometryDoc(req.doc, scope), scope, req.featureId);
@@ -253,9 +307,15 @@ export class InlineGeometryBackend implements GeometryBackend {
     this.isReady = isKernelReady();
   }
   ready(): boolean { return this.isReady; }
-  async evaluate(doc: CadDocument, onProgress?: (fraction: number) => void): Promise<EvaluateResult> {
-    const solids = withBuildProgress(onProgress, () => evaluateForRender(doc, scopeOf(doc), this.cache));
-    return { solids, facePlanes: collectFacePlanes(doc) };
+  async evaluate(doc: CadDocument, onProgress?: (fraction: number) => void, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult> {
+    if (!onMeshes) {
+      const solids = withBuildProgress(onProgress, () => evaluateForRender(doc, scopeOf(doc), this.cache));
+      return { solids, facePlanes: collectFacePlanes(doc), complete: true };
+    }
+    const staged = withBuildProgress(onProgress, () => evaluateForRenderStaged(doc, scopeOf(doc), this.cache));
+    onMeshes({ solids: staged.render(), facePlanes: collectFacePlanes(doc) });
+    while (staged.measureNext()) { /* every body, exactly */ }
+    return { solids: measuredRows(staged.render()), facePlanes: collectFacePlanes(doc), complete: true };
   }
   async edges(doc: CadDocument, featureId: string): Promise<Edge3D[]> {
     const scope = scopeOf(doc);

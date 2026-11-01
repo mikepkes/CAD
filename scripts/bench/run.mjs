@@ -24,9 +24,9 @@ for (const f of examples) {
   if (!line) { console.error(`${f}: ${r.stderr.slice(-2000)}`); rows.push({ example: f.replace(/\.json$/, ""), error: "failed" }); continue; }
   const row = JSON.parse(line);
   rows.push(row);
-  console.error(`${row.example}: kernel ${row.kernelMs} recompute ${row.recomputeMs} cold ${row.coldMs} warm ${row.warmMs} edit ${row.editMs} (${row.slider}) pose ${row.poseMs} (${row.poseSlider}) bodies ${row.bodies} tris ${row.triangles}${row.errors?.length ? ` ERRORS ${row.errors.join("; ")}` : ""}`);
+  console.error(`${row.example}: kernel ${row.kernelMs} recompute ${row.recomputeMs} cold ${row.coldMs} (meshes ${row.coldMeshesMs}) warm ${row.warmMs} edit ${row.editMs} (meshes ${row.editMeshesMs}, ${row.slider}) pose ${row.poseMs} (meshes ${row.poseMeshesMs}, ${row.poseSlider}) bodies ${row.bodies} tris ${row.triangles}${row.errors?.length ? ` ERRORS ${row.errors.join("; ")}` : ""}`);
 }
-const cols = ["example", "kernelMs", "recomputeMs", "coldMs", "warmMs", "editMs", "editRecomputeMs", "slider", "poseMs", "poseSlider", "bodies", "triangles"];
+const cols = ["example", "kernelMs", "recomputeMs", "coldMs", "coldMeshesMs", "warmMs", "editMs", "editMeshesMs", "slider", "poseMs", "poseMeshesMs", "poseSlider", "bodies", "triangles"];
 console.log(`| ${cols.join(" | ")} |`);
 console.log(`|${cols.map(() => "---").join("|")}|`);
 for (const r of rows) console.log(`| ${cols.map((c) => r[c] ?? "").join(" | ")} |`);

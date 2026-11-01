@@ -16,7 +16,7 @@ import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
-  faceGeoms, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape, keepHalfSpace,
+  faceGeoms, faceKinds, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape, keepHalfSpace,
   readNurbsBrep, chainWire, surfaceExtrude, surfaceRevolve, surfaceLoft, surfaceSweep, planarPatch, sewShapes, thickenShape, offsetSurface, untrimFaces, hasSolid,
 } from "./occ/kernel";
 import { genericNames, extrudeNames, revolveNames, holeCutterNames, inheritNames, copyNames, edgeNamesOf } from "./naming";
@@ -147,7 +147,7 @@ function nameSafely(shape: Shape3D, featureId: string, namer: (g: FaceGeom[]) =>
   const geoms = faceGeoms(shape);
   try { return namer(geoms); } catch { return genericNames(featureId, geoms); }
 }
-const named = (shape: Shape3D, featureId: string): Named => ({ shape, names: genericNames(featureId, faceGeoms(shape)) });
+const named = (shape: Shape3D, featureId: string): Named => ({ shape, names: genericNames(featureId, faceKinds(shape)) });
 
 interface Body {
   id: string; name: string; sketchId: string; distance: number; shape: Shape3D; decals?: ThreadDecal[];
@@ -161,6 +161,9 @@ interface Body {
   faceNames: string[];
   /** Content signature of this body's shape (set when evaluating with a cache). */
   sig?: string;
+  /** The frame that content is expressed in — the step that last changed the body did its work
+   *  relative to it (see stepFrame), so the same body somewhere else has the same signature. */
+  frame?: Rigid;
   /** Set on a structural member: what the cut list needs. */
   member?: MemberMeta;
   /** Set on a sheet-metal body: its flat state and folds (what flanges, folds and the flat pattern build on). */
@@ -370,12 +373,12 @@ function applyPrimitive(scope: Scope, f: PrimitiveFeature, bodies: Body[], out: 
   addOrCombine(f, tool, bodies, out, f.shape);
 }
 
-/** Per gear spec (see localGearSolid): its faces' geometry and its display mesh / mass properties in its own frame. */
-const GEAR_LOCAL = new Map<string, { geoms: FaceGeom[]; extent: Annulus[] | null; ev?: BodyEval }>();
+/** Per gear spec (see localGearSolid): its faces' kinds, and — once a gear of it has been meshed and
+ *  measured — its display mesh and mass properties in its own frame (shared by every gear of the spec). */
+const GEAR_LOCAL = new Map<string, { geoms: Pick<FaceGeom, "type" | "normal">[]; extent: Annulus[] | null; mesh?: SolidMesh; mass?: MassProps }>();
 
-/** A body evaluation carried by a rigid transform: the same mesh moved, the same volume, the centroid
- *  moved, and the moved shape's own bounds (`bounds`: a turned box would be loose). */
-function posedEval(ev: BodyEval, T: Rigid, bounds: Bounds3 | undefined): BodyEval {
+/** A mesh carried by a rigid transform (positions and edges moved, normals turned). */
+function moveMesh(m: SolidMesh, T: Rigid): SolidMesh {
   const mv = (src: Float32Array, vec: boolean): Float32Array => {
     const out = new Float32Array(src.length);
     for (let i = 0; i < src.length; i += 3) {
@@ -385,8 +388,24 @@ function posedEval(ev: BodyEval, T: Rigid, bounds: Bounds3 | undefined): BodyEva
     }
     return out;
   };
-  const mesh = { ...cloneMesh(ev.mesh), positions: mv(ev.mesh.positions, false), normals: mv(ev.mesh.normals, true), edges: mv(ev.mesh.edges, false) };
-  return { mesh, bounds, mass: { ...ev.mass, centroid: applyPoint(T, ev.mass.centroid) }, ...(ev.surface ? { surface: true } : {}) };
+  return { ...cloneMesh(m), positions: mv(m.positions, false), normals: mv(m.normals, true), edges: mv(m.edges, false) };
+}
+
+/** A body evaluation carried by a rigid transform: the same mesh moved, the same volume, the centroid
+ *  moved, and the moved shape's own bounds (`bounds`: a turned box would be loose). */
+function posedEval(ev: BodyEval, T: Rigid, bounds: Bounds3 | undefined): BodyEval {
+  return { mesh: moveMesh(ev.mesh, T), bounds, mass: { ...ev.mass, centroid: applyPoint(T, ev.mass.centroid) }, ...(ev.surface ? { surface: true } : {}) };
+}
+
+/** The box around a mesh's vertices: within the meshing tolerance of the body's own. */
+function meshBounds(pos: Float32Array): Bounds3 {
+  let nx = Infinity, ny = Infinity, nz = Infinity, xx = -Infinity, xy = -Infinity, xz = -Infinity;
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+    if (x < nx) nx = x; if (y < ny) ny = y; if (z < nz) nz = z;
+    if (x > xx) xx = x; if (y > xy) xy = y; if (z > xz) xz = z;
+  }
+  return { min: { x: nx, y: ny, z: nz }, max: { x: xx, y: xy, z: xz } };
 }
 
 /** A gear's numbers now: each expression (or its default) evaluated, written back to dimValues. */
@@ -433,7 +452,7 @@ function applyGear(doc: CadDocument, scope: Scope, f: GearFeature, bodies: Body[
     };
     // faces named in the gear's own frame (so a turned gear keeps its names), from geometry kept per spec
     let local0 = GEAR_LOCAL.get(key);
-    if (!local0) { local0 = { geoms: faceGeoms(local), extent: gearExtent(spec) }; GEAR_LOCAL.set(key, local0); while (GEAR_LOCAL.size > 48) GEAR_LOCAL.delete(GEAR_LOCAL.keys().next().value as string); }
+    if (!local0) { local0 = { geoms: faceKinds(local), extent: gearExtent(spec) }; GEAR_LOCAL.set(key, local0); while (GEAR_LOCAL.size > 48) GEAR_LOCAL.delete(GEAR_LOCAL.keys().next().value as string); }
     tool = { shape: placeShape(local, T), names: genericNames(f.id, local0.geoms) };
     pose = { key, T, shape: tool.shape };
   } catch (e) {
@@ -463,7 +482,7 @@ function applyImport(f: ImportFeature, bodies: Body[], out: Record<string, Solid
   try {
     let shape = f.format === "brep" ? readBrep(f.data) : f.format === "stl" ? readStl(base64ToBytes(f.data)) : f.format === "nurbs" ? readNurbsBrep(f.data) : readStep(f.data);
     if (f.at && (f.at.x || f.at.y || f.at.z)) { const moved = translateShape(shape, f.at); shape.delete(); shape = moved; }
-    tool = { shape, names: faceGeoms(shape).map((_, i) => `${f.id}:f${i}`) };
+    tool = { shape, names: faceKinds(shape).map((_, i) => `${f.id}:f${i}`) };
   } catch (e) {
     out[f.id] = { ...modifierRow(f), error: `import: ${kernelErrorMessage(e)}` };
     return;
@@ -538,7 +557,7 @@ function applyMembers(doc: CadDocument, scope: Scope, f: MemberFeature, bodies: 
       const wp: WorkPlane = { id: "custom", name: "member", origin: along(m.a, d, -extend[i].a), u, v, normal: d, color: "#888" };
       const shape = buildRegionsSolid(wp, [section], length + extend[i].a + extend[i].b);
       const id = `${f.id}/${m.lineId}`;
-      made.push({ id, name: `${f.name} ${i + 1}`, sketchId: f.sketchId, distance: length, shape, faceNames: genericNames(id, faceGeoms(shape)), member: { origin: m.a, axis: d, profile: label, angles: angles[i] } });
+      made.push({ id, name: `${f.name} ${i + 1}`, sketchId: f.sketchId, distance: length, shape, faceNames: genericNames(id, faceKinds(shape)), member: { origin: m.a, axis: d, profile: label, angles: angles[i] } });
     });
 
     const trimTo = (b: Body, origin: Vec3, normal: Vec3) => {
@@ -588,7 +607,7 @@ function applyMembers(doc: CadDocument, scope: Scope, f: MemberFeature, bodies: 
         const y = cross(d, x);
         const u = { x: x.x * Math.cos(rotate) + y.x * Math.sin(rotate), y: x.y * Math.cos(rotate) + y.y * Math.sin(rotate), z: x.z * Math.cos(rotate) + y.z * Math.sin(rotate) };
         const cap = buildRegionsSolid({ id: "custom", name: "cap", origin: j.at, u, v: cross(outward, u), normal: outward, color: "#888" }, [{ outer: section.outer, holes: [] }], capT);
-        try { booleanInto("join", b, cap, genericNames(`${b.id}:cap`, faceGeoms(cap)), f.id); } finally { cap.delete(); }
+        try { booleanInto("join", b, cap, genericNames(`${b.id}:cap`, faceKinds(cap)), f.id); } finally { cap.delete(); }
       }
     }
     // gussets: a triangular plate in the inside corner of two members, clear of them
@@ -609,7 +628,7 @@ function applyMembers(doc: CadDocument, scope: Scope, f: MemberFeature, bodies: 
         let plate = buildRegionsSolid({ id: "custom", name: "gusset", origin: along(j.at, n, -t / 2), u, v: vv, normal: n, color: "#888" }, [{ outer: loop, holes: [] }], t);
         for (const e of j.ends) { const next = cutShapes(plate, made[e.member].shape); plate.delete(); plate = next; }
         const id = `${f.id}/gusset${++k}`;
-        made.push({ id, name: `${f.name} gusset ${k}`, sketchId: f.sketchId, distance: 0, shape: plate, faceNames: genericNames(id, faceGeoms(plate)) });
+        made.push({ id, name: `${f.name} gusset ${k}`, sketchId: f.sketchId, distance: 0, shape: plate, faceNames: genericNames(id, faceKinds(plate)) });
       }
     }
     bodies.push(...made);
@@ -634,7 +653,7 @@ const rad = (deg: number) => (deg * Math.PI) / 180;
 function setSheet(b: Body, built: SheetBuild) {
   b.shape.delete();
   b.shape = built.shape;
-  b.faceNames = genericNames(b.id, faceGeoms(built.shape));
+  b.faceNames = genericNames(b.id, faceKinds(built.shape));
   b.sheet = { ...built.state, pattern: built.pattern };
 }
 
@@ -711,7 +730,7 @@ function applySheet(doc: CadDocument, scope: Scope, f: SheetFeature, bodies: Bod
       state = { frame: { origin, x: wp.u, y: wp.v, z: N }, base: { regions }, ops: [], edges: blankEdges(regions, lines), folds, ...rules, fixed: f.fixed ?? regions[0].interior };
     }
     const built = buildSheet(state);
-    bodies.push({ id: f.id, name: f.name, sketchId: f.sketchId, distance: t, shape: built.shape, faceNames: genericNames(f.id, faceGeoms(built.shape)), sheet: { ...built.state, pattern: built.pattern } });
+    bodies.push({ id: f.id, name: f.name, sketchId: f.sketchId, distance: t, shape: built.shape, faceNames: genericNames(f.id, faceKinds(built.shape)), sheet: { ...built.state, pattern: built.pattern } });
     if (built.warnings.length) out[f.id].warning = built.warnings.join("; ");
   } catch (e) {
     out[f.id].error = kernelErrorMessage(e);
@@ -870,7 +889,7 @@ function surfaceParentsOf(inputs: Shape3D[], output: Shape3D): number[][] {
   for (const input of inputs) {
     const p = surfaceParents(input, output);
     p.forEach((ps, j) => { (result[j] ??= []).push(...ps.map((i) => i + offset)); });
-    offset += faceGeoms(input).length;
+    offset += faceKinds(input).length;
   }
   return result;
 }
@@ -915,7 +934,7 @@ function applyTrim(doc: CadDocument, f: TrimFeature, bodies: Body[], out: Record
       owned = true;
     }
     try {
-      const toolNames = genericNames(`${f.id}:tool`, faceGeoms(tool));
+      const toolNames = genericNames(`${f.id}:tool`, faceKinds(tool));
       booleanInto(f.keep === "inside" ? "intersect" : "cut", target, tool, toolNames, f.id);
     } finally { if (owned) tool.delete(); }
   } catch (e) {
@@ -995,7 +1014,7 @@ function applyThread(f: ThreadFeature, bodies: Body[], out: Record<string, Solid
     const op = internal ? "cut" : (f.operation ?? "new");
     if (!internal && (op === "new" || !bodies.length)) {
       const cyl = placeAlong(buildPrimitive({ shape: "cylinder", at: { x: 0, y: 0, z: f.spec.length / 2 }, radius: f.spec.diameter / 2, height: f.spec.length }), { x: 0, y: 0, z: 1 }, axis, f.at);
-      bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape: cyl, faceNames: genericNames(f.id, faceGeoms(cyl)), decals: [decal] });
+      bodies.push({ id: f.id, name: f.name, sketchId: "", distance: 0, shape: cyl, faceNames: genericNames(f.id, faceKinds(cyl)), decals: [decal] });
       return;
     }
     try { (pickBody(bodies, f.body, "thread").decals ??= []).push(decal); }
@@ -1056,7 +1075,7 @@ function applyHole(scope: Scope, f: HoleFeature, bodies: Body[], out: Record<str
         try {
           const shape = buildThreadRod(f.thread, 0.1);
           try {
-            const tapNames = genericNames(`${f.id}:tap`, faceGeoms(shape));
+            const tapNames = genericNames(`${f.id}:tap`, faceKinds(shape));
             pts.forEach((p, i) => {
               const tap = placeAlong(shape, { x: 0, y: 0, z: 1 }, axis, p);
               try { booleanInto("cut", target, tap, namesAt(tapNames, i), f.id); }
@@ -1259,8 +1278,19 @@ function applyMirror(doc: CadDocument, f: MirrorFeature, bodies: Body[], out: Re
 // changed it, so independent bodies never invalidate each other and an edit
 // late in the timeline reuses everything before it. Meshes and mass
 // properties are cached per body signature.
+//
+// Keys are written in a FRAME, so a body that only moved is the same body: a
+// sketch feature's key says where its sketch entities are and where the bodies
+// it reads sit RELATIVE TO ITS SKETCH PLANE, not where the plane is in the
+// world; a name-only fillet's says where things are relative to its target. A
+// joint drive moving a component moves every plane in it together, so the keys
+// of the features drawn there don't change, and a replay moves the recorded
+// shapes (and their meshes) by the frame's delta instead of rebuilding. A step
+// whose definition is in world coordinates (a primitive's `at`, a hole, a
+// mirror plane, an edge selector by axis) is keyed in the world, where a moved
+// body reads as a different input, as it should.
 
-interface BodyState { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; faceNames: string[]; decals?: ThreadDecal[]; sig: string; member?: MemberMeta; sheet?: SheetState }
+interface BodyState { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; faceNames: string[]; decals?: ThreadDecal[]; sig: string; frame: Rigid; member?: MemberMeta; sheet?: SheetState }
 interface StepEffect { bodies: (BodyState & { added: boolean })[]; removed?: string[]; row?: SolidEval; planes: Record<string, WorkPlane> }
 interface BodyEval { mesh: SolidMesh; bounds?: Bounds3; mass: MassProps; surface?: boolean }
 
@@ -1270,7 +1300,7 @@ const cloneDecals = (d?: ThreadDecal[]) => (d ? d.map((x) => structuredClone(x))
 /** Incremental-evaluation cache (lives in the geometry backend, across evaluations). */
 export class GeometryCache {
   private steps = new Map<string, { eff: StepEffect; used: number }>();
-  private evals = new Map<string, { ev: BodyEval; used: number; bytes: number }>();
+  private evals = new Map<string, { ev: BodyEval; frame: Rigid; used: number; bytes: number }>();
   private generation = 0;
   private readonly generations: number;
   private readonly meshBudget: number;
@@ -1289,11 +1319,12 @@ export class GeometryCache {
   }
   step(key: string): StepEffect | undefined { const s = this.steps.get(key); if (s) s.used = this.generation; return s?.eff; }
   storeStep(key: string, eff: StepEffect): void { this.dropStep(key); this.steps.set(key, { eff, used: this.generation }); }
-  bodyEval(sig: string): BodyEval | undefined { const e = this.evals.get(sig); if (e) e.used = this.generation; return e?.ev; }
-  storeBodyEval(sig: string, e: BodyEval): void {
+  /** A body's cached evaluation, with the frame it was measured in (the same body elsewhere is moved from it). */
+  bodyEval(sig: string): { ev: BodyEval; frame: Rigid } | undefined { const e = this.evals.get(sig); if (e) e.used = this.generation; return e ? { ev: e.ev, frame: e.frame } : undefined; }
+  storeBodyEval(sig: string, e: BodyEval, frame: Rigid): void {
     const mesh = cloneMesh(e.mesh);
     const bytes = mesh.positions.byteLength + mesh.normals.byteLength + mesh.indices.byteLength + mesh.edges.byteLength;
-    this.evals.set(sig, { ev: { ...e, mesh }, used: this.generation, bytes });
+    this.evals.set(sig, { ev: { ...e, mesh }, frame, used: this.generation, bytes });
   }
   /** Start an evaluation. */
   begin(): void { this.generation++; }
@@ -1350,6 +1381,7 @@ function bodiesRead(doc: CadDocument, f: FeatureDef, bodies: Body[]): Body[] {
   switch (f.kind) {
     case "extrude": case "revolve":
       if (doc.sketches[f.sketchId]?.faceRef) return bodies; // re-resolves its plane against every body
+      if (f.kind === "extrude" && f.extent === "toFace") return bodies; // finds its face on any body
       return op === "new" ? [] : target();
     case "primitive": case "gear": case "import": case "loft": case "sweep": return op === "new" ? [] : target();
     case "mirror": return f.bodies === "last" ? bodies.slice(-1) : bodies;
@@ -1364,29 +1396,89 @@ function bodiesRead(doc: CadDocument, f: FeatureDef, bodies: Body[]): Body[] {
 const DERIVED_FIELD = /Values?$/;
 const IDENT = /[A-Za-z_][A-Za-z0-9_]*/g;
 
-/** A step's cache key, or undefined when a body it reads has no signature. */
-function stepKey(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Body[], frame?: Rigid): string | undefined {
+// ---- frames ----
+
+/** A plane as the rigid transform from its (u, v, normal) coordinates to the world. */
+const rigidOfPlane = (p: WorkPlane): Rigid => ({ origin: { ...p.origin }, x: { ...p.u }, y: { ...p.v }, z: { ...p.normal } });
+/** A rigid transform rounded to the nanometre, so two computations of the same pose hash alike. */
+const r9 = (v: number) => { const r = Math.round(v * 1e9) / 1e9; return r === 0 ? 0 : r; };
+const rv = (v: Vec3): Vec3 => ({ x: r9(v.x), y: r9(v.y), z: r9(v.z) });
+const roundRigid = (T: Rigid): Rigid => ({ origin: rv(T.origin), x: rv(T.x), y: rv(T.y), z: rv(T.z) });
+/** Whether two rigid transforms are the same pose (to 1e-10: no real move is that small). */
+function samePose(a: Rigid, b: Rigid): boolean {
+  const near = (p: Vec3, q: Vec3) => Math.abs(p.x - q.x) < 1e-10 && Math.abs(p.y - q.y) < 1e-10 && Math.abs(p.z - q.z) < 1e-10;
+  return near(a.origin, b.origin) && near(a.x, b.x) && near(a.y, b.y) && near(a.z, b.z);
+}
+/** Whether a rigid transform turns (so a moved body's bounds aren't its old bounds moved). */
+const turns = (T: Rigid): boolean => !samePose({ ...T, origin: IDENTITY.origin }, IDENTITY);
+/** Whether an edge selector picks by topological name alone (so it follows the body wherever it is). */
+const byNameOnly = (sel: object): boolean => Object.entries(sel).every(([k, v]) => v === undefined || k === "names");
+/** `shape` moved by T (operand untouched; faces keep their order; the B-rep is shared, only its placement is new). */
+const moveShape = (shape: Shape3D, T: Rigid): Shape3D => placeShape(shape, T);
+
+/**
+ * The frame a step's work is expressed in, given the bodies it reads:
+ *  - a sketch feature: its (first) sketch's plane — the entities are drawn in it, and
+ *    any body it cuts or joins is keyed by where it sits relative to it;
+ *  - a modifier that picks by topological name alone: the body it modifies;
+ *  - anything that names world coordinates (a primitive's `at`, a hole, a mirror plane,
+ *    a geometric selector), a face-referenced sketch, a sheet or a weldment: the world.
+ */
+function stepFrame(doc: CadDocument, f: FeatureDef, reads: Body[]): Rigid {
+  if (reads.some((b) => b.member || b.sheet)) return IDENTITY;
+  switch (f.kind) {
+    case "extrude": case "revolve": case "gear": case "loft": case "sweep": case "surface": {
+      const sk = doc.sketches[featureSketches(f)[0]];
+      if (!sk || sk.faceRef || sk.templatePlane) return IDENTITY;
+      if (f.kind === "extrude" && f.extent === "toFace") return IDENTITY;
+      return rigidOfPlane(resolveSketchPlane(sk));
+    }
+    case "fillet": case "chamfer": return reads[0] && byNameOnly(f.edges) ? reads[0].frame ?? IDENTITY : IDENTITY;
+    case "thicken": case "untrim": case "stitch": return reads[0]?.frame ?? IDENTITY;
+    default: return IDENTITY;
+  }
+}
+
+/** A step's cache key and frame, or undefined when a body it reads has no signature. */
+function stepKey(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Body[], instance?: Rigid): { key: string; frame: Rigid } | undefined {
   const reads = bodiesRead(doc, f, bodies);
-  if (reads.some((b) => !b.sig)) return undefined;
+  if (reads.some((b) => !b.sig || !b.frame)) return undefined;
+  const frame = stepFrame(doc, f, reads);
+  const inv = invert(frame);
   const def = Object.fromEntries(Object.entries(f).filter(([k]) => !DERIVED_FIELD.test(k)));
   const params = new Set<string>();
   JSON.stringify(f, (_k, v) => { if (typeof v === "string") for (const id of v.match(IDENT) ?? []) if (id in scope) params.add(id); return v; });
-  const sketches = featureSketches(f).map((sid) => {
+  const sketches = featureSketches(f).map((sid, i) => {
     const sk = doc.sketches[sid];
-    return sk ? { id: sid, planeId: sk.planeId, plane: sk.plane, faceRef: sk.faceRef, entities: sk.entities } : { id: sid, missing: true };
+    if (!sk) return { id: sid, missing: true };
+    if (frame === IDENTITY) return { id: sid, planeId: sk.planeId, plane: sk.plane, faceRef: sk.faceRef, entities: sk.entities };
+    // in the step's frame: the first sketch IS the frame; another sits somewhere relative to it
+    return { id: sid, faceRef: sk.faceRef, entities: sk.entities, ...(i ? { rel: roundRigid(compose(inv, rigidOfPlane(resolveSketchPlane(sk)))) } : {}) };
   });
   const datum = f.kind === "mirror" ? doc.planes[f.plane]?.plane : undefined;
-  return contentHash(stableJson({
-    def, sketches, datum, frame,
+  // a through-all extrude is as long as its target's box is wide: that length is an input to what
+  // a join or an intersect leaves (a cut takes the same away however far past the body it reaches)
+  const through = f.kind === "extrude" && f.extent === "throughAll" && f.operation !== "cut" && reads[0] ? r9(throughAllLength(safeBounds(reads[0].shape))) : undefined;
+  const key = contentHash(stableJson({
+    def, sketches, datum, instance, through,
     params: [...params].sort().map((p) => [p, scope[p]]),
-    reads: reads.map((b) => [b.id, b.sig]),
+    reads: reads.map((b) => [b.id, b.sig, b.frame === frame ? 0 : roundRigid(compose(inv, b.frame!))]),
   }));
+  return { key, frame };
 }
 
-const bodyState = (b: Body): BodyState => ({ id: b.id, name: b.name, sketchId: b.sketchId, distance: b.distance, shape: cloneShape(b.shape), faceNames: b.faceNames.slice(), decals: cloneDecals(b.decals), sig: b.sig!, ...(b.member ? { member: structuredClone(b.member) } : {}), ...(b.sheet ? { sheet: structuredClone(b.sheet) } : {}) });
+const bodyState = (b: Body): BodyState => ({ id: b.id, name: b.name, sketchId: b.sketchId, distance: b.distance, shape: cloneShape(b.shape), faceNames: b.faceNames.slice(), decals: cloneDecals(b.decals), sig: b.sig!, frame: b.frame!, ...(b.member ? { member: structuredClone(b.member) } : {}), ...(b.sheet ? { sheet: structuredClone(b.sheet) } : {}) });
+
+/** A recorded body brought back live in `frame`: moved by the frame's delta since it was recorded, if it has one. */
+function replayBody(b: BodyState, frame: Rigid): Body {
+  const delta = compose(frame, invert(b.frame));
+  if (samePose(delta, IDENTITY)) return { ...bodyState(b as unknown as Body), frame };
+  const decals = b.decals?.map((d) => ({ ...structuredClone(d), at: applyPoint(delta, d.at), axis: applyVec(delta, d.axis) }));
+  return { ...bodyState(b as unknown as Body), shape: moveShape(b.shape, delta), decals, frame };
+}
 
 /** Run one step through `run`, recording what it did; or replay a recorded effect. */
-function cachedStep(cache: GeometryCache, key: string, doc: CadDocument, f: FeatureDef, bodies: Body[], out: Record<string, SolidEval>, run: () => void) {
+function cachedStep(cache: GeometryCache, key: string, frame: Rigid, doc: CadDocument, f: FeatureDef, bodies: Body[], out: Record<string, SolidEval>, run: () => void) {
   const hit = cache.step(key);
   if (hit && [...hit.bodies.filter((b) => !b.added).map((b) => b.id), ...(hit.removed ?? [])].every((id) => bodies.some((x) => x.id === id))) {
     cache.hits++;
@@ -1396,7 +1488,7 @@ function cachedStep(cache: GeometryCache, key: string, doc: CadDocument, f: Feat
       bodies.splice(i, 1);
     }
     for (const b of hit.bodies) {
-      const live = { ...bodyState(b as unknown as Body), sig: b.sig };
+      const live = replayBody(b, frame);
       if (b.added) { bodies.push(live); continue; }
       const i = bodies.findIndex((x) => x.id === b.id);
       bodies[i].shape.delete();
@@ -1417,6 +1509,7 @@ function cachedStep(cache: GeometryCache, key: string, doc: CadDocument, f: Feat
     const was = before.get(b.id);
     if (was && was.shape === b.shape && was.names === b.faceNames && was.decals === (b.decals?.length ?? 0)) continue;
     b.sig = contentHash(`${key}|${b.id}`);
+    b.frame = frame;
     eff.bodies.push({ ...bodyState(b), added: !was });
   }
   if (out[f.id]) eff.row = structuredClone(out[f.id]);
@@ -1506,8 +1599,8 @@ function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): 
       T = compose(worlds.get(f.instanceFrame.component) ?? IDENTITY, invert(worlds.get(f.instanceFrame.template) ?? IDENTITY));
     }
     const run = T ? () => applyInTemplateFrame(() => applyFeature(doc, scope, f, bodies, out), f, bodies, T!) : () => applyFeature(doc, scope, f, bodies, out);
-    const key = cache ? stepKey(doc, scope, f, bodies, T) : undefined;
-    if (cache && key) cachedStep(cache, key, doc, f, bodies, out, run);
+    const step = cache ? stepKey(doc, scope, f, bodies, T) : undefined;
+    if (cache && step) cachedStep(cache, step.key, step.frame, doc, f, bodies, out, run);
     else run();
   }
   return { bodies, out };
@@ -1529,16 +1622,48 @@ const activeFeatures = (doc: CadDocument, scope: Scope): FeatureDef[] => Object.
  *  properties). With a cache, only the steps whose inputs changed touch the
  *  kernel, and only bodies whose content changed are re-meshed. */
 export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: GeometryCache): Record<string, SolidEval> {
+  const staged = evaluateFeaturesStaged(doc, scope, cache);
+  while (staged.measureNext()) { /* every body, exactly */ }
+  return staged.solids;
+}
+
+/**
+ * An evaluation in two stages: the rows with their meshes first, then the exact
+ * measuring. Measuring a body — its box (OCC's optimal one, which on a gear's
+ * hundreds of B-spline faces takes longer than meshing it) and its volume, area
+ * and centroid (an adaptive integral) — is most of a cold build's time and none
+ * of what it takes to show the model, so a caller may show `solids` as soon as it
+ * has them and measure after, one body per `measureNext`. Until a body is
+ * measured its row carries its mesh's box (within the meshing tolerance of the
+ * exact one) and no volume, area or centroid. A body measured before (in this
+ * pose, or moved without turning) needs nothing more.
+ */
+export interface StagedEvaluation {
+  solids: Record<string, SolidEval>;
+  /** Bodies still to be measured. */
+  readonly pending: number;
+  /** Measure one more body, writing the result onto its row (and into the cache); false when none is left. */
+  measureNext(): boolean;
+  /** Give up the measuring that is left (the model is superseded). */
+  dispose(): void;
+}
+
+/** A body awaiting its exact measurement. `mass` is known when only the box is missing (a turned replay);
+ *  `store` says the full evaluation goes into the cache once measured; `gear` shares its mass per spec. */
+interface Pending { body: Body; row: SolidEval; mesh: SolidMesh; surface: boolean; mass?: MassProps; store: boolean; gear?: { key: string; T: Rigid } }
+
+export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: GeometryCache): StagedEvaluation {
   const features: FeatureDef[] = activeFeatures(doc, scope);
+  const done: StagedEvaluation = { solids: {}, pending: 0, measureNext: () => false, dispose: () => {} };
   if (!isKernelReady()) {
-    const out: Record<string, SolidEval> = {};
     for (const f of features) {
-      out[f.id] = f.kind === "extrude"
+      done.solids[f.id] = f.kind === "extrude"
         ? { featureId: f.id, name: f.name, sketchId: f.sketchId, distance: resolveDistance(f, scope), error: "kernel not ready" }
         : { ...modifierRow(f), sketchId: f.kind === "revolve" ? f.sketchId : "", error: "kernel not ready" };
     }
-    return out;
+    return done;
   }
+  const pending: Pending[] = [];
   cache?.begin();
   try {
     const { bodies, out } = evaluateBodies(doc, scope, cache);
@@ -1547,47 +1672,103 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
       buildProgress?.(FEATURE_SHARE + ((1 - FEATURE_SHARE) * meshed++) / bodies.length);
       const row: SolidEval = { ...(out[body.id] ?? {}), featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance };
       if (body.decals?.length) row.threadDecals = body.decals;
+      let keep = false; // the shape stays alive for its measuring
       try {
-        let ev = cache && body.sig ? cache.bodyEval(body.sig) : undefined;
+        let ev: BodyEval | undefined;
+        let later: Pending | undefined;
+        const frame = body.frame ?? IDENTITY;
+        const cached = cache && body.sig ? cache.bodyEval(body.sig) : undefined;
+        if (cached) {
+          // the same body, measured before — here, or somewhere else (then moved: the same
+          // mesh and volume; a turned body gets its box measured afresh)
+          const delta = compose(frame, invert(cached.frame));
+          const b = cached.ev.bounds;
+          if (samePose(delta, IDENTITY)) ev = cached.ev;
+          else if (!turns(delta) && b) ev = posedEval(cached.ev, delta, { min: applyPoint(delta, b.min), max: applyPoint(delta, b.max) });
+          else {
+            ev = posedEval(cached.ev, delta, undefined);
+            ev.bounds = meshBounds(ev.mesh.positions);
+            later = { body, row, mesh: ev.mesh, surface: !!ev.surface, mass: ev.mass, store: false };
+          }
+        }
         if (!ev && body.pose) {
-          // a gear: meshed and measured once in its own frame, then moved
+          // a gear: meshed once in its own frame and moved; measured once per spec too
           const local = GEAR_LOCAL.get(body.pose.key);
           const lshape = local && body.pose.shape === body.shape ? peekLocalGear(body.pose.key) : undefined;
           if (local && lshape) {
-            local.ev ??= { mesh: meshShape(lshape), bounds: safeBounds(lshape), mass: massPropsOfShape(lshape) };
-            ev = posedEval(local.ev, body.pose.T, safeBounds(body.shape));
-            if (cache && body.sig) cache.storeBodyEval(body.sig, ev);
+            local.mesh ??= meshShape(lshape);
+            const mesh = moveMesh(local.mesh, body.pose.T);
+            const mass = local.mass ? { ...local.mass, centroid: applyPoint(body.pose.T, local.mass.centroid) } : undefined;
+            ev = { mesh, bounds: meshBounds(mesh.positions), mass: mass ?? NO_MASS };
+            later = { body, row, mesh, surface: false, mass, store: true, gear: { key: body.pose.key, T: body.pose.T } };
           }
         }
         if (!ev) {
-          ev = { mesh: meshShape(body.shape), bounds: safeBounds(body.shape), mass: massPropsOfShape(body.shape), ...(hasSolid(body.shape) ? {} : { surface: true }) };
-          if (cache && body.sig) cache.storeBodyEval(body.sig, ev);
+          const mesh = meshShape(body.shape);
+          const surface = !hasSolid(body.shape);
+          ev = { mesh, bounds: meshBounds(mesh.positions), mass: NO_MASS, ...(surface ? { surface: true } : {}) };
+          later = { body, row, mesh, surface, store: true };
         }
         row.mesh = cloneMesh(ev.mesh);
         if (row.mesh.faceRanges && row.mesh.faceRanges.length === 2 * body.faceNames.length) row.mesh.faceNames = body.faceNames.slice();
-        row.bounds = ev.bounds;
-        // an open surface encloses nothing: OCC's volume integral over it means nothing
-        if (ev.surface) row.volume = 0;
-        else if (Number.isFinite(ev.mass.volume)) row.volume = ev.mass.volume;
-        if (Number.isFinite(ev.mass.area)) row.area = ev.mass.area;
-        if (Number.isFinite(ev.mass.centroid.x)) row.centroid = ev.mass.centroid;
-        if (ev.surface) row.surface = true;
+        writeMeasure(row, ev.bounds, ev.mass, !!ev.surface);
         if (body.member) row.member = { profile: body.member.profile, length: extentAlong(ev.mesh.positions, body.member.axis), angles: body.member.angles };
         if (body.sheet?.pattern) {
           const sh = body.sheet;
           row.sheet = { thickness: sh.thickness, kFactor: sh.kFactor, unfolded: !!sh.unfolded, ...(sh.edited && !sh.unfolded ? { stale: true } : {}), angles: Object.fromEntries(Object.entries(sh.angles ?? {}).map(([k, v]) => [k, Math.round(v * 180 / Math.PI * 1e6) / 1e6])), edges: sh.edges.map((e) => e.name), flat: sh.pattern! };
         }
+        if (later) { pending.push(later); keep = true; }
       } catch (e) {
         row.error = kernelErrorMessage(e);
       } finally {
-        body.shape.delete();
+        if (!keep) body.shape.delete();
       }
       out[body.id] = row;
     }
-    return out;
+    done.solids = out;
   } finally {
     cache?.end();
   }
+  const measure = (p: Pending) => {
+    const { body, row } = p;
+    try {
+      const bounds = safeBounds(body.shape);
+      let mass = p.mass;
+      if (!mass && p.gear) {
+        const local = GEAR_LOCAL.get(p.gear.key);
+        const inv = invert(p.gear.T);
+        const m = local?.mass ?? (() => { const w = massPropsOfShape(body.shape); return { ...w, centroid: applyPoint(inv, w.centroid) }; })();
+        if (local && !local.mass) local.mass = m;
+        mass = { ...m, centroid: applyPoint(p.gear.T, m.centroid) };
+      }
+      mass ??= massPropsOfShape(body.shape);
+      writeMeasure(row, bounds, mass, p.surface);
+      if (p.store && cache && body.sig) cache.storeBodyEval(body.sig, { mesh: p.mesh, bounds, mass, ...(p.surface ? { surface: true } : {}) }, body.frame ?? IDENTITY);
+    } catch (e) {
+      row.error ??= kernelErrorMessage(e);
+    } finally {
+      body.shape.delete();
+    }
+  };
+  return {
+    solids: done.solids,
+    get pending() { return pending.length; },
+    measureNext() { const p = pending.shift(); if (!p) return false; measure(p); return true; },
+    dispose() { for (const p of pending.splice(0)) p.body.shape.delete(); },
+  };
+}
+
+/** Mass properties not measured yet. */
+const NO_MASS: MassProps = { volume: NaN, area: NaN, centroid: { x: NaN, y: NaN, z: NaN } };
+
+/** A body's measurements onto its row (a NaN is left off; an open surface encloses nothing). */
+function writeMeasure(row: SolidEval, bounds: Bounds3 | undefined, mass: MassProps, surface: boolean) {
+  row.bounds = bounds;
+  if (surface) row.volume = 0;
+  else if (Number.isFinite(mass.volume)) row.volume = mass.volume;
+  if (Number.isFinite(mass.area)) row.area = mass.area;
+  if (Number.isFinite(mass.centroid.x)) row.centroid = mass.centroid;
+  if (surface) row.surface = true;
 }
 
 /** Faces and edges of each body with their topological names and geometry

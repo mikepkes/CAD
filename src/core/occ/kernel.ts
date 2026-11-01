@@ -730,6 +730,20 @@ export interface FaceGeom {
   area: number;
 }
 
+/** What generic naming needs of a face: its surface type and the normal at its middle. Skips the
+ *  centroid and area (a GProp integration per face: on a gear's hundreds of B-spline faces, most of
+ *  the time faceGeoms takes). */
+export function faceKinds(shape: Shape3D): Pick<FaceGeom, "type" | "normal">[] {
+  const faces = facesOf(shape);
+  try {
+    return faces.map((f) => {
+      let n: Vec3 = { x: 0, y: 0, z: 0 };
+      try { const raw = f.normalAt(); const m = Math.hypot(raw.x, raw.y, raw.z); if (m > 0) n = { x: raw.x / m, y: raw.y / m, z: raw.z / m }; } catch { /* leave zero */ }
+      return { type: String(f.geomType).toUpperCase(), normal: n };
+    });
+  } finally { freeAll(faces); }
+}
+
 export function faceGeoms(shape: Shape3D): FaceGeom[] {
   const faces = facesOf(shape);
   try {

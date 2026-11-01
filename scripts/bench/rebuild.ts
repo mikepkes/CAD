@@ -60,9 +60,10 @@ function slidersOf(doc: CadDocument, n: number): { geom: Slider | null; pose: Sl
   const bounded = (p: { min?: number; max?: number }) => p.min != null && p.max != null;
   const geomOnly = doc.parameters.filter((p) => reads(geomText, p) && !reads(jointText, p));
   const geomAny = doc.parameters.filter((p) => reads(geomText, p));
-  const poseParams = doc.parameters.filter((p) => reads(jointText, p));
+  const poseOnly = doc.parameters.filter((p) => reads(jointText, p) && !reads(geomText, p));
+  const poseAny = doc.parameters.filter((p) => reads(jointText, p));
   const pick = (ps: typeof doc.parameters) => ps.find(bounded) ?? ps[0];
-  const g = pick(geomOnly) ?? pick(geomAny), j = pick(poseParams);
+  const g = pick(geomOnly) ?? pick(geomAny), j = pick(poseOnly) ?? pick(poseAny);
   return { geom: g ? sweep(g, n) : null, pose: j ? sweep(j, n) : null };
 }
 
@@ -79,10 +80,12 @@ async function main() {
   const recomputeMs = performance.now() - t;
   const docBytes = JSON.stringify(s.doc).length;
 
+  // the app's path: the meshes land first (what the person sees), the exact measuring follows
   t = performance.now();
-  const first = await backend.evaluate(s.doc);
+  let meshesMs = 0, shown: Record<string, SolidEval> = {};
+  const first = await backend.evaluate(s.doc, undefined, (r) => { meshesMs = performance.now() - t; shown = r.solids; });
   const coldMs = performance.now() - t;
-  const stats = meshStats(first.solids);
+  const stats = meshStats(shown);
   const errors = Object.values(first.solids).filter((r) => r.error).map((r) => `${r.name}: ${r.error}`);
 
   const warm: number[] = [];
@@ -92,28 +95,29 @@ async function main() {
   // Every edit is to a value not seen before (as in a drag), then the original is restored (untimed).
   const sliders = slidersOf(s.doc, repeats);
   const measure = async (slider: Slider | null) => {
-    if (!slider) return { edit: null, recompute: null, name: null };
+    if (!slider) return { edit: null, shown: null, recompute: null, name: null };
     const original = s.doc.parameters.find((p) => p.name === slider.name)!.expr;
-    const edit: number[] = [], editRecompute: number[] = [];
+    const edit: number[] = [], shownAt: number[] = [], editRecompute: number[] = [];
     for (const expr of [...slider.values, original]) {
       t = performance.now();
       const r = await s.dispatch("parameter.set", { name: slider.name, expression: expr });
       if (!r.ok) throw new Error(`parameter.set ${slider.name}=${expr}: ${r.error}`);
       const rc = performance.now() - t;
       t = performance.now();
-      await backend.evaluate(s.doc);
-      if (expr !== original) { editRecompute.push(rc); edit.push(performance.now() - t); }
+      let at = 0;
+      await backend.evaluate(s.doc, undefined, () => { at = performance.now() - t; });
+      if (expr !== original) { editRecompute.push(rc); edit.push(performance.now() - t); shownAt.push(at); }
     }
-    return { edit: ms(median(edit)), recompute: ms(median(editRecompute)), name: slider.name };
+    return { edit: ms(median(edit)), shown: ms(median(shownAt)), recompute: ms(median(editRecompute)), name: slider.name };
   };
   const geom = await measure(sliders.geom);
   const pose = await measure(sliders.pose);
   const cache = (backend as unknown as { cache: { hits: number; misses: number } }).cache;
   console.log(JSON.stringify({
     example: file.replace(/^.*\//, "").replace(/\.json$/, ""),
-    kernelMs: ms(kernelMs), recomputeMs: ms(recomputeMs), coldMs: ms(coldMs), warmMs: ms(median(warm)),
-    editMs: geom.edit, editRecomputeMs: geom.recompute, slider: geom.name,
-    poseMs: pose.edit, poseRecomputeMs: pose.recompute, poseSlider: pose.name,
+    kernelMs: ms(kernelMs), recomputeMs: ms(recomputeMs), coldMs: ms(coldMs), coldMeshesMs: ms(meshesMs), warmMs: ms(median(warm)),
+    editMs: geom.edit, editMeshesMs: geom.shown, editRecomputeMs: geom.recompute, slider: geom.name,
+    poseMs: pose.edit, poseMeshesMs: pose.shown, poseRecomputeMs: pose.recompute, poseSlider: pose.name,
     ...stats, docBytes, hits: cache.hits, misses: cache.misses, errors,
   }));
 }

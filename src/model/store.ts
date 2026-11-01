@@ -28,7 +28,7 @@ const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? 
 import { solveDrag } from "../core/drag";
 import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
 import type { SolidEval } from "../core/features";
-import { GeometryBackend, InlineGeometryBackend, TopologyOpts, ExportFormat } from "../core/geometry/backend";
+import { GeometryBackend, InlineGeometryBackend, TopologyOpts, ExportFormat, EvaluateResult } from "../core/geometry/backend";
 import { hasFlexures } from "../sim/flexure";
 import { WorkerGeometryBackend } from "./worker-backend";
 import { runMotionStudy, driveParams, MotionStatus, MotionResult } from "./motionStudy";
@@ -56,6 +56,7 @@ let studyReady = false;
 let motionToken = 0; // bumped to cancel/supersede an in-flight study
 let rebuildInFlight: Promise<void> | null = null; // the running preview evaluate (its whole coalesced loop)
 let rebuildDirty = false;    // a newer rebuild was requested while one ran
+let buildToken = 0;          // the latest build started: measurements of an older one are stale
 /** Resolves once no solid rebuild is running (the video director's "the model is done" signal). */
 export const whenRebuilt = (): Promise<void> => rebuildInFlight ?? Promise.resolve();
 
@@ -1052,19 +1053,33 @@ export const useStore = create<AppState>((set, get) => {
             rebuildDirty = false;
             const doc = get().session.doc;
             set({ build: { started, fraction: 0 } });
-            const { solids, facePlanes } = await geometry.evaluate(doc, (fraction) => set({ build: { started, fraction } }));
-            // The backend may run on a worker (a doc copy), so fold the derived state
-            // back onto the live doc: feature distances (inspector) and re-resolved
-            // face-sketch planes (so the ghost sketch tracks its face).
-            for (const [fid, s] of Object.entries(solids)) {
-              const f = doc.features[fid];
-              if (f && f.kind === "extrude" && Number.isFinite(s.distance)) f.distanceValue = s.distance;
-            }
-            for (const [sid, plane] of Object.entries(facePlanes)) {
-              const sk = doc.sketches[sid];
-              if (sk) sk.plane = plane;
-            }
-            bump({ solids });
+            // The meshes land first and the loop goes on (to the next value of a drag, say); the
+            // exact measurements (volume, area, centroid, box) follow and are folded in when they
+            // arrive — unless a newer build has landed by then, in which case they are of a
+            // superseded model and the backend gave them up anyway.
+            const token = ++buildToken;
+            const shown = (r: EvaluateResult) => {
+              // The backend may run on a worker (a doc copy), so fold the derived state
+              // back onto the live doc: feature distances (inspector) and re-resolved
+              // face-sketch planes (so the ghost sketch tracks its face).
+              for (const [fid, s] of Object.entries(r.solids)) {
+                const f = doc.features[fid];
+                if (f && f.kind === "extrude" && Number.isFinite(s.distance)) f.distanceValue = s.distance;
+              }
+              for (const [sid, plane] of Object.entries(r.facePlanes)) {
+                const sk = doc.sketches[sid];
+                if (sk) sk.plane = plane;
+              }
+              bump({ solids: r.solids });
+            };
+            let landed!: () => void;
+            const meshes = new Promise<void>((res) => { landed = res; });
+            const measured = geometry.evaluate(doc, (fraction) => set({ build: { started, fraction } }), (r) => { shown(r); landed(); });
+            void measured.then((r) => {
+              if (token !== buildToken || r.complete === false) return;
+              set((s) => ({ rev: s.rev + 1, solids: Object.fromEntries(Object.entries(s.solids).map(([id, row]) => [id, r.solids[id] ? { ...row, ...r.solids[id], mesh: row.mesh } : row])) }));
+            }, () => { /* reported through the race below when it is this build's failure */ });
+            await Promise.race([meshes, measured]);
           } while (rebuildDirty);
           await refreshAnalysis();
         } finally {
