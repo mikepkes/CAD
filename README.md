@@ -48,6 +48,22 @@ whose value is `turn` times the tooth ratios down the train — so the teeth sta
 in mesh, which the motion study checks. Printable: 5 mm bores on pins, 0.1 mm
 backlash a side.
 
+And **https://mikepkes.github.io/CAD/?mode=customize&example=skadis** — a
+**gravity holder for an IKEA SKÅDIS pegboard**: drop something in and its
+weight shuts the jaws on it; lift it out and they swing open. Two cheeks hang on
+the board from printed hooks sized to its slots (5 × 15 mm, 40 mm apart, in 5 mm
+hardboard). Between them, two jaws hang from pivot pins like pendulums, and a
+U-shaped cradle carries the object on its tray. The object's weight pulls the
+cradle down, and pin-slot joints turn that drop into the jaws swinging their
+pads in. Empty, the jaws swing back out under their own weight, and they pull
+harder the further they are closed. Drag `jaw` to close them on the stand-in
+object (the cradle and the object ride down with it). `size` sets the largest
+object (they close to a third of it), `hooks` sets one or two slot pitches
+between the hooks, and `wall` and `arm` set the cheek and jaw thicknesses.
+There are eleven parts, and each prints without supports. Untick `board` to
+hide the board and the object before you save it for printing. The viewer also
+offers the drawing.
+
 ### Compliant mechanisms
 
 Parts that move by **bending** instead of sliding on pins, printed flat as one
@@ -415,6 +431,7 @@ straight from a URL:
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&example=gimbal         # two-axis flexure gimbal: eight cross-blade flexures, alpha/beta steer the mirror; blade, platform and range sliders
 ?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm) and a Geneva drive, driven by `turn`
+?mode=customize&example=skadis         # SKÅDIS gravity holder: the object's weight swings two pendulum jaws shut; jaw angle, object size, hook spacing, wall and arm sliders
 ?mode=customize&model=<url-to.json>    # any VibeCAD model file
 ```
 
