@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync, mkdirSync, openSync, writeSync, closeSync,
 import { join, extname } from "node:path";
 import { chromium } from "playwright";
 import { fastened } from "./lib/director.mjs";
-import { MONTAGE } from "./script/lines.mjs";
+import { MONTAGE, CHAPTERS } from "./script/lines.mjs";
 import { loadClips, VO_TAIL_MS } from "./lib/voices.mjs";
 import { readWav, writeWav } from "./lib/wav.mjs";
 
@@ -43,6 +43,7 @@ const takeFiles = [];
 const chyrons = []; // { from, to, text } in output frames
 const captions = []; // { from, to, text }
 const cues = [];
+const chapters = []; // { from, title } in output frames, in order
 let outFrame = 0;
 
 /** Spoken addresses as written, for the captions: "mikepkes dot github dot io slash CAD" → "mikepkes.github.io/CAD".
@@ -98,6 +99,7 @@ if (acts[0] === 1 && existsSync(join(takes, "act3", "timing.json"))) {
       }
     }
     cues.push({ act: 1, id: "montage", from, to: outFrame, text: MONTAGE });
+    if (CHAPTERS[1]?.montage) chapters.push({ from, title: CHAPTERS[1].montage });
     captions.push({ from, to: outFrame, text: MONTAGE });
     console.log(`montage: ${picks.length} picks (${picks.map((p) => p.label).join(", ")}), ${((outFrame - from) / FPS).toFixed(1)} s`);
   }
@@ -135,6 +137,7 @@ for (const n of acts) {
   for (const b of timing.beats) {
     // how much longer the beat is for the slowest voice than it would be for the default voice alone
     if (b.wantMs != null) beatsExtra += (Math.max(b.actionsMs, b.wantMs) - Math.max(b.actionsMs, b.defaultWantMs)) / 1000;
+    if (CHAPTERS[n]?.[b.id]) chapters.push({ from: toOut(b.start), title: CHAPTERS[n][b.id] });
     if (!b.narration.trim()) continue; // a silent beat (the title): no line to read or caption
     const from = toOut(b.start), to = Math.max(from + FPS, toOut(b.end));
     cues.push({ act: n, id: b.id, from, to, text: b.narration });
@@ -189,6 +192,18 @@ if (voiced) {
 } else if (vo) console.log("voiceover: no clips (run node video/vo.mjs); the MP4 is silent");
 
 const tc = (f, sep = ",") => { const ms = Math.round((f / FPS) * 1000); const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}${sep}${String(ms % 1000).padStart(3, "0")}`; };
+// chapters: each runs to the next one's start (the first from 0:00), as ffmpeg metadata for the MP4 and as a YouTube
+// description list, which wants every chapter at least 10 s long (a shorter one joins the one before it)
+if (chapters.length) chapters[0].from = 0;
+const chapterMs = chapters.map((c, i) => ({ title: c.title, start: Math.round((c.from / FPS) * 1000), end: Math.round(((chapters[i + 1]?.from ?? outFrame) / FPS) * 1000) }));
+const esc = (t) => t.replace(/[=;#\\\n]/g, (c) => `\\${c}`);
+writeFileSync(join(out, "chapters.ffmeta"), `;FFMETADATA1\n${chapterMs.map((c) => `[CHAPTER]\nTIMEBASE=1/1000\nSTART=${c.start}\nEND=${c.end}\ntitle=${esc(c.title)}\n`).join("")}`);
+const yt = [];
+for (const c of chapterMs) { if (yt.length && c.start - yt.at(-1).start < 10000) continue; yt.push(c); }
+while (yt.length > 1 && (outFrame / FPS) * 1000 - yt.at(-1).start < 10000) yt.pop(); // the last one too
+const mmss = (ms) => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s % 60).padStart(2, "0")}`; };
+writeFileSync(join(out, "chapters.txt"), yt.map((c) => `${mmss(c.start)} ${c.title}`).join("\n") + "\n");
+if (chapters.length) console.log(`chapters: ${chapterMs.length} in the MP4, ${yt.length} in chapters.txt (YouTube's 10 s minimum)`);
 writeFileSync(join(out, "subtitles.srt"), captions.map((c, i) => `${i + 1}\n${tc(c.from)} --> ${tc(c.to)}\n${c.text}\n`).join("\n"));
 const voCol = (c) => (c.clips.length ? `${(Math.max(...c.clips.map((k) => k.ms)) / 1000).toFixed(1)} s` : "–");
 writeFileSync(join(out, "cue-sheet.md"), `# Voiceover cue sheet (${run})\n\nRecord each line to picture (ADR), or use the synthesised voiceover (video/vo.mjs), whose clips start at "In". Times are in the cut; the picture holds about half a second of settled tail after each line. "VO" is the longest synthesised clip of the line.\n\n| # | Act | Beat | In | Length | VO | Line |\n|---|---|---|---|---|---|---|\n${cues.map((c, i) => `| ${i + 1} | ${c.act} | ${c.id} | ${tc(c.from, ".").slice(3, 9)} | ${((c.to - c.from) / FPS).toFixed(1)} s | ${voCol(c)} | ${c.text} |`).join("\n")}\n\nTotal: ${tc(outFrame, ".").slice(3, 9)}\n`);
@@ -244,14 +259,15 @@ function muxVoices() {
   }
   const dir = `vibecad-tts/mux/${run}`;
   execFileSync("ssh", [...SSH, HOST, `mkdir -p ~/${dir}`]);
-  execFileSync("rsync", ["-a", "-e", rsh, mp4, ...mixes.map((m) => m.m4a), `${HOST}:${dir}/`]);
-  const inputs = ["-i", "vibecad-tutorial.mp4", ...mixes.flatMap((m) => ["-i", `${m.voice.id}.m4a`])];
-  const maps = ["-map", "0:v:0", ...mixes.flatMap((_, i) => ["-map", `${i + 1}:a:0`])];
+  const ffmeta = join(out, "chapters.ffmeta"), withChapters = chapters.length > 0;
+  execFileSync("rsync", ["-a", "-e", rsh, mp4, ...mixes.map((m) => m.m4a), ...(withChapters ? [ffmeta] : []), `${HOST}:${dir}/`]);
+  const inputs = ["-i", "vibecad-tutorial.mp4", ...mixes.flatMap((m) => ["-i", `${m.voice.id}.m4a`]), ...(withChapters ? ["-i", "chapters.ffmeta"] : [])];
+  const maps = ["-map", "0:v:0", ...mixes.flatMap((_, i) => ["-map", `${i + 1}:a:0`]), ...(withChapters ? ["-map_chapters", String(mixes.length + 1)] : [])];
   // the MP4 muxer keeps a track's name as its handler name (it drops `title`), which is what players list
   const meta = ["-metadata:s:v:0", "handler_name=VibeCAD tutorial", ...mixes.flatMap((m, i) => [
     `-metadata:s:a:${i}`, `title=${m.voice.title}`, `-metadata:s:a:${i}`, `handler_name=${m.voice.title}`, `-metadata:s:a:${i}`, "language=eng", `-disposition:a:${i}`, i === 0 ? "default" : "0"])];
   const ff = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", ...inputs, ...maps, "-c", "copy", ...meta, "-movflags", "+faststart", "tracks.mp4"];
-  const probe = "ffprobe -v error -show_entries format=duration:stream=index,codec_type,codec_name,duration:stream_tags=title,handler_name,language:stream_disposition=default -of json tracks.mp4";
+  const probe = "ffprobe -v error -show_chapters -show_entries format=duration:stream=index,codec_type,codec_name,duration:stream_tags=title,handler_name,language:stream_disposition=default -of json tracks.mp4";
   const t0 = Date.now();
   execFileSync("ssh", [...SSH, HOST, `cd ~/${dir} && ${ff.map(sh).join(" ")}`], { stdio: ["ignore", "inherit", "inherit"] });
   const info = JSON.parse(execFileSync("ssh", [...SSH, HOST, `cd ~/${dir} && ${probe}`], { encoding: "utf8" }));
@@ -263,5 +279,6 @@ function muxVoices() {
   const audio = info.streams.filter((s) => s.codec_type === "audio");
   console.log(`muxed ${audio.length} voice tracks on ${HOST} in ${((Date.now() - t0) / 1000).toFixed(0)} s (ffprobe):`);
   for (const s of info.streams) console.log(`  #${s.index} ${s.codec_type} ${s.codec_name} ${Number(s.duration).toFixed(2)} s${s.tags?.handler_name ? ` "${s.tags.handler_name}"` : ""}${s.tags?.language ? ` [${s.tags.language}]` : ""}${s.disposition?.default ? " (default)" : ""}`);
+  console.log(`  ${info.chapters?.length ?? 0} chapters`);
   writeFileSync(join(out, "tracks.json"), JSON.stringify(info, null, 1));
 }

@@ -85,6 +85,50 @@ export const LINES = {
   },
 };
 
+/** The video's chapters: a title per beat that starts one, by act and beat id ("montage" is the intro, before Act 1).
+ *  A beat with no title here (the title card) stays in the chapter before it. The edit embeds them in the MP4 and
+ *  writes them as a YouTube description list (chapters.txt). */
+export const CHAPTERS = {
+  1: {
+    montage: "Intro",
+    "cold-open": "A parametric phone stand",
+    "get-vibecad": "Getting VibeCAD",
+    "the-room": "The workspace",
+    block: "Start with a block",
+    "raise-the-back": "Sketch the slanted back",
+    "what-it-kept": "The history",
+    "make-it-parametric": "Make it parametric",
+    "turn-the-dials": "Turn the dials",
+    "just-type-it": "Command K",
+    "keep-it": "Saving your work",
+  },
+  2: {
+    soften: "Round the corners",
+    rules: "Rules: keep it under 200 g",
+    "better-versions": "The design space",
+    materials: "Materials and print direction",
+    "will-it-print": "Will it print?",
+    "make-it-yours": "Your own action ring",
+    "ship-it": "Export",
+  },
+  3: {
+    gyroscope: "Print-in-place gyroscope",
+    clockwork: "Gears and a Geneva drive",
+    walker: "Jansen wind walker",
+    skadis: "SKÅDIS gravity holder",
+    handlebar: "Bike handlebar",
+    origami: "Paper airplane",
+    "scissor-jointed": "Jointed scissor lift",
+    starbox: "Snap-together star box",
+    "bistable-forces": "Claude runs a force analysis",
+    "print-direction": "Print direction and strain",
+    gimbal: "Flexure gimbal",
+    roubo: "Roubo workbench and shop drawing",
+    agent: "Ask Claude to build it",
+    outro: "Thanks for watching",
+  },
+};
+
 /** Every spoken line, in playing order: { act, id, key, text }. The montage plays before Act 1 as "act1-montage". */
 export function spoken(acts = [1, 2, 3]) {
   const out = [];
