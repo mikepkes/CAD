@@ -100,6 +100,12 @@ export function RingOverlay() {
     };
   }, [run]);
 
+  // while the ring is open the pins on the part fade, so their badges never read through or beside the slots
+  useEffect(() => {
+    document.body.classList.toggle("ring-open", open);
+    return () => document.body.classList.remove("ring-open");
+  }, [open]);
+
   if (!open) return null;
   const c = centreOf(at);
   const context = CONTEXT_LABELS[top];
@@ -112,7 +118,7 @@ export function RingOverlay() {
         <div className="ring-track" style={{ width: 2 * RING_R, height: 2 * RING_R }} aria-hidden="true" />
         <div className="ring-centre" aria-hidden="true">
           <span className="k-label ring-context">{context}</span>
-          <span className="k-dim ring-hint">configure in ⌨</span>
+          <span className="k-dim ring-hint">set up in Keyboard shortcuts</span>
         </div>
         {slots.map((s) => {
           const o = slotOffset(s.index, RING_R);
