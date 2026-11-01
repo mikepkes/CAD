@@ -5,7 +5,7 @@
 // list, so they move to the main thread zero-copy.
 
 import { runGeometryJob, GeometryRequest } from "../core/geometry/backend";
-import { GeometryCache } from "../core/features";
+import { GeometryCache, type BuildStep } from "../core/features";
 import { initKernel } from "../core/occ/kernel";
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
@@ -29,7 +29,12 @@ ctx.onmessage = async (e: MessageEvent) => {
   if (initPromise) await initPromise;
   // progress, at most every 50 ms, so a long build can show how far it has got
   let last = 0;
-  const progress = (fraction: number) => { const t = performance.now(); if (t - last > 50) { last = t; ctx.postMessage({ id: msg.id, kind: "progress", fraction }); } };
+  let phase = "";
+  const progress = (fraction: number, step?: BuildStep) => {
+    // a new phase always gets through (the bar's label changes with it)
+    const t = performance.now();
+    if (t - last > 50 || (step && step.phase !== phase)) { last = t; phase = step?.phase ?? phase; ctx.postMessage({ id: msg.id, kind: "progress", fraction, step }); }
+  };
   const { res, transfer } = await runGeometryJob(msg, cache, progress, {
     emit: (r, buffers) => ctx.postMessage(r, buffers),
     stale: () => msg.kind === "evaluate" && latestEvaluate !== msg.id,

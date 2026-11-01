@@ -27,7 +27,7 @@ import { importRequests, ImportRequest } from "../core/importers";
 const readLS = (k: string, d = "") => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 import { solveDrag } from "../core/drag";
 import { Sketch, isDimension, DimensionConstraint } from "../sketch/types";
-import type { SolidEval } from "../core/features";
+import type { SolidEval, BuildStep } from "../core/features";
 import { GeometryBackend, InlineGeometryBackend, TopologyOpts, ExportFormat, EvaluateResult } from "../core/geometry/backend";
 import { hasFlexures } from "../sim/flexure";
 import { WorkerGeometryBackend } from "./worker-backend";
@@ -172,7 +172,7 @@ export interface AppState {
   solids: Record<string, SolidEval>;
   kernelReady: boolean;
   /** The model rebuilding now: when it started (performance.now) and how far it has got (0…1); null when idle. */
-  build: { started: number; fraction: number } | null;
+  build: { started: number; fraction: number; step?: BuildStep } | null;
   kernelLoading: boolean;
 
   // Motion study (customize mode): sweep the driven joints and pass/fail the
@@ -1149,7 +1149,7 @@ export const useStore = create<AppState>((set, get) => {
             };
             let landed!: () => void;
             const meshes = new Promise<void>((res) => { landed = res; });
-            const measured = geometry.evaluate(doc, (fraction) => set({ build: { started, fraction } }), (r) => { shown(r); landed(); });
+            const measured = geometry.evaluate(doc, (fraction, step) => set({ build: { started, fraction, step } }), (r) => { shown(r); landed(); });
             void measured.then((r) => {
               if (token !== buildToken || r.complete === false) return;
               set((s) => ({ rev: s.rev + 1, solids: Object.fromEntries(Object.entries(s.solids).map(([id, row]) => [id, r.solids[id] ? { ...row, ...r.solids[id], mesh: row.mesh } : row])) }));

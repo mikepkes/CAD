@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { flexureEquilibria, flexureState, flexureSweep, hasFlexures, isAngularDrive, type EquilibriumStudy } from "../sim/flexure";
 import { drivesOf } from "../model/concepts/mechanism";
 import { printFormat, useStore } from "../model/store";
+import { buildPercent, buildStepText } from "./BuildProgress";
 
 export const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000));
 
@@ -165,5 +166,30 @@ export function SaveButton(p: { onSave: () => void }) {
     >
       {label}
     </button>
+  );
+}
+
+/** The viewer's loading screen: what it's waiting for, and once the model is
+ *  building, which step it's on and how far it has got. */
+export function LoadingOverlay(p: { phase: "loading" | "building"; name?: string }) {
+  const build = useStore((s) => s.build);
+  const kernelLoading = useStore((s) => s.kernelLoading);
+  const what = p.name ? `“${p.name}”` : "the model";
+  const head = p.phase === "building" ? `Building ${what}…` : kernelLoading ? "Loading the 3D engine…" : `Loading ${what}…`;
+  const pct = build ? buildPercent(build.fraction) : 0;
+  return (
+    <div className="cz-overlay">
+      <div className="cz-loading">
+        <div className="cz-loading-head" role="status" aria-live="polite">{head}</div>
+        {p.phase === "building" && build && (
+          <>
+            <div className="cz-loading-step">{buildStepText(build.step)} · {pct}%</div>
+            <div className="cz-loading-bar" role="progressbar" aria-label="Building the model" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-valuetext={`${buildStepText(build.step)}, ${pct}%`}>
+              <span style={{ width: `${pct}%` }} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

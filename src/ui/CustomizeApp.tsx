@@ -12,7 +12,8 @@ import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
 import { editCommitter } from "./editCommitter";
 import { DrawingView } from "./DrawingView";
-import { Control, FlexureReadout, MotionBadge, SaveButton } from "./CustomizeControls";
+import { Control, FlexureReadout, LoadingOverlay, MotionBadge, SaveButton } from "./CustomizeControls";
+import { BuildProgress } from "./BuildProgress";
 import { Toast } from "./Toast";
 
 // The 3D rebuild is the slow part, so the slider's own value updates live while
@@ -40,7 +41,7 @@ export function CustomizeApp() {
   const hasDrawing = useStore((s) => !!s.session.doc.drawing);
   const openDrawing = useStore((s) => s.openDrawing);
   useStore((s) => s.rev); // re-render as the model resolves
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [state, setState] = useState<"loading" | "building" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [open, setOpen] = useState(true);
 
@@ -65,12 +66,16 @@ export function CustomizeApp() {
     void (async () => {
       try {
         useStore.setState({ showPlanes: false, showGrid: false }); // clean product view
-        await ensureKernel();
         const url = modelUrl();
         if (!url) throw new Error("No model given. Add ?model=<url> or ?example=gyroscope to the link.");
+        // the kernel (a big download) and the model load side by side
+        const kernel = ensureKernel();
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`Could not load model (${resp.status}).`);
-        await loadDocument(deserializeDocument(await resp.text()));
+        const text = await resp.text();
+        await kernel;
+        setState("building");
+        await loadDocument(deserializeDocument(text));
         // frame it: the default camera suits a small part, and sits inside anything the size of a workbench
         window.dispatchEvent(new CustomEvent("vibecad:view", { detail: "iso" }));
         window.dispatchEvent(new CustomEvent("vibecad:frame"));
@@ -111,7 +116,8 @@ export function CustomizeApp() {
       )}
       <DrawingView viewer />
       <Toast />
-      {state === "loading" && <div className="cz-overlay">Loading…</div>}
+      {state === "ready" && <BuildProgress />}
+      {(state === "loading" || state === "building") && <LoadingOverlay phase={state} name={new URLSearchParams(location.search).get("example") ?? undefined} />}
       {state === "error" && <div className="cz-overlay error">{error}</div>}
     </div>
   );

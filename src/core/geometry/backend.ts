@@ -9,7 +9,7 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D, kernelErrorMessage } from "../occ/kernel";
-import { evaluateFeaturesStaged, StagedEvaluation, withBuildProgress, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
+import { evaluateFeaturesStaged, StagedEvaluation, withBuildProgress, type BuildProgressSink, type BuildStep, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
 import { meshesTo3mf } from "../export/threemf";
 import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
@@ -53,7 +53,7 @@ export interface GeometryBackend {
    *  (box, volume, area, centroid) of the bodies not measured before, which only the
    *  returned promise waits for; until then such a row carries its mesh's box and no
    *  mass properties. The promise's rows carry no meshes then (they were delivered). */
-  evaluate(doc: CadDocument, onProgress?: (fraction: number) => void, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult>;
+  evaluate(doc: CadDocument, onProgress?: BuildProgressSink, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult>;
   /** World-space B-rep edges of one feature's solid (for projection into a sketch). */
   edges(doc: CadDocument, featureId: string): Promise<Edge3D[]>;
   /** STL/STEP bytes for one feature's solid, or (featureId null) the whole model
@@ -214,7 +214,7 @@ export type GeometryResponse =
   | { id: number; kind: "drawing"; svg: string; parts: CutPart[] }
   | { id: number; kind: "error"; message: string }
   /** Not an answer: how far a running job has got (0…1), sent while it works. */
-  | { id: number; kind: "progress"; fraction: number };
+  | { id: number; kind: "progress"; fraction: number; step?: BuildStep };
 
 /** GeometryRequest without the id field, distributing over the union. */
 export type GeometryRequestInit = GeometryRequest extends infer T ? (T extends { id: number } ? Omit<T, "id"> : never) : never;
@@ -246,7 +246,7 @@ export interface JobChannel {
  * `parentPort` — just a request in, a response plus its transfer list out. The
  * kernel must already be initialized in whatever realm this runs in.
  */
-export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache, onProgress?: (fraction: number) => void, channel: JobChannel = {}): Promise<{ res: GeometryResponse; transfer: ArrayBuffer[] }> {
+export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache, onProgress?: BuildProgressSink, channel: JobChannel = {}): Promise<{ res: GeometryResponse; transfer: ArrayBuffer[] }> {
   try {
     const scope = scopeOf(req.doc);
     if (req.kind === "evaluate") {
@@ -312,7 +312,7 @@ export class InlineGeometryBackend implements GeometryBackend {
     this.isReady = isKernelReady();
   }
   ready(): boolean { return this.isReady; }
-  async evaluate(doc: CadDocument, onProgress?: (fraction: number) => void, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult> {
+  async evaluate(doc: CadDocument, onProgress?: BuildProgressSink, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult> {
     if (!onMeshes) {
       const solids = withBuildProgress(onProgress, () => evaluateForRender(doc, scopeOf(doc), this.cache));
       return { solids, facePlanes: collectFacePlanes(doc), complete: true };
