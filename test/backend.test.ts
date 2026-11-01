@@ -74,4 +74,44 @@ describe("geometry backend", () => {
     if (res.kind !== "edges") throw new Error("unexpected");
     expect(res.edges.length).toBeGreaterThan(0); // a box has 12 edges
   });
+
+  // Staged: the meshes come first (with the mesh's box, no mass properties yet), the exact
+  // measurements after; together they are the plain evaluation.
+  it("a staged evaluate delivers the meshes first and the measurements after", async () => {
+    const s = await boxSession();
+    const fid = Object.keys(s.doc.features)[0];
+    const plain = (await new InlineGeometryBackend().evaluate(s.doc)).solids[fid];
+
+    const backend = new InlineGeometryBackend(); // its own cache: nothing measured yet
+    await backend.init({ wasmBinary: wasm });
+    let early: Record<string, unknown> | undefined;
+    const final = await backend.evaluate(s.doc, undefined, (r) => { early = { ...r.solids[fid] }; });
+    expect(early).toBeTruthy();
+    expect((early as { mesh?: unknown }).mesh).toBeTruthy();
+    expect((early as { volume?: number }).volume).toBeUndefined(); // not measured yet
+    const eb = (early as { bounds: { min: { z: number }; max: { z: number } } }).bounds;
+    expect(eb.min.z).toBeCloseTo(0, 6); expect(eb.max.z).toBeCloseTo(25, 6); // the mesh's own box
+    expect(final.complete).toBe(true);
+    const row = final.solids[fid];
+    expect(row.mesh).toBeUndefined(); // delivered already
+    expect(row.volume).toBeCloseTo(plain.volume!, 9);
+    expect(row.area).toBeCloseTo(plain.area!, 9);
+    expect(row.bounds).toEqual(plain.bounds);
+    expect(row.centroid).toEqual(plain.centroid);
+
+    // the job protocol: an "evaluate" answer emitted with the meshes in its transfer list, then "measured"
+    const emitted: { res: { kind: string }; transfer: ArrayBuffer[] }[] = [];
+    const { res } = await runGeometryJob({ id: 4, kind: "evaluate", doc: s.doc, staged: true }, undefined, undefined, { emit: (r, t) => emitted.push({ res: r, transfer: t }) });
+    expect(emitted.map((e) => e.res.kind)).toEqual(["evaluate"]);
+    expect(emitted[0].transfer.length).toBe(4);
+    expect(res.kind).toBe("measured");
+    if (res.kind !== "measured") throw new Error("unexpected");
+    expect(res.complete).toBe(true);
+    expect(res.solids[fid].volume).toBeCloseTo(plain.volume!, 9);
+
+    // superseded: the measuring stops, and says so
+    const { res: stale } = await runGeometryJob({ id: 5, kind: "evaluate", doc: s.doc, staged: true }, undefined, undefined, { emit: () => {}, stale: () => true });
+    if (stale.kind !== "measured") throw new Error("unexpected");
+    expect(stale.complete).toBe(false);
+  });
 });

@@ -56,7 +56,7 @@ function axisLabel(n: Vec3): string | undefined {
 /** Names from geometry alone — for a freshly built solid whose faces have no
  *  better provenance (primitives, lofts, sweeps, threads, imports): planar faces
  *  by axis ("+X") where aligned, curved faces by surface type ("cylinder"). */
-export function genericNames(featureId: string, geoms: FaceGeom[]): string[] {
+export function genericNames(featureId: string, geoms: Pick<FaceGeom, "type" | "normal">[]): string[] {
   return dedupe(geoms.map((g) => `${featureId}:${g.type === "PLANE" ? axisLabel(g.normal) ?? "plane" : surfaceLabel(g.type)}`));
 }
 

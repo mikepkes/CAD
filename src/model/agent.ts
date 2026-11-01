@@ -5,7 +5,7 @@
 // The API key lives only in the user's browser (localStorage) and is sent only to
 // api.anthropic.com. Nothing goes to any server of ours.
 
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { CommandRegistry } from "../core/command/registry";
 import { CadDocument, FeatureDef } from "../core/document";
 import { resolveSketchPlane } from "../geometry/plane";
@@ -202,8 +202,11 @@ let clientFactory: ((apiKey: string) => MessagesClient) | null = null;
 export function setAgentClientFactory(f: ((apiKey: string) => MessagesClient) | null) { clientFactory = f; }
 /** The client every request goes through: the installed stand-in, else the SDK. Organizational assist's
  *  naming requests use it too, so a stand-in answers them as well (see `isAssistRequest`). */
-export function agentClient(apiKey: string): MessagesClient {
-  return clientFactory ? clientFactory(apiKey) : new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+export async function agentClient(apiKey: string): Promise<MessagesClient> {
+  if (clientFactory) return clientFactory(apiKey);
+  // the SDK (300 kB of script) is loaded when an agent first runs, not with the app
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 }
 
 export async function runAgent(opts: {
@@ -216,7 +219,7 @@ export async function runAgent(opts: {
   onTool: (name: string, ok: boolean, detail: string) => void;
   signal?: AbortSignal;
 }): Promise<Anthropic.MessageParam[]> {
-  const client = agentClient(opts.apiKey);
+  const client = await agentClient(opts.apiKey);
   const tools = buildTools(opts.registry);
   const messages: Anthropic.MessageParam[] = [...opts.history];
 

@@ -491,16 +491,35 @@ export class SceneManager {
     if (!this.recording) this.drawFrame();
   };
 
+  // ---- render on demand ----
+  // A frame is drawn when something to see changed: the view was rebuilt, an overlay
+  // (handles, the pick highlight, the lens) changed, or the camera moved — by the
+  // controls, a tween, the 3D mouse, or anyone setting it directly (its pose is
+  // stamped every tick). Nothing changing, nothing is drawn.
+  private needsRender = true;
+  private lastCamStamp = "";
+  /** Ask for a frame: something in the scene changed. */
+  invalidate() { this.needsRender = true; }
+  private camStamp(): string {
+    const c = this.camera as THREE.PerspectiveCamera & THREE.OrthographicCamera;
+    const p = c.position, q = c.quaternion, u = c.up;
+    // to 8 significant digits: the controls recompute the pose from spherical coordinates every
+    // tick, which jitters in the last bits of a double without the camera having moved
+    const f = (v: number | undefined) => (v === undefined ? "" : v === 0 ? "0" : v.toPrecision(8));
+    return `${f(p.x)},${f(p.y)},${f(p.z)}|${f(q.x)},${f(q.y)},${f(q.z)},${f(q.w)}|${f(u.x)},${f(u.y)},${f(u.z)}|${f(c.zoom)},${c.fov},${f(c.left)},${f(c.top)}|${c.uuid}`;
+  }
+
   private animate = () => {
     if (this.disposed) return;
     requestAnimationFrame(this.animate);
     if (this.recording) return; // the turntable recorder drives render() itself
     const dt = this.clock.getDelta();
-    if (this.tween) this.stepTween(dt);
+    let moving = false;
+    if (this.tween) { this.stepTween(dt); moving = true; }
     else {
-      this.controls.update();
+      if (this.controls.update()) moving = true;
       const nav = navigationDelta(this.navInput, Math.min(dt, 0.05), this.navSettings, this.lastData?.mode === "sketch");
-      if (!isIdle(nav)) this.applyNavigation(nav);
+      if (!isIdle(nav)) { this.applyNavigation(nav); moving = true; }
     }
     // Dimension annotations and constraint badges are sized in world units from
     // the on-screen pixel scale, computed when the sketch is built. That scale
@@ -512,7 +531,12 @@ export class SceneManager {
       this.rerenderSketchLayer();
     }
     this.lastPixelScale = scale;
-    this.drawFrame();
+    const stamp = this.camStamp();
+    if (stamp !== this.lastCamStamp) { this.lastCamStamp = stamp; moving = true; }
+    if (moving || this.needsRender) {
+      this.needsRender = false;
+      this.drawFrame();
+    }
     this.noticeCameraChange();
   };
 
@@ -524,7 +548,7 @@ export class SceneManager {
   }
 
   /** Show analysis under a lens / wipe (null clears it). See lensPass.ts. */
-  setLens(spec: LensSpec | null) { this.lensPass.setSpec(spec); }
+  setLens(spec: LensSpec | null) { this.lensPass.setSpec(spec); this.invalidate(); }
 
   // Screen-anchored HTML (pins, cards, dimensions) follows the camera through
   // this: listeners run once per frame in which the view actually moved.
@@ -598,6 +622,7 @@ export class SceneManager {
     this.clearGroup(this.previewGroup);
     this.renderSketch(d.sketch, d.plane, d);
     if (d.preview) this.renderPreview(d.preview, d.plane);
+    this.invalidate();
   }
 
   /** Advance the active-camera animation one frame (slerp orientation, lerp dolly). */
@@ -737,6 +762,7 @@ export class SceneManager {
   /** Light one face (its triangles' positions, flat xyz) in the accent colour, drawn over everything so a face
    *  behind the model shows through; null clears it. The selection picker calls this as you hover its entries. */
   setPickHighlight(triangles: Float32Array | null) {
+    this.invalidate();
     if (this.pickHighlight) { this.scene.remove(this.pickHighlight); this.pickHighlight.geometry.dispose(); (this.pickHighlight.material as THREE.Material).dispose(); this.pickHighlight = null; }
     if (!triangles || !triangles.length) return;
     const geo = new THREE.BufferGeometry();
@@ -836,6 +862,7 @@ export class SceneManager {
     this.sketchGroup.visible = sketchVisible;
     restoreOverlays?.();
     rt.dispose();
+    this.invalidate(); // the on-screen frame is as it was, but a render changed GL state
 
     const canvas = document.createElement("canvas");
     canvas.width = width; canvas.height = height;
@@ -1076,13 +1103,16 @@ export class SceneManager {
     // Solids render in model mode (and faded while sketching).
     if (!this.animating) {
       this.solidsGroup.visible = !!data.solids && data.solids.length > 0;
+      this.updateSeq++;
       if (data.solids) data.solids.forEach((s, i) => this.renderSolid(s, data.mode === "sketch" || !!s.ghost, i));
+      this.sweepGeometries();
     }
 
     if (data.sketch && data.plane) {
       this.renderSketch(data.sketch, data.plane, data);
       if (data.preview) this.renderPreview(data.preview, data.plane);
     }
+    this.invalidate();
   }
 
   /** The material for a surface-quality display mode, or null to draw normally. */
@@ -1112,8 +1142,65 @@ export class SceneManager {
     return null;
   }
 
+  // ---- display geometry, kept across view updates ----
+  // The view is rebuilt from the store on every change (a hover, a selection, one
+  // slider tick): a body whose mesh arrays are the same objects as last time keeps
+  // its BufferGeometry, so its GPU buffers aren't re-uploaded. What an update
+  // didn't use is disposed right after it.
+  private geoCache = new Map<Float32Array, { geo: THREE.BufferGeometry; used: number }>();
+  private updateSeq = 0;
+
+  private solidGeometry(s: SolidView): THREE.BufferGeometry {
+    let hit = this.geoCache.get(s.positions);
+    if (!hit || hit.geo.getIndex()?.array !== s.indices) {
+      const geo = solidGeometry(s); // the module builder: positions, normals, index, and paper's sheet UVs
+      geo.userData.cached = true;
+      hit?.geo.dispose();
+      hit = { geo, used: 0 };
+      this.geoCache.set(s.positions, hit);
+    }
+    hit.used = this.updateSeq;
+    return hit.geo;
+  }
+  private edgeGeometry(edges: Float32Array): THREE.BufferGeometry {
+    let hit = this.geoCache.get(edges);
+    if (!hit) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(edges, 3));
+      geo.userData.cached = true;
+      hit = { geo, used: 0 };
+      this.geoCache.set(edges, hit);
+    }
+    hit.used = this.updateSeq;
+    return hit.geo;
+  }
+  /** Dispose the geometries the last update didn't use (their bodies are gone or re-meshed). */
+  private sweepGeometries() {
+    for (const [k, v] of this.geoCache) if (v.used !== this.updateSeq) { v.geo.dispose(); this.geoCache.delete(k); }
+  }
+  // The plain body and edge materials, by look: one of each, not one per body per update.
+  private plainMaterial(color: number, faded: boolean): THREE.Material {
+    const key = `p:${color}:${faded}`;
+    let m = this.matCache.get(key);
+    if (!m) {
+      m = new THREE.MeshStandardMaterial({ color, metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide, transparent: faded, opacity: faded ? 0.25 : 1 });
+      m.userData.cached = true; this.matCache.set(key, m);
+    }
+    return m;
+  }
+  private edgeMaterial(faded: boolean): THREE.Material {
+    const key = `e:${faded}`;
+    let m = this.matCache.get(key);
+    if (!m) {
+      m = new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1 });
+      m.userData.cached = true; this.matCache.set(key, m);
+    }
+    return m;
+  }
+
   private renderSolid(s: SolidView, faded: boolean, index: number) {
-    const geo = solidGeometry(s);
+    const geo = this.solidGeometry(s);
+    if (geo.getAttribute("color")) geo.deleteAttribute("color"); // a curvature display's colours, from an earlier update
     const clip = this.clipPlane ? [this.clipPlane] : null;
     // In section view each body gets its own colour so parts read apart; the
     // normal (un-sectioned) view keeps the assigned material, else a uniform tint.
@@ -1130,11 +1217,13 @@ export class SceneManager {
       mat = this.materialFor(s);
       (mat as THREE.MeshStandardMaterial).transparent = faded;
       (mat as THREE.MeshStandardMaterial).opacity = faded ? 0.25 : 1;
-    } else {
+    } else if (clip) {
       mat = new THREE.MeshStandardMaterial({
         color, metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide,
-        transparent: faded, opacity: faded ? 0.25 : 1, clippingPlanes: clip ?? undefined,
+        transparent: faded, opacity: faded ? 0.25 : 1, clippingPlanes: clip,
       });
+    } else {
+      mat = this.plainMaterial(color, faded);
     }
     const mesh = new THREE.Mesh(geo, mat);
     if (s.ghost || s.variant) mesh.userData.ghost = true; // drawn, but never picked
@@ -1165,15 +1254,15 @@ export class SceneManager {
     }
 
     if (s.edges.length) {
-      const egeo = new THREE.BufferGeometry();
-      egeo.setAttribute("position", new THREE.BufferAttribute(s.edges, 3));
+      const egeo = this.edgeGeometry(s.edges);
       const eseg = new THREE.LineSegments(
         egeo,
         s.variant
           ? new THREE.LineDashedMaterial({ color: COLORS().variant, dashSize: 1.5, gapSize: 1, transparent: true, opacity: 0.85, clippingPlanes: clip ?? undefined }) // variant ghost: dashed accent edges
           : s.material?.kind === "paper" && !clip
             ? paperEdgeMaterial(faded)
-            : new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1, clippingPlanes: clip ?? undefined })
+            : clip ? new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1, clippingPlanes: clip })
+            : this.edgeMaterial(faded)
       );
       if (s.variant) { eseg.computeLineDistances(); eseg.userData.ghost = true; } // dashes need distances; the lens skips ghosts
       eseg.userData.edges = true; // the body's B-rep edges (the lens redraws these)
@@ -1243,7 +1332,8 @@ export class SceneManager {
   private clearGroup(g: THREE.Group) {
     for (const child of [...g.children]) {
       g.remove(child);
-      (child as any).geometry?.dispose?.();
+      const geo = (child as any).geometry as THREE.BufferGeometry | undefined;
+      if (geo && !geo.userData?.cached) geo.dispose?.(); // cached geometries are reused across frames (see solidGeometry)
       const m = (child as any).material;
       const keep = (x: THREE.Material) => !!x.userData?.cached; // cached materials are reused across frames
       if (Array.isArray(m)) m.forEach((x) => { if (!keep(x)) x.dispose(); });
@@ -1266,6 +1356,7 @@ export class SceneManager {
     this.endAnimation();
     this.animating = true;
     this.recording = !live; // live: the normal loop keeps rendering (and the camera keeps moving) while poses change
+    this.invalidate();
     this.clearGroup(this.solidsGroup);
     this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = []; this.animMeshes.clear();
     this.solidsGroup.visible = true;
@@ -1294,6 +1385,7 @@ export class SceneManager {
   /** Move every component to the given world pose (applied as a delta from its
    *  build pose), carrying the wood grain frame along so grain doesn't swim. */
   setAnimationPose(world: Map<string, Rigid>) {
+    this.invalidate();
     const deltas = new Map<string, THREE.Matrix4>();
     for (const [cid, g] of this.animGroups) {
       const Wr = world.get(cid);
@@ -1344,6 +1436,7 @@ export class SceneManager {
       this.camera = saved.camera;
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // configureRecording forced 1
       this.onResize();
+      this.invalidate();
     };
   }
 
@@ -1373,6 +1466,7 @@ export class SceneManager {
     this.clearGroup(this.solidsGroup);
     this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = []; this.animMeshes.clear();
     if (this.lastData) this.update(this.lastData);
+    this.invalidate();
   }
 
   private materialFor(s: SolidView): THREE.Material {
@@ -1408,25 +1502,30 @@ export class SceneManager {
   private renderGhostSketch(sk: Sketch, plane: WorkPlane) {
     const getPt = (id: string) => sk.entities[id] as SketchPoint | undefined;
     const color = COLORS().ghost;
-    const add = (obj: THREE.Line) => { (obj.material as THREE.Material).transparent = true; (obj.material as THREE.Material).opacity = 0.65; this.ghostGroup.add(obj); };
-    const dashed = (line: THREE.Line, construction?: boolean) => { if (construction) line.computeLineDistances(); };
-    const lineMat = (construction?: boolean) =>
-      construction ? new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.6 }) : new THREE.LineBasicMaterial({ color });
+    // Every plain curve of the sketch goes into one LineSegments (one draw call per
+    // sketch, not one per curve); construction curves keep a dashed line each, since
+    // a dash pattern runs along a polyline, not from segment to segment.
+    const plain: THREE.Vector3[] = [];
+    const strip = (pts: THREE.Vector3[]) => { for (let i = 0; i + 1 < pts.length; i++) plain.push(pts[i], pts[i + 1]); };
+    const dashedLine = (pts: THREE.Vector3[]) => {
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.6, transparent: true, opacity: 0.65 }));
+      line.computeLineDistances();
+      this.ghostGroup.add(line);
+    };
+    const curve = (pts: THREE.Vector3[], construction?: boolean) => { if (construction) dashedLine(pts); else strip(pts); };
     for (const e of Object.values(sk.entities)) {
       if (e.kind === "line") {
         const a = getPt(e.p1), b = getPt(e.p2);
         if (!a || !b) continue;
-        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([this.worldPt(plane, a.x, a.y), this.worldPt(plane, b.x, b.y)]), lineMat(e.construction));
-        dashed(line, e.construction); add(line);
+        curve([this.worldPt(plane, a.x, a.y), this.worldPt(plane, b.x, b.y)], e.construction);
       } else if (e.kind === "circle") {
         const ctr = getPt(e.center); if (!ctr) continue;
-        const line = this.makeArcLine(plane, ctr.x, ctr.y, e.r, 0, Math.PI * 2, true, color);
-        add(line);
+        strip(this.arcPoints(plane, ctr.x, ctr.y, e.r, 0, Math.PI * 2, true));
       } else if (e.kind === "arc") {
         const ctr = getPt(e.center), a = getPt(e.p1), b = getPt(e.p2);
         if (!ctr || !a || !b) continue;
         const a1 = Math.atan2(a.y - ctr.y, a.x - ctr.x), a2 = Math.atan2(b.y - ctr.y, b.x - ctr.x);
-        add(this.makeArcLine(plane, ctr.x, ctr.y, e.r, a1, a2, e.ccw, color));
+        strip(this.arcPoints(plane, ctr.x, ctr.y, e.r, a1, a2, e.ccw));
       } else if (e.kind === "ellipse") {
         const ctr = getPt(e.center); if (!ctr) continue;
         const pts: THREE.Vector3[] = [];
@@ -1437,16 +1536,14 @@ export class SceneManager {
           const v = ctr.y + ex * Math.sin(e.rotation) + ey * Math.cos(e.rotation);
           pts.push(this.worldPt(plane, u, v));
         }
-        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(e.construction));
-        dashed(line, e.construction); add(line);
+        curve(pts, e.construction);
       } else if (e.kind === "spline") {
         const through = e.points.map((id) => getPt(id)).filter((p) => !!p).map((p) => ({ x: p!.x, y: p!.y }));
         if (through.length < 2) continue;
-        const pts = sampleSpline(through, 10).map((p) => this.worldPt(plane, p.x, p.y));
-        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(e.construction));
-        dashed(line, e.construction); add(line);
+        curve(sampleSpline(through, 10).map((p) => this.worldPt(plane, p.x, p.y)), e.construction);
       }
     }
+    if (plain.length) this.ghostGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(plain), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.65 })));
   }
 
   /** Translucent extruded-prism preview of a pending extrude (built in JS, no kernel). */
@@ -2007,6 +2104,12 @@ export class SceneManager {
     ccw: boolean,
     color: number
   ): THREE.Line {
+    const geo = new THREE.BufferGeometry().setFromPoints(this.arcPoints(plane, cu, cv, r, a1, a2, ccw));
+    return new THREE.Line(geo, new THREE.LineBasicMaterial({ color }));
+  }
+
+  /** The polyline of an arc on a plane (a full circle when a1 = 0, a2 = 2π). */
+  private arcPoints(plane: WorkPlane, cu: number, cv: number, r: number, a1: number, a2: number, ccw: boolean): THREE.Vector3[] {
     const pts: THREE.Vector3[] = [];
     let start = a1;
     let end = a2;
@@ -2020,8 +2123,7 @@ export class SceneManager {
       const t = start + ((end - start) * i) / segs;
       pts.push(this.worldPt(plane, cu + r * Math.cos(t), cv + r * Math.sin(t)));
     }
-    const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    return new THREE.Line(geo, new THREE.LineBasicMaterial({ color }));
+    return pts;
   }
 
   private renderPreview(preview: PreviewGeom, plane: WorkPlane) {

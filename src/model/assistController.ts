@@ -88,7 +88,7 @@ async function runAuto(now = false): Promise<void> {
   try {
     const doc = st.session.doc;
     const req = buildNamingRequest(batch.map((i) => ({ id: i.id, targetKind: i.targetKind, from: i.from, context: assistContext(doc, i, st.solids) })));
-    const names = parseNamingResponse(await agentClient(st.apiKey).messages.create(req));
+    const names = parseNamingResponse(await (await agentClient(st.apiKey)).messages.create(req));
     for (const i of batch) {
       const cur = service.inbox.get(i.id);
       if (!cur || cur.status !== "pending") continue;
