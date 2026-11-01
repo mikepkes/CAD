@@ -988,7 +988,7 @@ export const BUILTINS: CommandDef<any>[] = [
     type: "material.assign",
     title: "Assign material",
     summary: "Assign a material to a component (its bodies inherit; root = document default).",
-    description: "Sets the material of `component` (defaults to the root component, i.e. the document-wide default). A body uses the nearest ancestor component that has a material. Or, with `materials` + `by`, the component takes materials[value of parameter `by`]: one per choice of a named-choice parameter, so picking the choice switches the material.",
+    description: "Sets the material of `component` (defaults to the root component, i.e. the document-wide default). A body uses the nearest ancestor component that has a material. Or, with `materials` + `by`, the component takes materials[value of parameter `by`]: one per choice of a named-choice parameter, so picking the choice switches the material. Or, with `clear`, the component drops its own material and inherits again.",
     paramsSchema: {
       type: "object",
       additionalProperties: false,
@@ -997,15 +997,23 @@ export const BUILTINS: CommandDef<any>[] = [
         component: { type: "string", description: "Target component; defaults to root." },
         materials: { type: "array", items: { type: "string" }, description: "One material per value 0…n−1 of parameter `by` (instead of `material`)." },
         by: { type: "string", description: "The parameter whose value picks from `materials`, e.g. a named choice." },
+        clear: { type: "boolean", description: "Remove the component's own material (and any parameter choice), so it inherits from its parent again." },
       },
     },
     examples: [
       { params: { material: "mat5", component: "cmp3" } },
+      { note: "Let a part inherit again", params: { clear: true, component: "cmp3" } },
       { note: "Follow a named choice: PLA, PETG or TPU", params: { materials: ["mat5", "mat6", "mat7"], by: "material", component: "cmp3" } },
     ],
-    apply(draft, p: { material?: string; materials?: string[]; by?: string; component?: string }) {
+    apply(draft, p: { material?: string; materials?: string[]; by?: string; component?: string; clear?: boolean }) {
       const comp = p.component ?? draft.rootComponentId;
       if (!draft.components[comp]) throw new Error(`No component "${comp}"`);
+      if (p.clear) {
+        if (p.material || p.materials || p.by) throw new Error("`clear` takes no material");
+        delete draft.components[comp].materialId;
+        delete draft.components[comp].materialChoice;
+        return { message: `${draft.components[comp].name} inherits its material` };
+      }
       if (p.materials || p.by) {
         if (p.material || !p.materials || !p.by) throw new Error("give `materials` with `by` (or a single `material`)");
         for (const m of p.materials) if (!draft.materials[m]) throw new Error(`No material "${m}"`);
