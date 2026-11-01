@@ -98,6 +98,35 @@ mikepkes.github.io/CAD while the repository is named CAD.
     curve, which is what shows the surfaces flow into each other;
   - check the fillet still builds across the phone-thickness range and keeps
     the mass rule in Act 2 passing (it removes material, so it should).
+- **The action ring is shown but never used.** In pass 2 the ring appears
+  twice and does nothing either time: Act 1's room tour presses Space, holds
+  1.8 s and presses Escape; Act 2's make-it-yours opens the shortcuts dialog
+  on its Ring tab and clicks Done without changing a slot. Nobody sees it run
+  an action, see that it changes with context, or that editing it matters.
+  Next pass:
+  - use it for real in Act 1 at a natural moment, with the hold-point-release
+    gesture visible (Space held, the cursor flicks toward a slot, the slot
+    lights, release runs it): e.g. start the block from the model ring's Box
+    slot, and later, with a face selected, use the face ring for Sketch or
+    Round edges, so the ring visibly changes with what's selected;
+  - in Act 2's make-it-yours, actually change a slot (put an action you just
+    used, e.g. Round edges, on an empty slot), close the dialog and use the
+    new slot straight away;
+  - the cursor matters here: keep it on and slow the flick enough to follow.
+- **Widen the Parameters panel while values are being edited.** The panel is
+  narrow, and each parameter row splits its width four ways (name,
+  expression, slider, value: `.param-row` in `styles.css`), so the slider is
+  about 40 px on camera. Next pass, at least for the stretches where we edit
+  values (the cold-open drag, naming numbers, adding `phone`, the montage
+  sweeps):
+  - widen the left panel smoothly for the edit and narrow it again after, so
+    the slider and value read clearly: `D.sideWidth("left", 480, 600)` eases
+    it (and back to 272 after);
+  - **fixed in the app**: both side panels now resize by dragging their inner
+    edge (double-click resets; the width is remembered), and a bounded
+    parameter's slider has its own full-width line under its row, with its
+    extents at the ends and the expression still editable in the row. The
+    script's `.param-slider input[type=range]` selector still finds it.
 - **A flash of the bench before "just describe it".** Cause: the Roubo clip
   ends with `d.key("Escape")` inside the recorded beat (`act3.mjs`), which
   closes the shop drawing and shows the bench again for the rest of the beat

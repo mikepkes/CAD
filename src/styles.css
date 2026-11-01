@@ -439,12 +439,18 @@ body {
   top: 0;
   z-index: 1;
 }
-.side.left.collapsed {
-  margin-left: -272px;
+/* the side panels' widths (and the collapsed margins) are set inline from the UI state */
+.side { flex-shrink: 0; }
+.side-resize {
+  flex: 0 0 6px;
+  margin: 0 -3px;
+  z-index: 4;
+  cursor: col-resize;
+  touch-action: none;
 }
-.side.right.collapsed {
-  margin-right: -272px;
-}
+.side-resize:hover,
+body.side-resizing .side-resize { background: var(--accent); opacity: 0.5; }
+body.side-resizing { cursor: col-resize; user-select: none; }
 .side-toggle {
   position: absolute;
   top: 10px;
@@ -583,7 +589,9 @@ body {
 .param-slider {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin: -1px 0 8px;
+  padding: 0 2px;
 }
 .param-slider input[type="range"] {
   flex: 1;
@@ -591,12 +599,10 @@ body {
   padding: 0;
   accent-color: var(--accent);
 }
-.param-slider-val {
-  font-size: 11.5px;
+.param-slider-end {
+  font-size: 10.5px;
   color: var(--text-dim);
   font-family: ui-monospace, monospace;
-  min-width: 28px;
-  text-align: right;
 }
 .param-row-btns {
   display: flex;
@@ -1054,7 +1060,7 @@ body {
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 240px;
+    width: 240px !important; /* over the dragged width: on a narrow screen the panels float at a fixed size */
   }
   .side.left {
     left: 0;
@@ -1063,10 +1069,13 @@ body {
     right: 0;
   }
   .side.left.collapsed {
-    margin-left: -240px;
+    margin-left: -240px !important;
   }
   .side.right.collapsed {
-    margin-right: -240px;
+    margin-right: -240px !important;
+  }
+  .side-resize {
+    display: none;
   }
   .tool-label {
     display: none;

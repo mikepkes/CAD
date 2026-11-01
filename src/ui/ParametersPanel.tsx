@@ -4,9 +4,12 @@ import { isValidParamName } from "../core/parameters";
 import type { Parameter } from "../core/document";
 import { askText } from "./kit/askDialog";
 
-/** The control shown for a parameter's value: a checkbox for a yes/no switch, a dropdown when it has named
- *  choices or a list of acceptable values, a slider when it has both extents, else the raw
- *  expression field. (This is the control the future customize mode reuses.) */
+/** Whether a parameter gets a slider: it has both extents (and isn't a switch or a list). */
+const hasSlider = (p: Parameter) => !p.boolean && !p.values?.length && p.min != null && p.max != null;
+
+/** The control shown in a parameter's row: a checkbox for a yes/no switch, a dropdown when it has named
+ *  choices or a list of acceptable values, else the expression field. A parameter with both extents also
+ *  gets a slider on its own full-width line under the row (`ParamSlider`). */
 function ParamControl({ p }: { p: Parameter }) {
   const setParameterExpr = useStore((s) => s.setParameterExpr);
   if (p.boolean) {
@@ -24,23 +27,6 @@ function ParamControl({ p }: { p: Parameter }) {
       </select>
     );
   }
-  if (p.min != null && p.max != null) {
-    const span = p.max - p.min;
-    const step = span >= 20 ? 1 : span >= 2 ? 0.1 : 0.01;
-    return (
-      <div className="param-slider">
-        <input
-          type="range"
-          min={p.min}
-          max={p.max}
-          step={step}
-          value={Math.min(p.max, Math.max(p.min, p.value))}
-          onChange={(e) => setParameterExpr(p.name, e.target.value)}
-        />
-        <span className="param-slider-val">{fmt(p.value)}</span>
-      </div>
-    );
-  }
   return (
     <input
       className="param-expr"
@@ -49,6 +35,28 @@ function ParamControl({ p }: { p: Parameter }) {
       onBlur={(e) => { if (e.target.value !== p.expr) setParameterExpr(p.name, e.target.value); }}
       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
     />
+  );
+}
+
+/** A bounded parameter's slider, the full width of the panel, with its extents at the ends. */
+function ParamSlider({ p }: { p: Parameter }) {
+  const setParameterExpr = useStore((s) => s.setParameterExpr);
+  const min = p.min!, max = p.max!, span = max - min;
+  const step = span >= 20 ? 1 : span >= 2 ? 0.1 : 0.01;
+  return (
+    <div className="param-slider">
+      <span className="param-slider-end">{fmt(min)}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={Math.min(max, Math.max(min, p.value))}
+        aria-label={p.name}
+        onChange={(e) => setParameterExpr(p.name, e.target.value)}
+      />
+      <span className="param-slider-end">{fmt(max)}</span>
+    </div>
   );
 }
 
@@ -173,6 +181,7 @@ export function ParametersPanel() {
                 <button className="icon-btn danger" title="Delete" onClick={() => deleteParameter(p.name)}>✕</button>
               </span>
             </div>
+            {hasSlider(p) && <ParamSlider p={p} />}
             {editing === p.id && <BoundsEditor p={p} onClose={() => setEditing(null)} />}
           </div>
         ))}

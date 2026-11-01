@@ -23,6 +23,7 @@ import { DrawingView } from "./DrawingView";
 import { PickMenu } from "./PickMenu";
 import { startAssist } from "../model/assistController";
 import { registerAppPanels } from "../model/appPanels";
+import { SideResizer } from "./SideResizer";
 
 function Toast() {
   const toast = useStore((s) => s.toast);
@@ -45,6 +46,7 @@ export function App() {
   const mode = useStore((s) => s.mode);
   const initApp = useStore((s) => s.initApp);
   const workbench = useUi((s) => s.panels.workbench);
+  const sideWidth = useUi((s) => s.sideWidth);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
 
@@ -62,11 +64,12 @@ export function App() {
       <Toolbar />
       {mode === "sketch" && <ConstraintBar />}
       <div className="workspace">
-        <aside className={`side left ${leftOpen ? "" : "collapsed"}`}>
+        <aside className={`side left ${leftOpen ? "" : "collapsed"}`} style={{ width: sideWidth.left, marginLeft: leftOpen ? 0 : -sideWidth.left }}>
           <BrowserPanel />
           <ParametersPanel />
           <TimelinePanel />
         </aside>
+        {leftOpen && <SideResizer side="left" />}
         <button className="side-toggle left" onClick={() => setLeftOpen((v) => !v)}>
           {leftOpen ? "‹" : "›"}
         </button>
@@ -85,7 +88,8 @@ export function App() {
         <button className="side-toggle right" onClick={() => setRightOpen((v) => !v)}>
           {rightOpen ? "›" : "‹"}
         </button>
-        <aside className={`side right ${rightOpen ? "" : "collapsed"}`}>
+        {rightOpen && <SideResizer side="right" />}
+        <aside className={`side right ${rightOpen ? "" : "collapsed"}`} style={{ width: sideWidth.right, marginRight: rightOpen ? 0 : -sideWidth.right }}>
           <RightPanel />
         </aside>
       </div>
