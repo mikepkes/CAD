@@ -387,8 +387,10 @@ export async function buildSkadis(s: CadSession): Promise<Record<string, string>
     for (const f of [b, cut]) await dis(s, "feature.setCondition", { feature: f, when: "board" });
     ids.board = b;
   }
-  // the stand-ins' sketches would draw as loose outlines with `board` unticked
-  const loose = Object.values(s.doc.sketches).filter((k) => ["SKÅDIS board", "SKÅDIS slots", "Stand-in item"].includes(k.name)).map((k) => k.id);
+  // every sketch a feature has built from is hidden: drawn, they'd show as loose outlines over the parts
+  // (the pads' and arms' cuts) and, with `board` unticked, where the stand-ins were
+  const used = new Set(Object.values(s.doc.features).flatMap((f) => { const k = (f as { sketchId?: string; sketch?: string }).sketchId ?? (f as { sketch?: string }).sketch; return k ? [k] : []; }));
+  const loose = Object.values(s.doc.sketches).filter((k) => used.has(k.id) || ["SKÅDIS board", "SKÅDIS slots", "Stand-in item"].includes(k.name)).map((k) => k.id);
   const hid = await s.setVisibility(loose, false);
   if (!hid.ok) throw new Error(hid.error);
 
