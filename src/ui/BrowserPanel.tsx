@@ -86,7 +86,7 @@ function ComponentNode({ doc, id, depth }: { doc: CadDocument; id: string; depth
 
       {connectors.map(([cn, conn]) => (
         <div key={cn} className="tree-row" style={{ paddingLeft: pad + 14 }} title="Connector (joint origin), local coords">
-          <span className="tree-icon" style={{ color: "#b48ead" }}>⊕</span>
+          <span className="tree-icon" style={{ color: "var(--ic-connector)" }}>⊕</span>
           <span className="tree-label">{cn} <span className="muted-inline">· ({conn.origin.x}, {conn.origin.y}, {conn.origin.z})</span></span>
           <button className="asm-x" title="Delete connector" onClick={(e) => { e.stopPropagation(); void deleteConnector(id, cn); }}>✕</button>
         </div>
@@ -210,14 +210,14 @@ function PatternsSection({ doc }: { doc: CadDocument }) {
         return (
           <div key={p.id}>
             <div className="tree-row" style={{ paddingLeft: 22 }} title={`Jointed pattern of ${doc.components[p.source]?.name ?? p.source}`}>
-              <span className="tree-icon" style={{ color: "#a3be8c" }}>❖</span>
+              <span className="tree-icon" style={{ color: "var(--ic-pattern)" }}>❖</span>
               <span className="tree-label">{p.name} <span className="muted-inline">· ×{resolvedCount(doc, p.countExpr, p.count)}</span></span>
               <input className="dim-expr" style={{ width: 54 }} defaultValue={p.countExpr} key={p.id + p.countExpr} title="Instance count (expression)" onClick={(e) => e.stopPropagation()} onBlur={(e) => { if (e.target.value !== p.countExpr) void editPatternCount(p.id, e.target.value); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
               <button className="asm-x" title="Delete pattern (and its joint templates)" onClick={(e) => { e.stopPropagation(); void deletePattern(p.id); }}>✕</button>
             </div>
             {tmpls.map((t) => (
               <div key={t.id} className="tree-row" style={{ paddingLeft: 36 }} title={`${t.kind}: ${t.moved.role}/${t.moved.port ?? "origin"} → ${t.base.role}/${t.base.port ?? "origin"}`}>
-                <span className="tree-icon" style={{ color: "#8fd3ff" }}>⚙</span>
+                <span className="tree-icon" style={{ color: "var(--ic-joint)" }}>⚙</span>
                 <span className="tree-label muted-inline">{t.moved.port ?? t.moved.role}→{t.base.role === "root" ? "root" : (t.base.port ?? t.base.role)}</span>
                 <select className="asm-sel" value={t.appliesTo} title="Which instances" onClick={(e) => e.stopPropagation()} onChange={(e) => void setJointTemplateAppliesTo(t.id, e.target.value as "all")}><option value="all">all</option><option value="first">first</option><option value="rest">rest</option></select>
                 {t.kind !== "rigid" && (
@@ -262,7 +262,7 @@ export function BrowserPanel() {
       <div className="tree">
         {datums.map((d) => (
           <div key={d.id} className="tree-row" style={{ paddingLeft: 22 }} onClick={() => startSketch(d.id)} title={d.error ? `Unresolved: ${d.error}` : d.kind === "frame" ? `Through (${d.originExpr?.x}, ${d.originExpr?.y}, ${d.originExpr?.z}) — click to sketch on it` : `Offset ${d.offsetExpr} from ${d.base} — click to sketch on it`}>
-            <span className="tree-icon" style={{ color: "#c9a227" }}>▱</span>
+            <span className="tree-icon" style={{ color: "var(--ic-datum)" }}>▱</span>
             <span className="tree-label">{d.name} <span className="muted-inline">· {d.kind === "frame" ? "point + normal" : `${d.base} +${d.offsetExpr}`}</span></span>
             {d.error && <span className="dof-dot bad" />}
             <EyeToggle id={d.id} label={d.name} />
@@ -271,7 +271,7 @@ export function BrowserPanel() {
         <ComponentNode doc={doc} id={doc.rootComponentId} depth={0} />
         {Object.values(doc.joints).map((j) => (
           <div key={j.id} className="tree-row" style={{ paddingLeft: 22 }} title={j.error ? `Unresolved: ${j.error}` : `${j.kind} joint: ${doc.components[j.moved]?.name ?? j.moved} → ${doc.components[j.base]?.name ?? j.base}`}>
-            <span className="tree-icon" style={{ color: "#8fd3ff" }}>⚙</span>
+            <span className="tree-icon" style={{ color: "var(--ic-joint)" }}>⚙</span>
             <span className="tree-label">{j.name} <span className="muted-inline">· {j.kind}</span></span>
             {j.kind !== "rigid" && (
               <input className="dim-expr" style={{ width: 54 }} defaultValue={j.valueExpr} key={j.id + j.valueExpr} title={j.kind === "revolute" ? "Angle (degrees)" : "Distance"} onClick={(e) => e.stopPropagation()} onBlur={(e) => { if (e.target.value !== j.valueExpr) editJointValue(j.id, e.target.value); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />

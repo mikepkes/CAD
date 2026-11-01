@@ -278,7 +278,7 @@ export function Toolbar() {
             ⬡ Component
           </button>
           {activeComponentId !== session.doc.rootComponentId && (
-            <span className="hint" title="Active component — new sketches are scoped here" style={{ color: "#8fd3ff" }}>
+            <span className="hint" title="Active component — new sketches are scoped here" style={{ color: "var(--ic-joint)" }}>
               ⬡ {session.doc.components[activeComponentId]?.name}
               <button className="icon-btn" title="Back to root component" onClick={() => activateComponent(session.doc.rootComponentId)}>✕</button>
             </span>
@@ -328,11 +328,11 @@ export function Toolbar() {
               <button
                 key={d.id}
                 className="tool"
-                style={{ borderColor: "#c9a227" }}
+                style={{ borderColor: "var(--ic-datum)" }}
                 onClick={() => startSketch(d.id)}
                 title={`Start a sketch on ${d.name}${d.error ? ` (unresolved: ${d.error})` : ""}`}
               >
-                <span className="swatch" style={{ background: "#c9a227" }} />
+                <span className="swatch" style={{ background: "var(--ic-datum)" }} />
                 {d.name}
               </button>
             ))}

@@ -13,6 +13,7 @@ import { materialForComponent } from "../core/document";
 import { materialSpec, woodFrameFromBounds } from "../viewport/material";
 import { ghostSolidViews, useGhost } from "../model/concepts/ghostVariant";
 import { ContextMenu } from "./ContextMenu";
+import { onViewportTheme, viewportColors } from "../viewport/palette";
 
 function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
   let inside = false;
@@ -58,7 +59,7 @@ function updateExtrudeHandle(scene: SceneManager, s: AppState) {
     anchor,
     dir: ctx.plane.normal,
     value: evalDistance(s.extrudeDistanceExpr, s),
-    color: s.extrudeOperation === "cut" ? 0xe4564e : 0x5bbf84,
+    color: s.extrudeOperation === "cut" ? viewportColors().extrudeCut : viewportColors().extrudeJoin,
     onChange: (v) => useStore.getState().setExtrudeDistanceExpr(String(Math.round(v * 100) / 100)),
   }]);
 }
@@ -189,6 +190,8 @@ function ViewportInner({ overlays }: { overlays?: ReactNode }) {
 
     // The ghost variant lives outside the document store; a change to it redraws the same view.
     const unsubGhost = useGhost.subscribe(() => controller.setBase(buildView(useStore.getState())));
+    // The scene repaints itself on a theme switch; the extrude handle takes its colour from here.
+    const unsubTheme = onViewportTheme(() => updateExtrudeHandle(scene, useStore.getState()));
     const unsub = useStore.subscribe((s) => {
       controller.setBase(buildView(s));
       updateExtrudeHandle(scene, s);
@@ -207,6 +210,7 @@ function ViewportInner({ overlays }: { overlays?: ReactNode }) {
     return () => {
       unsub();
       unsubGhost();
+      unsubTheme();
       setActiveScene(null);
       controller.dispose();
       scene.dispose();

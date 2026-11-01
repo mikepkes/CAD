@@ -3,7 +3,7 @@
 
 /* a dimming layer over the whole window while the ring is open: a press on it closes the ring, and
    the dim keeps the slots legible over cards and panels underneath */
-.ring-scrim { position: fixed; inset: 0; z-index: 70; background: rgba(8, 10, 12, 0.32); }
+.ring-scrim { position: fixed; inset: 0; z-index: 70; background: var(--k-scrim); }
 
 /* zero-size box at the ring centre; everything inside is placed from it */
 .ring {

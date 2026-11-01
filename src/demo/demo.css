@@ -1,5 +1,6 @@
 /* The video's presenter layer (demo.tsx): over everything, never takes input. */
-.demo-layer { position: fixed; inset: 0; z-index: 10000; pointer-events: none; font-family: var(--k-font, system-ui, sans-serif); }
+/* Dark-styled in either app theme (it is for video): pin the kit accent it borrows to its dark value. */
+.demo-layer { position: fixed; inset: 0; z-index: 10000; pointer-events: none; font-family: var(--k-font, system-ui, sans-serif); --k-accent: #f0a44b; color-scheme: dark; }
 .demo-cursor { position: absolute; width: 26px; height: 26px; margin: -2px 0 0 -3px; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45)); transition: opacity 160ms; }
 .demo-ripple { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 2px solid var(--k-accent, #f0a44b); animation: demo-ripple 420ms ease-out forwards; }
 @keyframes demo-ripple { from { transform: scale(0.3); opacity: 0.9; } to { transform: scale(1.4); opacity: 0; } }

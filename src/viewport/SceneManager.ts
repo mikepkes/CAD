@@ -24,6 +24,7 @@ import { createMaterial, MaterialSpec, WoodFrame } from "./material";
 import type { ThreadDecal } from "../core/document";
 import { fitDistance, orbitDirection } from "./orbitCamera";
 import { LensPass, type LensSpec } from "./lensPass";
+import { onViewportTheme, viewportColors } from "./palette";
 import { WORLD_VERT, curvatureColors, draftFrag, zebraFrag } from "./analysisShaders";
 
 /** Options for an offscreen still (render_view). A free camera — `azimuthDeg` /
@@ -127,25 +128,9 @@ export interface PickResult {
   interior?: { x: number; y: number };
 }
 
-const COLORS = {
-  bg: 0x1b1d23,
-  grid: 0x2d3340,
-  gridMajor: 0x3a4152,
-  ghost: 0x5b6472,
-  variant: 0xf0a44b, // mirrors the kit's --k-ghost (kit.css); change both together
-  geometry: 0xdfe6f2,
-  underConstrained: 0x5a8cff, // Fusion-style blue for under-constrained geometry
-  profileFill: 0x4f8cff,
-  construction: 0x8a93a6,
-  selected: 0xffb454,
-  hover: 0x5ac8fa,
-  point: 0xbcc6d8,
-  origin: 0xffd166,
-  dimension: 0x7bd88f,
-  fullyConstrained: 0x8fe388,
-  bad: 0xff6b6b,
-  sectionCap: 0xc7ccd6, // steel fill on cut faces (Fusion-style)
-};
+/** The active theme's viewport colours (palette.ts): read at build time, so a
+ *  theme switch takes effect on the next build (applyTheme rebuilds at once). */
+const COLORS = viewportColors;
 
 // Distinct per-object colors used in section view, so each body (and its cut
 // cap) reads as its own part. Picked to stay legible on the dark background.
@@ -228,6 +213,8 @@ export class SceneManager {
   /** The Lens (concept UI): a masked analysis pass drawn after each frame. All
    *  of its logic lives in lensPass.ts; this only holds the spec. */
   private lensPass = new LensPass();
+  /** Unsubscribes from theme changes (palette.ts). */
+  private offTheme: () => void = () => {};
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -244,7 +231,8 @@ export class SceneManager {
     this.renderer.domElement.addEventListener("wheel", this.onWheel, { passive: false, capture: true });
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(COLORS.bg);
+    this.scene.background = new THREE.Color(COLORS().bg);
+    this.offTheme = onViewportTheme(() => this.applyTheme());
 
     const aspect = container.clientWidth / container.clientHeight;
     this.perspCam = new THREE.PerspectiveCamera(45, aspect, 0.1, 100000);
@@ -304,19 +292,36 @@ export class SceneManager {
     this.animate();
   }
 
+  /** Repaint for the current theme (palette.ts): background, grid, axes, origin
+   *  planes, then everything update() builds (sketch, dimensions, datums, regions). */
+  private applyTheme() {
+    if (this.disposed) return;
+    const c = COLORS();
+    (this.scene.background as THREE.Color).set(c.bg);
+    this.applyGrid(this.gridSize, true);
+    const axisColors = [c.axisX, c.axisY, c.axisZ];
+    this.axes.children.forEach((l, i) => ((l as THREE.Line).material as THREE.LineBasicMaterial).color.set(axisColors[i]));
+    for (const m of this.planeMeshes.values()) (m.material as THREE.MeshBasicMaterial).opacity = c.planeFill;
+    for (const o of this.planeGroup.children) if (o.userData.planeOutline) ((o as THREE.LineSegments).material as THREE.LineBasicMaterial).opacity = c.planeLine;
+    // A live animation moves bodies by matrix; rebuilding them would drop its groups, so only the sketch layer repaints then.
+    if (this.lastData && !this.animating && !this.recording) this.update(this.lastData);
+    else this.rerenderSketchLayer();
+    if (!this.recording) this.drawFrame();
+  }
+
   private makeGrid(size: number): THREE.GridHelper {
     const divisions = 40;
-    const grid = new THREE.GridHelper(size * divisions, divisions, COLORS.gridMajor, COLORS.grid);
+    const grid = new THREE.GridHelper(size * divisions, divisions, COLORS().gridMajor, COLORS().grid);
     grid.rotation.x = Math.PI / 2; // GridHelper is XZ by default; lay it in XY (Z up)
     (grid.material as THREE.Material).transparent = true;
-    (grid.material as THREE.Material).opacity = 0.5;
+    (grid.material as THREE.Material).opacity = COLORS().gridOpacity;
     this.gridSize = size;
     return grid;
   }
 
   /** Rebuild the grid at a new cell size (mm). */
-  private applyGrid(size: number) {
-    if (Math.abs(size - this.gridSize) < 1e-9) return;
+  private applyGrid(size: number, force = false) {
+    if (!force && Math.abs(size - this.gridSize) < 1e-9) return;
     const visible = this.grid.visible;
     this.scene.remove(this.grid);
     this.grid.geometry.dispose();
@@ -334,9 +339,10 @@ export class SceneManager {
       ]);
       return new THREE.Line(g, new THREE.LineBasicMaterial({ color }));
     };
-    this.axes.add(mk(new THREE.Vector3(1, 0, 0), 0xff5555));
-    this.axes.add(mk(new THREE.Vector3(0, 1, 0), 0x55ff77));
-    this.axes.add(mk(new THREE.Vector3(0, 0, 1), 0x5588ff));
+    const c = COLORS();
+    this.axes.add(mk(new THREE.Vector3(1, 0, 0), c.axisX));
+    this.axes.add(mk(new THREE.Vector3(0, 1, 0), c.axisY));
+    this.axes.add(mk(new THREE.Vector3(0, 0, 1), c.axisZ));
     this.scene.add(this.axes);
   }
 
@@ -356,7 +362,7 @@ export class SceneManager {
       const mat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(p.color),
         transparent: true,
-        opacity: 0.08,
+        opacity: COLORS().planeFill,
         side: THREE.DoubleSide,
         depthWrite: false,
       });
@@ -370,8 +376,9 @@ export class SceneManager {
       const edges = new THREE.EdgesGeometry(geo);
       const line = new THREE.LineSegments(
         edges,
-        new THREE.LineBasicMaterial({ color: new THREE.Color(p.color), transparent: true, opacity: 0.5 })
+        new THREE.LineBasicMaterial({ color: new THREE.Color(p.color), transparent: true, opacity: COLORS().planeLine })
       );
+      line.userData = { planeOutline: true };
       this.orientToPlane(line, p, size / 2);
       this.planeGroup.add(line);
     }
@@ -396,7 +403,7 @@ export class SceneManager {
     const size = 90;
     for (const d of datums) {
       const p = d.plane;
-      const color = new THREE.Color(0xc9a227); // datum amber, distinct from origin planes
+      const color = new THREE.Color(COLORS().datum); // datum amber, distinct from origin planes
       const geo = new THREE.PlaneGeometry(size, size);
       const mat = new THREE.MeshBasicMaterial({
         color,
@@ -621,6 +628,7 @@ export class SceneManager {
 
   dispose() {
     this.disposed = true;
+    this.offTheme();
     for (const t of this.threadTexCache.values()) t.dispose();
     this.threadTexCache.clear();
     this.lensPass.dispose();
@@ -1112,7 +1120,7 @@ export class SceneManager {
     const analysisMat = !s.variant && !faded && !clip && analysis && analysis.mode !== "none" ? this.analysisMaterial(analysis, s, geo) : null; // a variant ghost never carries analysis
     if (s.variant) {
       // A compared design variant: translucent in the kit's ghost accent, drawn without writing depth so the real part stays legible through it.
-      mat = new THREE.MeshStandardMaterial({ color: COLORS.variant, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.28, depthWrite: false, clippingPlanes: clip ?? undefined });
+      mat = new THREE.MeshStandardMaterial({ color: COLORS().variant, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.28, depthWrite: false, clippingPlanes: clip ?? undefined });
     } else if (analysisMat) {
       mat = analysisMat;
     } else if (s.material && !clip) {
@@ -1159,7 +1167,7 @@ export class SceneManager {
       const eseg = new THREE.LineSegments(
         egeo,
         s.variant
-          ? new THREE.LineDashedMaterial({ color: COLORS.variant, dashSize: 1.5, gapSize: 1, transparent: true, opacity: 0.85, clippingPlanes: clip ?? undefined }) // variant ghost: dashed accent edges
+          ? new THREE.LineDashedMaterial({ color: COLORS().variant, dashSize: 1.5, gapSize: 1, transparent: true, opacity: 0.85, clippingPlanes: clip ?? undefined }) // variant ghost: dashed accent edges
           : new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1, clippingPlanes: clip ?? undefined })
       );
       if (s.variant) { eseg.computeLineDistances(); eseg.userData.ghost = true; } // dashes need distances; the lens skips ghosts
@@ -1361,9 +1369,9 @@ export class SceneManager {
   }
 
   private colorFor(id: string, data: ViewData, base: number, construction?: boolean) {
-    if (data.selection.has(id)) return COLORS.selected;
-    if (data.hover === id) return COLORS.hover;
-    if (construction) return COLORS.construction;
+    if (data.selection.has(id)) return COLORS().selected;
+    if (data.hover === id) return COLORS().hover;
+    if (construction) return COLORS().construction;
     return base;
   }
 
@@ -1371,7 +1379,7 @@ export class SceneManager {
    *  fills, dimensions or badges, and not pickable (it lives in its own group). */
   private renderGhostSketch(sk: Sketch, plane: WorkPlane) {
     const getPt = (id: string) => sk.entities[id] as SketchPoint | undefined;
-    const color = COLORS.ghost;
+    const color = COLORS().ghost;
     const add = (obj: THREE.Line) => { (obj.material as THREE.Material).transparent = true; (obj.material as THREE.Material).opacity = 0.65; this.ghostGroup.add(obj); };
     const dashed = (line: THREE.Line, construction?: boolean) => { if (construction) line.computeLineDistances(); };
     const lineMat = (construction?: boolean) =>
@@ -1424,7 +1432,7 @@ export class SceneManager {
       const w = this.worldPt(plane, u, v);
       return new THREE.Vector3(w.x + n.x * depth, w.y + n.y * depth, w.z + n.z * depth);
     };
-    const color = operation === "cut" ? 0xe4564e : 0x5bbf84;
+    const color = operation === "cut" ? COLORS().extrudeCut : COLORS().extrudeJoin;
     for (const region of data.regions) {
       try {
         const loops = [region.outer, ...region.holes];
@@ -1482,7 +1490,7 @@ export class SceneManager {
         geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
         geo.setIndex(faces.flat());
         const mat = new THREE.MeshBasicMaterial({
-          color: reg.selected ? 0x5bbf84 : 0x4a7bd6,
+          color: reg.selected ? COLORS().regionSelected : COLORS().regionIdle,
           transparent: true,
           opacity: reg.selected ? 0.42 : 0.2,
           side: THREE.DoubleSide,
@@ -1556,10 +1564,10 @@ export class SceneManager {
     // constrained, red = conflicting.
     const baseColor =
       data.constraintState === "full"
-        ? COLORS.geometry
+        ? COLORS().geometry
         : data.constraintState === "conflict"
-          ? COLORS.bad
-          : COLORS.underConstrained;
+          ? COLORS().bad
+          : COLORS().underConstrained;
 
     // shade closed profiles (what's extrudable) behind the curves
     this.renderProfileFill(sk, plane);
@@ -1646,13 +1654,13 @@ export class SceneManager {
       const pt = e as SketchPoint;
       const isOrigin = pt.id === sk.originPointId;
       const color = data.selection.has(pt.id)
-        ? COLORS.selected
+        ? COLORS().selected
         : data.hover === pt.id
-          ? COLORS.hover
+          ? COLORS().hover
           : isOrigin
-            ? COLORS.origin
+            ? COLORS().origin
             : pt.fixed
-              ? COLORS.point
+              ? COLORS().point
               : baseColor;
       // Pixel-sized so markers stay constant on screen (the sketch layer
       // re-renders on zoom), rather than ballooning with the geometry.
@@ -1671,7 +1679,7 @@ export class SceneManager {
       } else if (data.showConstraints) {
         const badge = this.constraintBadge(sk, plane, c as unknown as Record<string, string>);
         if (badge) {
-          const sprite = this.makeTextSprite(badge.glyph, "#9ab0e8", 18);
+          const sprite = this.makeTextSprite(badge.glyph, COLORS().badgeText, 18);
           sprite.position.copy(badge.pos);
           this.sketchGroup.add(sprite);
         }
@@ -1708,7 +1716,7 @@ export class SceneManager {
       geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       geo.setIndex(indices);
       const mat = new THREE.MeshBasicMaterial({
-        color: COLORS.profileFill,
+        color: COLORS().profileFill,
         transparent: true,
         opacity: 0.1,
         side: THREE.DoubleSide,
@@ -1815,7 +1823,7 @@ export class SceneManager {
   private renderDimension(sk: Sketch, plane: WorkPlane, c: DimensionConstraint) {
     const layout = this.dimLayout(sk, c);
     if (!layout) return;
-    const color = 0x5bbf84;
+    const color = COLORS().dimension;
     if (layout.lines.length) {
       const pts: THREE.Vector3[] = [];
       for (const [u1, v1, u2, v2] of layout.lines) pts.push(this.worldPt(plane, u1, v1), this.worldPt(plane, u2, v2));
@@ -1825,7 +1833,7 @@ export class SceneManager {
       this.sketchGroup.add(seg);
     }
     const labelPos = this.worldPt(plane, layout.text.x, layout.text.y);
-    const sprite = this.makeTextSprite(this.dimensionLabel(c.type, c.value), "#8fe3ad");
+    const sprite = this.makeTextSprite(this.dimensionLabel(c.type, c.value), COLORS().dimensionText);
     sprite.position.copy(labelPos);
     sprite.userData = { id: c.id, kind: "dimension", dimLabel: true };
     this.sketchGroup.add(sprite);
@@ -1989,7 +1997,8 @@ export class SceneManager {
   }
 
   private renderPreview(preview: PreviewGeom, plane: WorkPlane) {
-    const mat = new THREE.LineDashedMaterial({ color: 0x9aa7bd, dashSize: 2, gapSize: 1.5 });
+    const pv = COLORS().preview;
+    const mat = new THREE.LineDashedMaterial({ color: pv, dashSize: 2, gapSize: 1.5 });
     (preview.segments ?? []).forEach((s) => {
       const geo = new THREE.BufferGeometry().setFromPoints([
         this.worldPt(plane, s.u1, s.v1),
@@ -2000,11 +2009,11 @@ export class SceneManager {
       this.previewGroup.add(line);
     });
     (preview.circles ?? []).forEach((c) => {
-      const line = this.makeArcLine(plane, c.cu, c.cv, c.r, 0, Math.PI * 2, true, 0x9aa7bd);
+      const line = this.makeArcLine(plane, c.cu, c.cv, c.r, 0, Math.PI * 2, true, pv);
       this.previewGroup.add(line);
     });
     (preview.arcs ?? []).forEach((a) => {
-      const line = this.makeArcLine(plane, a.cu, a.cv, a.r, a.a1, a.a2, a.ccw, 0x9aa7bd);
+      const line = this.makeArcLine(plane, a.cu, a.cv, a.r, a.a1, a.a2, a.ccw, pv);
       this.previewGroup.add(line);
     });
     (preview.ellipses ?? []).forEach((e) => {
@@ -2014,19 +2023,19 @@ export class SceneManager {
         const ex = e.rx * Math.cos(t), ey = e.ry * Math.sin(t);
         pts.push(this.worldPt(plane, e.cu + ex * Math.cos(e.rotation) - ey * Math.sin(e.rotation), e.cv + ex * Math.sin(e.rotation) + ey * Math.cos(e.rotation)));
       }
-      this.previewGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x9aa7bd })));
+      this.previewGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: pv })));
     });
     if (preview.snap) {
       // A flat ring on the sketch plane reads as a snap marker, not a floating sphere.
       const r = this.pixelToWorld(6);
-      const ring = this.makeArcLine(plane, preview.snap.u, preview.snap.v, r, 0, Math.PI * 2, true, 0xffd166);
+      const ring = this.makeArcLine(plane, preview.snap.u, preview.snap.v, r, 0, Math.PI * 2, true, COLORS().origin);
       this.previewGroup.add(ring);
     }
     if (preview.markers && preview.markers.length) {
       const anchor = preview.snap ?? preview.cursor ?? null;
       if (anchor) {
         const off = this.pixelToWorld(14);
-        const sprite = this.makeTextSprite(preview.markers.join(" "), "#ffd166", 18);
+        const sprite = this.makeTextSprite(preview.markers.join(" "), `#${COLORS().origin.toString(16).padStart(6, "0")}`, 18);
         sprite.position.copy(this.worldPt(plane, anchor.u + off, anchor.v + off));
         this.previewGroup.add(sprite);
       }
@@ -2042,7 +2051,7 @@ export class SceneManager {
     canvas.width = w;
     canvas.height = font + 20;
     ctx.font = `${font}px -apple-system, system-ui, sans-serif`;
-    ctx.fillStyle = "rgba(20,22,28,0.85)";
+    ctx.fillStyle = COLORS().labelBg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = color;
     ctx.textBaseline = "middle";
@@ -2050,6 +2059,11 @@ export class SceneManager {
     const tex = new THREE.CanvasTexture(canvas);
     tex.minFilter = THREE.LinearFilter;
     tex.anisotropy = 4;
+    // An exact label shows the canvas's sRGB colours as drawn; otherwise they
+    // are read as linear and tone-mapped, which lifts them (the dark theme's
+    // look, kept as it was; dark ink on a light plate would wash out).
+    const exact = COLORS().exactLabels;
+    if (exact) tex.colorSpace = THREE.SRGBColorSpace;
     // sizeAttenuation must stay ON: three.js only compensates disabled
     // attenuation for perspective cameras, so under the orthographic sketch
     // camera a non-attenuated sprite collapses to nothing. We instead size the
@@ -2060,6 +2074,7 @@ export class SceneManager {
       depthTest: false,
       transparent: true,
       sizeAttenuation: true,
+      toneMapped: !exact,
     });
     const sprite = new THREE.Sprite(mat);
     const h = this.pixelToWorld(pxHeight);
