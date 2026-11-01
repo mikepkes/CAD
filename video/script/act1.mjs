@@ -141,7 +141,7 @@ export async function act1(d) {
     await d.api("titleCard", { title: "VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Always will be"] });
   });
 
-  await d.beat("the-room", "Start a new document. Four places matter: the model in the middle, its history along the bottom, its numbers on the left, and two shortcuts. Command K finds anything by name, and Space opens the action ring.", async () => {
+  await d.beat("the-room", "Start a new document. Four places matter: the model in the middle, its history along the bottom, its numbers on the left, and two shortcuts. Command K runs anything you can type, and Space opens the action ring.", async () => {
     await d.api("titleCard", null);
     await d.api("cursor", true);
     await d.clickEl(".toolbar button, button", "New");
@@ -248,6 +248,20 @@ export async function act1(d) {
     await d.settle(400); await d.wait(800);
     await d.page.keyboard.press("Meta+Z"); await d.settle(400);
     await d.api("sideWidth", "left", 272, 500);
+  });
+
+  await d.beat("just-type-it", "Or skip the mouse. Command K, and type what you want. Right, for a side view. Phone fourteen, and the lip makes room. Back to step two, and the history rolls back with it; roll to the end, and it's all there again.", async () => {
+    await d.lower("Intent line", "⌘K: type what you want");
+    await d.intent("right", "View right");
+    await d.wait(500);
+    await d.intent("phone 14", "phone = 14");
+    await d.wait(1200);
+    await d.intent("back to 2", "Back to 2");
+    await d.wait(1200);
+    await d.intent("roll end", "Roll to the end");
+    await d.wait(600);
+    await d.api("aim", { dir: STAND_VIEW, ms: 900 });
+    await d.lower(null);
   });
 
   await d.beat("keep-it", "Save it to a file whenever you like. VibeCAD also keeps your work as you go, so you can experiment freely.", async () => {

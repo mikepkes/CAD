@@ -185,6 +185,18 @@ export class Director {
     await this.page.keyboard.up(" ");
     await sleep(300);
   }
+  /** Use the intent line: ⌘K, type what you want, check the top suggestion reads `expect`, Enter runs it. */
+  async intent(text, expect, { cps = 12, dwell = 700 } = {}) {
+    await this.page.keyboard.down("Meta"); await this.key("k"); await this.page.keyboard.up("Meta");
+    await this.page.waitForSelector(".intent-input", { timeout: 3000 });
+    await sleep(250);
+    await this.type(text, cps);
+    await sleep(dwell);
+    const top = await this.page.$eval(".intent-option.on .intent-label", (e) => e.textContent).catch(() => null);
+    if (!top || !top.includes(expect)) { await this.key("Escape"); throw new Error(`intent "${text}": top suggestion is ${JSON.stringify(top)}, expected "${expect}"`); }
+    await this.key("Enter");
+    await this.settle(300);
+  }
   async type(text, cps = 14) { for (const ch of text) { await this.page.keyboard.type(ch); await sleep(1000 / cps); } }
   wait(ms) { return sleep(ms); }
 }

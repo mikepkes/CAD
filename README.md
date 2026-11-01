@@ -38,7 +38,10 @@ and a planetary stage (sun, three planets, a fixed ring gear) steps it down
 4:1; the carrier's spur gear drives a **rack** along the front and a **spur**,
 a **helical** and a **herringbone** pair, each stepping it back up ×2; a
 **straight bevel** pair turns the drive through 90° onto a cross shaft, whose
-**worm** turns a wheel with a hand at 1/8 of the knob. Every gear is one
+**worm** turns a wheel with a hand at 1/8 of the knob. Off the carrier, spur G
+turns a **Geneva drive**: its crank pin steps a four-slot star a quarter turn per
+revolution, and a locking disc holds the star still in between (the star's joint
+is written with `floor` and `atan2`, so it dwells and steps). Every gear is one
 `feature.gear`, each pair placed by its `mesh` option (centre distance and
 tooth phase as expressions of its mate's), and every shaft is a revolute joint
 whose value is `turn` times the tooth ratios down the train — so the teeth stay
@@ -411,7 +414,7 @@ straight from a URL:
 ?mode=customize&example=gripper        # compliant gripper: 10 hinges, 3 loops, amplified jaws; jaw length slider, grip springs, PLA skeleton
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&example=gimbal         # two-axis flexure gimbal: eight cross-blade flexures, alpha/beta steer the mirror; blade, platform and range sliders
-?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm), driven by `turn`
+?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm) and a Geneva drive, driven by `turn`
 ?mode=customize&model=<url-to.json>    # any VibeCAD model file
 ```
 
