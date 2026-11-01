@@ -38,8 +38,8 @@ export async function act2(d) {
     await d.drag({ x: n.cx, y: n.cy }, { x: n.cx + 40, y: n.cy }, 900);
     await d.settle(300);
     const m = await d.rect(".wb-card .k-live");
-    await d.click(m.cx, m.cy);
-    await d.key("Enter");
+    await d.click(m.cx, m.cy); // a click starts typing, the value selected
+    await d.wait(150);
     await d.type("15", 8);
     await d.wait(250);
     await d.key("Enter");

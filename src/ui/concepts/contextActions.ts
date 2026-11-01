@@ -10,9 +10,9 @@
 import { hotkeys, type HotkeyAction } from "../../model/hotkeys";
 import { useStore, type FaceSelection } from "../../model/store";
 import { useUi } from "../../model/concepts/uiState";
-import { featureRows, type FeatureRow } from "../../model/concepts/featureCatalog";
+import { featureRows, evalParam, type FeatureRow } from "../../model/concepts/featureCatalog";
 import { createEditQueue } from "../kit/editQueue";
-import { pushEdit, rowForFace, shouldDelete, namedParam, paramNameProblem, suggestParamName, type CardParam, type PushEdit } from "./workbench/workbench";
+import { pushEdit, pushToExpr, rowForFace, shouldDelete, namedParam, paramNameProblem, suggestParamName, type CardParam, type PushEdit, type PushTarget } from "./workbench/workbench";
 import { useLens, MODES, type LensMode } from "./lens/lens";
 import { cycleFeature, cycleRows, faceCornerSelector, faceEdgeSelector, historyRange, newSolidCentre, nextLensSize, otherShape, parentComponent, stepRollback } from "./contextActions.logic";
 import { ask, askText } from "../kit/askDialog";
@@ -86,6 +86,23 @@ export async function applyPush(e: PushEdit): Promise<void> {
   await st().setParameterExpr(e.also.name, e.also.expr);
   await st().editOperation(e.opId, e.params);
   st().session.squash(cp, "Push/Pull");
+}
+
+/** A typed expression for a card's number ("w*2", or "w = 40" to make the parameter): stored as the expression. */
+export async function typeExpression(row: FeatureRow, key: string, text: string): Promise<void> {
+  const expr = await st().resolveTyped(text);
+  if (!expr) return;
+  const op = st().session.timeline.find((o) => o.opId === row.opId);
+  await st().editOperation(row.opId, { ...(op?.params ?? row.op.params), [key]: expr });
+}
+
+/** A typed expression for a face's Push/Pull number: the face moves as for that value, and the number stays the expression. */
+export async function pushExpression(row: FeatureRow, target: PushTarget, text: string): Promise<void> {
+  const expr = await st().resolveTyped(text);
+  if (!expr) return;
+  const v = evalParam(st().session.doc, expr);
+  if (!Number.isFinite(v)) return;
+  await applyPush(pushToExpr(row, target, expr, v, paramNames()));
 }
 
 /** Edit a number that is a formula as text (the card's and the face verbs' "edit formula…"): the formula is kept

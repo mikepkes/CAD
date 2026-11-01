@@ -18,7 +18,7 @@ import { createEditQueue } from "../../kit/editQueue";
 import { formatValue } from "../../kit/numberMath";
 import { extrudeCap, isFormula, measurements, namedParam, pushEdit, pushTargetOf, pushTo, rowForFace } from "./workbench";
 import { faceEdgeSelector } from "../contextActions.logic";
-import { applyPush, edgeFace, editFormula, lookAtFace, nameThisNumber, pushKey } from "../contextActions";
+import { applyPush, edgeFace, editFormula, lookAtFace, nameThisNumber, pushExpression, pushKey } from "../contextActions";
 
 export function FaceVerbs() {
   const rows = useFeatureRows();
@@ -79,7 +79,7 @@ export function FaceVerbs() {
               ) : (
                 <>
                   <Button size="sm" icon ariaLabel={`Pull ${push.label} in`} onClick={() => step(-1)}>−</Button>
-                  <LiveNumber value={push.value} spec={push.spec} unit={push.unit} name={`${push.label} (Push/Pull)`} onChange={sendPush} onCommit={commitPush} />
+                  <LiveNumber value={push.value} spec={push.spec} unit={push.unit} name={`${push.label} (Push/Pull)`} onChange={sendPush} onCommit={commitPush} onExpression={(text) => { if (target) void pushExpression(row, target, text); }} />
                   <Button size="sm" icon ariaLabel={`Push ${push.label} out`} onClick={() => step(1)}>+</Button>
                   {named
                     ? <span className="k-mono k-dim wb-named" title={`This number is the parameter ${named}`}>= {named}</span>

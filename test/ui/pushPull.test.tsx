@@ -73,6 +73,23 @@ describe("the face card", () => {
   });
 });
 
+describe("typing into a card's number (M7)", () => {
+  it("stores a typed expression as the expression", async () => {
+    const boss = await s.dispatch("feature.extrude", { sketch: Object.keys(s.doc.sketches)[0], distance: "10", name: "Boss" });
+    useUi.setState({ openFeature: boss.createdIds[0] });
+    render(<FeatureCard />);
+    const n = screen.getByRole("button", { name: /Boss distance, 10\.0 mm/ });
+    n.focus();
+    fireEvent.keyDown(n, { key: "t" });
+    const input = screen.getByRole("textbox", { name: "Boss distance" });
+    fireEvent.change(input, { target: { value: "t+1" } });
+    await act(async () => { fireEvent.keyDown(input, { key: "Enter" }); });
+    await waitFor(() => expect(a.editOperation).toHaveBeenCalled());
+    expect(a.editOperation.mock.calls[0]).toEqual([boss.opId, expect.objectContaining({ distance: "t+1" })]);
+    await s.deleteOperation(boss.opId!);
+  });
+});
+
 describe("the feature card", () => {
   it("keeps a formula read-only and offers Reverse", () => {
     useUi.setState({ openFeature: id });

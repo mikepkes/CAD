@@ -12,7 +12,7 @@ import { useFeatureRows } from "../../kit/useFeatureRows";
 import { createEditQueue } from "../../kit/editQueue";
 import { useCardSize } from "../../kit/useCardSize";
 import { cardHeight, cardParams, isFormula, namedParam, pinAnchors, pushTo, quadrantDir } from "./workbench";
-import { applyPush, deleteFeature, editFormula, nameThisNumber, pushKey, reverseExtrude } from "../contextActions";
+import { applyPush, deleteFeature, editFormula, nameThisNumber, pushKey, reverseExtrude, typeExpression } from "../contextActions";
 import { formatValue } from "../../kit/numberMath";
 
 export function FeatureCard() {
@@ -91,6 +91,7 @@ export function FeatureCard() {
                 name={`${row.name} ${p.label.toLowerCase()}`}
                 onChange={(v) => queue.live(pushTo(row, { param: p }, v, names))}
                 onCommit={(v) => queue.commit(pushTo(row, { param: p }, v, names))}
+                onExpression={(text) => void typeExpression(row, p.key, text)}
                 onHover={(hot) => setHotParam(hot ? { featureId: row.featureId, key: p.key } : null)}
               />
             ) : (

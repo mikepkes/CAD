@@ -62,12 +62,31 @@ export function formatValue(v: number, spec: NumberSpec, unit = ""): string {
   return unit ? `${text} ${unit}` : text;
 }
 
-/** Parse what someone typed into a live number (a plain number only; expressions go through the document). */
+/** Parse what someone typed into a live number: a plain number only (expressions go through the document), kept as
+ *  typed — not rounded to the drag step, not clamped (`typedProblem` says when it is out of bounds). */
 export function parseTyped(text: string, spec: NumberSpec): number | null {
-  const core = text.replace(/,/g, "").replace(/[a-z°%\s]+$/i, "").trim();
-  if (!/\d/.test(core)) return null;
+  void spec;
+  const core = text.replace(/,/g, "").replace(/\s*(mm|cm|m|in|deg|°|%)$/i, "").trim();
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(core)) return null;
   const n = Number(core);
-  return Number.isFinite(n) ? quantize(n, spec) : null;
+  return Number.isFinite(n) ? Number(n.toFixed(9)) : null;
+}
+
+const fmtLimit = (v: number) => String(Number(v.toFixed(6))).replace("-", "−");
+
+/** The number's limits in words ("Between 0.5 and 500 mm", "At least 1"), null when it has none. */
+export function limitsText(spec: NumberSpec, unit = ""): string | null {
+  const u = unit ? (unit === "°" ? "°" : ` ${unit}`) : "";
+  if (spec.min != null && spec.max != null) return `Between ${fmtLimit(spec.min)} and ${fmtLimit(spec.max)}${u}`;
+  if (spec.min != null) return `At least ${fmtLimit(spec.min)}${u}`;
+  if (spec.max != null) return `At most ${fmtLimit(spec.max)}${u}`;
+  return null;
+}
+
+/** Why a typed value can't be used (outside the limits), or null when it can: said, never clamped silently. */
+export function typedProblem(v: number, spec: NumberSpec, unit = ""): string | null {
+  if ((spec.min != null && v < spec.min) || (spec.max != null && v > spec.max)) return `${limitsText(spec, unit)}: ${fmtLimit(v)} is out of range`;
+  return null;
 }
 
 /** Decimal places that suit a magnitude: hundreds and up 0, tens 1, below 2. */

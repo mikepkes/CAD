@@ -82,8 +82,61 @@ describe("LiveNumber", () => {
     const input = screen.getByRole("textbox", { name: "n" });
     await userEvent.clear(input);
     await userEvent.type(input, "42.3{Enter}");
-    expect(onChange).toHaveBeenLastCalledWith(42.5);
+    expect(onChange).toHaveBeenLastCalledWith(42.3); // as typed: not rounded to the drag step
     expect(screen.getByRole("button").textContent).toBe("10.0");
+  });
+
+  it("a click without dragging starts typing, with the value selected (M7)", async () => {
+    const onCommit = vi.fn();
+    render(<LiveNumber value={10} spec={spec} name="n" onChange={() => {}} onCommit={onCommit} />);
+    const b = screen.getByRole("button");
+    fireEvent.pointerDown(b, { button: 0, clientX: 100, pointerId: 1 });
+    fireEvent.pointerUp(b, { clientX: 101 });
+    const input = screen.getByRole("textbox", { name: "n" }) as HTMLInputElement;
+    expect(input.value).toBe("10.0");
+    expect(document.activeElement).toBe(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 4]);
+    await userEvent.keyboard("25{Enter}");
+    expect(onCommit).toHaveBeenCalledWith(25);
+  });
+
+  it("a digit on the focused number starts typing it", async () => {
+    const onCommit = vi.fn();
+    render(<LiveNumber value={10} spec={spec} name="n" onChange={() => {}} onCommit={onCommit} />);
+    screen.getByRole("button").focus();
+    await userEvent.keyboard("80{Enter}");
+    expect(onCommit).toHaveBeenCalledWith(80);
+  });
+
+  it("says the limits instead of clamping a typed value", async () => {
+    const onChange = vi.fn();
+    render(<LiveNumber value={10} spec={spec} unit="mm" name="n" onChange={onChange} />);
+    expect(screen.getByRole("button").title).toMatch(/Between 0 and 100 mm/);
+    screen.getByRole("button").focus();
+    await userEvent.keyboard("800{Enter}");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toBe("Between 0 and 100 mm: 800 is out of range");
+    const input = screen.getByRole("textbox", { name: "n" });
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("button").textContent).toBe("10.0 mm");
+  });
+
+  it("hands a typed expression to the caller, and refuses one when it takes only numbers", async () => {
+    const onExpression = vi.fn(), onChange = vi.fn();
+    const { unmount } = render(<LiveNumber value={10} spec={spec} name="n" onChange={onChange} onExpression={onExpression} />);
+    screen.getByRole("button").focus();
+    await userEvent.keyboard("width*2{Enter}");
+    expect(onExpression).toHaveBeenCalledWith("width*2");
+    expect(onChange).not.toHaveBeenCalled();
+    unmount();
+    render(<LiveNumber value={10} spec={spec} name="n" onChange={onChange} />);
+    screen.getByRole("button").focus();
+    await userEvent.keyboard("{Enter}");
+    const input = screen.getByRole("textbox", { name: "n" });
+    await userEvent.clear(input);
+    await userEvent.type(input, "w*2{Enter}");
+    expect(screen.getByRole("alert").textContent).toBe("Type a number");
   });
 
   it("reports hover so the part can light up", () => {

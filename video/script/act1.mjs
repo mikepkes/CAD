@@ -46,11 +46,11 @@ async function scrubFace(d, dx) {
   await d.drag({ x: n.cx, y: n.cy }, { x: n.cx + dx, y: n.cy }, Math.min(1600, 500 + Math.abs(dx) * 3));
   await d.settle();
 }
-/** Type a face's number: click it, Enter, the value, Enter. */
+/** Type a face's number: click it (a click starts typing, the value selected), the value, Enter. */
 async function typeFace(d, value) {
   const n = await d.rect(".wb-verbs .k-live");
   await d.click(n.cx, n.cy);
-  await d.key("Enter");
+  await d.wait(150);
   await d.type(String(value), 8);
   await d.wait(250);
   await d.key("Enter");

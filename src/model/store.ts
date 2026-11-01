@@ -264,6 +264,9 @@ export interface AppState {
 
   // parameters
   addParameter: (name?: string, expr?: string) => Promise<void>;
+  /** A typed value checked against the parameters: the expression to store, or null (with a toast saying why).
+   *  "name = expr" makes the parameter and gives its name. */
+  resolveTyped: (expr: string) => Promise<string | null>;
   /** Create a parameter from a dimension's current value and point the dimension at it. */
   promoteDimension: (cid: string) => Promise<void>;
   setParameterExpr: (name: string, expr: string) => Promise<void>;
@@ -915,6 +918,7 @@ export const useStore = create<AppState>((set, get) => {
       while (names.has(n)) n = `${base}${i++}`;
       await runDispatch("parameter.add", { name: n, expression: expr ?? "10" });
     },
+    resolveTyped: (expr) => typedExpression(expr),
     promoteDimension: async (cid) => {
       const sk = activeSketch(get());
       if (!sk) return;

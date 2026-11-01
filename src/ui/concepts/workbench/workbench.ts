@@ -320,6 +320,16 @@ export type PushEdit =
 const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
 
 /** Push `target` on `row` to `value`. `names` are the document's parameter names. */
+/** Push `target` on `row` to a typed expression (`expr`, worth `value` now): the same edit as `pushTo`, but the
+ *  number is stored as the expression, so it stays a formula. */
+export function pushToExpr(row: FeatureRow, target: PushTarget, expr: string, value: number, names: string[] = []): PushEdit {
+  const e = pushTo(row, target, value, names);
+  if (e.kind === "param") return { ...e, expr };
+  const params = { ...e.params, [target.param.key]: expr };
+  if (e.also) return { kind: "op", opId: e.opId, params: { ...params, [target.param.key]: target.param.expr }, also: { ...e.also, expr } };
+  return { kind: "op", opId: e.opId, params };
+}
+
 export function pushTo(row: FeatureRow, target: PushTarget, value: number, names: string[] = []): PushEdit {
   // an extrude's depth never crosses zero by pushing: it stops a step short instead of flipping to the other side
   if (row.spec.kind === "extrude" && target.param.key === "distance" && Number.isFinite(target.param.value)) {
