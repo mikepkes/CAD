@@ -17,7 +17,7 @@ function fakeHost(withRecorder = true) {
     runCommand: async () => ({ ok: true }),
     describe: () => ({}),
     render: async (opts) => { calls.render.push(opts); return { base64: PNG_B64, width: 640, height: 480, view: opts.azimuthDeg != null ? "az-90_el30" : "iso" }; },
-    saveOutput: async (name, bytes, mime) => { calls.saved.push({ name, bytes, mime }); return `/Users/me/Downloads/Chisel CAD/${name}`; },
+    saveOutput: async (name, bytes, mime) => { calls.saved.push({ name, bytes, mime }); return `/Users/me/Downloads/VibeCAD/${name}`; },
     ...(withRecorder ? {
       recordTurntable: async (opts: TurntableOpts) => {
         calls.record.push(opts);
@@ -64,12 +64,12 @@ describe("output filenames", () => {
   });
 
   it("falls back when nothing usable is left", () => {
-    expect(sanitizeOutputName(undefined, "mp4", "chisel-turntable")).toBe("chisel-turntable.mp4");
+    expect(sanitizeOutputName(undefined, "mp4", "vibecad-turntable")).toBe("vibecad-turntable.mp4");
     expect(sanitizeOutputName("/", "png", "fallback")).toBe("fallback.png");
   });
 
   it("stamps default names", () => {
-    expect(timestampedStem("chisel-turntable", new Date(2026, 9, 29, 14, 5, 9))).toBe("chisel-turntable-20261029-140509");
+    expect(timestampedStem("vibecad-turntable", new Date(2026, 9, 29, 14, 5, 9))).toBe("vibecad-turntable-20261029-140509");
   });
 });
 
@@ -90,7 +90,7 @@ describe("render_view", () => {
     expect(calls.saved[0].mime).toBe("image/png");
     expect(Array.from(calls.saved[0].bytes)).toEqual([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
     expect(r.content[0].type).toBe("image");
-    expect(text(r)).toMatchObject({ ok: true, saved: "/Users/me/Downloads/Chisel CAD/part.png" });
+    expect(text(r)).toMatchObject({ ok: true, saved: "/Users/me/Downloads/VibeCAD/part.png" });
   });
 });
 
@@ -104,7 +104,7 @@ describe("record_turntable", () => {
     const { host, calls } = fakeHost();
     const r = await tool(host, "record_turntable").execute({});
     expect(calls.record[0]).toMatchObject({ seconds: 4, fps: 60, width: 1280, height: 720, revolutions: 1, elevationDeg: 25, startAzDeg: -60, fovDeg: 30 });
-    expect(calls.saved[0].name).toMatch(/^chisel-turntable-\d{8}-\d{6}\.mp4$/);
+    expect(calls.saved[0].name).toMatch(/^vibecad-turntable-\d{8}-\d{6}\.mp4$/);
     expect(calls.saved[0].mime).toBe("video/mp4");
     expect(text(r)).toMatchObject({ ok: true, codec: "avc1.640033", frames: 240, bytes: 1234 });
   });

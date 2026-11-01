@@ -104,7 +104,7 @@ export function releaseOutcome(heldMs: number, slot: number | null): "run" | "st
 
 // ---- state ----
 
-const STORAGE_KEY = "chisel.ring.v1";
+const STORAGE_KEY = "vibecad.ring.v1";
 
 function load(): RingOverrides {
   try {

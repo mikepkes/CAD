@@ -1,6 +1,6 @@
 # Third-party notices
 
-Chisel CAD's own code is under the [MIT License](LICENSE). It is built on
+VibeCAD's own code is under the [MIT License](LICENSE). It is built on
 third-party software under its own licenses. Every package a build ships, with
 its license text, is listed in `THIRD_PARTY_LICENSES.txt`, which
 `scripts/third-party-licenses.mjs` generates before each build and which ships
@@ -11,12 +11,12 @@ Zlib, Unicode-3.0, Unlicense). The exceptions are below.
 
 ## LGPL libraries
 
-These two libraries are under the GNU Lesser General Public License. Chisel CAD
+These two libraries are under the GNU Lesser General Public License. VibeCAD
 uses them unmodified, as separate WebAssembly modules loaded at run time, so you
 can replace either with your own build of the same interface. The full license
 text is in [licenses/LGPL-2.1.txt](licenses/LGPL-2.1.txt).
 
-| Library | What Chisel uses it for | License | Source |
+| Library | What VibeCAD uses it for | License | Source |
 |---|---|---|---|
 | OpenCASCADE Technology, packaged as `replicad-opencascadejs` (see `package-lock.json` for the version) | The solid-modelling kernel | LGPL-2.1-only, with the OCCT exception | https://github.com/Open-Cascade-SAS/OCCT, built for the web by https://github.com/sgenoud/replicad (`packages/replicad-opencascadejs`) |
 | PlaneGCS, packaged as `@salusoft89/planegcs` | The sketch constraint solver (from FreeCAD) | LGPL-2.0-or-later | https://github.com/Salusoft89/planegcs, from https://github.com/FreeCAD/FreeCAD (`src/Mod/Sketcher/App/planegcs`) |

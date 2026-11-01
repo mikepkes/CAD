@@ -179,7 +179,7 @@ pub async fn start(bridge: Arc<Bridge>, forward: Forward, port: u16) -> Result<S
 async fn root() -> Response {
     json_response(
         StatusCode::OK,
-        &json!({ "name": "chisel-cad", "transport": "streamable-http", "endpoint": "/mcp" }),
+        &json!({ "name": "vibecad", "transport": "streamable-http", "endpoint": "/mcp" }),
     )
 }
 
@@ -223,7 +223,7 @@ fn sse_stream(ctx: &Ctx) -> Response {
     let rx = ctx.bridge.listen();
     let stop = ctx.stop.clone();
     // A comment first, so the client sees the stream open before any notification.
-    let hello = futures_util::stream::once(async { Ok::<Bytes, Infallible>(Bytes::from_static(b": chisel-cad notifications\n\n")) });
+    let hello = futures_util::stream::once(async { Ok::<Bytes, Infallible>(Bytes::from_static(b": vibecad notifications\n\n")) });
     let events = futures_util::stream::unfold((rx, stop), |(mut rx, mut stop)| async move {
         loop {
             if *stop.borrow() {
@@ -407,7 +407,7 @@ mod tests {
         let mut body = resp.into_body();
         let hello = body.frame().await.unwrap().unwrap().into_data().unwrap();
         assert!(String::from_utf8_lossy(&hello).starts_with(':'));
-        let n = json!({ "jsonrpc": "2.0", "method": "notifications/resources/updated", "params": { "uri": "chisel://assist/inbox" } });
+        let n = json!({ "jsonrpc": "2.0", "method": "notifications/resources/updated", "params": { "uri": "vibecad://assist/inbox" } });
         assert_eq!(bridge.notify(n.clone()), 1);
         let frame = body.frame().await.unwrap().unwrap().into_data().unwrap();
         let text = String::from_utf8(frame.to_vec()).unwrap();

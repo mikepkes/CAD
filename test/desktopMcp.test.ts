@@ -25,7 +25,7 @@ describe("desktop MCP JSON-RPC handler", () => {
     expect(r.id).toBe(1);
     expect(r.result.protocolVersion).toBe("2025-03-26");
     expect(r.result.capabilities.tools).toBeDefined();
-    expect(r.result.serverInfo.name).toBe("chisel-cad");
+    expect(r.result.serverInfo.name).toBe("vibecad");
   });
 
   it("falls back to the newest protocol version for unknown ones", async () => {

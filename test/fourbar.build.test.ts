@@ -4,7 +4,7 @@
 // the finger pad and the crank turns about its ground flexure, the coupler
 // carries the motion across, and the rocker's pointer swings — every joint is a
 // strip of plastic bending, no pins. Modelled as four components joined by
-// flexure joints with the loop closed at B, so Chisel solves the pose for any
+// flexure joints with the loop closed at B, so VibeCAD solves the pose for any
 // crank angle and reports each hinge's strain and the input torque.
 //   BUILD_FOURBAR=/abs/out npx vitest run test/fourbar.build.test.ts
 import { describe, it, beforeAll, expect } from "vitest";
@@ -144,7 +144,7 @@ describe("compliant four-bar", () => {
     const s = realSession();
     await buildFourBar(s);
     await s.recompute();
-    if (OUT) writeFileSync(`${OUT}/fourbar.chisel.json`, serializeDocument(s.doc));
+    if (OUT) writeFileSync(`${OUT}/fourbar.vibecad.json`, serializeDocument(s.doc));
     const scope = resolveParameters(s.doc.parameters).scope;
     placeComponentSketches(s.doc, scope);
     const bodies = Object.values(evaluateFeatures(s.doc, scope));

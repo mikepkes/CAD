@@ -13,7 +13,7 @@ import { isTauri } from "./desktopMcp";
 import { isContextId } from "./contexts";
 import { buttonMapOf, resolveButton } from "./buttonMap";
 
-const SETTINGS_KEY = "chisel.spacemouse.v1";
+const SETTINGS_KEY = "vibecad.spacemouse.v1";
 
 export interface SpaceMouseStatus {
   /** Where motion comes from, or null when no device is connected. */

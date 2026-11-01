@@ -36,7 +36,7 @@ describe("intents store", () => {
     expect(useIntents.getState().results[0].ok).toBe(true);
     useStore.setState({ solids: solid(30000) });
     expect(useIntents.getState().results[0]).toMatchObject({ ok: false, lhs: 81 });
-    expect(localStorage.getItem(`chisel.intents.v1.${s.doc.id}`)).toBeNull(); // nothing kept outside the document
+    expect(localStorage.getItem(`vibecad.intents.v1.${s.doc.id}`)).toBeNull(); // nothing kept outside the document
   });
 
   it("picks up intents already in the document when the store changes and checks them in the new scope", async () => {

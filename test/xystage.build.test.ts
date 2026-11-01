@@ -132,7 +132,7 @@ describe("XY flexure stage", () => {
     const s = realSession();
     await buildStage(s);
     await s.recompute();
-    if (OUT) writeFileSync(`${OUT}/xystage.chisel.json`, serializeDocument(s.doc));
+    if (OUT) writeFileSync(`${OUT}/xystage.vibecad.json`, serializeDocument(s.doc));
     for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
     const scope = scopeAt(s);
     placeComponentSketches(s.doc, scope);

@@ -5,7 +5,7 @@ const W = (x, y, z) => ({ x, y, z });
 
 export async function preroll(d) {
   await d.run(async () => {
-    const D = window.__chiselDemo, st = D.store.getState(), S = D.STAND;
+    const D = window.__vibecadDemo, st = D.store.getState(), S = D.STAND;
     for (const [name, v, min, max] of [["width", S.width, 70, 120], ["depth", S.depth, 60, 90], ["phone", S.phone, 6, 16]]) {
       await st.dispatch("parameter.add", { name, expression: String(v) });
       await st.dispatch("parameter.setBounds", { name, min, max });
@@ -27,7 +27,7 @@ export async function preroll(d) {
 const toggle = (d, label) => d.clickEl(".k-panel-toggle button", label);
 
 export async function act2(d) {
-  const S = await d.run(() => window.__chiselDemo.STAND);
+  const S = await d.run(() => window.__vibecadDemo.STAND);
 
   await d.beat("soften", "Sharp edges chip and catch. Click the front face and choose Round edges: every edge around it gets a fillet, and its radius is just another number you can drag or name.", async () => {
     await d.clickWorld(W(-S.width / 4, -S.depth / 2, S.base * 0.6)); await d.settle();
@@ -39,7 +39,7 @@ export async function act2(d) {
     await d.api("closeCards");
   }, { lower: { title: "Fillet", sub: "a feature like any other, in the history" } });
 
-  await d.beat("rules", "Instead of checking by eye after every change, write down what must stay true. Here, the stand must weigh under two hundred grams. Chisel checks it on every change, and when it fails, it builds fixes and offers them. Accept one.", async () => {
+  await d.beat("rules", "Instead of checking by eye after every change, write down what must stay true. Here, the stand must weigh under two hundred grams. VibeCAD checks it on every change, and when it fails, it builds fixes and offers them. Accept one.", async () => {
     await toggle(d, "Ledger"); await d.settle(300);
     await d.clickEl("input[aria-label=Intent]");
     await d.type("mass <= 200", 12);

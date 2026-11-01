@@ -17,7 +17,7 @@ import {
   type AssistBy, type AssistItem, type ResolveResult,
 } from "./assist";
 
-export const ASSIST_LS = "chisel.assist.enabled";
+export const ASSIST_LS = "vibecad.assist.enabled";
 /** How long the document must be quiet before the agent is asked (a sketch and the extrude that uses it go together). */
 export const ASSIST_QUIET_MS = 2500;
 /** Items named per request. */

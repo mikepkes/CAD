@@ -245,7 +245,7 @@ describe("flexure gimbal", () => {
   }, 120000);
 
   it("builds: base, ring, platform, mirror and eight pivot clamps, touching and nowhere overlapping", async () => {
-    if (OUT) writeFileSync(`${OUT}/gimbal.chisel.json`, serializeDocument(s.doc));
+    if (OUT) writeFileSync(`${OUT}/gimbal.vibecad.json`, serializeDocument(s.doc));
     for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
     for (const pl of Object.values(s.doc.planes)) expect(pl.error, pl.name).toBeUndefined();
     const scope = scopeOf(s);

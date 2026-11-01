@@ -253,7 +253,7 @@ describe("the tools", () => {
     const read = await handleMcpRpc({ id: 3, method: "resources/read", params: { uri: ASSIST_INBOX_URI } }, []) as { result: { contents: { text: string }[] } };
     expect(JSON.parse(read.result.contents[0].text).items[0].target).toBe(sk);
     expect(await handleMcpRpc({ id: 4, method: "resources/subscribe", params: { uri: ASSIST_INBOX_URI } }, [])).toMatchObject({ result: {} });
-    expect(await handleMcpRpc({ id: 5, method: "resources/read", params: { uri: "chisel://nope" } }, [])).toMatchObject({ error: { code: -32002 } });
+    expect(await handleMcpRpc({ id: 5, method: "resources/read", params: { uri: "vibecad://nope" } }, [])).toMatchObject({ error: { code: -32002 } });
   });
 
   it("every inbox change reaches the hub's listeners once per tick", async () => {

@@ -8,9 +8,9 @@ const NAMES = { "Sketch 1": "Back plate profile", "Sketch 2": "Lip profile", "Ex
 
 /** Before recording: the finished stand for the cold open (built by the same steps the tests build). */
 export async function preroll(d) {
-  await d.run((names) => window.__chiselDemo.mockAgent({ prompt: "", model: "claude-haiku-5-5", source: "video act 1 names", turns: [], names }), NAMES);
+  await d.run((names) => window.__vibecadDemo.mockAgent({ prompt: "", model: "claude-haiku-5-5", source: "video act 1 names", turns: [], names }), NAMES);
   await d.run(async () => {
-    const D = window.__chiselDemo, st = D.store.getState();
+    const D = window.__vibecadDemo, st = D.store.getState();
     await st.dispatch("parameter.add", { name: "phone", expression: "9" });
     await st.dispatch("parameter.setBounds", { name: "phone", min: 6, max: 16 });
     await D.standStep("box");
@@ -49,7 +49,7 @@ async function typeFace(d, value) {
 /** A point on the base's top, in front of the lip. */
 const topOfBase = (S) => W(0, -S.depth / 2 + 4, S.base);
 /** The base box's bounds right now. */
-const baseBox = (d) => d.run(() => window.__chiselDemo.bounds()[0]);
+const baseBox = (d) => d.run(() => window.__vibecadDemo.bounds()[0]);
 async function clickFace(d, which) {
   await d.api("closeCards"); // PUPPET: as clicking away would; an open card can cover the face
   const b = await baseBox(d);
@@ -100,7 +100,7 @@ async function pickBehind(d, world, want) {
   await d.wait(700); // the long press opens the picker
   await d.page.mouse.up();
   await d.wait(250);
-  const items = await d.run(() => window.__chiselDemo.store.getState().pickMenu?.items ?? []);
+  const items = await d.run(() => window.__vibecadDemo.store.getState().pickMenu?.items ?? []);
   const k = items.findIndex(want);
   if (k < 0) throw new Error(`picker has no matching entry (${items.map((i) => i.label).join(", ")})`);
   const rows = d.page.locator(".pick-item");
@@ -111,9 +111,9 @@ async function pickBehind(d, world, want) {
 }
 
 export async function act1(d) {
-  const S = await d.run(() => window.__chiselDemo.STAND);
+  const S = await d.run(() => window.__vibecadDemo.STAND);
 
-  await d.beat("cold-open", "This is a phone stand made in Chisel. Drag one number, the phone's thickness, and the whole stand adapts. In the next four minutes you'll build it from a blank page.", async () => {
+  await d.beat("cold-open", "This is a phone stand made in VibeCAD. Drag one number, the phone's thickness, and the whole stand adapts. In the next four minutes you'll build it from a blank page.", async () => {
     await d.api("cursor", false);
     await d.api("turntable", 12); // degrees a second: a slow, readable turn (pass 1's 3D-mouse drift ran at about 450°/s)
     await d.wait(2500);
@@ -126,9 +126,9 @@ export async function act1(d) {
     await d.api("turntable", null);
   });
 
-  await d.beat("get-chisel", "Chisel runs in your browser at mikepkes dot github dot io slash CAD, or as a desktop app from the project's GitHub releases. It's free, it's open source under the MIT licence, and it will stay that way.", async () => {
+  await d.beat("get-vibecad", "VibeCAD runs in your browser at mikepkes dot github dot io slash CAD, or as a desktop app from the project's GitHub releases. It's free, it's open source under the MIT licence, and it will stay that way.", async () => {
     await d.api("cursor", false);
-    await d.api("titleCard", { title: "Chisel CAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Always will be"] });
+    await d.api("titleCard", { title: "VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Always will be"] });
   });
 
   await d.beat("the-room", "Start a new document. Four places matter: the model in the middle, its history along the bottom, its numbers on the left, and two shortcuts. Command K finds anything by name, and Space opens the action ring.", async () => {
@@ -138,7 +138,7 @@ export async function act1(d) {
     await d.clickEl("[role=dialog] button", "New document");
     await d.settle(500);
     await d.api("view", "iso"); await d.settle(300);
-    await d.run((names) => window.__chiselDemo.mockAgent({ prompt: "", model: "claude-haiku-5-5", source: "video act 1 names", turns: [], names }), NAMES); // fresh names for the new document
+    await d.run((names) => window.__vibecadDemo.mockAgent({ prompt: "", model: "claude-haiku-5-5", source: "video act 1 names", turns: [], names }), NAMES); // fresh names for the new document
     await d.move(820, 380, 700); await d.wait(700);
     await d.moveTo(await d.rect(".wb-strip"), 600); await d.wait(800);
     await d.moveTo(await d.rect(".panel-head", "Parameters"), 600); await d.wait(800);
@@ -166,14 +166,14 @@ export async function act1(d) {
 
   let lipSketch = null;
   const side = W(S.width / 2, -S.depth / 2 + 8, S.base / 2); // the base's +X side, clear of the plate and the lip
-  await d.beat("raise-the-back", "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and press S to sketch on it. Draw the outline corner by corner, finish the sketch, and extrude it up to the far side of the base, so it always spans the base, whatever its width. That side is hidden, so press and hold: Chisel lists everything under the cursor and lights each one as you point at it. The lip in front of the phone is a rectangle, made the same way.", async () => {
+  await d.beat("raise-the-back", "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and press S to sketch on it. Draw the outline corner by corner, finish the sketch, and extrude it up to the far side of the base, so it always spans the base, whatever its width. That side is hidden, so press and hold: VibeCAD lists everything under the cursor and lights each one as you point at it. The lip in front of the phone is a rectangle, made the same way.", async () => {
     await d.api("closeCards");
     await d.clickWorld(side); await d.settle();
     await d.shot("side");
     await d.key("s");
     await d.settle(300);
     await d.key("f"); await d.wait(900);
-    const back = await d.run(() => window.__chiselDemo.backOutline());
+    const back = await d.run(() => window.__vibecadDemo.backOutline());
     await drawOutline(d, back.map((p) => W(S.width / 2, p.y, p.z)));
     await d.page.keyboard.press("Meta+Enter"); await d.settle(300);
     await d.api("view", "iso"); await d.wait(700);
@@ -183,10 +183,10 @@ export async function act1(d) {
     await d.shot("side");
     await d.key("s");
     await d.settle(300);
-    lipSketch = await d.run(() => window.__chiselDemo.store.getState().activeSketchId);
+    lipSketch = await d.run(() => window.__vibecadDemo.store.getState().activeSketchId);
     await d.key("f"); await d.wait(900);
     await d.key("r");
-    const lip = await d.run(() => window.__chiselDemo.lipOutline());
+    const lip = await d.run(() => window.__vibecadDemo.lipOutline());
     for (const p of [lip[0], lip[2]]) { const s = await d.api("sketchWorldToScreen", W(S.width / 2, p.y, p.z)); await d.click(s.x, s.y); }
     await d.key("Escape");
     await d.page.keyboard.press("Meta+Enter"); await d.settle(300);
@@ -194,7 +194,7 @@ export async function act1(d) {
     await extrudeToFarSide(d, S, W(-S.width / 2, (back[0].y + back[2].y) / 2 + 2, S.base + S.height * 0.6)); // the plate's far side: the base's is behind the panel now
   });
 
-  await d.beat("what-it-kept", "Here's the quiet part: Chisel kept a recipe of everything you did by hand. Every push and every sketch is a step in the history. Drag back through it, and forward again. Nothing has to be redone, and every step can still change.", async () => {
+  await d.beat("what-it-kept", "Here's the quiet part: VibeCAD kept a recipe of everything you did by hand. Every push and every sketch is a step in the history. Drag back through it, and forward again. Nothing has to be redone, and every step can still change.", async () => {
     const r = await d.rect(".wb-strip input[type=range]");
     await d.drag({ x: r.x + r.w - 6, y: r.cy }, { x: r.x + r.w * 0.2, y: r.cy }, 2200);
     await d.wait(500);
@@ -216,13 +216,13 @@ export async function act1(d) {
       await d.settle(300);
     }
     // PUPPET: the phone parameter and the lip's dimensions go in by command (the inline dimension tool on a face sketch is not scripted yet).
-    const lipBox = await d.run(() => window.__chiselDemo.lipOutline());
+    const lipBox = await d.run(() => window.__vibecadDemo.lipOutline());
     await d.moveTo(await d.rect(".panel-head", "Parameters"), 500);
-    await d.run(async () => { const st = window.__chiselDemo.store.getState(); await st.dispatch("parameter.add", { name: "phone", expression: "9" }); await st.dispatch("parameter.setBounds", { name: "phone", min: 6, max: 16 }); });
+    await d.run(async () => { const st = window.__vibecadDemo.store.getState(); await st.dispatch("parameter.add", { name: "phone", expression: "9" }); await st.dispatch("parameter.setBounds", { name: "phone", min: 6, max: 16 }); });
     await d.settle();
     const s = await d.world(W(S.width / 2, lipBox[1].y, lipBox[2].z)); await d.move(s.x, s.y, 600);
     await d.lower("lip = phone + 2", "a dimension written as a formula");
-    await d.run(async (sid) => { await window.__chiselDemo.lipDims(sid, "phone"); }, lipSketch);
+    await d.run(async (sid) => { await window.__vibecadDemo.lipDims(sid, "phone"); }, lipSketch);
     await d.settle();
     await d.key("Escape");
   });
@@ -235,7 +235,7 @@ export async function act1(d) {
     await d.page.keyboard.press("Meta+Z"); await d.settle(400);
   });
 
-  await d.beat("keep-it", "Save it to a file whenever you like. Chisel also keeps your work as you go, so you can experiment freely.", async () => {
+  await d.beat("keep-it", "Save it to a file whenever you like. VibeCAD also keeps your work as you go, so you can experiment freely.", async () => {
     await d.clickEl("button", "Save");
     await d.wait(600);
   });

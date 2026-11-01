@@ -103,11 +103,11 @@ describe("face", () => {
 
   it("looks at the face and opens its feature", () => {
     const lookAt = vi.fn();
-    window.addEventListener("chisel:lookAt", lookAt);
+    window.addEventListener("vibecad:lookAt", lookAt);
     useStore.setState({ faceSelection: face });
     key("f");
     expect((lookAt.mock.calls[0][0] as CustomEvent).detail).toEqual({ point: face.point, normal: face.normal });
-    window.removeEventListener("chisel:lookAt", lookAt);
+    window.removeEventListener("vibecad:lookAt", lookAt);
     key("Enter");
     expect(useUi.getState().openFeature).toBe(extrudeId);
   });
@@ -122,7 +122,7 @@ describe("face", () => {
 describe("escape", () => {
   it("closes the face verbs, then the feature card, most specific first", () => {
     const cancel = vi.fn();
-    window.addEventListener("chisel:cancel", cancel);
+    window.addEventListener("vibecad:cancel", cancel);
     useStore.setState({ faceSelection: face });
     useUi.setState({ openFeature: extrudeId });
     key("Escape");
@@ -133,7 +133,7 @@ describe("escape", () => {
     expect(cancel).not.toHaveBeenCalled();
     key("Escape");
     expect(cancel).toHaveBeenCalledTimes(1);
-    window.removeEventListener("chisel:cancel", cancel);
+    window.removeEventListener("vibecad:cancel", cancel);
   });
 });
 

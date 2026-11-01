@@ -61,7 +61,7 @@ for (const it of items) {
 }
 const line = (it) => `  ${it.name} ${it.version} (${it.license})${it.source ? ` ${it.source.replace(/^git\+/, "")}` : ""}`;
 
-let out = `Chisel CAD: third-party software\n\nChisel CAD is MIT licensed (see LICENSE). It ships the third-party packages below under their own licenses.\nThe LGPL libraries (OpenCASCADE via replicad-opencascadejs, PlaneGCS) are separate, replaceable WebAssembly modules; see THIRD_PARTY_NOTICES.md for where to get their source and how to replace them.\n${rustNote}\n${items.length} packages.\n`;
+let out = `VibeCAD: third-party software\n\nVibeCAD is MIT licensed (see LICENSE). It ships the third-party packages below under their own licenses.\nThe LGPL libraries (OpenCASCADE via replicad-opencascadejs, PlaneGCS) are separate, replaceable WebAssembly modules; see THIRD_PARTY_NOTICES.md for where to get their source and how to replace them.\n${rustNote}\n${items.length} packages.\n`;
 for (const g of groups.values()) {
   out += `\n${"=".repeat(78)}\n${g.items.map(line).join("\n")}\n${"-".repeat(78)}\n${g.texts.join(`\n\n${"-".repeat(40)}\n\n`)}\n`;
 }

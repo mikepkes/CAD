@@ -23,7 +23,7 @@ describe("schema migration", () => {
   it("normalizes a legacy (unversioned) file via the 0→1 migration", () => {
     // An old file: no version, no rollbackIndex, no timelineGroups.
     const legacy = JSON.stringify({
-      format: "chisel-cad",
+      format: "vibecad",
       id: "old",
       units: "mm",
       nextId: 5,
@@ -38,13 +38,17 @@ describe("schema migration", () => {
   });
 
   it("refuses a file newer than this app supports", () => {
-    const future = JSON.stringify({ format: "chisel-cad", version: CURRENT_VERSION + 5, operations: [] });
+    const future = JSON.stringify({ format: "vibecad", version: CURRENT_VERSION + 5, operations: [] });
     expect(() => deserializeDocument(future)).toThrow(/newer than this app supports/i);
   });
 
-  it("rejects a non-Chisel document", () => {
-    expect(() => deserializeDocument(JSON.stringify({ format: "something-else", operations: [] }))).toThrow(/Not a Chisel CAD/i);
-    expect(() => deserializeDocument(JSON.stringify({ format: "chisel-cad" }))).toThrow(/no operations/i);
+  it("rejects a non-VibeCAD document", () => {
+    expect(() => deserializeDocument(JSON.stringify({ format: "something-else", operations: [] }))).toThrow(/Not a VibeCAD/i);
+    expect(() => deserializeDocument(JSON.stringify({ format: "vibecad" }))).toThrow(/no operations/i);
+  });
+
+  it("opens a file saved before the rename (format chisel-cad)", () => {
+    expect(deserializeDocument(JSON.stringify({ format: "chisel-cad", operations: [] })).operations).toEqual([]);
   });
 
   it("runs the migration chain in order (composition)", () => {
@@ -54,12 +58,12 @@ describe("schema migration", () => {
       1: (r) => ({ ...r, version: 2, trail: [...(r.trail as number[]), 2] }),
       2: (r) => ({ ...r, version: 3, trail: [...(r.trail as number[]), 3] }),
     };
-    const out = runMigrations({ format: "chisel-cad", operations: [] }, migrations, 3);
+    const out = runMigrations({ format: "vibecad", operations: [] }, migrations, 3);
     expect(out.version).toBe(3);
     expect(out.trail).toEqual([1, 2, 3]);
 
     // Already current → untouched.
-    const noop = runMigrations({ format: "chisel-cad", version: 3, operations: [] }, migrations, 3);
+    const noop = runMigrations({ format: "vibecad", version: 3, operations: [] }, migrations, 3);
     expect(noop.version).toBe(3);
     expect(noop.trail).toBeUndefined();
   });

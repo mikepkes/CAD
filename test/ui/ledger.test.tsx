@@ -156,7 +156,7 @@ describe("LedgerPanel", () => {
     expect(within(section).getByText("Height:")).toBeTruthy();
     expect(s.doc.intents).toMatchObject([{ label: "Height", lhs: "h", op: ">=", rhs: "15" }]);
     expect(s.doc.operations.at(-1)?.type).toBe("intent.add");
-    expect(localStorage.getItem("chisel.intents.v1.doc1")).toBeNull();
+    expect(localStorage.getItem("vibecad.intents.v1.doc1")).toBeNull();
     const limit = within(section).getByRole("button", { name: /Height limit, 15/ });
     limit.focus();
     await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");

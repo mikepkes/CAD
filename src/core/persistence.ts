@@ -15,7 +15,7 @@ import { OperationRecord } from "./command/types";
 export const CURRENT_VERSION = 1;
 
 export interface SerializedDocument {
-  format: "chisel-cad";
+  format: "vibecad";
   version: number;
   id: string;
   units: string;
@@ -34,6 +34,9 @@ export interface SerializedDocument {
 }
 
 /** A parsed-but-not-yet-validated document; migrations work on this loose shape. */
+/** The document format tag, and the one files saved before the rename to VibeCAD carry. */
+const DOCUMENT_FORMATS = ["vibecad", "chisel-cad"];
+
 export type RawDocument = Record<string, unknown> & { format?: unknown; version?: unknown };
 
 /**
@@ -80,7 +83,7 @@ export function runMigrations(
 
 export function serializeDocument(doc: CadDocument): string {
   const out: SerializedDocument = {
-    format: "chisel-cad",
+    format: "vibecad",
     version: CURRENT_VERSION,
     id: doc.id,
     units: doc.units,
@@ -97,7 +100,7 @@ export function serializeDocument(doc: CadDocument): string {
 
 export function deserializeDocument(json: string): CadDocument {
   const parsed = JSON.parse(json) as RawDocument;
-  if (parsed.format !== "chisel-cad") throw new Error("Not a Chisel CAD document");
+  if (!DOCUMENT_FORMATS.includes(parsed.format as string)) throw new Error("Not a VibeCAD document");
   if (!Array.isArray(parsed.operations)) throw new Error("Document has no operations");
   const d = runMigrations(parsed) as unknown as SerializedDocument;
   const doc = createDocument(d.id || "doc1");

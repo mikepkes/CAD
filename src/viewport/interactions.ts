@@ -61,10 +61,10 @@ export class Interactions {
     // Keyboard shortcuts are routed through the HotkeyManager (attached at app
     // init). Interactions only listens for the view-level events those actions
     // fire, because resetting the in-progress draw stage is interaction-local.
-    window.addEventListener("chisel:lookAt", this.onLookAt as EventListener);
-    window.addEventListener("chisel:frame", this.onFrame as EventListener);
-    window.addEventListener("chisel:view", this.onView as EventListener);
-    window.addEventListener("chisel:cancel", this.onCancel as EventListener);
+    window.addEventListener("vibecad:lookAt", this.onLookAt as EventListener);
+    window.addEventListener("vibecad:frame", this.onFrame as EventListener);
+    window.addEventListener("vibecad:view", this.onView as EventListener);
+    window.addEventListener("vibecad:cancel", this.onCancel as EventListener);
   }
 
   dispose() {
@@ -74,10 +74,10 @@ export class Interactions {
     this.dom.removeEventListener("dblclick", this.onDblClick);
     this.dom.removeEventListener("contextmenu", this.onContext);
     this.dom.removeEventListener("pointerdown", this.onHandleDown, { capture: true } as EventListenerOptions);
-    window.removeEventListener("chisel:lookAt", this.onLookAt as EventListener);
-    window.removeEventListener("chisel:frame", this.onFrame as EventListener);
-    window.removeEventListener("chisel:view", this.onView as EventListener);
-    window.removeEventListener("chisel:cancel", this.onCancel as EventListener);
+    window.removeEventListener("vibecad:lookAt", this.onLookAt as EventListener);
+    window.removeEventListener("vibecad:frame", this.onFrame as EventListener);
+    window.removeEventListener("vibecad:view", this.onView as EventListener);
+    window.removeEventListener("vibecad:cancel", this.onCancel as EventListener);
   }
 
   /** Look at: the active sketch plane in sketch mode; in model mode, the face in

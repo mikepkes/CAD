@@ -3,7 +3,7 @@
 // rides a parallelogram guide (two links), and a pushrod each side turns a jaw
 // lever about its ground hinge, so the jaw tips move ~jaw/14× as far as the
 // plunger. 8 parts, 10 flexure hinges and 3 closed loops, solved together for
-// any plunger travel: Chisel reports each hinge's strain, the push force, and
+// any plunger travel: VibeCAD reports each hinge's strain, the push force, and
 // the jaw opening.
 //   BUILD_GRIPPER=/abs/out npx vitest run test/gripper.build.test.ts
 import { describe, it, beforeAll, expect } from "vitest";
@@ -252,7 +252,7 @@ describe("compliant gripper", () => {
     const s = realSession();
     await buildGripper(s);
     await s.recompute();
-    if (OUT) writeFileSync(`${OUT}/gripper.chisel.json`, serializeDocument(s.doc));
+    if (OUT) writeFileSync(`${OUT}/gripper.vibecad.json`, serializeDocument(s.doc));
     for (const sk of Object.values(s.doc.sketches)) expect(sk.status.conflicting, `sketch ${sk.name}`).toBe(false);
     const scope = scopeOf(s);
     placeComponentSketches(s.doc, scope);

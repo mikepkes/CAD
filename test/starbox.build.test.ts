@@ -25,7 +25,7 @@ describe("androgynous snap-together star box", () => {
     const s = realSession();
     await buildStarBox(s);
     await s.recompute();
-    if (OUT) writeFileSync(`${OUT}/starbox.chisel.json`, serializeDocument(s.doc));
+    if (OUT) writeFileSync(`${OUT}/starbox.vibecad.json`, serializeDocument(s.doc));
     await closeBox(s);
 
     const { doc, scope } = expanded(s);

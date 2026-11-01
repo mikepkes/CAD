@@ -96,14 +96,14 @@ describe("<IntentLine/>", () => {
     const seen: string[] = [];
     const onView = (e: Event) => seen.push(`view:${(e as CustomEvent).detail}`);
     const onFrame = () => seen.push("frame");
-    window.addEventListener("chisel:view", onView); window.addEventListener("chisel:frame", onFrame);
+    window.addEventListener("vibecad:view", onView); window.addEventListener("vibecad:frame", onFrame);
     try {
       render(<IntentLine />);
       open(); await userEvent.type(input(), "front{Enter}");
       open(); await userEvent.type(input(), "fit{Enter}");
       await waitFor(() => expect(seen).toEqual(["view:front", "frame"]));
       expect(useStore.getState().lastMessage).toBe("Framed.");
-    } finally { window.removeEventListener("chisel:view", onView); window.removeEventListener("chisel:frame", onFrame); }
+    } finally { window.removeEventListener("vibecad:view", onView); window.removeEventListener("vibecad:frame", onFrame); }
   });
 
   it("rolls back, suppresses and restores through the store", async () => {

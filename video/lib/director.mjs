@@ -36,7 +36,7 @@ export class Director {
     page.on("pageerror", (e) => console.error("  [page error]", e.message));
     page.on("console", (m) => { if (m.type() === "error") console.error("  [console]", m.text().slice(0, 300)); });
     await page.goto(url);
-    await page.waitForFunction(() => !!window.__chiselDemo, null, { timeout: 30000 });
+    await page.waitForFunction(() => !!window.__vibecadDemo, null, { timeout: 30000 });
     const d = new Director(browser, context, page, takeDir, record);
     await d.api("settle");
     return d;
@@ -81,8 +81,8 @@ export class Director {
   now() { return this.t0 == null ? 0 : Date.now() / 1000 - this.t0; }
 
   // ---- the app ----
-  /** Call window.__chiselDemo[name](...args) in the page. */
-  api(name, ...args) { return this.page.evaluate(([n, a]) => window.__chiselDemo[n](...a), [name, args]); }
+  /** Call window.__vibecadDemo[name](...args) in the page. */
+  api(name, ...args) { return this.page.evaluate(([n, a]) => window.__vibecadDemo[n](...a), [name, args]); }
   /** Run `fn(demo, arg)` in the page (fn must be self-contained). */
   run(fn, arg) { return this.page.evaluate(fn, arg); }
   async settle(quietMs = 250, { camera = true } = {}) { const ok = await this.api("settle", quietMs, 20000, camera); if (!ok) this.note("settle timed out"); return ok; }

@@ -1,13 +1,13 @@
 [package]
-name = "chisel-cad"
+name = "vibecad"
 version = "0.1.0"
-description = "Chisel CAD desktop app (Tauri shell around the web app, with a local MCP server)"
+description = "VibeCAD desktop app (Tauri shell around the web app, with a local MCP server)"
 edition = "2021"
 license = "MIT"
 rust-version = "1.77.2"
 
 [lib]
-name = "chisel_cad_lib"
+name = "vibecad_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

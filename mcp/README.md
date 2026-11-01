@@ -1,6 +1,6 @@
-# Chisel CAD — MCP server
+# VibeCAD — MCP server
 
-An MCP server that exposes the Chisel CAD core to an LLM/agent. The core runs
+An MCP server that exposes the VibeCAD core to an LLM/agent. The core runs
 headless here (PlaneGCS via WebAssembly), so an agent can build and edit
 parametric, CNC/3D-print-ready models with no browser.
 
@@ -27,7 +27,7 @@ Point any MCP client at the built server over stdio. Example (Claude Desktop
 ```json
 {
   "mcpServers": {
-    "chisel-cad": {
+    "vibecad": {
       "command": "node",
       "args": ["/absolute/path/to/CAD/dist-mcp/server.mjs"]
     }
@@ -103,7 +103,7 @@ Plus timeline / query / history tools:
   it (plane or face, entities, dimensions, what uses it); `resolve_assist
   {id, name}` renames it (an undoable edit of the op that made it) or
   `{id, dismiss: true}` leaves it. The same inbox is the resource
-  `chisel://assist/inbox`: `resources/subscribe` to it and the server sends
+  `vibecad://assist/inbox`: `resources/subscribe` to it and the server sends
   `notifications/resources/updated` whenever it changes. Headless, a sketch is
   queued once a feature reads it or a newer sketch starts.
 

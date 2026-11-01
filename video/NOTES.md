@@ -4,6 +4,85 @@ Running notes for the automated tutorial video, newest pass first. Each pass
 records what to keep doing, what broke and how it was fixed, and what is still
 open, so the next pass starts from here rather than from memory.
 
+## Pass 3 (next): notes from reviewing pass 2
+
+Hold: no recording until the pass 2 review is finished.
+
+### Renamed to VibeCAD
+
+The app is now **VibeCAD** (was Chisel CAD). The scripts, title cards, VO
+lines and output names (`vibecad-tutorial.mp4`) say VibeCAD; the demo API is
+`window.__vibecadDemo`. Passes 1 and 2 below keep the old name as recorded.
+Their cuts still show "Chisel": pass 3 must be recorded fresh, with nothing
+reused from older takes (the montage included). The address stays
+mikepkes.github.io/CAD while the repository is named CAD.
+
+### Your review of pass 2
+
+- **Gyroscope section: show the bearing.** The bearing is the most interesting
+  part of the cut. Pass 2 cut on XZ and then turned the model at 10°/s, so the
+  bearing was only seen at an angle. Next pass:
+  - after the cut, ease the camera into a straight-on view, looking square at
+    the cut face (along Y for the XZ plane), rather than just spinning;
+  - frame the view (or zoom) on a pivot so the bearing reads clearly, and hold
+    long enough to see how its cone comes to a point inside its seat;
+  - the motion study follows after that.
+  - Needs: named views already ease over 0.5 s (`SceneManager` tween), which
+    is quick on camera, so a slower duration in the demo API; and a way to
+    frame a world-space box (the pivot's) instead of `frameAll`.
+- **Intro: a rapid-fire jump-cut montage.** At the start, during the intro,
+  flash through the most exciting things Chisel can do, each held only a
+  quarter to a third of a second (15–20 frames at 60 fps), so the viewer sees
+  the range before the slow walkthrough begins.
+  - Candidates: gyroscope section, clockwork gears turning, bistable force
+    chart and strain lens, star box closing, scissor mechanism, gimbal, Roubo
+    shop drawing, the agent building the coaster, the phone stand adapting.
+  - Likely build: cut it in `edit.mjs` from the Act 3 takes (and Act 1/2 where
+    useful) rather than recording it, as a list of (take, source time) picks;
+    choose the frames when each clip's motion is at its most striking.
+  - Decide where it sits against the cold open's phone-stand drag and the
+    title card (before, or between them), and that the montage is long
+    enough for its VO line: ~10 clips × 0.3 s is about 3 s.
+- **Cold open: the phone-thickness drag lands edge-on.** The turntable keeps
+  turning at 12°/s through the drag (`act1.mjs`, cold-open beat), and the
+  9 → 15 → 9 mm edits happen while the stand is side-on to the camera, so the
+  lip gap widening is hard to see. Next pass:
+  - ease the turntable to a stop (or ease into a fixed view) before the drag,
+    at a three-quarter angle where the lip and the phone gap face the camera;
+  - pick that angle from the model, not from timing: the stand's side profile
+    (the lip and back plate) should read clearly, so the gap visibly opens;
+  - resume the slow turn after the drag back, if at all;
+  - check by sampling frames during the drag (as with the spin check), not by
+    eye on the full cut.
+- **Clockwork: fill the frame and show the gears turning together.** The
+  gears should fill most of the viewport, and we should see them rotate so
+  the ratios between them read (the worm creeping the wheel, the rack
+  sliding, the bevels turning the cross shaft). In pass 2 the model sat small
+  in the frame under a turntable, and the `turn` sweep was 40 coarse steps
+  played at 19× (each step a full rebuild), so it read as jumps, not motion.
+  Next pass:
+  - frame the gear train tightly (front or three-quarter view onto the gear
+    faces), with no turntable, so the camera holds still and only the gears
+    move;
+  - turn them smoothly at real speed: drive `turn` as a pose (transforms of
+    the rebuilt bodies, as the motion study does) instead of a rebuild per
+    step, or pre-bake the frames; fixes the "19×" open item too;
+  - slow enough to follow a tooth through a mesh, perhaps a close-in on one
+    pair (worm and wheel) after the wide shot.
+  - **No turntable at all in the gear clip** (your follow-up): the spinning
+    camera detracts. Spend that time on the gear motions instead, and go
+    further into the mechanisms: after the wide shot, move in on two or three
+    meshes in turn (worm and wheel, rack and pinion, the bevel pair, the ring
+    gear and its pinion) with the camera still while each turns.
+- **A flash of the bench before "just describe it".** Cause: the Roubo clip
+  ends with `d.key("Escape")` inside the recorded beat (`act3.mjs`), which
+  closes the shop drawing and shows the bench again for the rest of the beat
+  (its padding to VO length plus the 0.5 s handle) before the cut to the new
+  document. Fix: end the Roubo beat on the drawing, and close it inside the
+  following `d.cut` (`closeDrawing()` with `newDocument`). Check every clip's
+  last frames for the same pattern: nothing should change on screen after a
+  clip's final shot.
+
 ## Pass 2 (2026-10-31): review fixes and new features
 
 ### Your review of pass 1, and what changed

@@ -74,7 +74,7 @@ describe("jointed parametric scissor (geometry)", () => {
 
     // Serialize the CLEAN construction (no trailing parameter.set ops, which would
     // otherwise override the Customize sliders on load).
-    if (OUT) writeFileSync(`${OUT}/scissor-jointed.chisel.json`, serializeDocument(s.doc));
+    if (OUT) writeFileSync(`${OUT}/scissor-jointed.vibecad.json`, serializeDocument(s.doc));
 
     const r3 = build(s);
     expect(r3.bodies).toBe(6); // 3 stages × 2 bars, each a real solid

@@ -97,7 +97,7 @@ describe("build parametric scissor lift", () => {
 
     // Serialize the CLEAN construction before the sweeps below append parameter.set
     // ops (which would otherwise override the Customize sliders on load).
-    if (OUT) writeFileSync(`${OUT}/scissor.chisel.json`, serializeDocument(s.doc));
+    if (OUT) writeFileSync(`${OUT}/scissor.vibecad.json`, serializeDocument(s.doc));
 
     // One fused body; height is (stages) × rise.
     const setParam = async (name: string, expr: string) => { await dis(s, "parameter.set", { name, expression: expr }); await s.recompute(); };

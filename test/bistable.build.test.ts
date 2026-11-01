@@ -4,7 +4,7 @@
 // back. The beams are `beam` elements (large-deflection beams,
 // src/sim/beam2d.ts), and so is the frame: the beams push its walls apart as
 // they flip, and a frame that gives lets them relax and lose the second rest
-// position (the first design, a U-frame, did just that when printed). Chisel
+// position (the first design, a U-frame, did just that when printed). VibeCAD
 // finds both rest positions, the snap force and the strain on the way, with the
 // frame bending as it does. Checked against the published result for this
 // mechanism (Qiu, Lang & Slocum, "A curved-beam bistable mechanism", JMEMS 2004).
@@ -215,7 +215,7 @@ describe("bistable switch", () => {
     const s = realSession();
     await buildBistable(s);
     await s.recompute();
-    if (OUT) writeFileSync(`${OUT}/bistable.chisel.json`, serializeDocument(s.doc));
+    if (OUT) writeFileSync(`${OUT}/bistable.vibecad.json`, serializeDocument(s.doc));
     const scope = scopeOf(s);
     expect(scope.thickness).toBeGreaterThan(0.85); // TPU 68D: stout beams, a firm snap
     placeComponentSketches(s.doc, scope);

@@ -83,7 +83,7 @@ export function SettingsPanel() {
           />
           <p className="field-note">
             Stored only in this browser (localStorage) and sent only to Anthropic’s API —
-            never to any ChiselCAD server. Create one at{" "}
+            never to any VibeCAD server. Create one at{" "}
             <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">console.anthropic.com</a>.
           </p>
 
@@ -111,10 +111,10 @@ export function SettingsPanel() {
           </label>
           <p className="field-note">
             Lets an external agent in your browser (an AI browser, a Chrome extension, Claude-in-Chrome)
-            discover and call ChiselCAD’s {" "}
+            discover and call VibeCAD’s {" "}
             <strong>commands as MCP tools</strong> to control this page directly — no server. Registers with
             <code> navigator.modelContext</code> when available, and always publishes
-            <code> window.chiselWebMCP</code> (<code>.listTools()</code> / <code>.callTool(name, args)</code>).
+            <code> window.vibecadWebMCP</code> (<code>.listTools()</code> / <code>.callTool(name, args)</code>).
             {webMcp && <> <span className="ok-dot">● live</span></>}
           </p>
 
@@ -144,7 +144,7 @@ export function SettingsPanel() {
                 <p className="field-note">
                   <span className="ok-dot">● live</span> at <code>{desktopMcpStatus.url}</code>
                   <br />
-                  Claude Code: <code>claude mcp add --transport http chisel-cad {desktopMcpStatus.url}</code>
+                  Claude Code: <code>claude mcp add --transport http vibecad {desktopMcpStatus.url}</code>
                 </p>
               )}
               {desktopMcp && !desktopMcpStatus.running && (

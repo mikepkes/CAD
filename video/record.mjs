@@ -19,7 +19,7 @@ const root = join(new URL(".", import.meta.url).pathname, "takes", run);
 if (!dry) {
   const warm = await Director.open({ url, takeDir: join(root, "warmup"), record: false, headless: true });
   for (const name of ["gyroscope", "clockwork", "bistable", "roubo"]) {
-    await warm.run(async (n) => { const r = await fetch(`/examples/${n}.json`); if (r.ok) await window.__chiselDemo.openText(await r.text(), `${n}.chisel.json`); }, name).catch(() => {});
+    await warm.run(async (n) => { const r = await fetch(`/examples/${n}.json`); if (r.ok) await window.__vibecadDemo.openText(await r.text(), `${n}.vibecad.json`); }, name).catch(() => {});
   }
   await warm.close();
   console.log("warmed up");

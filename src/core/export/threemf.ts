@@ -44,7 +44,7 @@ export function modelXml(parts: ThreeMfPart[], name: string): string {
   const out: string[] = [];
   out.push(`<?xml version="1.0" encoding="UTF-8"?>`);
   out.push(`<model unit="millimeter" xml:lang="en-US" xmlns="${CORE_NS}">`);
-  out.push(`<metadata name="Application">Chisel CAD</metadata>`);
+  out.push(`<metadata name="Application">VibeCAD</metadata>`);
   out.push(`<metadata name="Title">${esc(name)}</metadata>`);
   out.push(`<resources>`);
   out.push(`<basematerials id="1">`);

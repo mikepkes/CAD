@@ -33,7 +33,7 @@ export interface BindingOverride {
   secondary?: string | null;
 }
 
-const STORAGE_KEY = "chisel.hotkeys";
+const STORAGE_KEY = "vibecad.hotkeys";
 
 /** Canonicalize a KeyboardEvent to a binding string like "mod+shift+z", "f", "delete". */
 export function eventToKey(e: KeyboardEvent): string {

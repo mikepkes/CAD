@@ -222,7 +222,7 @@ describe("execute maps each action to one command-path call", () => {
     await execute({ type: "addIntent", label: "mass", lhs: "mass", op: "<=", rhs: "120" }, x);
     await execute({ type: "hotkey", id: "sketch.construction" }, x);
     expect(calls).toEqual([
-      ["setParameterExpr", "h", "5"], ["editOperation", "op1", { radius: "2" }], ["fire", "chisel:view", "front"], ["fire", "chisel:frame"],
+      ["setParameterExpr", "h", "5"], ["editOperation", "op1", { radius: "2" }], ["fire", "vibecad:view", "front"], ["fire", "vibecad:frame"],
       ["moveRollback", 3], ["suppressOperation", "op2", true], ["undo"], ["redo"], ["setOpenFeature", "f1"], ["togglePanel", "ledger"],
       ["addIntent", "mass <= 120", "mass"],
     ]);

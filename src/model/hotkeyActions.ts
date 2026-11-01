@@ -36,9 +36,9 @@ const hasSolid = () => Object.keys(st().session.doc.features).length > 0;
 
 const ACTIONS: HotkeyAction[] = [
   // ---- global ----
-  { id: "view.frame", label: "Frame selection / fit", context: "global", defaultPrimary: "f", run: () => fire("chisel:frame") },
+  { id: "view.frame", label: "Frame selection / fit", context: "global", defaultPrimary: "f", run: () => fire("vibecad:frame") },
   ...(["iso", "front", "top", "right", "back", "left", "bottom"] as const).map((v) => ({
-    id: `view.${v}`, label: `View: ${v[0].toUpperCase()}${v.slice(1)}`, context: "global", run: () => window.dispatchEvent(new CustomEvent("chisel:view", { detail: v })),
+    id: `view.${v}`, label: `View: ${v[0].toUpperCase()}${v.slice(1)}`, context: "global", run: () => window.dispatchEvent(new CustomEvent("vibecad:view", { detail: v })),
   })),
   // concept panels (toggle; unbound by default, bindable in the Hotkeys panel)
   { id: "view.workbench", label: "Toggle feature pins (Workbench)", context: "global", run: () => useUi.getState().togglePanel("workbench") },
@@ -68,7 +68,7 @@ const ACTIONS: HotkeyAction[] = [
       if (s.faceSelection) { s.selectFace(null); return; }
       const ui = useUi.getState();
       if (ui.openFeature) { ui.setOpenFeature(null); return; }
-      fire("chisel:cancel");
+      fire("vibecad:cancel");
     },
   },
 
@@ -95,7 +95,7 @@ const ACTIONS: HotkeyAction[] = [
   { id: "sketch.finish", label: "Finish sketch", context: "sketch", defaultPrimary: "mod+enter", run: () => st().finishSketch() },
   { id: "sketch.project", label: "Project bodies", context: "sketch", when: hasSolid, run: () => void st().projectBodies(false) },
   { id: "sketch.construction", label: "Toggle construction", context: "sketch", defaultPrimary: "x", run: () => st().toggleConstruction() },
-  { id: "sketch.lookAt", label: "Look at sketch plane", context: "sketch", defaultPrimary: "f", run: () => fire("chisel:lookAt") },
+  { id: "sketch.lookAt", label: "Look at sketch plane", context: "sketch", defaultPrimary: "f", run: () => fire("vibecad:lookAt") },
   {
     id: "sketch.delete",
     label: "Delete selection",

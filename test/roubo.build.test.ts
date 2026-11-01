@@ -299,7 +299,7 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     const s = realSession();
     const { chop, armIds } = await buildRoubo(s);
     await s.recompute();
-    if (OUT) writeFileSync(`${OUT}/roubo.chisel.json`, serializeDocument(s.doc));
+    if (OUT) writeFileSync(`${OUT}/roubo.vibecad.json`, serializeDocument(s.doc));
 
     const b0 = bodies(s);
     // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw+garter(flange+bolts=2)
