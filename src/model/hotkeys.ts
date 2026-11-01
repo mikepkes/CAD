@@ -83,6 +83,9 @@ export interface ConflictInfo {
   actionIds: string[];
 }
 
+/** Input types you type text into: every key pressed in one is the field's. */
+const TEXT_INPUTS = new Set(["text", "search", "number", "email", "password", "tel", "url", "date", "time", "datetime-local", "month", "week"]);
+
 export class HotkeyManager {
   private actions = new Map<string, HotkeyAction>();
   private overrides: Record<string, BindingOverride> = {};
@@ -264,8 +267,11 @@ export class HotkeyManager {
     this.attached = true;
     const onKey = (ev: Event) => {
       const e = ev as KeyboardEvent;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      // a text field keeps its keys; a slider or checkbox keeps its plain keys (arrows, Space) but not ⌘/Ctrl shortcuts
+      if (tag === "TEXTAREA" || t?.isContentEditable) return;
+      if (tag === "INPUT" && (TEXT_INPUTS.has((t as HTMLInputElement).type) || !(e.metaKey || e.ctrlKey))) return;
       if (this.handle(e)) e.preventDefault();
     };
     target.addEventListener("keydown", onKey);

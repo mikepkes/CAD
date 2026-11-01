@@ -53,7 +53,7 @@ function chunks(text) {
 }
 
 // ---- the intro montage: a third of a second from each moment Act 3 marked (`d.pick`), before Act 1's cold open ----
-const MONTAGE = "Gears, mechanisms, sections, forces, shop drawings.";
+const MONTAGE = "Sections, gears, mechanisms, forces, and parts built just by asking."; // one shot per model
 const PICK = Math.round(FPS / 3);
 if (acts[0] === 1 && existsSync(join(takes, "act3", "timing.json"))) {
   const timing = JSON.parse(readFileSync(join(takes, "act3", "timing.json"), "utf8"));

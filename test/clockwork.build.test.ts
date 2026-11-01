@@ -6,7 +6,9 @@
 //     spur pair, a helical pair and a herringbone pair stepping the speed back
 //     up, ×2 each;
 //   - a straight bevel pair turns the drive through 90° onto a cross shaft;
-//   - a worm on the cross shaft drives a wheel with a hand: the slow "clock".
+//   - a worm on the cross shaft drives a wheel with a hand: the slow "clock";
+//   - spur G off A turns a Geneva crank: its pin steps a four-slot star a
+//     quarter turn per turn of the crank, and locks it still in between.
 // Every gear is one feature.gear, each pair placed by `mesh` (or, for the
 // bevel and worm pairs, by the maths in feature.gear's description), so the
 // teeth are phased to mesh at rest; every shaft is a component on a revolute
@@ -39,6 +41,7 @@ const Z = {
   F: 14, H: 21,                        // herringbone F, bevel H: S4
   I: 14,                               // bevel I: the cross shaft, with the worm
   J: 24, starts: 1,                    // the worm wheel
+  G: 12,                               // the Geneva crank's spur, meshing A
   rack: 17,
 };
 const RANGE = 180;                     // turn: ±180°
@@ -70,6 +73,13 @@ const WORM_X1 = I_HEEL_X - 14, WORM_X0 = WORM_X1 - WORM.L; // the worm, past a b
 const JC = { x: (WORM_X0 + WORM_X1) / 2, y: S4.y - (WORM.d + M * Z.J) / 2 }; // the wheel: beside the worm, like the gear test
 const J_Z0 = H_APEX - FW / 2;                            // wheel faces, its middle on the worm's axis
 const RACK_Y = -(M * Z.A) / 2;                           // the rack's pitch line, under A
+// the Geneva drive: crank shaft S5 off A, the star a centre distance GC from it
+const GENEVA = { n: 4, a: 18, pin: 2.5, slot: 5.4, star: 18.2 }; // slots, crank radius, crank pin radius, slot width, star radius
+const S5 = add(S1, (M * (Z.A + Z.G)) / 2, -10);
+const GC = GENEVA.a / Math.sin(Math.PI / GENEVA.n);      // the crank pin enters each slot square to it
+const STAR = add(S5, GC, 90);
+const G_CRANK = { z0: L2 + FW + 1, z1: L2 + FW + 3.5 };  // the crank plate, above G
+const G_STAR = { z0: G_CRANK.z1 + 1, z1: G_CRANK.z1 + 6 }; // the star and the locking disc
 
 // ---- the drive: every shaft's turn as `turn` times the ratios to it ----
 const carrier = `turn*${Z.sun}/(${Z.sun}+${Z.ring})`;
@@ -80,6 +90,15 @@ const cross = `${carrier}*${Z.A}/${Z.B}*${Z.C}/${Z.D}*${Z.E}/${Z.F}*${Z.H}/${Z.I
 const dial = `${cross}*${Z.starts}/${Z.J}`;
 const planet = `-(turn - ${carrier})*${Z.sun}/${Z.planet}`;    // relative to the carrier
 const rack = `${carrier}*pi*${M}*${Z.A}/360`;                  // mm along X
+const crank = `(-${carrier}*${Z.A}/${Z.G})`;
+/** The star's turn for a crank turned `t`: whole steps of 360/n, plus the step in progress while the pin is in a slot
+ *  (|ψ| < 90 − 180/n from the line of centres), where the slot follows the pin: atan2(sin ψ, GC/a − cos ψ). */
+const genevaStar = (t: string) => {
+  const step = 360 / GENEVA.n, half = 180 / GENEVA.n, win = 90 - half;
+  const psi = `max(-${win}, min(${win}, ${t} - 180 - 360*floor(${t}/360)))`;
+  return `-${step}*floor(${t}/360) - deg(atan2(sin(rad(${psi})), 1/sin(pi/${GENEVA.n}) - cos(rad(${psi})))) - ${half}`;
+};
+const star = genevaStar(crank);
 
 async function dis(s: CadSession, type: string, params: Record<string, unknown>): Promise<string[]> {
   const r = await s.dispatch(type, params);
@@ -124,7 +143,7 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   // ---- the frame: base plate, the rack's rails, the pins, the cross shaft's bearings ----
   const frame = await part("Frame", slate);
   const pins = await part("Pins", steel);
-  const xs = [JC.x - 30, WORM_X0 - 12], xe = [66, S2.x + 22];
+  const xs = [JC.x - 30, WORM_X0 - 12], xe = [66, S2.x + 22, STAR.x + GENEVA.star + 6];
   await block(s, frame, Math.min(...xs), -48, Math.max(...xe), S2.y + 24, -BASE_T, 0, "Base plate", 8);
   const rail = { y0: RACK_Y - 2.5 - 6, y1: RACK_Y - 2.5 - 1 };
   await block(s, frame, -70, rail.y0, -14, rail.y1, 0, L2, "Rail, left");
@@ -138,6 +157,7 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   await discs(s, pins, 0, L3 + FW, [{ ...S2, r: PIN }, { ...S3, r: PIN }], "Pins S2, S3");
   await discs(s, pins, 0, L3 + 4, [{ ...S4, r: PIN }], "Pin S4");
   await discs(s, pins, 0, J_Z0 + FW, [{ ...JC, r: PIN }], "Pin, wheel");
+  await discs(s, pins, 0, G_STAR.z1, [{ ...S5, r: PIN }, { ...STAR, r: PIN }], "Pins, Geneva");
 
   // ---- the planetary stage: ring fixed, sun on the knob, carrier out at 12/48 ----
   const ringC = await part("Ring", brass);
@@ -209,6 +229,47 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   await gear("J", wheelC, { type: "helical", module: M, teeth: Z.J, faceWidth: FW, helixAngle: `deg(atan(${Z.starts}*${M}/${WORM.d}))`, bore: BORE, spokes: 6, x: r3(JC.x), y: r3(JC.y), offset: r3(J_Z0), rotation: r3(90 - ((0.5 - sR) * 360) / Z.J - midTwist), name: "Worm wheel" });
   await block(s, wheelC, JC.x + 2, JC.y - 1.5, JC.x + 19, JC.y + 1.5, J_Z0 + FW, J_Z0 + FW + 1.5, "Hand");
 
+  // ---- the Geneva drive: crank and locking disc on G's shaft, the star on its own pin ----
+  // Frame: the star's slots sit at 45° + 90°k, its locking arcs face the crank at 270° + 90°k; the crank pin
+  // rests pointing away from the star (270°), and the cut in the locking disc turns with it.
+  const g = GENEVA, bore = [{ ...S5, r: BORE / 2 }];
+  const crankC = await part("Geneva crank", bronze);
+  await gear("G", crankC, { type: "spur", teeth: Z.G, faceWidth: FW, bore: BORE, hubDiameter: 11, hubLength: G_CRANK.z0 - (L2 + FW), mesh: { gear: ids.A, angle: -10 }, name: "Spur G" });
+  await discs(s, crankC, G_CRANK.z0, G_CRANK.z1 - G_CRANK.z0, [{ ...S5, r: g.a + 4 }], "Crank plate", bore);
+  await discs(s, crankC, G_CRANK.z1, G_STAR.z1 - G_CRANK.z1, [{ ...add(S5, g.a, 270), r: g.pin }], "Crank pin");
+  // the locking disc rides in the star's arcs while the pin is out; it is cut away where the star swings through
+  const edge = 180 / g.n - Math.asin(g.slot / 2 / g.star) / deg;             // where a slot's side meets the rim, off the arc's centre line
+  const rArc = Math.hypot(GC - g.star * Math.cos(edge * deg), g.star * Math.sin(edge * deg));
+  await discs(s, crankC, G_CRANK.z1, G_STAR.z1 - G_CRANK.z1, [{ ...S5, r: r3(rArc - 0.3) }], "Locking disc", bore);
+  const lockId = Object.keys(s.doc.features).at(-1)!;
+  {
+    const sk = (await dis(s, "sketch.create", { plane: "XY", offset: G_CRANK.z1, component: crankC, name: "Locking disc relief" }))[0];
+    const c = add(S5, GC, 270);
+    await dis(s, "sketch.addCircle", { sketch: sk, center: { x: r3(c.x), y: r3(c.y) }, radius: g.star + 0.8 });
+    await dis(s, "feature.extrude", { sketch: sk, distance: String(G_STAR.z1 - G_CRANK.z1), operation: "cut", body: lockId, name: "Locking disc relief" });
+  }
+  const starC = await part("Geneva star", brass);
+  await discs(s, starC, G_STAR.z0, G_STAR.z1 - G_STAR.z0, [{ ...STAR, r: g.star }], "Star", [{ ...STAR, r: BORE / 2 }]);
+  const starId = Object.keys(s.doc.features).at(-1)!;
+  {
+    const sk = (await dis(s, "sketch.create", { plane: "XY", offset: G_STAR.z0, component: starC, name: "Star slots" }))[0];
+    const r0 = GC - g.a - g.pin - 0.5, r1 = g.star + 2;               // the pin reaches GC − a from the star's centre
+    for (let k = 0; k < g.n; k++) {
+      const a = 45 + (360 / g.n) * k;
+      const pts = [add(add(STAR, r0, a), g.slot / 2, a + 90), add(add(STAR, r1, a), g.slot / 2, a + 90), add(add(STAR, r1, a), g.slot / 2, a - 90), add(add(STAR, r0, a), g.slot / 2, a - 90)];
+      const pids: string[] = [];
+      for (const q of pts) pids.push((await dis(s, "sketch.addPoint", { sketch: sk, x: r3(q.x), y: r3(q.y) }))[0]);
+      for (let i = 0; i < 4; i++) await dis(s, "sketch.addLine", { sketch: sk, start: { ref: pids[i] }, end: { ref: pids[(i + 1) % 4] } });
+    }
+    await dis(s, "feature.extrude", { sketch: sk, distance: String(G_STAR.z1 - G_STAR.z0), operation: "cut", body: starId, name: "Star slots" });
+  }
+  {
+    const sk = (await dis(s, "sketch.create", { plane: "XY", offset: G_STAR.z0, component: starC, name: "Star locking arcs" }))[0];
+    for (let k = 0; k < g.n; k++) { const c = add(STAR, GC, 270 + (360 / g.n) * k); await dis(s, "sketch.addCircle", { sketch: sk, center: { x: r3(c.x), y: r3(c.y) }, radius: r3(rArc) }); }
+    await dis(s, "feature.extrude", { sketch: sk, distance: String(G_STAR.z1 - G_STAR.z0), operation: "cut", body: starId, name: "Star locking arcs" });
+  }
+  await block(s, starC, STAR.x + 3, STAR.y - 1.5, STAR.x + 9, STAR.y + 1.5, G_STAR.z1, G_STAR.z1 + 1.5, "Star hand");
+
   // ---- the joints: one drive, every ratio written out ----
   await joint(drive, at(S1), up, "turn", "Knob");
   await joint(carrierC, at(S1), up, carrier, "Carrier");
@@ -219,6 +280,8 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   await joint(s4C, at(S4), up, s4, "Shaft 4");
   await joint(crossC, { x: r3(I_HEEL_X), y: r3(S4.y), z: r3(H_APEX) }, alongX, cross, "Cross shaft");
   await joint(wheelC, at(JC), up, dial, "Wheel");
+  await joint(crankC, at(S5), up, crank, "Geneva crank");
+  await joint(starC, at(STAR), up, star, "Geneva star");
   return ids;
 }
 
@@ -251,7 +314,7 @@ describe("clockwork", () => {
     expect([...types].sort()).toEqual(["bevel", "helical", "herringbone", "rack", "ring", "spur", "worm"]);
     // the meshed placements land on the planned shafts
     const v = (k: string) => (s.doc.features[ids[k]] as { dimValues: Record<string, number> }).dimValues;
-    for (const [k, p] of [["A", S1], ["B", S2], ["D", S3], ["F", S4]] as const) {
+    for (const [k, p] of [["A", S1], ["B", S2], ["D", S3], ["F", S4], ["G", S5]] as const) {
       expect(v(k).x, k).toBeCloseTo(p.x, 3);
       expect(v(k).y, k).toBeCloseTo(p.y, 3);
     }
@@ -273,6 +336,23 @@ describe("clockwork", () => {
     expect(ev("Shaft 4")).toBeCloseTo(-c * Z.A / Z.B * Z.C / Z.D * Z.E / Z.F, 9);
     expect(ev("Cross shaft")).toBeCloseTo(c * Z.A / Z.B * Z.C / Z.D * Z.E / Z.F * Z.H / Z.I, 9);
     expect(ev("Wheel")).toBeCloseTo(c * Z.A / Z.B * Z.C / Z.D * Z.E / Z.F * Z.H / Z.I * Z.starts / Z.J, 9);
+    expect(ev("Geneva crank")).toBeCloseTo(-c * Z.A / Z.G, 9);
+  }, 60000);
+
+  // the star dwells while the pin is out, and steps a quarter turn while it's in a slot, against the crank's turn
+  it("the Geneva star steps a quarter turn per crank turn, and dwells between", async () => {
+    const at = (crankDeg: number) => { posed(s, crankDeg / (-(Z.sun / (Z.sun + Z.ring)) * Z.A / Z.G)); return Object.values(s.doc.joints).find((x) => x.name === "Geneva star")!.valueValue; };
+    for (const t of [0, 60, 130, -100, -130]) expect(at(t), `crank ${t}`).toBeCloseTo(0, 6);   // dwell
+    expect(at(180)).toBeCloseTo(-45, 6);                                                        // mid-step
+    for (const t of [230, 300, 490]) expect(at(t), `crank ${t}`).toBeCloseTo(-90, 6);
+    expect(at(-180)).toBeCloseTo(45, 6);
+    expect(at(720 + 180)).toBeCloseTo(-225, 6);
+    // the slot follows the pin: through the step, the star's slot points at the crank pin
+    for (const t of [140, 160, 180, 200, 220]) {
+      const pin = add(S5, GENEVA.a, 270 + t);
+      const slot = 315 + at(t);                                                                    // the slot that meets the pin at crank 135° rests at 315°
+      expect(Math.cos((Math.atan2(pin.y - STAR.y, pin.x - STAR.x) / deg - slot) * deg), `crank ${t}`).toBeCloseTo(1, 6);
+    }
   }, 60000);
 
   // the check can fail: knock one shaft half a tooth out of phase and its teeth hit
@@ -285,6 +365,16 @@ describe("clockwork", () => {
     const hit = c.overlaps.find((o) => /Herringbone/.test(o.a) && /Herringbone/.test(o.b));
     expect(hit?.volume ?? 0).toBeGreaterThan(1);
   }, 600000);
+
+  // through a Geneva step (crank 140°…220°), with the pin in the slot and the star swinging past the locking disc
+  for (const crankDeg of [140, 165, 195, 220]) {
+    it(`the Geneva drive is clear at crank = ${crankDeg}°`, async () => {
+      const { doc, scope } = posed(s, crankDeg / (-(Z.sun / (Z.sun + Z.ring)) * Z.A / Z.G));
+      const c = collideFeatures(doc, scope);
+      expect(c.buildError).toBeUndefined();
+      for (const o of c.overlaps) expect(o.volume, `${o.a} × ${o.b} at crank ${crankDeg}`).toBeLessThan(0.01);
+    }, 600000);
+  }
 
   for (const turn of [37, -113]) { // rest and the ends of the slider are swept by test/examples.test.ts
     it(`stays meshed and clear at turn = ${turn}°`, async () => {

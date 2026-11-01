@@ -46,13 +46,9 @@ export async function act2(d) {
     await d.api("closeCards");
   }, { lower: { title: "Fillet", sub: "a feature like any other, in the history" } });
 
-  await d.beat("rules", "Instead of checking by eye after every change, write down what must stay true. Here, the stand must weigh under two hundred grams. VibeCAD checks it on every change, and when it fails, it builds fixes and offers them. Accept one.", async () => {
+  await d.beat("rules", "Instead of checking by eye after every change, write down what must stay true. Here, the stand must weigh under two hundred grams: Command K, mass at most two hundred. It lands in the ledger, which checks it on every change, and when it fails, builds fixes and offers them. Accept one.", async () => {
     await toggle(d, "Ledger"); await d.settle(300);
-    await d.clickEl("input[aria-label=Intent]");
-    await d.type("mass <= 200", 12);
-    await d.clickEl("input[aria-label=Label]");
-    await d.type("Light enough", 14);
-    await d.key("Enter");
+    await d.intent("mass <= 200", "Keep mass <= 200", { dwell: 900 });
     await d.settle(400);
     await d.lower("Design intent", "checked on every rebuild");
     await d.fast("searching for fixes", () => d.page.waitForSelector("button:has-text('Accept')", { timeout: 120000 }));

@@ -87,7 +87,7 @@ export async function act3(d) {
     await d.wait(1200);
   });
   if (hasExample("clockwork")) {
-    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm", "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train. The planets roll inside the ring gear, and the worm creeps its wheel round at a fraction of the speed.", async () => {
+    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm, and a Geneva drive", "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train. The planets roll inside the ring gear, and the worm creeps its wheel round at a fraction of the speed. And a Geneva drive turns steady motion into steps: the pin catches a slot, flicks the star a quarter turn, and the locking disc holds it still until the next.", async () => {
       // no turntable: the camera holds still and only the gears move (posed from the turn parameter, not rebuilt)
       await d.api("aim", { dir: [0.2, -0.5, 1], ms: 1200, margin: 0.8 });
       await d.api("poseSweep", "turn", 0, 360, 5200, { ease: false });
@@ -95,11 +95,13 @@ export async function act3(d) {
       await d.api("poseSweep", "turn", 360, 540, 1800, { ease: false });
       await d.api("aim", { dir: [0.15, -0.35, 1], box: await d.api("componentBox", ["Ring", "Planet 1", "Planet 2", "Planet 3", "Carrier"]), ms: 1400, margin: 0.85 });
       await d.api("poseSweep", "turn", 540, 900, 4000, { ease: false });
-      d.pick("planetary");
       await d.api("aim", { dir: [0.5, -0.6, 0.75], box: await d.api("componentBox", ["Cross shaft", "Wheel"]), ms: 1600, margin: 0.9 });
       await d.api("poseSweep", "turn", 900, 1620, 2500, { ease: false });
-      d.pick("worm");
       await d.api("poseSweep", "turn", 1620, 2340, 2500, { ease: false });
+      // the crank turns at −5/8 of the knob: three steps of the star in 1728° of turn
+      await d.api("aim", { dir: [0.1, -0.55, 1], box: await d.api("componentBox", ["Geneva crank", "Geneva star"]), ms: 1500, margin: 1.05 });
+      await d.api("poseSweep", "turn", 2340, 3204, 3000, { ease: false });
+      await d.api("poseSweep", "turn", 3204, 4068, 3000, { ease: false });
     });
   } else d.note("no clockwork example yet: gears clip skipped");
   await clip("scissor-jointed", "scissor-jointed", "Jointed scissor lift", "the stage count is a slider, and it still moves", "A scissor lift where even the number of stages is a slider, patterned as a jointed assembly that still moves.", async () => { await sweep(d, "stages", [3, 4, 5, 4, 3], 2600); d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600); });
@@ -146,7 +148,6 @@ export async function act3(d) {
     await d.clickEl("[role=menuitem]", "Shop drawing");
     await d.fast("drawing the views", () => d.page.waitForSelector(".drawing-sheet svg", { timeout: 60000 }));
     await d.api("cursor", false);
-    d.pick("shop drawing");
     await d.wait(3000);
     // the drawing stays up to the end of the clip; it closes in the cut, so the bench never flashes back
   });
@@ -172,7 +173,7 @@ export async function act3(d) {
     };
     await ask(agentCache.prompt, "Claude building");
     await d.api("aim", { dir: [1, -1, 0.45], ms: 1200, margin: 0.9 });
-    await d.wait(1600); d.pick("agent build");
+    await d.wait(1600);
     // the refinement: a second prompt in the same conversation
     for (const f of agentCache.followUps ?? []) await ask(f, "Claude refining");
     await d.api("aim", { dir: [1, -1, 0.3], ms: 1200, margin: 0.85 });

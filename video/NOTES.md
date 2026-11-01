@@ -4,6 +4,22 @@ Running notes for the automated tutorial video, newest pass first. Each pass
 records what to keep doing, what broke and how it was fixed, and what is still
 open, so the next pass starts from here rather than from memory.
 
+## Pass 5 (not recorded yet): your pass 4 review
+
+### Your review of pass 4, and what changed
+
+- **"Do you show command K in action?"** It wasn't shown. Two places now:
+  - **Act 1:** a new beat, *just-type-it*, after the dials. ⌘K → "right" (side view), "phone 14", "back to 2", "roll end".
+  - **Act 2:** the *rules* beat adds `mass <= 200` through ⌘K instead of the Ledger's field.
+  - **Director:** `d.intent(text, expect)` checks that the top suggestion is `expect` before pressing Enter.
+  - **App fix this found:** every hotkey was ignored while an `<input>` had focus, including a slider just dragged. Now only text fields keep all their keys. Sliders and checkboxes keep their plain keys and let ⌘/Ctrl shortcuts through (`TEXT_INPUTS` in `src/model/hotkeys.ts`).
+- **A Geneva drive on the clockwork.**
+  - **Mechanism:** spur G (12 teeth) meshes spur A and turns a crank at −5/8 of `turn`. The crank pin steps a four-slot star a quarter turn per revolution, and a locking disc holds the star in its arcs between steps.
+  - **The star's joint:** the step count is `floor(t/360)`. While the pin is in the slot, the star angle is `atan2(sin ψ, 1/sin(π/4) − cos ψ)`, with ψ clamped to ±45°.
+  - **Tests:** `test/clockwork.build.test.ts` checks the dwell and the step values, that the slot points at the pin through a step, and that the drive is clear at crank 140°, 165°, 195° and 220°.
+  - **Act 3:** the clockwork clip ends on a close-up of three steps.
+- **"The montage should only have one shot of each model."** It now has 8 shots, one per model: gyroscope, clockwork, scissor lift, star box, force analysis, gimbal, leg vise, lamp shade. Dropped: planetary, worm, Geneva, shop drawing, agent build. The caption is now "Sections, gears, mechanisms, forces, and parts built just by asking."
+
 ## Pass 4 (2026-11-01): your pass 3 review
 
 ### Your review of pass 3, and what changed

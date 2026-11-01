@@ -62,6 +62,19 @@ describe("<IntentLine/>", () => {
     } finally { off(); }
   });
 
+  it("⌘K still opens from a focused slider (just dragged), but not from a text field", () => {
+    render(<><input aria-label="other" /><input type="range" aria-label="phone" /><IntentLine /></>);
+    const off = hotkeys.attach(window);
+    try {
+      fireEvent.keyDown(screen.getByLabelText("other"), { key: "k", metaKey: true });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      fireEvent.keyDown(screen.getByLabelText("phone"), { key: "/" }); // a slider's plain keys stay its own
+      expect(screen.queryByRole("dialog")).toBeNull();
+      fireEvent.keyDown(screen.getByLabelText("phone"), { key: "k", metaKey: true });
+      expect(screen.getByRole("dialog", { name: "Intent line" })).toBeTruthy();
+    } finally { off(); }
+  });
+
   it("lists ranked suggestions as a listbox, moves with the arrows and runs the selected one on Enter", async () => {
     render(<IntentLine />);
     open();
