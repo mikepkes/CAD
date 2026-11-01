@@ -29,6 +29,11 @@ hidapi = { version = "2.6", default-features = false, features = ["macos-shared-
 # Loads 3Dconnexion's driver framework (3DxWare) at run time, when installed.
 libc = "0.2"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# hidapi needs exactly one Linux backend: hidraw through a pure-Rust udev, so the
+# build needs no system libraries beyond Tauri's own (no libudev-dev or libusb).
+hidapi = { version = "2.6", default-features = false, features = ["linux-native-basic-udev"] }
+
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
