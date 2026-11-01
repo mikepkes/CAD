@@ -3,6 +3,7 @@
 // tabbed right side panel. Thin templates over useUi; which tab can show is
 // decided in uiState.ts (rightTabFor).
 
+import { useRef } from "react";
 import { InspectorPanel } from "./InspectorPanel";
 import { useUi, PANEL_NAMES, type ConceptPanel, type RightTab } from "../model/concepts/uiState";
 import { OverflowRow, type OverflowRowItem } from "./kit/OverflowRow";
@@ -72,19 +73,43 @@ export function RightPanel() {
   );
 }
 
-/** Chips at the viewport's bottom-left for something running that no open panel shows: a Sweep started
- *  from the ring or a hotkey while the Mechanism tab is hidden, with its Stop. */
+/** Chips at the viewport's bottom-left for work no open panel shows: a Sweep started from the ring or a hotkey
+ *  while the Mechanism tab is hidden, with its Stop; the motion study run from the editor (toolbar, ring, ⌘K),
+ *  its progress and its verdict until the model changes. */
 export function ViewChips() {
   const sweeping = useMechanism((s) => s.sweeping);
   const watched = useMechanism((s) => s.watchers > 0);
-  const chips = sweeping && !watched;
-  if (!chips) return null;
+  const motion = useStore((s) => s.motionStatus);
+  const progress = useStore((s) => s.motionProgress);
+  const result = useStore((s) => s.motionResult);
+  const doc = useStore((s) => s.session.doc);
+  // the verdict belongs to the document it was checked on: an edit retires it
+  const checkedOn = useRef<unknown>(null);
+  const wasRunning = useRef(false);
+  if (motion === "running" && !wasRunning.current) checkedOn.current = doc;
+  wasRunning.current = motion === "running";
+  const verdict = (motion === "pass" || motion === "fail") && checkedOn.current === doc;
+  const sweep = !!sweeping && !watched;
+  if (!sweep && motion !== "running" && !verdict) return null;
   return (
     <div className="view-chips" role="status" aria-live="polite">
-      {sweeping && !watched && (
+      {sweep && (
         <span className="view-chip">
           <span>Sweeping {sweeping}…</span>
           <Button size="sm" onClick={() => useMechanism.getState().stopSweep()} title="Stop the sweep and put the drive back">Stop</Button>
+        </span>
+      )}
+      {motion === "running" && (
+        <span className="view-chip" data-testid="motion-chip">
+          <span>Motion study {Math.round(progress * 100)}%</span>
+          <span className="view-chip-bar" aria-hidden="true"><span style={{ width: `${Math.round(progress * 100)}%` }} /></span>
+          <Button size="sm" onClick={() => useStore.getState().cancelMotionStudy()}>Stop</Button>
+        </span>
+      )}
+      {verdict && (
+        <span className={`view-chip ${motion}`} data-testid="motion-chip">
+          <span>{motion === "pass" ? "✓ Moves through its range without collisions" : `✕ ${result?.reason ?? "Parts collide in the motion study"}`}</span>
+          <Button size="sm" ghost ariaLabel="Dismiss the motion study" onClick={() => useStore.getState().cancelMotionStudy()}>×</Button>
         </span>
       )}
     </div>

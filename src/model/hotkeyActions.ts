@@ -14,6 +14,7 @@ import { useRing, RING_ACTION_ID } from "./ring";
 import { hasFlexures } from "../sim/flexure";
 import { drivesOf } from "./concepts/mechanism";
 import { useMechanism } from "./concepts/mechanismStore";
+import { driveParams } from "./motionStudy";
 
 const st = () => useStore.getState();
 const fire = (name: string) => window.dispatchEvent(new CustomEvent(name));
@@ -52,6 +53,11 @@ const ACTIONS: HotkeyAction[] = [
     id: "mechanism.sweep", label: "Sweep the mechanism's drive", context: "model",
     when: () => hasFlexures(st().session.doc) && drivesOf(st().session.doc).length > 0,
     run: () => { const m = useMechanism.getState(); if (m.sweeping) m.stopSweep(); else void m.sweep(); },
+  },
+  {
+    id: "motion.study", label: "Motion study (do the joints move through their range without collisions?)", context: "model",
+    when: () => driveParams(st().session.doc).length > 0,
+    run: () => { if (st().motionStatus === "running") st().cancelMotionStudy(); else void st().runMotionStudy(); },
   },
   { id: RING_ACTION_ID, label: "Action ring (hold, point, release)", context: "global", defaultPrimary: "space", run: () => useRing.getState().openRing() },
   { id: "edit.undo", label: "Undo", context: "global", defaultPrimary: "mod+z", run: () => st().undo() },

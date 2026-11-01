@@ -173,6 +173,7 @@ const ACTIONS: Record<string, IconName> = {
   "view.materials": "material",
   "view.mechanism": "mechanism",
   "mechanism.sweep": "play",
+  "motion.study": "play",
   "ring.open": "action-ring",
   "intent.open": "command",
   "edit.undo": "undo",
