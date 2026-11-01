@@ -120,6 +120,8 @@ export function Legend(p: { title?: string; rows?: { color: string; label: strin
 }
 
 export interface ChipProps {
+  /** A leading icon (an <Icon/>), before the number. */
+  icon?: ReactNode;
   num?: string | number;
   label: string;
   state?: "at" | "ghost" | "on";
@@ -139,6 +141,7 @@ export function Chip(p: ChipProps) {
   return (
     <button type="button" className={cx("k-chip", p.state === "at" && "at", p.state === "ghost" && "ghost", p.off && "off", p.err && "err", p.hot && "k-hot", p.className)} onClick={p.onClick} title={p.title}
       onMouseEnter={p.onHover ? () => p.onHover!(true) : undefined} onMouseLeave={p.onHover ? () => p.onHover!(false) : undefined}>
+      {p.icon}
       {p.num != null && <span className="k-num">{p.num}</span>}
       {p.label}
     </button>

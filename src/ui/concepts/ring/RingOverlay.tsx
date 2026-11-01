@@ -11,6 +11,7 @@ import { hotkeys, eventToKey } from "../../../model/hotkeys";
 import { useRing, resolveRing, slotAt, slotOffset, clampCentre, releaseOutcome } from "../../../model/ring";
 import { CONTEXT_LABELS, isContextId } from "../../../model/contexts";
 import { RING_R, RING_PAD, DEAD_ZONE, SlotView, slotViews, ringKeys, releasesRingKey, digitSlot, arrowDir, moveHighlight } from "./ringView";
+import { Icon, iconForAction } from "../../icons";
 import "./ring.css";
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -129,6 +130,7 @@ export function RingOverlay() {
               title={`${s.title}${s.from ? ` · ${CONTEXT_LABELS[s.from]}` : ""} · ${s.index + 1}`}
               onClick={() => run(s.index)}
             >
+              <Icon name={iconForAction(s.actionId)} />
               <span className="ring-label">{s.label}</span>
               {s.key && <span className="k-num k-dim ring-key">{s.key}</span>}
             </button>

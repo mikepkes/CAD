@@ -4,6 +4,7 @@ import { hotkeys, eventToKey, prettyKey } from "../model/hotkeys";
 import { contextLabel } from "../model/ringConfig";
 import { Pills } from "./kit/primitives";
 import { RingEditor } from "./RingEditor";
+import { Icon, iconForAction } from "./icons";
 
 type Capture = { id: string; slot: "primary" | "secondary" } | null;
 type Tab = "keys" | "ring";
@@ -93,7 +94,7 @@ export function HotkeyPanel() {
                   </div>
                   {c.actions.map((a) => (
                     <div key={a.id} className="hk-row">
-                      <span className="hk-label">{a.label}{a.customized && <em className="hk-custom" title="Customized"> ·</em>}</span>
+                      <span className="hk-label with-icon"><Icon name={iconForAction(a.id)} />{a.label}{a.customized && <em className="hk-custom" title="Customized"> ·</em>}</span>
                       {cell(c.context, a.id, "primary", a.primary)}
                       {cell(c.context, a.id, "secondary", a.secondary)}
                     </div>

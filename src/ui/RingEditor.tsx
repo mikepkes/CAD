@@ -10,6 +10,7 @@ import { CONTEXTS, CONTEXT_LABELS, ContextId } from "../model/contexts";
 import { isCustomized, useRing } from "../model/ring";
 import { activeStack, actionLabel, editorSlotPos, ringChoices, ringPreview, slotViews } from "../model/ringConfig";
 import { Button, Pills } from "./kit/primitives";
+import { Icon, iconForAction } from "./icons";
 
 /** The compass's half-width / half-height in px (an ellipse, so the labels fit the modal). */
 const RX = 180, RY = 112;
@@ -68,7 +69,7 @@ export function RingEditor() {
               onClick={() => setPicking(picking === s.index ? null : s.index)}
             >
               <span className="hk-slot-name">{s.name}{s.overridden && <em className="hk-custom" title="Customized"> •</em>}</span>
-              <span className="hk-slot-action">{id ? actionLabel(id) : "—"}</span>
+              <span className="hk-slot-action with-icon">{id && <Icon name={iconForAction(id)} size={14} />}{id ? actionLabel(id) : "—"}</span>
               {inherits && s.inherited.from && <span className="hk-slot-from">from {CONTEXT_LABELS[s.inherited.from]}</span>}
             </button>
           );

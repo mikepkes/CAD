@@ -12,6 +12,8 @@ import { Button, Card } from "../../kit/primitives";
 import { useFeatureRows } from "../../kit/useFeatureRows";
 import { MAX_SUGGESTIONS, Suggestion, buildCtx, moveSelection, resolve } from "./intent";
 import { execute, Executor } from "./execute";
+import { suggestionIcon } from "./suggestionIcon";
+import { Icon } from "../../icons";
 import "./intent.css";
 
 /** Id of the hotkey action that opens the palette (⌘K / Ctrl+K, or "/"). */
@@ -109,6 +111,7 @@ export function IntentLine() {
               onClick={() => void run(s)}
             >
               <span className="k-label intent-kind">{s.kind}</span>
+              <Icon name={suggestionIcon(s.action, rows, session.timeline.length)} className="intent-icon" />
               <span className="intent-label">{s.label}</span>
               <span className="k-dim intent-detail">{s.detail}</span>
             </li>

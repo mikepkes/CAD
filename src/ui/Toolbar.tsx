@@ -3,6 +3,7 @@ import { Tool, TOOL_VARIANTS, useStore } from "../model/store";
 import { PLANES } from "../geometry/plane";
 import { ask } from "./kit/askDialog";
 import { addPrimitive, addGear } from "./concepts/contextActions";
+import { Icon, iconForAction } from "./icons";
 
 function FileMenu() {
   const newDocument = useStore((s) => s.newDocument);
@@ -13,10 +14,10 @@ function FileMenu() {
   const importRef = useRef<HTMLInputElement>(null);
   return (
     <div className="file-menu">
-      <button className="btn ghost" title="New document" onClick={() => void ask({ title: "New document", text: "Start a new document? The current one is replaced; unsaved work is autosaved in this browser or app only.", confirmLabel: "New document", danger: true }).then((ok) => { if (ok) newDocument(); })}>New</button>
-      <button className="btn ghost" title="Open a .vibecad.json file" onClick={() => inputRef.current?.click()}>Open</button>
-      <button className="btn ghost" title="Save to a .vibecad.json file" onClick={saveToFile}>Save</button>
-      <button className="btn ghost" title="Import STEP, BREP, STL, FreeCAD (.FCStd) or Rhino (.3dm) as bodies" onClick={() => importRef.current?.click()}>Import</button>
+      <button className="btn ghost with-icon" title="New document" onClick={() => void ask({ title: "New document", text: "Start a new document? The current one is replaced; unsaved work is autosaved in this browser or app only.", confirmLabel: "New document", danger: true }).then((ok) => { if (ok) newDocument(); })}><Icon name="file-new" />New</button>
+      <button className="btn ghost with-icon" title="Open a .vibecad.json file" onClick={() => inputRef.current?.click()}><Icon name="folder" />Open</button>
+      <button className="btn ghost with-icon" title="Save to a .vibecad.json file" onClick={saveToFile}><Icon name="save" />Save</button>
+      <button className="btn ghost with-icon" title="Import STEP, BREP, STL, FreeCAD (.FCStd) or Rhino (.3dm) as bodies" onClick={() => importRef.current?.click()}><Icon name="import" />Import</button>
       <ExportMenu />
       <input
         ref={inputRef}
@@ -95,7 +96,7 @@ function SectionControls() {
             title="Offset of the cut along the plane normal (mm)"
             onChange={(e) => setSection({ ...cur, offset: Number(e.target.value) || 0 })}
           />
-          <button className="icon-btn" title="Flip which side is kept" onClick={() => setSection({ ...cur, flip: !cur.flip })}>⇄</button>
+          <button className="icon-btn" title="Flip which side is kept" aria-label="Flip which side is kept" onClick={() => setSection({ ...cur, flip: !cur.flip })}><Icon name="swap" size={14} /></button>
         </>
       )}
     </div>
@@ -142,19 +143,19 @@ function AnalysisControls() {
   );
 }
 
-const TOOLS: { id: Tool; label: string; key: string; glyph: string }[] = [
-  { id: "select", label: "Select", key: "S", glyph: "⤢" },
-  { id: "line", label: "Line", key: "L", glyph: "╱" },
-  { id: "rectangle", label: "Rectangle", key: "R", glyph: "▭" },
-  { id: "circle", label: "Circle", key: "C", glyph: "◯" },
-  { id: "arc", label: "Arc", key: "A", glyph: "◜" },
-  { id: "polygon", label: "Polygon", key: "G", glyph: "⬡" },
-  { id: "slot", label: "Slot", key: "O", glyph: "⬭" },
-  { id: "ellipse", label: "Ellipse", key: "I", glyph: "⬯" },
-  { id: "point", label: "Point", key: "P", glyph: "•" },
-  { id: "dimension", label: "Dimension", key: "D", glyph: "↦" },
-  { id: "trim", label: "Trim", key: "T", glyph: "✂" },
-  { id: "extend", label: "Extend", key: "E", glyph: "⇥" },
+const TOOLS: { id: Tool; label: string; key: string }[] = [
+  { id: "select", label: "Select", key: "S" },
+  { id: "line", label: "Line", key: "L" },
+  { id: "rectangle", label: "Rectangle", key: "R" },
+  { id: "circle", label: "Circle", key: "C" },
+  { id: "arc", label: "Arc", key: "A" },
+  { id: "polygon", label: "Polygon", key: "G" },
+  { id: "slot", label: "Slot", key: "O" },
+  { id: "ellipse", label: "Ellipse", key: "I" },
+  { id: "point", label: "Point", key: "P" },
+  { id: "dimension", label: "Dimension", key: "D" },
+  { id: "trim", label: "Trim", key: "T" },
+  { id: "extend", label: "Extend", key: "E" },
 ];
 
 export function Toolbar() {
@@ -194,9 +195,9 @@ export function Toolbar() {
         <span className="logo">◆</span> Vibe<span className="brand-dim">CAD</span>
       </div>
       <FileMenu />
-      <button className="btn ghost" title="Claude agent — sketch by describing it" onClick={() => useStore.getState().toggleAgent()}>✦ Agent</button>
-      <button className="btn ghost" title="Keyboard shortcuts" onClick={() => useStore.getState().setHotkeysOpen(true)}>⌨</button>
-      <button className="btn ghost" title="Settings" onClick={() => useStore.getState().setSettingsOpen(true)}>⚙</button>
+      <button className="btn ghost with-icon" title="Claude agent — sketch by describing it" onClick={() => useStore.getState().toggleAgent()}><Icon name="agent" />Agent</button>
+      <button className="btn ghost with-icon" title="Keyboard shortcuts" aria-label="Keyboard shortcuts" onClick={() => useStore.getState().setHotkeysOpen(true)}><Icon name="keyboard" /></button>
+      <button className="btn ghost with-icon" title="Settings" aria-label="Settings" onClick={() => useStore.getState().setSettingsOpen(true)}><Icon name="settings" /></button>
 
       {mode === "sketch" ? (
         <>
@@ -208,7 +209,7 @@ export function Toolbar() {
                 title={`${t.label} (${t.key})`}
                 onClick={() => setTool(t.id)}
               >
-                <span className="tool-glyph">{t.glyph}</span>
+                <Icon name={iconForAction(`tool.${t.id}`)} />
                 <span className="tool-label">{t.label}</span>
               </button>
             ))}
@@ -235,47 +236,47 @@ export function Toolbar() {
             }
             onClick={() => useStore.getState().toggleConstruction()}
           >
-            <span className="tool-glyph">┄</span>
+            <Icon name="construction" />
             <span className="tool-label">{hasSelection ? "Construction" : constructionMode ? "Construction ✓" : "Construction"}</span>
           </button>
           <div className="spacer" />
           <button
-            className="btn ghost"
+            className="btn ghost with-icon"
             title="Project existing body edges onto this sketch plane"
             onClick={() => useStore.getState().projectBodies(false)}
           >
-            ⧉ Project
+            <Icon name="project" />Project
           </button>
           <button
-            className="btn ghost"
+            className="btn ghost with-icon"
             title="Look at the sketch plane (orient normal-to)"
             onClick={() => window.dispatchEvent(new CustomEvent("vibecad:lookAt"))}
           >
-            ⟂ Look At
+            <Icon name="look-at" />Look At
           </button>
           <label className="toggle" title="Show geometric constraint glyphs in the sketch">
             <input type="checkbox" checked={showConstraints} onChange={toggleShowConstraints} /> Constraints
           </label>
           <GridControls />
-          <button className="btn primary" onClick={finishSketch}>
-            ✓ Finish Sketch
+          <button className="btn primary with-icon" onClick={finishSketch}>
+            <Icon name="check" />Finish Sketch
           </button>
         </>
       ) : (
         <>
           <button
-            className={`btn ${sketchPlacing ? "primary" : ""}`}
+            className={`btn with-icon ${sketchPlacing ? "primary" : ""}`}
             title="Create Sketch — then click a plane or a planar face (or pick a plane below)"
             onClick={() => useStore.getState().setSketchPlacing(!sketchPlacing)}
           >
-            ✏ Create Sketch
+            <Icon name="sketch" />Create Sketch
           </button>
           <button
-            className="btn"
+            className="btn with-icon"
             title="Create a sub-component under the active one and activate it (new sketches land there)"
             onClick={() => useStore.getState().createComponent()}
           >
-            ⬡ Component
+            <Icon name="component-add" />Component
           </button>
           {activeComponentId !== session.doc.rootComponentId && (
             <span className="hint" title="Active component — new sketches are scoped here" style={{ color: "#8fd3ff" }}>
@@ -322,7 +323,7 @@ export function Toolbar() {
               title={`Create a reusable offset plane ${offset} from ${datumBase} (parametric; editable in the timeline)`}
               onClick={() => createDatumPlane(datumBase, String(offset))}
             >
-              ＋ Offset Plane
+              <Icon name="plane-offset" />Offset Plane
             </button>
             {datumPlanes.map((d) => (
               <button
@@ -338,16 +339,16 @@ export function Toolbar() {
             ))}
           </div>
           <div className="tool-group">
-            <button className="btn" disabled={kernelLoading} title="Add a box (B): click a face to push and pull it to size" onClick={() => void addPrimitive("box")}>▣ Box</button>
-            <button className="btn" disabled={kernelLoading} title="Add a cylinder: click its end or side to push and pull it" onClick={() => void addPrimitive("cylinder")}>◯ Cylinder</button>
-            <button className="btn" disabled={kernelLoading} title="Add a gear (G): spur, helical, herringbone, ring, rack, bevel or worm — its card sets the type, teeth and sizes" onClick={() => void addGear()}>⚙ Gear</button>
+            <button className="btn with-icon" disabled={kernelLoading} title="Add a box (B): click a face to push and pull it to size" onClick={() => void addPrimitive("box")}><Icon name="box" />Box</button>
+            <button className="btn with-icon" disabled={kernelLoading} title="Add a cylinder: click its end or side to push and pull it" onClick={() => void addPrimitive("cylinder")}><Icon name="cylinder" />Cylinder</button>
+            <button className="btn with-icon" disabled={kernelLoading} title="Add a gear (G): spur, helical, herringbone, ring, rack, bevel or worm — its card sets the type, teeth and sizes" onClick={() => void addGear()}><Icon name="gear" />Gear</button>
             <button
-              className="btn"
+              className="btn with-icon"
               disabled={!lastSketch || kernelLoading}
               title={lastSketch ? "Extrude a sketch region into a solid (new / join / cut)" : "Create a sketch first"}
               onClick={() => useStore.getState().openExtrude()}
             >
-              {kernelLoading ? "⏳ Loading 3D…" : "⬆ Extrude"}
+              {kernelLoading ? "⏳ Loading 3D…" : <><Icon name="extrude" />Extrude</>}
             </button>
             {hasSolids && (
               <>
@@ -360,8 +361,8 @@ export function Toolbar() {
                   {PLANES.map((p) => <option key={p.id} value={p.id}>{p.id}</option>)}
                   {datumPlanes.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
-                <button className="btn" title="Mirror the model across the chosen plane (symmetry)" onClick={() => mirrorModel(mirrorPlane)}>
-                  ⟷ Mirror
+                <button className="btn with-icon" title="Mirror the model across the chosen plane (symmetry)" onClick={() => mirrorModel(mirrorPlane)}>
+                  <Icon name="mirror" />Mirror
                 </button>
               </>
             )}
@@ -398,7 +399,7 @@ function ExportMenu() {
   ];
   return (
     <span className="export-menu">
-      <button className="btn ghost" aria-haspopup="menu" aria-expanded={open} title="Export the model or make a shop drawing" onClick={() => setOpen((o) => !o)}>Export ▾</button>
+      <button className="btn ghost with-icon" aria-haspopup="menu" aria-expanded={open} title="Export the model or make a shop drawing" onClick={() => setOpen((o) => !o)}><Icon name="export" />Export ▾</button>
       {open && (
         <>
           <div className="export-scrim" onPointerDown={() => setOpen(false)} />
