@@ -1131,6 +1131,9 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 }
 
 /* ---------- Toast ---------- */
+/* the live region it appears in: always present (so it's announced), never in the way */
+.toast-region { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+.toast-region > .toast { pointer-events: auto; }
 .toast {
   position: absolute;
   left: 50%;

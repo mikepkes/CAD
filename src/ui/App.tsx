@@ -25,23 +25,7 @@ import { startAssist } from "../model/assistController";
 import { registerAppPanels } from "../model/appPanels";
 import { SideResizer } from "./SideResizer";
 import { BuildProgress } from "./BuildProgress";
-
-function Toast() {
-  const toast = useStore((s) => s.toast);
-  const dismiss = useStore((s) => s.dismissToast);
-  useEffect(() => {
-    if (toast) {
-      const t = setTimeout(dismiss, 4000);
-      return () => clearTimeout(t);
-    }
-  }, [toast, dismiss]);
-  if (!toast) return null;
-  return (
-    <div className={`toast ${toast.kind}`} onClick={dismiss}>
-      {toast.text}
-    </div>
-  );
-}
+import { Toast } from "./Toast";
 
 export function App() {
   const mode = useStore((s) => s.mode);

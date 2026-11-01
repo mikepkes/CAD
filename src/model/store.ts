@@ -50,7 +50,9 @@ function createGeometryBackend(): GeometryBackend {
   } catch { /* fall through to inline */ }
   return new InlineGeometryBackend();
 }
-const geometry = createGeometryBackend();
+let geometry = createGeometryBackend();
+/** Tests only: put a stand-in geometry backend behind the store. */
+export function __setGeometryBackend(g: GeometryBackend): void { geometry = g; }
 // A second backend dedicated to the motion study, so its 360° sweep runs in
 // parallel with (and never blocks) the live preview on the main backend.
 const studyGeometry = createGeometryBackend();
@@ -59,8 +61,29 @@ let motionToken = 0; // bumped to cancel/supersede an in-flight study
 let rebuildInFlight: Promise<void> | null = null; // the running preview evaluate (its whole coalesced loop)
 let rebuildDirty = false;    // a newer rebuild was requested while one ran
 let buildToken = 0;          // the latest build started: measurements of an older one are stale
-/** Resolves once no solid rebuild is running (the video director's "the model is done" signal). */
-export const whenRebuilt = (): Promise<void> => rebuildInFlight ?? Promise.resolve();
+let rebuildRequested: Promise<void> | null = null; // the latest rebuildSolids call, from the moment it's made
+/** Resolves once no solid rebuild is running or asked for — including one requested a
+ *  moment ago that hasn't started yet (it first waits for the kernel). The video
+ *  director's "the model is done" signal, and what Save waits for so it never
+ *  exports the model as it was before the last edit. */
+export const whenRebuilt = async (): Promise<void> => {
+  for (let i = 0; i < 100; i++) {
+    const p = rebuildRequested ?? rebuildInFlight;
+    if (!p) return;
+    await p.catch(() => { /* a failed build is still a finished one */ });
+  }
+};
+
+/** What Save writes: a 3MF with a part per material when the model has more than one print material, else one STL. */
+export function printFormat(doc: CadDocument, solids: Record<string, SolidEval>): "stl" | "3mf" {
+  const scope = resolveParameters(doc.parameters).scope;
+  const materials = new Set(Object.values(solids).filter((sol) => sol.mesh)
+    .map((sol) => materialForComponent(doc, sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined, scope)?.id ?? ""));
+  return materials.size > 1 ? "3mf" : "stl";
+}
+
+/** Save's progress: waiting for the model to catch up with the last edit, then making the file. */
+export type SaveState = { stage: "updating" } | { stage: "preparing"; format: "stl" | "3mf" };
 
 const AUTOSAVE_KEY = "vibecad.autosave.v1";
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -162,6 +185,8 @@ export interface AppState {
   cancelMotionStudy: () => void;
 
   toast: Toast | null;
+  /** Save / share for printing is running (the button is busy and a second press does nothing). */
+  saving: SaveState | null;
   lastMessage: string;
 
   // embedded agent (BYO Claude API key, stored in the browser only)
@@ -353,7 +378,9 @@ export interface AppState {
   /** The whole model as one print file, offered through the native share sheet
    *  on phones (Save to Files / AirDrop / another app) and downloaded elsewhere:
    *  an STL, or a 3MF with a part per material when it has more than one. */
-  shareModel: (name?: string) => Promise<void>;
+  /** Save the model for printing. `flush` first commits a control edit still waiting
+   *  (customize mode's debounce); the model is then rebuilt to match before the file is made. */
+  shareModel: (name?: string, opts?: { flush?: () => Promise<void> }) => Promise<void>;
 
   // agent
   setSettingsOpen: (open: boolean, focus?: "apiKey") => void;
@@ -664,6 +691,7 @@ export const useStore = create<AppState>((set, get) => {
     hasMotionStudy: false,
     kernelLoading: false,
     toast: null,
+    saving: null,
     lastMessage: "Pick an origin plane to start a sketch.",
     activeComponentId: session.doc.rootComponentId,
     settingsOpen: false,
@@ -1081,7 +1109,9 @@ export const useStore = create<AppState>((set, get) => {
         set({ kernelLoading: false, toast: { kind: "error", text: `3D kernel failed to load: ${(e as Error).message}` } });
       }
     },
-    rebuildSolids: async () => {
+    rebuildSolids: () => {
+      // tracked from the call (whenRebuilt), not only once the kernel is ready and the build starts
+      const run = (async () => {
       await get().ensureKernel();
       if (!get().kernelReady) return;
       // Coalesce, latest-wins: while one evaluate is in flight, a new request
@@ -1133,6 +1163,10 @@ export const useStore = create<AppState>((set, get) => {
         }
       })();
       return rebuildInFlight;
+      })();
+      const tracked: Promise<void> = run.then(() => {}, () => {}).finally(() => { if (rebuildRequested === tracked) rebuildRequested = null; });
+      rebuildRequested = tracked;
+      return run;
     },
     runMotionStudy: async () => {
       const doc = get().session.doc;
@@ -1343,35 +1377,49 @@ export const useStore = create<AppState>((set, get) => {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     },
-    shareModel: async (name) => {
-      const meshes = Object.values(get().solids)
-        .filter((s) => s.mesh)
-        .map((s) => ({ positions: s.mesh!.positions, indices: s.mesh!.indices }));
-      if (!meshes.length) { set({ toast: { kind: "info", text: "Nothing to export yet." } }); return; }
-      // A compliant mechanism prints unbent and in one piece, whatever pose the
-      // sliders show; anything else exports as it stands.
-      const doc = get().session.doc;
-      // two print materials (an embedded skeleton): a 3MF, one part each
-      const scope = resolveParameters(doc.parameters).scope;
-      const materials = new Set(Object.values(get().solids).filter((sol) => sol.mesh)
-        .map((sol) => materialForComponent(doc, sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined, scope)?.id ?? ""));
-      const multi = materials.size > 1;
-      const bytes = multi ? await geometry.exportBytes(doc, null, "3mf")
-        : hasFlexures(doc) ? await geometry.exportBytes(doc, null, "stl") : meshesToStlBinary(meshes);
-      if (!bytes) { set({ toast: { kind: "error", text: "Export failed." } }); return; }
-      const file = multi
-        ? new File([bytes as BlobPart], `${name || "model"}.3mf`, { type: "model/3mf" })
-        : new File([bytes as BlobPart], `${name || "model"}.stl`, { type: "model/stl" });
-      const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
-      // Native share sheet (phones) → Save to Files / AirDrop / another app.
-      if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
-        try { await nav.share({ files: [file], title: file.name, text: `3D model (${multi ? "3MF" : "STL"}) from VibeCAD` }); return; }
-        catch (e) { if ((e as Error).name === "AbortError") return; /* else fall through to download */ }
+    shareModel: async (name, opts) => {
+      if (get().saving) return; // one save at a time: a double press saves once
+      set({ saving: { stage: "updating" } });
+      try {
+        // the file must match the screen: commit an edit still waiting, then let the rebuild it starts finish
+        await opts?.flush?.();
+        await whenRebuilt();
+        const meshes = Object.values(get().solids)
+          .filter((s) => s.mesh)
+          .map((s) => ({ positions: s.mesh!.positions, indices: s.mesh!.indices }));
+        if (!meshes.length) { set({ toast: { kind: "info", text: "Nothing to export yet." } }); return; }
+        // A compliant mechanism prints unbent and in one piece, whatever pose the
+        // sliders show; anything else exports as it stands.
+        const doc = get().session.doc;
+        // two print materials (an embedded skeleton): a 3MF, one part each
+        const format = printFormat(doc, get().solids);
+        const multi = format === "3mf";
+        set({ saving: { stage: "preparing", format } });
+        const bytes = multi ? await geometry.exportBytes(doc, null, "3mf")
+          : hasFlexures(doc) ? await geometry.exportBytes(doc, null, "stl") : meshesToStlBinary(meshes);
+        if (!bytes) { set({ toast: { kind: "error", text: "Export failed." } }); return; }
+        const file = multi
+          ? new File([bytes as BlobPart], `${name || "model"}.3mf`, { type: "model/3mf" })
+          : new File([bytes as BlobPart], `${name || "model"}.stl`, { type: "model/stl" });
+        const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean; share?: (d: unknown) => Promise<void> };
+        // Native share sheet (phones) → Save to Files / AirDrop / another app.
+        if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+          try {
+            await nav.share({ files: [file], title: file.name, text: `3D model (${multi ? "3MF" : "STL"}) from VibeCAD` });
+            set({ toast: { kind: "info", text: `Shared ${file.name}` } });
+            return;
+          } catch (e) { if ((e as Error).name === "AbortError") return; /* else fall through to download */ }
+        }
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url; a.download = file.name; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        set({ toast: { kind: "info", text: `Saved ${file.name}${multi ? ", a part per material" : ""}` } });
+      } catch (e) {
+        set({ toast: { kind: "error", text: `Save failed: ${(e as Error).message}` } });
+      } finally {
+        set({ saving: null });
       }
-      const url = URL.createObjectURL(file);
-      const a = document.createElement("a");
-      a.href = url; a.download = file.name; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
     },
 
     initApp: async () => {
