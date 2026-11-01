@@ -146,6 +146,8 @@ export interface AppState {
   faceSelection: FaceSelection | null;
   showPlanes: boolean;
   showGrid: boolean;
+  /** The origin axes (off in the customize viewer: a product, not a modelling view). */
+  showAxes: boolean;
   /** Draw hidden bodies as faint, unpickable ghosts. */
   showHiddenGhosts: boolean;
   /** Surface-quality display: zebra / draft / curvature map, and curvature combs. */
@@ -667,6 +669,7 @@ export const useStore = create<AppState>((set, get) => {
     hover: null,
     showPlanes: true,
     showGrid: true,
+    showAxes: true,
     showHiddenGhosts: false,
     analysis: { mode: "none", stripes: 12, draftDeg: 1, pull: { x: 0, y: 0, z: 1 }, quantity: "mean", combs: false },
     curvatureRequested: false,

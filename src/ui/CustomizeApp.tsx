@@ -12,9 +12,10 @@ import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
 import { editCommitter } from "./editCommitter";
 import { DrawingView } from "./DrawingView";
-import { Control, FlexureReadout, LoadingOverlay, MotionBadge, SaveButton } from "./CustomizeControls";
+import { Control, FlexureReadout, LoadingOverlay, LoadProblem, MotionBadge, SaveButton, modelTitle, viewerControls, type LoadFailure } from "./CustomizeControls";
 import { BuildProgress } from "./BuildProgress";
 import { Toast } from "./Toast";
+import { exampleUrl } from "../model/examples";
 
 // The 3D rebuild is the slow part, so the slider's own value updates live while
 // the model is rebuilt only when you briefly pause or release (debounce, not
@@ -22,12 +23,13 @@ import { Toast } from "./Toast";
 const IDLE_MS = 2000;   // run the motion study after this long with no interaction
 const COMMIT_MS = 200;  // debounce: rebuild the model this long after the last move
 
-function modelUrl(): string | null {
+/** What the link asks for: an example by name, or a model by URL. */
+function requested(): { url: string; example?: string } | null {
   const q = new URLSearchParams(location.search);
   const model = q.get("model");
-  if (model) return model;
+  if (model) return { url: model };
   const example = q.get("example");
-  if (example) return `${import.meta.env.BASE_URL}examples/${encodeURIComponent(example)}.json`;
+  if (example) return { url: exampleUrl(example), example };
   return null;
 }
 
@@ -37,13 +39,15 @@ export function CustomizeApp() {
   const runMotionStudy = useStore((s) => s.runMotionStudy);
   const cancelMotionStudy = useStore((s) => s.cancelMotionStudy);
   const shareModel = useStore((s) => s.shareModel);
-  const params = useStore((s) => s.session.doc.parameters);
+  const doc = useStore((s) => s.session.doc);
   const hasDrawing = useStore((s) => !!s.session.doc.drawing);
   const openDrawing = useStore((s) => s.openDrawing);
   useStore((s) => s.rev); // re-render as the model resolves
   const [state, setState] = useState<"loading" | "building" | "ready" | "error">("loading");
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<LoadFailure | null>(null);
   const [open, setOpen] = useState(true);
+  const req = useRef(requested());
+  const example = req.current?.example;
 
   const idle = useRef<ReturnType<typeof setTimeout>>();
 
@@ -65,60 +69,88 @@ export function CustomizeApp() {
   useEffect(() => {
     void (async () => {
       try {
-        useStore.setState({ showPlanes: false, showGrid: false }); // clean product view
-        const url = modelUrl();
-        if (!url) throw new Error("No model given. Add ?model=<url> or ?example=gyroscope to the link.");
+        useStore.setState({ showPlanes: false, showGrid: false, showAxes: false }); // clean product view
+        const r = req.current;
+        if (!r) { setFailure({ kind: "none" }); setState("error"); return; }
         // the kernel (a big download) and the model load side by side
         const kernel = ensureKernel();
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`Could not load model (${resp.status}).`);
-        const text = await resp.text();
+        let text: string;
+        try {
+          const resp = await fetch(r.url);
+          text = await resp.text();
+          // a missing file comes back as a 404, or as the app's own page from a server that serves it for any path
+          if (!resp.ok || /^\s*</.test(text)) { setFailure({ kind: "missing", example: r.example, url: r.url }); setState("error"); return; }
+        } catch {
+          setFailure({ kind: "offline", example: r.example, url: r.url }); setState("error"); return;
+        }
+        let parsed;
+        try { parsed = deserializeDocument(text); } catch (e) {
+          setFailure({ kind: "unreadable", example: r.example, url: r.url, detail: (e as Error).message }); setState("error"); return;
+        }
         await kernel;
         setState("building");
-        await loadDocument(deserializeDocument(text));
+        await loadDocument(parsed);
         // frame it: the default camera suits a small part, and sits inside anything the size of a workbench
         window.dispatchEvent(new CustomEvent("vibecad:view", { detail: "iso" }));
-        window.dispatchEvent(new CustomEvent("vibecad:frame"));
         setState("ready");
         armStudy(); // validate the starting configuration once
       } catch (e) {
-        setError((e as Error).message);
+        setFailure({ kind: "unreadable", example: req.current?.example, url: req.current?.url ?? "", detail: (e as Error).message });
         setState("error");
       }
     })();
     return () => { clearTimeout(idle.current); committer.current.cancel(); };
   }, [ensureKernel, loadDocument, armStudy]);
 
-  const bounded = params.filter((p) => (p.min != null && p.max != null) || (p.values && p.values.length));
+  const title = state === "ready" ? modelTitle(doc, example) : modelTitle(null, example);
+  const intro = state === "ready" ? doc.about?.description : undefined;
+  useEffect(() => {
+    document.title = state === "error" ? "Model not found · VibeCAD" : `${title} · VibeCAD`;
+  }, [title, state]);
+
+  const controls = viewerControls(doc.parameters);
 
   return (
     <div className="customize">
-      <Viewport />
+      <Viewport label={`3D view of ${title}. Drag to turn it; pinch or scroll to zoom.`} />
       <MotionBadge />
-      {state === "ready" && bounded.length > 0 && (
-        <div className={`cz-panel ${open ? "" : "collapsed"}`}>
-          <button className="cz-handle" onClick={() => setOpen((v) => !v)} title={open ? "Hide controls" : "Show controls"}>
-            <span>Customize</span><span className="cz-chevron">{open ? "▾" : "▴"}</span>
-          </button>
+      {state === "ready" && (
+        <section className={`cz-panel ${open ? "" : "collapsed"}`} aria-labelledby="cz-title">
+          {/* the whole head row toggles the sheet; the button is what a keyboard or screen reader uses */}
+          <div className="cz-head" onClick={() => setOpen((v) => !v)}>
+            <h1 className="cz-title" id="cz-title">{title}</h1>
+            <button className="cz-handle" aria-expanded={open} aria-controls="cz-body" aria-label={open ? "Hide the controls" : "Show the controls"} title={open ? "Hide the controls" : "Show the controls"}>
+              <span className="cz-chevron" aria-hidden="true">{open ? "▾" : "▴"}</span>
+            </button>
+          </div>
           {open && (
-            <div className="cz-controls">
-              {bounded.map((p) => <Control key={p.id} name={p.name} value={p.value} expr={p.expr} min={p.min} max={p.max} step={p.step} values={p.values} boolean={p.boolean} options={p.options} onEdit={onEdit} />)}
-              <FlexureReadout />
-              {hasDrawing && (
-                <button className="cz-drawing" title="The design's shop drawing: views, dimensions and the cut list, as a PDF" onClick={() => void openDrawing()}>
-                  ▤ Drawing (PDF)
-                </button>
-              )}
-              <SaveButton onSave={() => void shareModel(new URLSearchParams(location.search).get("example") || "model", { flush: () => committer.current.flush() })} />
-            </div>
+            <>
+              <div className="cz-controls" id="cz-body">
+                {intro && <p className="cz-intro">{intro}</p>}
+                {controls.map((p) => (
+                  <Control key={p.id} name={p.name} label={p.label} unit={p.unit} description={p.description} value={p.value} expr={p.expr}
+                    min={p.min} max={p.max} step={p.step} values={p.values} boolean={p.boolean} options={p.options} onEdit={onEdit} />
+                ))}
+                <FlexureReadout />
+              </div>
+              {/* Save and the drawing stay in reach, outside the scrolling controls */}
+              <div className="cz-foot">
+                {hasDrawing && (
+                  <button className="cz-drawing" title="The design's shop drawing: views, dimensions and the cut list, as a PDF" onClick={() => void openDrawing()}>
+                    ▤ Drawing (PDF)
+                  </button>
+                )}
+                <SaveButton onSave={() => void shareModel(example || "model", { flush: () => committer.current.flush() })} />
+              </div>
+            </>
           )}
-        </div>
+        </section>
       )}
       <DrawingView viewer />
       <Toast />
       {state === "ready" && <BuildProgress />}
-      {(state === "loading" || state === "building") && <LoadingOverlay phase={state} name={new URLSearchParams(location.search).get("example") ?? undefined} />}
-      {state === "error" && <div className="cz-overlay error">{error}</div>}
+      {(state === "loading" || state === "building") && <LoadingOverlay phase={state} name={title} />}
+      {state === "error" && failure && <LoadProblem failure={failure} />}
     </div>
   );
 }

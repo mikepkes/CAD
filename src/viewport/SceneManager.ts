@@ -100,6 +100,8 @@ export interface ViewData {
   preview: PreviewGeom | null;
   showPlanes: boolean;
   showGrid: boolean;
+  /** The origin axes (default shown). */
+  showAxes?: boolean;
   gridSize?: number;
   showConstraints: boolean;
   /** Overall constrained state of the active sketch, for Fusion-style coloring. */
@@ -1079,6 +1081,7 @@ export class SceneManager {
     this.datumGroup.visible = data.showPlanes && data.mode === "model";
     if (data.gridSize) this.applyGrid(data.gridSize);
     this.grid.visible = data.showGrid;
+    this.axes.visible = data.showAxes !== false;
 
     this.renderDatumPlanes(data.datumPlanes ?? []);
     this.clearGroup(this.sketchGroup);

@@ -3,59 +3,130 @@
 // and the Save button. Kept apart from the viewer itself (which mounts the 3D
 // viewport) so they can be tested without WebGL.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { snapToStep } from "../core/parameters";
 import { flexureEquilibria, flexureState, flexureSweep, hasFlexures, isAngularDrive, type EquilibriumStudy } from "../sim/flexure";
 import { drivesOf } from "../model/concepts/mechanism";
 import { printFormat, useStore } from "../model/store";
 import { buildPercent, buildStepText } from "./BuildProgress";
+import type { CadDocument, Parameter } from "../core/document";
+import { EXAMPLES, customizeLink, exampleTitle } from "../model/examples";
 
 export const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000));
 
-/** One bounded parameter. Shows its own local value instantly while dragging
- *  (so the slider never lags the model), reporting changes up via `onEdit`. */
-export function Control({ name, value, expr, min, max, step: paramStep, values, boolean, options, onEdit }: {
-  name: string; value: number; expr: string; min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[];
+/** A slider's step: an explicit increment wins; otherwise a sensible precision from the span. */
+export function sliderStep(min: number, max: number, step?: number): number {
+  if (step && step > 0) return step;
+  const span = max - min;
+  return span >= 20 ? 1 : span >= 2 ? 0.1 : 0.01;
+}
+
+/** A typed value as the slider would take it: a number, kept within [min, max] and on the step
+ *  (counted from min, as the slider counts); null when it isn't a number. */
+export function typedValue(text: string, min: number, max: number, step?: number): number | null {
+  const v = Number(text.trim().replace(",", "."));
+  if (!text.trim() || !Number.isFinite(v)) return null;
+  const snapped = step && step > 0 ? snapToStep(v, step, min) : v;
+  const clamped = Math.min(max, Math.max(min, snapped));
+  return Math.round(clamped * 1e9) / 1e9; // no float dust from the snapping
+}
+
+/** A value with its unit, for reading out ("1700 mm", "30°"). */
+export const withUnit = (v: string, unit?: string) => (!unit ? v : /^[°%′″]/.test(unit) ? `${v}${unit}` : `${v} ${unit}`);
+
+export interface ControlProps {
+  name: string; value: number; expr: string;
+  /** What a person calls it (falls back to the name), its unit and a line about it. */
+  label?: string; unit?: string; description?: string;
+  min?: number; max?: number; step?: number; values?: number[]; boolean?: boolean; options?: string[];
   onEdit: (name: string, value: string, flush: boolean) => void;
-}) {
+}
+
+/** One bounded parameter: its label (or name), a line about it, and a slider with
+ *  a value field beside it (type an exact value; it is kept in range and on the
+ *  step), or a dropdown / checkbox. Shows its own local value instantly while
+ *  dragging (so the slider never lags the model), reporting changes up via `onEdit`. */
+export function Control({ name, value, expr, label: shown, unit, description, min, max, step: paramStep, values, boolean, options, onEdit }: ControlProps) {
   const [local, setLocal] = useState(value);
+  const [draft, setDraft] = useState<string | null>(null); // the value field while it's being typed in
   const dragging = useRef(false);
+  const id = useId();
   useEffect(() => { if (!dragging.current) setLocal(value); }, [value]); // follow external changes when idle
 
-  const label = <span className="cz-row-name" title={expr}>{name}</span>;
+  const label = shown || name;
+  const descId = description ? `${id}-desc` : undefined;
+  const head = (
+    <div className="cz-row-head">
+      <label className="cz-row-name" htmlFor={`${id}-input`} title={shown ? `${name} = ${expr}` : expr}>{label}</label>
+    </div>
+  );
+  const desc = description && <p className="cz-row-desc" id={descId}>{description}</p>;
+
   if (boolean) {
     return (
-      <label className="cz-row">
-        {label}
-        <input className="cz-check" type="checkbox" checked={value !== 0} onChange={(e) => onEdit(name, e.target.checked ? "1" : "0", true)} />
-      </label>
+      <div className="cz-row cz-row-check">
+        <input id={`${id}-input`} className="cz-check" type="checkbox" checked={value !== 0} aria-describedby={descId} onChange={(e) => onEdit(name, e.target.checked ? "1" : "0", true)} />
+        {head}
+        {desc}
+      </div>
     );
   }
   if (values && values.length) {
+    const known = values.some((v) => Math.abs(v - value) < 1e-9);
     return (
-      <label className="cz-row">
-        {label}
-        <select className="cz-select" value={values.some((v) => Math.abs(v - value) < 1e-9) ? String(value) : ""} onChange={(e) => onEdit(name, e.target.value, true)}>
-          {!values.some((v) => Math.abs(v - value) < 1e-9) && <option value="">{fmt(value)}…</option>}
-          {values.map((v) => <option key={v} value={String(v)}>{options?.[v] ?? fmt(v)}</option>)}
+      <div className="cz-row">
+        {head}
+        <select id={`${id}-input`} className="cz-select" aria-describedby={descId} value={known ? String(value) : ""} onChange={(e) => onEdit(name, e.target.value, true)}>
+          {!known && <option value="">{withUnit(fmt(value), unit)}…</option>}
+          {values.map((v) => <option key={v} value={String(v)}>{options?.[v] ?? withUnit(fmt(v), unit)}</option>)}
         </select>
-      </label>
+        {desc}
+      </div>
     );
   }
-  const span = max! - min!;
-  // An explicit increment wins; otherwise pick a sensible precision from the span.
-  const step = paramStep && paramStep > 0 ? paramStep : span >= 20 ? 1 : span >= 2 ? 0.1 : 0.01;
+  const lo = min!, hi = max!;
+  const step = sliderStep(lo, hi, paramStep);
+  const commitTyped = () => {
+    if (draft == null) return;
+    const v = typedValue(draft, lo, hi, paramStep);
+    setDraft(null);
+    if (v == null || v === local) return;
+    setLocal(v);
+    onEdit(name, String(v), true);
+  };
   return (
-    <label className="cz-row">
-      {label}
+    <div className="cz-row">
+      <div className="cz-row-head">
+        <label className="cz-row-name" htmlFor={`${id}-input`} title={shown ? `${name} = ${expr}` : expr}>{label}</label>
+        <span className="cz-row-num">
+          <input
+            className="cz-num" type="text" inputMode="decimal" enterKeyHint="done" autoComplete="off" spellCheck={false}
+            aria-label={`${label}, exact value${unit ? ` in ${unit}` : ""}`}
+            value={draft ?? fmt(local)}
+            onFocus={(e) => { setDraft(fmt(local)); e.target.select(); }}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitTyped}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); commitTyped(); }
+              else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setDraft(null); }
+            }}
+          />
+          {unit && <span className="cz-unit" aria-hidden="true">{unit}</span>}
+        </span>
+      </div>
       <input
-        className="cz-range" type="range" min={min} max={max} step={step}
-        value={Math.min(max!, Math.max(min!, local))}
+        id={`${id}-input`}
+        className="cz-range" type="range" min={lo} max={hi} step={step}
+        value={Math.min(hi, Math.max(lo, local))}
+        aria-valuetext={withUnit(fmt(local), unit)}
+        aria-describedby={descId}
         onPointerDown={() => { dragging.current = true; }}
         onPointerUp={() => { dragging.current = false; onEdit(name, String(local), true); }}
         onChange={(e) => { const v = Number(e.target.value); setLocal(v); onEdit(name, String(v), false); }}
       />
-      <span className="cz-row-val">{fmt(local)}</span>
-    </label>
+      <div className="cz-row-ends" aria-hidden="true"><span>{withUnit(fmt(lo), unit)}</span><span>{withUnit(fmt(hi), unit)}</span></div>
+      {desc}
+    </div>
   );
 }
 
@@ -111,17 +182,18 @@ export function FlexureReadout() {
   const unit = angular ? "°" : " mm"; // a non-angle drive is a length
   const study = rest?.key === key ? rest.study : undefined;
   const stable = study?.states.filter((q) => q.stable) ?? [];
+  const called = (n: string) => doc.parameters.find((q) => q.name === n)?.label || n; // a drive by its label
   return (
     <div className="cz-flex" title="Each flexure is a thin strip that bends instead of a pin. Its bar shows the peak strain against the material's limit.">
       <div className="cz-flex-head">
-        <span>Flexures</span>
+        <h2 className="cz-flex-title">Flexures</h2>
         <span className={over || st.error ? "cz-flex-bad" : "cz-flex-ok"}>{st.error ? "can't reach this pose" : over ? "over the strain limit" : "within the strain limit"}</span>
       </div>
       {st.flexures.map((f) => {
         const u = f.allowable ? f.strain / f.allowable : 0;
         return (
           <div className="cz-flex-row" key={f.joint}>
-            <span className="cz-flex-name">{f.name}</span>
+            <span className="cz-flex-name" title={f.name}>{f.name}</span>
             <span className="cz-flex-bar"><span className={u > 1 ? "over" : ""} style={{ width: `${Math.min(100, u * 100)}%` }} /></span>
             <span className="cz-flex-val">{(f.strain * 100).toFixed(1)}%</span>
           </div>
@@ -130,15 +202,15 @@ export function FlexureReadout() {
       <div className="cz-flex-foot">
         {st.flexures[0]?.allowable != null && <span>limit {(st.flexures[0].allowable * 100).toFixed(0)}%</span>}
         {efforts.length > 1
-          ? efforts.map(({ d, effort }) => <span key={d.name}>{isAngularDrive(doc, d.name) ? `${d.name} torque ${Math.abs(effort).toFixed(0)} N·mm` : `${d.name} force ${Math.abs(effort).toFixed(1)} N`}</span>)
+          ? efforts.map(({ d, effort }) => <span key={d.name}>{isAngularDrive(doc, d.name) ? `${called(d.name)} torque ${Math.abs(effort).toFixed(0)} N·mm` : `${called(d.name)} force ${Math.abs(effort).toFixed(1)} N`}</span>)
           : Number.isFinite(st.effort) && <span>{angular ? `input torque ${Math.abs(st.effort).toFixed(0)} N·mm` : `input force ${Math.abs(st.effort).toFixed(1)} N`}</span>}
         <span>stored {st.energy.toFixed(1)} mJ</span>
       </div>
       {param && study && stable.length > 0 && (
         <div className="cz-flex-rest" title="Where it stays put when you let go: the effort is zero there and pushes back either way.">
           {study.multistable
-            ? <><span className="cz-flex-ok">bistable</span> rests at {param.name} = {stable.map((q) => `${fmt(Math.round(q.value * 10) / 10)}${unit}`).join(" and ")}</>
-            : <>springs back to {param.name} = {fmt(Math.round(stable[0].value * 10) / 10)}{unit}</>}
+            ? <><span className="cz-flex-ok">bistable</span> rests at {called(param.name)} = {stable.map((q) => `${fmt(Math.round(q.value * 10) / 10)}${unit}`).join(" and ")}</>
+            : <>springs back to {called(param.name)} = {fmt(Math.round(stable[0].value * 10) / 10)}{unit}</>}
           {study.snap && <> · snaps over at {angular ? `${Math.abs(study.snap.effort).toFixed(0)} N·mm` : `${Math.abs(study.snap.effort).toFixed(1)} N`}</>}
         </div>
       )}
@@ -189,6 +261,53 @@ export function LoadingOverlay(p: { phase: "loading" | "building"; name?: string
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** The design's title: its own (document.describe), its drawing's, its root
+ *  component's name, else the example's; "Model" when there's nothing to go on. */
+export function modelTitle(doc: CadDocument | null, example?: string): string {
+  const root = doc?.components[doc.rootComponentId]?.name;
+  return doc?.about?.title || doc?.drawing?.title || (root && root !== "Root Component" ? root : "") || (example ? exampleTitle(example) : "") || "Model";
+}
+
+/** The parameters the viewer offers: bounded ones (a range, a list, a switch) that aren't hidden. */
+export function viewerControls(params: Parameter[]): Parameter[] {
+  return params.filter((p) => !p.hidden && ((p.min != null && p.max != null) || (p.values && p.values.length)));
+}
+
+/** Why the viewer couldn't show a model. */
+export type LoadFailure =
+  | { kind: "none" }
+  | { kind: "missing" | "offline"; example?: string; url: string }
+  | { kind: "unreadable"; example?: string; url: string; detail: string };
+
+/** The viewer's page when there's no model to show: what went wrong, in a
+ *  sentence, and the examples it does have. */
+export function LoadProblem({ failure }: { failure: LoadFailure }) {
+  const what = failure.kind === "none" ? "" : failure.example ? `“${failure.example}”` : failure.url;
+  const head = failure.kind === "none" ? "No model to show"
+    : failure.kind === "missing" ? `Couldn't find the model ${what}`
+    : failure.kind === "offline" ? `Couldn't load the model ${what}`
+    : `Couldn't read the model ${what}`;
+  const why = failure.kind === "none" ? "The link doesn't name a model. Add ?example=<name> or ?model=<url> to it, or pick one below."
+    : failure.kind === "missing" ? (failure.example ? "There's no example by that name. Check the link, or pick one below." : "Nothing was found at that address. Check the link, or pick an example below.")
+    : failure.kind === "offline" ? "The connection failed. Check that you're online and try again."
+    : `It isn't a VibeCAD model this version can open (${"detail" in failure ? failure.detail : ""}).`;
+  return (
+    <div className="cz-overlay cz-problem">
+      <div className="cz-problem-card" role="alert">
+        <h1 className="cz-problem-head">{head}</h1>
+        <p className="cz-problem-why">{why}</p>
+        <h2 className="k-label">Examples</h2>
+        <ul className="cz-problem-list">
+          {EXAMPLES.map((e) => (
+            <li key={e.name}><a href={customizeLink(e.name)}>{e.title}</a> <span className="k-dim">· {e.blurb}</span></li>
+          ))}
+        </ul>
+        <p className="cz-problem-why"><a href="./">Open the editor</a></p>
       </div>
     </div>
   );
