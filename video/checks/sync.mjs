@@ -78,7 +78,12 @@ for (const e of events.filter((x) => x.names.length)) {
   if (best) matched.push({ ...e, word: best.w, wordT: best.t, delta: +(e.t - best.t).toFixed(2) });
   else unmatched.push(e);
 }
-const flags = matched.filter((m) => Math.abs(m.delta) > TOL).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+// a word names one moment: when the picture repeats the action (⌘K pressed for each command, a panel opened and later
+// closed), the event nearest the word is its match and the rest are repeats, not drift
+const claim = new Map();
+for (const m of matched) { const k = `${m.wordT}|${m.word}`, o = claim.get(k); if (!o || Math.abs(m.delta) < Math.abs(o.delta)) claim.set(k, m); }
+for (const m of matched) m.repeat = claim.get(`${m.wordT}|${m.word}`) !== m;
+const flags = matched.filter((m) => !m.repeat && Math.abs(m.delta) > TOL).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 
 // ---- the report ----
 const mmss = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
@@ -86,7 +91,7 @@ const lines = [`# Sync check: ${VIDEOS[videoId].title} (${run})`, "",
   `Words timed in the default voice (${voice}) with faster-whisper; events from the recorder, placed in the cut. A flag is an event more than ${TOL} s from the word that names it: **+** the picture comes after the word, **−** before it.`, ""];
 if (!events.length) lines.push("**No events in this cut.** It was recorded before the recorder logged them: re-record it to check the picture against the words. The words are timed below.", "");
 else {
-  lines.push(`${events.length} events, ${matched.length} matched to a word, ${flags.length} flagged, ${unmatched.length} naming something the narration never says nearby.`, "");
+  lines.push(`${events.length} events, ${matched.length} matched to a word (${matched.filter((m) => m.repeat).length} of them repeats of an action already matched), ${flags.length} flagged, ${unmatched.length} naming something the narration never says nearby.`, "");
   if (flags.length) {
     lines.push("| Word at | Beat | Said | Shown | Event at | Off by |", "|---|---|---|---|---|---|");
     for (const f of flags) lines.push(`| ${mmss(f.wordT)} | ${f.beat} | "${f.word}" | ${f.kind}: ${f.label.replace(/\|/g, "/")} | ${mmss(f.t)} | ${f.delta > 0 ? "+" : "−"}${Math.abs(f.delta).toFixed(1)} s |`);
