@@ -5,6 +5,7 @@ import { groupCutList, cutListCsv } from "../core/weldment";
 import { flatPatternSvg, flatPatternDxf, flatPatternPdf, type FlatPattern } from "../core/sheet";
 import { saveOutput, sanitizeOutputName } from "../model/saveOutput";
 import { Constraint, DimensionConstraint, isDimension } from "../sketch/types";
+import { FoldsPanel } from "./FoldsPanel";
 
 const dimLabel: Record<string, string> = {
   distance: "Distance", distanceX: "Horiz. dist", distanceY: "Vert. dist",
@@ -150,6 +151,7 @@ function ModelInspector() {
           );
         })}
       </div>
+      <FoldsPanel />
       <CutList />
       <FlatPatterns />
     </div>
@@ -188,6 +190,8 @@ export function InspectorPanel() {
         <span className="status-dot" />
         <span>{solve.text}</span>
       </div>
+
+      <FoldsPanel />
 
       <div className="inspector-section">
         <div className="section-title">Dimensions ({dims.length})</div>

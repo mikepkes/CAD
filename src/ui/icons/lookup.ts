@@ -79,6 +79,7 @@ const COMMANDS: Record<string, IconName> = {
   "feature.sheet": "sheet",
   "feature.flange": "flange",
   "feature.fold": "fold",
+  "feature.sheet.edit": "fold",
   "feature.unfold": "unfold",
   "feature.refold": "refold",
   "feature.surface": "surface",

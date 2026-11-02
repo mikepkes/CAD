@@ -2445,6 +2445,7 @@ export const BUILTINS: CommandDef<any>[] = [
         radius: { type: ["string", "number"], description: "Default inner bend radius (default = thickness; 0 = sharp creases)." },
         kFactor: { type: ["string", "number"], description: "Neutral-layer position from the inside, as a fraction of the thickness (default 0.5)." },
         reliefWidth: { type: ["string", "number"] },
+        cuts: { type: "array", items: { type: "string" }, description: "base: lines of the sketch (construction) the paper is cut along — slits, for pop-up cards: a slot the thickness wide (at least 0.1) is cut from the blank, and the crease pattern draws the cut line. A crease may end on a cut (the paper is free there)." },
         folds: {
           type: "array",
           description: "base: lines of the sketch to fold along.",
@@ -2480,7 +2481,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A U-channel from an open three-line profile, 1.5 mm, 40 deep", params: { sketch: "sketch2", mode: "contour", thickness: 1.5, width: 40 } },
       { note: "Paper folded in steps: in half, then in half again through both layers, driven by a `fold` parameter (0…2)", params: { sketch: "sketch1", thickness: 0.1, radius: 0, folds: [{ line: "l5", angle: 180, step: 1 }, { line: "l6", angle: 180, step: 2 }], progress: "fold" } },
     ],
-    apply(draft, p: { sketch: string; mode?: "base" | "contour"; thickness: unknown; radius?: unknown; kFactor?: unknown; reliefWidth?: unknown; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown; step?: number; turn?: boolean; flip?: boolean; collapse?: boolean; with?: string; through?: "up" | "down" | "both"; depth?: number; bend?: boolean; reverse?: "inside" | "outside" }[]; progress?: unknown; width?: unknown; flip?: boolean; fixed?: { x: number; y: number }; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; mode?: "base" | "contour"; thickness: unknown; cuts?: string[]; radius?: unknown; kFactor?: unknown; reliefWidth?: unknown; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown; step?: number; turn?: boolean; flip?: boolean; collapse?: boolean; with?: string; through?: "up" | "down" | "both"; depth?: number; bend?: boolean; reverse?: "inside" | "outside" }[]; progress?: unknown; width?: unknown; flip?: boolean; fixed?: { x: number; y: number }; name?: string }, ctx) {
       const sk = draft.sketches[p.sketch];
       if (!sk) throw new Error(`No sketch "${p.sketch}"`);
       const ex = (v: unknown) => (v == null ? undefined : String(v));
@@ -2491,6 +2492,7 @@ export const BUILTINS: CommandDef<any>[] = [
           ...(f.step != null ? { step: f.step } : {}), ...(f.turn ? { turn: true } : {}), ...(f.flip ? { flip: true } : {}), ...(f.collapse ? { collapse: true } : {}), ...(f.with ? { with: f.with } : {}), ...(f.through ? { through: f.through } : {}), ...(f.depth != null ? { depth: f.depth } : {}), ...(f.bend ? { bend: true } : {}), ...(f.reverse ? { reverse: f.reverse } : {}),
         };
       });
+      for (const c of p.cuts ?? []) if (sk.entities[c]?.kind !== "line") throw new Error(`cut "${c}" isn't a line of ${sk.name}`);
       const stepped = folds?.filter((f) => f.step != null).length ?? 0;
       if (stepped && stepped !== folds!.length) throw new Error("folding in steps: give every fold a `step`");
       if (stepped && folds!.some((f) => f.angleExpr == null && !f.collapse && !f.reverse)) throw new Error("folding in steps: give every fold an `angle` (a collapse's may be solved)");
@@ -2499,7 +2501,7 @@ export const BUILTINS: CommandDef<any>[] = [
       draft.features[id] = {
         id, kind: "sheet", name: p.name ?? (p.mode === "contour" ? "Contour flange" : "Sheet"), mode: p.mode ?? "base", sketchId: p.sketch,
         thicknessExpr: String(p.thickness), ...(p.radius != null ? { radiusExpr: String(p.radius) } : {}), ...(p.kFactor != null ? { kFactorExpr: String(p.kFactor) } : {}),
-        ...(p.reliefWidth != null ? { reliefWidthExpr: String(p.reliefWidth) } : {}), ...(folds?.length ? { folds } : {}),
+        ...(p.reliefWidth != null ? { reliefWidthExpr: String(p.reliefWidth) } : {}), ...(folds?.length ? { folds } : {}), ...(p.cuts?.length ? { cuts: p.cuts } : {}),
         ...(ex(p.width) ? { widthExpr: ex(p.width) } : {}), ...(p.flip ? { flip: true } : {}), ...(p.fixed ? { fixed: { x: p.fixed.x, y: p.fixed.y } } : {}),
         ...(ex(p.progress) ? { progressExpr: ex(p.progress) } : {}),
       };
@@ -3556,6 +3558,103 @@ export const BUILTINS: CommandDef<any>[] = [
     },
     apply(draft, p: { sketch: string; target: string; distance: number }, ctx) {
       return offsetCurve(sketchOf(draft, p.sketch), p.target, p.distance, ctx);
+    },
+  },
+  {
+    type: "feature.sheet.edit",
+    title: "Edit sheet folds",
+    summary: "Change a sheet's (paper's) folds, cuts, progress, held point or thickness in place — the Folds panel's command.",
+    description:
+      "Edits the `feature.sheet` `feature` where it stands: each field given replaces the sheet's own, the rest are kept. " +
+      "`folds` is the whole new list (same items as feature.sheet's: `line`, `angle` (degrees, + valley seen from the top, − mountain), `direction`, `step`, `turn`, `flip`, `collapse`, `with`, `through`, `depth`, `bend`, `reverse`); [] removes every fold. " +
+      "To add a fold, read the sheet's folds (get_state), append one and send the whole list; to insert a step, renumber the later folds' `step`. " +
+      "`cuts` is the whole new list of slit lines ([] removes them). `progress` (an expression, usually a `fold` parameter: 0 flat, k = step k done; \"\" = all done), `fixed` (the held point, sketch coords; null = the default), `thickness`. " +
+      "Checked as feature.sheet checks them: every fold and cut is a line of the sheet's sketch, no line is both a fold and a cut, folds in steps all have a `step` and an `angle` (a collapse's or reverse fold's may be left to solve), `with` names another fold of the same step, and `progress` needs folds made in steps (or none yet). " +
+      "Where the folding itself fails (a layer through a crease, a tear), the sheet's row carries the error, naming the step and fold.",
+    paramsSchema: {
+      type: "object",
+      required: ["feature"],
+      additionalProperties: false,
+      properties: {
+        feature: { type: "string", description: "The sheet feature's id (from feature.sheet)." },
+        folds: {
+          type: "array",
+          description: "The new list of folds (replaces the sheet's).",
+          items: {
+            type: "object", required: ["line"], additionalProperties: false,
+            properties: {
+              line: { type: "string" },
+              angle: { type: ["string", "number"], description: "Degrees: + valley (toward the top), − mountain. Omit to solve (a collapse's creases)." },
+              direction: { type: "string", enum: ["valley", "mountain"] },
+              radius: { type: ["string", "number"] },
+              step: { type: "integer", minimum: 1 },
+              turn: { type: "boolean" },
+              flip: { type: "boolean" },
+              collapse: { type: "boolean" },
+              with: { type: "string", description: "In a collapse: the line of another fold of the same step this one turns with." },
+              through: { type: "string", enum: ["up", "down", "both"] },
+              depth: { type: "integer", minimum: 1 },
+              bend: { type: "boolean" },
+              reverse: { type: "string", enum: ["inside", "outside"] },
+            },
+          },
+        },
+        cuts: { type: "array", items: { type: "string" }, description: "The new list of slits (sketch line ids)." },
+        progress: { type: ["string", "number"], description: "How far the steps are folded (usually a parameter name); \"\" = every step done." },
+        fixed: { description: "The held point (sketch coords); null = the default.", oneOf: [{ type: "object", required: ["x", "y"], additionalProperties: false, properties: { x: { type: "number" }, y: { type: "number" } } }, { type: "null" }] },
+        thickness: { type: ["string", "number"] },
+      },
+    },
+    examples: [
+      { note: "Fold in half along construction line ln9 as step 1, then in half again along ln10 as step 2, run by `fold`", params: { feature: "sheet12", folds: [{ line: "ln9", angle: 180, step: 1 }, { line: "ln10", angle: 180, step: 2 }], progress: "fold" } },
+      { note: "Cut two slits (a pop-up card)", params: { feature: "sheet12", cuts: ["ln14", "ln15"] } },
+      { note: "Hold the paper at another point, and make it thinner", params: { feature: "sheet12", fixed: { x: -20, y: 5 }, thickness: 0.05 } },
+    ],
+    apply(draft, p: { feature: string; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown; step?: number; turn?: boolean; flip?: boolean; collapse?: boolean; with?: string; through?: "up" | "down" | "both"; depth?: number; bend?: boolean; reverse?: "inside" | "outside" }[]; cuts?: string[]; progress?: unknown; fixed?: { x: number; y: number } | null; thickness?: unknown }) {
+      const f = draft.features[p.feature];
+      if (!f) throw new Error(`No feature "${p.feature}"`);
+      if (f.kind !== "sheet") throw new Error(`${f.name} isn't a sheet (feature.sheet)`);
+      const sk = draft.sketches[f.sketchId];
+      if (!sk) throw new Error(`No sketch "${f.sketchId}"`);
+      if (f.mode === "contour" && (p.folds || p.cuts)) throw new Error("a contour flange has no folds or cuts of its own: add flanges and folds to it instead");
+      const isLine = (id: string) => sk.entities[id]?.kind === "line";
+      const given = (v: unknown) => v != null && v !== "";
+      const folds: SheetFoldDef[] = p.folds ? p.folds.map((d) => {
+        if (!isLine(d.line)) throw new Error(`fold "${d.line}" isn't a line of ${sk.name}`);
+        return {
+          line: d.line, ...(given(d.angle) ? { angleExpr: String(d.angle) } : {}), ...(d.direction ? { direction: d.direction } : {}), ...(given(d.radius) ? { radiusExpr: String(d.radius) } : {}),
+          ...(d.step != null ? { step: d.step } : {}), ...(d.turn ? { turn: true } : {}), ...(d.flip ? { flip: true } : {}), ...(d.collapse ? { collapse: true } : {}), ...(d.with ? { with: d.with } : {}), ...(d.through ? { through: d.through } : {}), ...(d.depth != null ? { depth: d.depth } : {}), ...(d.bend ? { bend: true } : {}), ...(d.reverse ? { reverse: d.reverse } : {}),
+        };
+      }) : (f.folds ?? []);
+      const cuts = p.cuts ? [...p.cuts] : (f.cuts ?? []);
+      for (const c of cuts) {
+        if (!isLine(c)) throw new Error(`cut "${c}" isn't a line of ${sk.name}`);
+        if (folds.some((d) => d.line === c)) throw new Error(`"${c}" is both a fold and a cut: a line is one or the other`);
+      }
+      const stepped = folds.filter((d) => d.step != null).length;
+      if (stepped && stepped !== folds.length) throw new Error("folding in steps: give every fold a `step`");
+      const noAngle = folds.find((d) => d.step != null && d.angleExpr == null && !d.collapse && !d.reverse);
+      if (noAngle) throw new Error(`folding in steps: give fold "${noAngle.line}" an \`angle\` (a collapse's may be solved)`);
+      for (const d of folds) {
+        if (!d.with) continue;
+        const other = folds.find((o) => o !== d && o.line === d.with);
+        if (!other) throw new Error(`fold "${d.line}" turns with "${d.with}", which isn't another fold of the sheet`);
+        if (other.step !== d.step) throw new Error(`fold "${d.line}" turns with "${d.with}", which is made in another step`);
+      }
+      const progress = p.progress === undefined ? f.progressExpr : String(p.progress).trim();
+      if (progress && folds.length && !stepped) throw new Error("`progress` runs folds made in steps: give the folds a `step`");
+      if (p.thickness !== undefined) {
+        const t = String(p.thickness).trim();
+        if (!t) throw new Error("give a `thickness` (0 = a surface)");
+        f.thicknessExpr = t;
+      }
+      if (p.folds) { if (folds.length) f.folds = folds; else delete f.folds; }
+      if (p.cuts) { if (cuts.length) f.cuts = cuts; else delete f.cuts; }
+      if (p.progress !== undefined) { if (progress) f.progressExpr = progress; else delete f.progressExpr; }
+      if (p.fixed !== undefined) { if (p.fixed) f.fixed = { x: p.fixed.x, y: p.fixed.y }; else delete f.fixed; }
+      const steps = new Set(folds.map((d) => d.step).filter((s) => s != null)).size;
+      const what = [`${folds.length} fold${folds.length === 1 ? "" : "s"}${steps ? ` in ${steps} step${steps === 1 ? "" : "s"}` : ""}`, ...(cuts.length ? [`${cuts.length} cut${cuts.length === 1 ? "" : "s"}`] : [])];
+      return { message: `${f.name}: ${what.join(", ")}` };
     },
   },
 ];
