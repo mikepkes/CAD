@@ -23,6 +23,8 @@ node video/edit.mjs --run pass2               # cut, speed up, subtitle and enco
 node video/edit.mjs --run pass2 --preview     # 720p copies under 30 MB, for review on a phone
 node video/sheet.mjs --run pass2 --video demo --every 15   # contact sheets of a cut, for review
 node video/checks/vo.mjs --run pass2          # every line has its clips, each fits its beat, none overlap
+node video/youtube.mjs auth                   # once: approve uploads to your channel (setup in youtube.mjs's header)
+node video/youtube.mjs upload --run pass2 --video demo   # upload a cut, private, with chapters and captions (--dry to preview)
 ```
 
 Don't change files in the repo while a take records: the dev server reloads the page (it ignores `video/takes`,
