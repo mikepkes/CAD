@@ -1,0 +1,1470 @@
+{
+  "format": "vibecad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 186,
+  "rollbackIndex": 56,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "size",
+        "expression": "150",
+        "min": 100,
+        "max": 300,
+        "step": 1
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1793606764033
+    },
+    {
+      "opId": "op3",
+      "type": "parameter.add",
+      "params": {
+        "name": "fold",
+        "expression": "5",
+        "min": 0,
+        "max": 5,
+        "step": 0.01
+      },
+      "createdIds": [
+        "param4"
+      ],
+      "label": "Add parameter",
+      "at": 1793606764034
+    },
+    {
+      "opId": "op5",
+      "type": "parameter.add",
+      "params": {
+        "name": "q",
+        "expression": "size/sqrt(2)/4",
+        "hidden": true
+      },
+      "createdIds": [
+        "param6"
+      ],
+      "label": "Add parameter",
+      "at": 1793606764034
+    },
+    {
+      "opId": "op7",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "name": "Sheet"
+      },
+      "createdIds": [
+        "sketch8",
+        "pt9"
+      ],
+      "label": "Create sketch",
+      "at": 1793606764034
+    },
+    {
+      "opId": "op10",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch8",
+        "x": "4*q",
+        "y": "0*q"
+      },
+      "createdIds": [
+        "pt11"
+      ],
+      "label": "Add point",
+      "at": 1793606764060
+    },
+    {
+      "opId": "op12",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch8",
+        "x": "0*q",
+        "y": "4*q"
+      },
+      "createdIds": [
+        "pt13"
+      ],
+      "label": "Add point",
+      "at": 1793606764060
+    },
+    {
+      "opId": "op14",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch8",
+        "x": "-4*q",
+        "y": "0*q"
+      },
+      "createdIds": [
+        "pt15"
+      ],
+      "label": "Add point",
+      "at": 1793606764061
+    },
+    {
+      "opId": "op16",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch8",
+        "x": "0*q",
+        "y": "-4*q"
+      },
+      "createdIds": [
+        "pt17"
+      ],
+      "label": "Add point",
+      "at": 1793606764061
+    },
+    {
+      "opId": "op18",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "ref": "pt11"
+        },
+        "end": {
+          "ref": "pt13"
+        }
+      },
+      "createdIds": [
+        "ln19"
+      ],
+      "label": "Add line",
+      "at": 1793606764061
+    },
+    {
+      "opId": "op20",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "ref": "pt13"
+        },
+        "end": {
+          "ref": "pt15"
+        }
+      },
+      "createdIds": [
+        "ln21"
+      ],
+      "label": "Add line",
+      "at": 1793606764062
+    },
+    {
+      "opId": "op22",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "ref": "pt15"
+        },
+        "end": {
+          "ref": "pt17"
+        }
+      },
+      "createdIds": [
+        "ln23"
+      ],
+      "label": "Add line",
+      "at": 1793606764062
+    },
+    {
+      "opId": "op24",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "ref": "pt17"
+        },
+        "end": {
+          "ref": "pt11"
+        }
+      },
+      "createdIds": [
+        "ln25"
+      ],
+      "label": "Add line",
+      "at": 1793606764062
+    },
+    {
+      "opId": "op26",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "2*q",
+          "y": "-2*q"
+        },
+        "end": {
+          "x": "2*q",
+          "y": "2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt27",
+        "pt28",
+        "ln29"
+      ],
+      "label": "Add line",
+      "at": 1793606764063
+    },
+    {
+      "opId": "op30",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "2*q",
+          "y": "2*q"
+        },
+        "end": {
+          "x": "-2*q",
+          "y": "2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt31",
+        "pt32",
+        "ln33"
+      ],
+      "label": "Add line",
+      "at": 1793606764063
+    },
+    {
+      "opId": "op34",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-2*q",
+          "y": "2*q"
+        },
+        "end": {
+          "x": "-2*q",
+          "y": "-2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt35",
+        "pt36",
+        "ln37"
+      ],
+      "label": "Add line",
+      "at": 1793606764063
+    },
+    {
+      "opId": "op38",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-2*q",
+          "y": "-2*q"
+        },
+        "end": {
+          "x": "2*q",
+          "y": "-2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt39",
+        "pt40",
+        "ln41"
+      ],
+      "label": "Add line",
+      "at": 1793606764064
+    },
+    {
+      "opId": "op42",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-3*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "3*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt43",
+        "pt44",
+        "ln45"
+      ],
+      "label": "Add line",
+      "at": 1793606764064
+    },
+    {
+      "opId": "op46",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "3*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "-3*q",
+          "y": "-1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt47",
+        "pt48",
+        "ln49"
+      ],
+      "label": "Add line",
+      "at": 1793606764064
+    },
+    {
+      "opId": "op50",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-2*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "2*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt51",
+        "pt52",
+        "ln53"
+      ],
+      "label": "Add line",
+      "at": 1793606764065
+    },
+    {
+      "opId": "op54",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "3*q"
+        },
+        "end": {
+          "x": "1*q",
+          "y": "3*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt55",
+        "pt56",
+        "ln57"
+      ],
+      "label": "Add line",
+      "at": 1793606764065
+    },
+    {
+      "opId": "op58",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "2*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "3*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt59",
+        "pt60",
+        "ln61"
+      ],
+      "label": "Add line",
+      "at": 1793606764065
+    },
+    {
+      "opId": "op62",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-3*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "-2*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt63",
+        "pt64",
+        "ln65"
+      ],
+      "label": "Add line",
+      "at": 1793606764066
+    },
+    {
+      "opId": "op66",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-2*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "2*q",
+          "y": "-1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt67",
+        "pt68",
+        "ln69"
+      ],
+      "label": "Add line",
+      "at": 1793606764066
+    },
+    {
+      "opId": "op70",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "-3*q"
+        },
+        "end": {
+          "x": "1*q",
+          "y": "-3*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt71",
+        "pt72",
+        "ln73"
+      ],
+      "label": "Add line",
+      "at": 1793606764067
+    },
+    {
+      "opId": "op74",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "2*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "3*q",
+          "y": "-1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt75",
+        "pt76",
+        "ln77"
+      ],
+      "label": "Add line",
+      "at": 1793606764068
+    },
+    {
+      "opId": "op78",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-3*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "-2*q",
+          "y": "-1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt79",
+        "pt80",
+        "ln81"
+      ],
+      "label": "Add line",
+      "at": 1793606764068
+    },
+    {
+      "opId": "op82",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "1*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "1*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt83",
+        "pt84",
+        "ln85"
+      ],
+      "label": "Add line",
+      "at": 1793606764069
+    },
+    {
+      "opId": "op86",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "3*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "3*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt87",
+        "pt88",
+        "ln89"
+      ],
+      "label": "Add line",
+      "at": 1793606764069
+    },
+    {
+      "opId": "op90",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "1*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "1*q",
+          "y": "2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt91",
+        "pt92",
+        "ln93"
+      ],
+      "label": "Add line",
+      "at": 1793606764070
+    },
+    {
+      "opId": "op94",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "1*q",
+          "y": "2*q"
+        },
+        "end": {
+          "x": "1*q",
+          "y": "3*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt95",
+        "pt96",
+        "ln97"
+      ],
+      "label": "Add line",
+      "at": 1793606764070
+    },
+    {
+      "opId": "op98",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "1*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "2*q",
+          "y": "2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt99",
+        "pt100",
+        "ln101"
+      ],
+      "label": "Add line",
+      "at": 1793606764071
+    },
+    {
+      "opId": "op102",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "1*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "2*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt103",
+        "pt104",
+        "ln105"
+      ],
+      "label": "Add line",
+      "at": 1793606764075
+    },
+    {
+      "opId": "op106",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "2*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "3*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt107",
+        "pt108",
+        "ln109"
+      ],
+      "label": "Add line",
+      "at": 1793606764076
+    },
+    {
+      "opId": "op110",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "1*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "1*q",
+          "y": "-2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt111",
+        "pt112",
+        "ln113"
+      ],
+      "label": "Add line",
+      "at": 1793606764079
+    },
+    {
+      "opId": "op114",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "1*q",
+          "y": "-2*q"
+        },
+        "end": {
+          "x": "1*q",
+          "y": "-3*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt115",
+        "pt116",
+        "ln117"
+      ],
+      "label": "Add line",
+      "at": 1793606764081
+    },
+    {
+      "opId": "op118",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "1*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "2*q",
+          "y": "-2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt119",
+        "pt120",
+        "ln121"
+      ],
+      "label": "Add line",
+      "at": 1793606764082
+    },
+    {
+      "opId": "op122",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "1*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "2*q",
+          "y": "-1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt123",
+        "pt124",
+        "ln125"
+      ],
+      "label": "Add line",
+      "at": 1793606764083
+    },
+    {
+      "opId": "op126",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "2*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "3*q",
+          "y": "-1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt127",
+        "pt128",
+        "ln129"
+      ],
+      "label": "Add line",
+      "at": 1793606764084
+    },
+    {
+      "opId": "op130",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "-1*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt131",
+        "pt132",
+        "ln133"
+      ],
+      "label": "Add line",
+      "at": 1793606764085
+    },
+    {
+      "opId": "op134",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-3*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "-3*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt135",
+        "pt136",
+        "ln137"
+      ],
+      "label": "Add line",
+      "at": 1793606764086
+    },
+    {
+      "opId": "op138",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "-1*q",
+          "y": "2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt139",
+        "pt140",
+        "ln141"
+      ],
+      "label": "Add line",
+      "at": 1793606764086
+    },
+    {
+      "opId": "op142",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "2*q"
+        },
+        "end": {
+          "x": "-1*q",
+          "y": "3*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt143",
+        "pt144",
+        "ln145"
+      ],
+      "label": "Add line",
+      "at": 1793606764087
+    },
+    {
+      "opId": "op146",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "-2*q",
+          "y": "2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt147",
+        "pt148",
+        "ln149"
+      ],
+      "label": "Add line",
+      "at": 1793606764088
+    },
+    {
+      "opId": "op150",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "-2*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt151",
+        "pt152",
+        "ln153"
+      ],
+      "label": "Add line",
+      "at": 1793606764090
+    },
+    {
+      "opId": "op154",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-2*q",
+          "y": "1*q"
+        },
+        "end": {
+          "x": "-3*q",
+          "y": "1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt155",
+        "pt156",
+        "ln157"
+      ],
+      "label": "Add line",
+      "at": 1793606764090
+    },
+    {
+      "opId": "op158",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "-1*q",
+          "y": "-2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt159",
+        "pt160",
+        "ln161"
+      ],
+      "label": "Add line",
+      "at": 1793606764091
+    },
+    {
+      "opId": "op162",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "-2*q"
+        },
+        "end": {
+          "x": "-1*q",
+          "y": "-3*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt163",
+        "pt164",
+        "ln165"
+      ],
+      "label": "Add line",
+      "at": 1793606764092
+    },
+    {
+      "opId": "op166",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "-2*q",
+          "y": "-2*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt167",
+        "pt168",
+        "ln169"
+      ],
+      "label": "Add line",
+      "at": 1793606764093
+    },
+    {
+      "opId": "op170",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-1*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "-2*q",
+          "y": "-1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt171",
+        "pt172",
+        "ln173"
+      ],
+      "label": "Add line",
+      "at": 1793606764094
+    },
+    {
+      "opId": "op174",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch8",
+        "start": {
+          "x": "-2*q",
+          "y": "-1*q"
+        },
+        "end": {
+          "x": "-3*q",
+          "y": "-1*q"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt175",
+        "pt176",
+        "ln177"
+      ],
+      "label": "Add line",
+      "at": 1793606764095
+    },
+    {
+      "opId": "op178",
+      "type": "feature.sheet",
+      "params": {
+        "sketch": "sketch8",
+        "name": "Masu box",
+        "thickness": 0.1,
+        "radius": 0,
+        "fixed": {
+          "x": 5,
+          "y": 3
+        },
+        "progress": "fold",
+        "folds": [
+          {
+            "line": "ln29",
+            "step": 1,
+            "angle": 180
+          },
+          {
+            "line": "ln33",
+            "step": 1,
+            "angle": 180
+          },
+          {
+            "line": "ln37",
+            "step": 1,
+            "angle": 180
+          },
+          {
+            "line": "ln41",
+            "step": 1,
+            "angle": 180
+          },
+          {
+            "line": "ln45",
+            "step": 2,
+            "angle": 180
+          },
+          {
+            "line": "ln49",
+            "step": 2,
+            "angle": 180
+          },
+          {
+            "line": "ln53",
+            "step": 3,
+            "angle": 90,
+            "collapse": true
+          },
+          {
+            "line": "ln57",
+            "step": 3,
+            "collapse": true,
+            "with": "ln53"
+          },
+          {
+            "line": "ln61",
+            "step": 3,
+            "collapse": true,
+            "with": "ln53"
+          },
+          {
+            "line": "ln65",
+            "step": 3,
+            "collapse": true,
+            "with": "ln53"
+          },
+          {
+            "line": "ln69",
+            "step": 3,
+            "angle": 90,
+            "collapse": true
+          },
+          {
+            "line": "ln73",
+            "step": 3,
+            "collapse": true,
+            "with": "ln69"
+          },
+          {
+            "line": "ln77",
+            "step": 3,
+            "collapse": true,
+            "with": "ln69"
+          },
+          {
+            "line": "ln81",
+            "step": 3,
+            "collapse": true,
+            "with": "ln69"
+          },
+          {
+            "line": "ln85",
+            "step": 4,
+            "angle": 90,
+            "collapse": true
+          },
+          {
+            "line": "ln89",
+            "step": 4,
+            "collapse": true,
+            "with": "ln85"
+          },
+          {
+            "line": "ln93",
+            "step": 4,
+            "collapse": true,
+            "direction": "valley"
+          },
+          {
+            "line": "ln97",
+            "step": 4,
+            "collapse": true,
+            "with": "ln93"
+          },
+          {
+            "line": "ln101",
+            "step": 4,
+            "collapse": true,
+            "direction": "valley"
+          },
+          {
+            "line": "ln105",
+            "step": 4,
+            "collapse": true
+          },
+          {
+            "line": "ln109",
+            "step": 4,
+            "collapse": true,
+            "with": "ln105"
+          },
+          {
+            "line": "ln93",
+            "step": 5,
+            "angle": 180,
+            "collapse": true
+          },
+          {
+            "line": "ln97",
+            "step": 5,
+            "collapse": true,
+            "with": "ln93"
+          },
+          {
+            "line": "ln105",
+            "step": 5,
+            "collapse": true
+          },
+          {
+            "line": "ln109",
+            "step": 5,
+            "collapse": true,
+            "with": "ln105"
+          },
+          {
+            "line": "ln113",
+            "step": 4,
+            "collapse": true,
+            "direction": "valley"
+          },
+          {
+            "line": "ln117",
+            "step": 4,
+            "collapse": true,
+            "with": "ln113"
+          },
+          {
+            "line": "ln121",
+            "step": 4,
+            "collapse": true,
+            "direction": "valley"
+          },
+          {
+            "line": "ln125",
+            "step": 4,
+            "collapse": true
+          },
+          {
+            "line": "ln129",
+            "step": 4,
+            "collapse": true,
+            "with": "ln125"
+          },
+          {
+            "line": "ln113",
+            "step": 5,
+            "angle": 180,
+            "collapse": true
+          },
+          {
+            "line": "ln117",
+            "step": 5,
+            "collapse": true,
+            "with": "ln113"
+          },
+          {
+            "line": "ln125",
+            "step": 5,
+            "collapse": true
+          },
+          {
+            "line": "ln129",
+            "step": 5,
+            "collapse": true,
+            "with": "ln125"
+          },
+          {
+            "line": "ln133",
+            "step": 4,
+            "angle": 90,
+            "collapse": true
+          },
+          {
+            "line": "ln137",
+            "step": 4,
+            "collapse": true,
+            "with": "ln133"
+          },
+          {
+            "line": "ln141",
+            "step": 4,
+            "collapse": true,
+            "direction": "valley"
+          },
+          {
+            "line": "ln145",
+            "step": 4,
+            "collapse": true,
+            "with": "ln141"
+          },
+          {
+            "line": "ln149",
+            "step": 4,
+            "collapse": true,
+            "direction": "valley"
+          },
+          {
+            "line": "ln153",
+            "step": 4,
+            "collapse": true
+          },
+          {
+            "line": "ln157",
+            "step": 4,
+            "collapse": true,
+            "with": "ln153"
+          },
+          {
+            "line": "ln141",
+            "step": 5,
+            "angle": 180,
+            "collapse": true
+          },
+          {
+            "line": "ln145",
+            "step": 5,
+            "collapse": true,
+            "with": "ln141"
+          },
+          {
+            "line": "ln153",
+            "step": 5,
+            "collapse": true
+          },
+          {
+            "line": "ln157",
+            "step": 5,
+            "collapse": true,
+            "with": "ln153"
+          },
+          {
+            "line": "ln161",
+            "step": 4,
+            "collapse": true,
+            "direction": "valley"
+          },
+          {
+            "line": "ln165",
+            "step": 4,
+            "collapse": true,
+            "with": "ln161"
+          },
+          {
+            "line": "ln169",
+            "step": 4,
+            "collapse": true,
+            "direction": "valley"
+          },
+          {
+            "line": "ln173",
+            "step": 4,
+            "collapse": true
+          },
+          {
+            "line": "ln177",
+            "step": 4,
+            "collapse": true,
+            "with": "ln173"
+          },
+          {
+            "line": "ln161",
+            "step": 5,
+            "angle": 180,
+            "collapse": true
+          },
+          {
+            "line": "ln165",
+            "step": 5,
+            "collapse": true,
+            "with": "ln161"
+          },
+          {
+            "line": "ln173",
+            "step": 5,
+            "collapse": true
+          },
+          {
+            "line": "ln177",
+            "step": 5,
+            "collapse": true,
+            "with": "ln173"
+          }
+        ]
+      },
+      "createdIds": [
+        "sheet179"
+      ],
+      "label": "Sheet metal / paper",
+      "at": 1793606764096
+    },
+    {
+      "opId": "op180",
+      "type": "material.create",
+      "params": {
+        "name": "Origami paper",
+        "kind": "paper",
+        "color": "#f4f1ea",
+        "backColor": "#b33a2e"
+      },
+      "createdIds": [
+        "mat181"
+      ],
+      "label": "Create material",
+      "at": 1793606764097
+    },
+    {
+      "opId": "op182",
+      "type": "material.assign",
+      "params": {
+        "material": "mat181"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793606764100
+    },
+    {
+      "opId": "op183",
+      "type": "parameter.describe",
+      "params": {
+        "name": "size",
+        "label": "Paper size",
+        "unit": "mm",
+        "description": "The square's side; 150 mm is standard origami paper. The box is a quarter as wide."
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793606764103
+    },
+    {
+      "opId": "op184",
+      "type": "parameter.describe",
+      "params": {
+        "name": "fold",
+        "label": "Fold",
+        "unit": "of 5",
+        "description": "0 is the flat sheet; 5 the finished box"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793606764105
+    },
+    {
+      "opId": "op185",
+      "type": "document.describe",
+      "params": {
+        "title": "Masu box",
+        "description": "The traditional origami box, folded from one square sheet: corners in, sides up, then the ends, the corners tucking in as they rise."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793606764106
+    }
+  ],
+  "timelineGroups": [],
+  "hidden": [
+    "sketch8"
+  ]
+}

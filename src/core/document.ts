@@ -278,6 +278,15 @@ export interface SheetFoldDef {
   turn?: boolean;
   /** Fold the side of the line the sheet is held by instead (the other side stays put). */
   flip?: boolean;
+  /** Folded in steps: this fold is one crease of a collapse — every fold of its step moves at once, sharing
+   *  paper (a squash, a petal fold, a box's corners). Its line is a crease on the flat sheet, end to end. */
+  collapse?: boolean;
+  /** In a collapse: the line of a fold this one turns with (a crease of a layer stacked with that one's). */
+  with?: string;
+  /** In a collapse: the crease goes on through the layers stacked on the top ("up") or bottom ("down") of the one it's
+   *  drawn on, or both, where it crosses them, `depth` layers on at most. */
+  through?: "up" | "down" | "both";
+  depth?: number;
 }
 
 /** A sheet-metal (or paper) part: a flat blank of uniform thickness folded

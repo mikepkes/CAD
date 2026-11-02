@@ -20,6 +20,26 @@ exports[`bundled examples > examples/scissor.json > replays, builds on both geom
 ]
 `;
 
+exports[`bundled examples > public/examples/crane.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet219",
+    "max": [
+      56.5,
+      49.8,
+      88.3,
+    ],
+    "min": [
+      -93.8,
+      -69,
+      -61.7,
+    ],
+    "name": "Crane",
+    "volume": 0,
+  },
+]
+`;
+
 exports[`bundled examples > public/examples/gimbal.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {

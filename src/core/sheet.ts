@@ -53,6 +53,12 @@ export interface SheetFold {
   step?: number;
   turn?: boolean;
   flip?: boolean;
+  collapse?: boolean;
+  with?: string;
+  /** In a collapse: solved (no angle given), starting its way by `direction`. */
+  solve?: boolean;
+  through?: "up" | "down" | "both";
+  depth?: number;
 }
 
 /** Material added to (a flange) or cut from (a relief) the blank, in order. */

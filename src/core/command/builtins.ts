@@ -2400,7 +2400,7 @@ export const BUILTINS: CommandDef<any>[] = [
     description:
       "`mode` base (default): the closed region(s) of `sketch` are the flat blank; `folds` lists lines of the same sketch (draw them as construction lines) to fold along, each with `angle` in degrees (+ folds toward the sheet's top — a valley seen from the top; − away, a mountain) and optionally its own `radius`. " +
       "Paper and origami: `thickness` 0 (a surface body) or a small one, `radius` 0 so folds are sharp creases. Creases may meet at vertices; a crease given no `angle` (just `direction` valley or mountain) is solved so every vertex closes up — drive one crease and the rest follow (rigid origami). An error names the vertex when the angles given can't all fold at once. " +
-      "Folding in steps (origami as diagrammed: a fold through layers an earlier one stacked up): give every fold a `step` (1, 2, …). Draw each line on the flat sheet where it crosses one layer; at its step it is carried to where that layer lies, every layer of the flap stacked there is creased, and the flap — the paper beyond the line from the held point (`fixed`; `flip` folds the held side), plus any layers it would pass through — turns by `angle` (+ valley toward the top of the layer the line is on, − mountain; 180 = flat). Folds of one step move together. `turn: true` makes a step that turns the whole model about the line (turn over: 180) without creasing. `progress` (an expression, e.g. a `fold` parameter) runs the steps: 0 flat, k = step k done, fractions part-way. Layers stack `thickness` apart (at least 0.02) and the paper is drawn as a surface; the paper never passes through itself, and a fold that would tear it (the flap joined across the line elsewhere) is an error. " +
+      "Folding in steps (origami as diagrammed: a fold through layers an earlier one stacked up): give every fold a `step` (1, 2, …). Draw each line on the flat sheet where it crosses one layer; at its step it is carried to where that layer lies, every layer of the flap stacked there is creased, and the flap — the paper beyond the line from the held point (`fixed`; `flip` folds the held side), plus any layers it would pass through — turns by `angle` (+ valley toward the top of the layer the line is on, − mountain; 180 = flat). Folds of one step move together. `turn: true` makes a step that turns the whole model about the line (turn over: 180) without creasing. `collapse: true` on every fold of a step makes it a collapse (a squash, a petal fold, a box raised at its corners): each line is a crease on the flat sheet, end to end (one per layer it should crease). A crease with an `angle` is driven: it folds steadily to that angle (how far it's folded when done — a crease folded already turns from where it is); one without is solved so the paper stays joined along every crease, starting its way by `direction`; `with` (another fold's line) folds a crease of a layer stacked with that one together with it. They move at once, and layers that land on each other are spaced a gap apart. `progress` (an expression, e.g. a `fold` parameter) runs the steps: 0 flat, k = step k done, fractions part-way. Layers stack `thickness` apart (at least 0.02) and the paper is drawn as a surface; the paper never passes through itself, and a fold that would tear it (the flap joined across the line elsewhere) is an error. " +
       "`mode` contour: `sketch` holds one open run of straight lines (the bottom face of the profile; a bend rounds each corner) swept `width` along the sketch normal; `flip` puts the material on the run's left. " +
       "Rules for the part and everything added to it: `thickness`, `radius` (inner bend radius, default the thickness), `kFactor` (neutral layer, default 0.5), `reliefWidth`. The flat length is Σ straights + Σ bend allowances, BA = angle·(radius + kFactor·thickness). " +
       "The body (id = this feature's id) carries its flat pattern (flat_pattern / get_state); add flanges (feature.flange), sketched bends and jogs (feature.fold), and unfold/refold to cut it flat. Returns the feature id.",
@@ -2428,6 +2428,10 @@ export const BUILTINS: CommandDef<any>[] = [
               step: { type: "integer", minimum: 1, description: "Fold in steps: the step this fold is made in." },
               turn: { type: "boolean", description: "Steps: turn the whole model about this line instead (+ turns its left side toward the top)." },
               flip: { type: "boolean", description: "Steps: fold the held side of the line instead." },
+              collapse: { type: "boolean", description: "Steps: a crease of a collapse — every fold of its step moves at once (a squash, a petal fold, a box's corners); the line is the crease end to end on the flat sheet. With an angle it's driven to that fold; without, it's solved (starting its way by `direction`)." },
+              with: { type: "string", description: "Steps, in a collapse: the line of another fold of the step this one turns with — the same crease on a layer stacked with that one's (its own angle is ignored)." },
+              through: { type: "string", enum: ["up", "down", "both"], description: "Steps, in a collapse: carry the crease on through every layer stacked on the top (up) or bottom (down) of the one it's drawn on, or both, where its segment crosses them — all turning alike." },
+              depth: { type: "integer", minimum: 1, description: "Steps, with through: how many layers on the crease reaches (default: the whole stack)." },
             },
           },
         },
@@ -2444,7 +2448,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A U-channel from an open three-line profile, 1.5 mm, 40 deep", params: { sketch: "sketch2", mode: "contour", thickness: 1.5, width: 40 } },
       { note: "Paper folded in steps: in half, then in half again through both layers, driven by a `fold` parameter (0…2)", params: { sketch: "sketch1", thickness: 0.1, radius: 0, folds: [{ line: "l5", angle: 180, step: 1 }, { line: "l6", angle: 180, step: 2 }], progress: "fold" } },
     ],
-    apply(draft, p: { sketch: string; mode?: "base" | "contour"; thickness: unknown; radius?: unknown; kFactor?: unknown; reliefWidth?: unknown; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown; step?: number; turn?: boolean; flip?: boolean }[]; progress?: unknown; width?: unknown; flip?: boolean; fixed?: { x: number; y: number }; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; mode?: "base" | "contour"; thickness: unknown; radius?: unknown; kFactor?: unknown; reliefWidth?: unknown; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown; step?: number; turn?: boolean; flip?: boolean; collapse?: boolean; with?: string; through?: "up" | "down" | "both"; depth?: number }[]; progress?: unknown; width?: unknown; flip?: boolean; fixed?: { x: number; y: number }; name?: string }, ctx) {
       const sk = draft.sketches[p.sketch];
       if (!sk) throw new Error(`No sketch "${p.sketch}"`);
       const ex = (v: unknown) => (v == null ? undefined : String(v));
@@ -2452,12 +2456,12 @@ export const BUILTINS: CommandDef<any>[] = [
         if (sk.entities[f.line]?.kind !== "line") throw new Error(`fold "${f.line}" isn't a line of ${sk.name}`);
         return {
           line: f.line, ...(f.angle != null ? { angleExpr: String(f.angle) } : {}), ...(f.direction ? { direction: f.direction } : {}), ...(f.radius != null ? { radiusExpr: String(f.radius) } : {}),
-          ...(f.step != null ? { step: f.step } : {}), ...(f.turn ? { turn: true } : {}), ...(f.flip ? { flip: true } : {}),
+          ...(f.step != null ? { step: f.step } : {}), ...(f.turn ? { turn: true } : {}), ...(f.flip ? { flip: true } : {}), ...(f.collapse ? { collapse: true } : {}), ...(f.with ? { with: f.with } : {}), ...(f.through ? { through: f.through } : {}), ...(f.depth != null ? { depth: f.depth } : {}),
         };
       });
       const stepped = folds?.filter((f) => f.step != null).length ?? 0;
       if (stepped && stepped !== folds!.length) throw new Error("folding in steps: give every fold a `step`");
-      if (stepped && folds!.some((f) => f.angleExpr == null)) throw new Error("folding in steps: give every fold an `angle`");
+      if (stepped && folds!.some((f) => f.angleExpr == null && !f.collapse)) throw new Error("folding in steps: give every fold an `angle` (a collapse's may be solved)");
       if (p.progress != null && !stepped) throw new Error("`progress` runs folds made in steps: give the folds a `step`");
       const id = ctx.alloc("sheet");
       draft.features[id] = {

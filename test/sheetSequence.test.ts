@@ -136,3 +136,63 @@ describe("folding in steps", () => {
     for (let i = 0; i < uv.length; i++) expect(uv[i]).toBeCloseTo(done.uvs[i], 3);
   });
 });
+
+describe("folding in steps: collapses", () => {
+  // a 60 × 60 corner of a box: the floor held, one wall already up (a step of its own), then a collapse raises the
+  // other — driven — while the corner square between them folds in on its diagonal, solved so the paper stays joined
+  const sq = [{ x: -40, y: -40 }, { x: 20, y: -40 }, { x: 20, y: 20 }, { x: -40, y: 20 }];
+  const corner = (extra: Partial<SeqFoldDef> = {}): SeqFoldDef[] => [
+    { id: "wallA", a: { x: -40, y: 0 }, b: { x: 0, y: 0 }, angle: PI / 2, step: 1, collapse: true },
+    { id: "wallB", a: { x: 0, y: -40 }, b: { x: 0, y: 0 }, angle: PI / 2, step: 2, collapse: true, ...extra },
+    { id: "edgeA", a: { x: 0, y: 0 }, b: { x: 0, y: 20 }, angle: 1, step: 2, collapse: true, solve: true },
+    { id: "edgeB", a: { x: 0, y: 0 }, b: { x: 20, y: 0 }, angle: 0, step: 2, collapse: true, solve: true },
+    { id: "diag", a: { x: 0, y: 0 }, b: { x: 20, y: 20 }, angle: 1, step: 2, collapse: true, solve: true },
+  ];
+  const gapAt = (seq: ReturnType<typeof planSequence>, p: number) => {
+    const T = poseSequence(seq, sequenceAngles(seq, p));
+    let worst = 0;
+    for (const c of seq.creases) for (const q of [c.a, c.b]) {
+      const a = applyPoint(T[c.facets[0]], { ...q, z: 0 }), b = applyPoint(T[c.facets[1]], { ...q, z: 0 });
+      worst = Math.max(worst, Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z));
+    }
+    return worst;
+  };
+
+  it("raises a box's wall while its corner folds in, the paper joined all the way", () => {
+    const seq = planSequence(sq, corner(), { x: -20, y: -20 }, 0.1);
+    expect(seq.collapses?.map((c) => c.step)).toEqual([1, 2]);
+    // (within half a millimetre: the corner starts from a fold that can open either way, where the solve takes a
+    // sample or two to settle onto the path)
+    for (let k = 0; k <= 40; k++) expect(gapAt(seq, k / 20), `fold ${k / 20}`).toBeLessThan(0.5);
+    expect(sweepClear(seq, 2)).toEqual([]);
+    // done: both walls stand square to the floor, and the corner's two halves lie on each other
+    const T = poseSequence(seq, sequenceAngles(seq));
+    const facetAt = (x: number, y: number) => seq.facets.findIndex((f) => f.poly.every((a, i) => { const b = f.poly[(i + 1) % f.poly.length]; return (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x) >= -1e-9; }));
+    expect(Math.abs(T[facetAt(-20, 10)].z.z)).toBeLessThan(1e-6);
+    expect(Math.abs(T[facetAt(10, -20)].z.z)).toBeLessThan(1e-6);
+    expect(Math.abs(dot(T[facetAt(15, 5)].z, T[facetAt(5, 15)].z))).toBeCloseTo(1, 6);
+    // part-way, the corner is folded part-way too: neither flat nor closed
+    const half = poseSequence(seq, sequenceAngles(seq, 1.5));
+    expect(Math.abs(dot(half[facetAt(15, 5)].z, half[facetAt(5, 15)].z))).toBeLessThan(0.99);
+  });
+
+  it("carries a crease through a stack, the stack turning as one", () => {
+    // a strip folded in half, then the doubled end turned back over a crease drawn on the bottom layer only
+    const seq = planSequence(rect(100, 20), [
+      { id: "half", a: { x: 50, y: 0 }, b: { x: 50, y: 20 }, angle: PI, step: 1 },
+      { id: "end", a: { x: 30, y: 0 }, b: { x: 30, y: 20 }, angle: PI, step: 2, collapse: true, through: "both" },
+    ], { x: 45, y: 10 }, 0.1);
+    // both layers creased there: on the bottom layer at x = 30, and on the folded one where it lies over it (x = 70)
+    const xs = seq.creases.filter((c) => c.folds.some((j) => seq.folds[j].id.startsWith("end"))).map((c) => Math.round(c.a.x)).sort();
+    expect(xs).toEqual([30, 70]);
+    expect(sweepClear(seq, 2)).toEqual([]);
+    for (let k = 0; k <= 40; k++) expect(gapAt(seq, k / 20), `fold ${k / 20}`).toBeLessThan(1);
+  });
+
+  it("names what it can't do: a collapse needs a driven crease; its folds are its own step", () => {
+    expect(() => planSequence(sq, corner({ angle: 1, solve: true }), { x: -20, y: -20 }, 0.1)).toThrow(/driven/);
+    expect(() => planSequence(sq, [...corner(), { id: "plain", a: { x: -40, y: -30 }, b: { x: 20, y: -30 }, angle: PI, step: 2 }], { x: -20, y: -20 }, 0.1)).toThrow(/step of its own/);
+  });
+});
+
+const dot = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => a.x * b.x + a.y * b.y + a.z * b.z;
