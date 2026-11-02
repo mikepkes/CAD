@@ -11,7 +11,9 @@ const agentCache = JSON.parse(readFileSync(new URL("../mock/agent-vase.json", im
 const forcesCache = JSON.parse(readFileSync(new URL("../mock/agent-bistable-forces.json", import.meta.url), "utf8"));
 const hasExample = (name) => existsSync(new URL(`../../public/examples/${name}.json`, import.meta.url));
 
-async function load(d, name) {
+/** Open an example inside a cut. `setup` (optional) runs inside the cut too, so the beat's first frame already
+ *  shows its starting state (e.g. a fold posed flat) rather than the example as saved. */
+async function load(d, name, setup) {
   await d.cut(async () => {
     await d.run(async (n) => {
       const D = window.__vibecadDemo;
@@ -25,6 +27,7 @@ async function load(d, name) {
       await new Promise((r) => setTimeout(r, 700));
       D.frameAll(); // fill the frame with the model
     }, name);
+    if (setup) await setup();
     await d.settle(500);
   });
 }
@@ -60,8 +63,8 @@ export async function act3(d) {
     await d.clickEl(".side-toggle.left"); await d.clickEl(".side-toggle.right");
   });
 
-  const clip = async (id, name, title, sub, act) => {
-    await load(d, name);
+  const clip = async (id, name, title, sub, act, setup) => {
+    await load(d, name, setup);
     await d.beat(id, async () => { await d.lower(title, sub); await act(); }, { minMs: 6500 });
   };
 
@@ -144,14 +147,13 @@ export async function act3(d) {
     await d.wait(1200);
   });
   await clip("origami", "origami", "Paper airplane", "a flat sheet to a finished dart, fold by fold", async () => {
-    await d.api("poseSweep", "fold", 6, 0, 1); // start flat
     await d.api("aim", { dir: [0.4, -0.8, 0.9], ms: 900, margin: 0.75 });
     d.pick("origami folds", { len: 2.2, speed: 3 }); // the whole fold, sped up: the montage's longer shot
     await d.api("poseSweep", "fold", 0, 6, 6600, { ease: false });
     await d.api("aim", { dir: [0.8, -0.5, 0.45], ms: 1500, margin: 0.85 });
     await d.wait(800);
     await d.api("poseEnd");
-  });
+  }, () => d.api("poseSweep", "fold", 6, 0, 1)); // posed flat inside the load's cut: the saved example is the finished dart
   await clip("scissor-jointed", "scissor-jointed", "Jointed scissor lift", "the stage count is a slider, and it still moves", async () => { await sweep(d, "stages", [3, 4, 5, 4, 3], 2600); d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600); });
   await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", async () => { await sweep(d, "width", [64, 76], 900); d.pick("star box"); await sweep(d, "width", [88, 76, 64], 2100); });
 
