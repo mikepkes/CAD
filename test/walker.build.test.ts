@@ -12,10 +12,13 @@
 // placed at its pivot and turned to the angle between its two pins. Drag `t` and
 // everything follows; drag `s` and the whole walker scales.
 //
-// Built for clearance as a real one is: every bar has its own layer in its throw,
-// the crankshaft is webs and a crank pin per throw with journals only between
-// throws (the crank-pin bars sweep right through the shaft's axis), and bulkheads
-// between the throws carry the journals and short stubs for the fixed pivots.
+// Built to go together as a real one does: in each throw the bars are stacked so
+// the parts on every pin sit on adjacent layers, 1 mm apart, and every joint has a
+// pin through it — the crank pin, a stub from a bulkhead at the fixed pivot, and at
+// each moving joint a boss on one part through holes in the others (each part's
+// bosses on one face, to print flat). The crankshaft is webs and a crank pin per
+// throw with journals only between throws (the crank-pin bars sweep right through
+// the shaft's axis), and bulkheads between the throws carry the journals.
 //   BUILD_WALKER=/abs/out npx vitest run test/walker.build.test.ts
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -29,6 +32,7 @@ import { collideFeatures, evaluateFeatures } from "../src/core/features";
 import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
+import type { SolidEval } from "../src/core/features";
 
 const OUT = process.env.BUILD_WALKER || "";
 const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
@@ -49,8 +53,17 @@ G_LOCAL.y = Math.sqrt(J.i ** 2 - G_LOCAL.x ** 2);
 
 const PHASES = [0, 120, 240, 60, 180, 300];  // six throws: 60° apart, alternating so neighbours differ by 120°
 const W = 8, T = 4, PITCH = 5, GAP = 8;      // bar width and thickness, layer pitch, bulkhead bay (mm)
-const LAYERS = 12;                           // per throw: web, c, BCE, j k f DFG, j' k' f' DFG', web
+const LAYERS = 8;                            // per throw: web, the two legs' six layers, web
 const BLOCK = GAP + LAYERS * PITCH;
+// Each leg's parts, layer by layer, so the parts on every moving pin sit on adjacent layers: C (upper
+// link, triangle) on 1–2, E (triangle, knee link) on 2–3, F (knee link, foot) on 3–4, D (rocker, foot,
+// lower link) on 3–5; the fixed pivot B's stub reaches 2–3 from the bulkhead. The rocker and the knee
+// link share a layer (their edges never come within 18 mm). The mirrored twin takes the same stack
+// turned over (layer 7 − n), so the two legs interleave on layers 1–6: no two of the four links on the
+// shared crank pin share a layer, and every other pair that does stays 39 mm or more apart.
+type Part = "Upper link" | "Upper triangle" | "Rocker" | "Knee link" | "Foot" | "Lower link";
+const LAYER: Record<Part, number> = { "Upper link": 1, "Upper triangle": 2, Rocker: 3, "Knee link": 3, Foot: 4, "Lower link": 5 };
+const layerOf = (part: Part, mirror: boolean) => (mirror ? LAYERS - 1 - LAYER[part] : LAYER[part]);
 const HOLE = 2.3, PIN = 2, AXLE = 4;
 const TOP = 44;                              // frame rails above everything that moves (units of s)
 
@@ -64,8 +77,21 @@ function meet(p1: [string, string], r1: string, p2: [string, string], r2: string
   return [`${p1[0]}+${a}*${dx}/${D}${sign > 0 ? "-" : "+"}${h}*${dz}/${D}`, `${p1[1]}+${a}*${dz}/${D}${sign > 0 ? "+" : "-"}${h}*${dx}/${D}`];
 }
 
-/** A flat bar from its pivot (local origin) along +x for `len` (expression), rounded ends, a pin hole at each. */
-async function bar(s: CadSession, comp: string, len: string, name: string) {
+/** A pin standing off one face of a part, at its corner `at`: `dir` +1 along +Y from the part's back
+ *  face, −1 along −Y from its front face; `len` from that face (so it runs through the part first). */
+type Boss = { at: number; dir: 1 | -1; len: number };
+
+/** The boss: a PIN-radius cylinder at the pin centre `c`, joined to the part's body. */
+async function boss(s: CadSession, comp: string, body: string, c: { x: string; y: string }, b: Boss, name: string) {
+  const sk = (await dis(s, "sketch.create", { plane: "XZ", offset: b.dir > 0 ? 0 : -T, component: comp, name }))[0];
+  const p = (await dis(s, "sketch.addPoint", { sketch: sk, x: c.x, y: c.y }))[0];
+  await dis(s, "sketch.addCircle", { sketch: sk, center: { ref: p }, radius: PIN });
+  await dis(s, "feature.extrude", { sketch: sk, distance: n(b.len), ...(b.dir > 0 ? { direction: "reverse" } : {}), operation: "join", body, name });
+}
+
+/** A flat bar from its pivot (local origin) along +x for `len` (expression), rounded ends, a pin
+ *  hole at each end but the one (0 or 1) carrying a boss. */
+async function bar(s: CadSession, comp: string, len: string, name: string, pin?: Boss) {
   const sk = (await dis(s, "sketch.create", { plane: "XZ", component: comp, name }))[0];
   const p = async (x: string, y: number) => (await dis(s, "sketch.addPoint", { sketch: sk, x, y: n(y) }))[0];
   const a0 = await p("0", -W / 2), a1 = await p(len, -W / 2), b1 = await p(len, W / 2), b0 = await p("0", W / 2);
@@ -74,14 +100,15 @@ async function bar(s: CadSession, comp: string, len: string, name: string) {
   await dis(s, "sketch.addArc", { sketch: sk, center: { ref: c1 }, start: { ref: a1 }, end: { ref: b1 }, ccw: true });
   await dis(s, "sketch.addLine", { sketch: sk, start: { ref: b1 }, end: { ref: b0 } });
   await dis(s, "sketch.addArc", { sketch: sk, center: { ref: c0 }, start: { ref: b0 }, end: { ref: a0 }, ccw: true });
-  for (const c of [c0, c1]) await dis(s, "sketch.addCircle", { sketch: sk, center: { ref: c }, radius: HOLE });
-  await dis(s, "feature.extrude", { sketch: sk, distance: String(T), direction: "reverse", name });
+  for (const [k, c] of [c0, c1].entries()) if (pin?.at !== k) await dis(s, "sketch.addCircle", { sketch: sk, center: { ref: c }, radius: HOLE });
+  const body = (await dis(s, "feature.extrude", { sketch: sk, distance: String(T), direction: "reverse", name }))[0];
+  if (pin) await boss(s, comp, body, { x: pin.at ? len : "0", y: "0" }, pin, `${name} pin`);
 }
 
 /** A rigid triangle plate with rounded corners: pins at the local origin, along +x at `x1` (units of
  *  the linkage, scaled by `s`) and at (x2, y2), its outline offset W/2 out from the pin centres all
- *  round so each pin hole sits inside the plate; holes at the first two pins. */
-async function plate(s: CadSession, comp: string, x1: number, x2: number, y2: number, name: string) {
+ *  round so each pin hole sits inside the plate; a hole at each corner in `holes`, a boss at `pin`'s. */
+async function plate(s: CadSession, comp: string, x1: number, x2: number, y2: number, name: string, holes: number[], pin?: Boss) {
   const sk = (await dis(s, "sketch.create", { plane: "XZ", component: comp, name }))[0];
   const V = [[0, 0], [x1, 0], [x2, y2]];
   const ccw = y2 > 0;                       // the mirrored twin's triangle winds the other way
@@ -101,8 +128,9 @@ async function plate(s: CadSession, comp: string, x1: number, x2: number, y2: nu
     await dis(s, "sketch.addLine", { sketch: sk, start: { ref: starts[k] }, end: { ref: ends[k] } });
     await dis(s, "sketch.addArc", { sketch: sk, center: { ref: centres[(k + 1) % 3] }, start: { ref: ends[k] }, end: { ref: starts[(k + 1) % 3] }, ccw });
   }
-  for (const c of centres.slice(0, 2)) await dis(s, "sketch.addCircle", { sketch: sk, center: { ref: c }, radius: HOLE });
-  await dis(s, "feature.extrude", { sketch: sk, distance: String(T), direction: "reverse", name });
+  for (const k of holes) await dis(s, "sketch.addCircle", { sketch: sk, center: { ref: centres[k] }, radius: HOLE });
+  const body = (await dis(s, "feature.extrude", { sketch: sk, distance: String(T), direction: "reverse", name }))[0];
+  if (pin) await boss(s, comp, body, { x: `${n(V[pin.at][0])}*s`, y: `${n(V[pin.at][1])}*s` }, pin, `${name} pin`);
 }
 
 export async function buildWalker(s: CadSession): Promise<{ legs: string[] }> {
@@ -142,7 +170,6 @@ export async function buildWalker(s: CadSession): Promise<{ legs: string[] }> {
   for (const L of legs) {
     const P = (q: string): [string, string] => [`${L.key}${q}x`, `${L.key}${q}z`];
     const B: [string, string] = [`(-${S(J.a)})`, `(-${S(J.l)})`];
-    const off = L.mirror ? 4 : 0;   // the twin's own bars sit in the layers beyond
     const place = async (name: string, layer: number, from: [string, string], to: [string, string], build: (c: string) => Promise<void>) => {
       const c = (await dis(s, "component.create", { name: `${name} ${L.key}` }))[0];
       await build(c);
@@ -158,12 +185,18 @@ export async function buildWalker(s: CadSession): Promise<{ legs: string[] }> {
       legComps.push(c);
     };
     const sgn = L.mirror ? -1 : 1;   // a mirrored part's frame is reflected: its off-axis points swap sides
-    await place("Rocker", 1, B, P("D"), (c) => bar(s, c, S(J.c), "Rocker"));
-    await place("Upper triangle", 2, B, P("C"), (c) => plate(s, c, J.b, E_LOCAL.x, sgn * E_LOCAL.y, "Upper triangle"));
-    await place("Upper link", 3 + off, P("A"), P("C"), (c) => bar(s, c, S(J.j), "Upper link"));
-    await place("Lower link", 4 + off, P("A"), P("D"), (c) => bar(s, c, S(J.k), "Lower link"));
-    await place("Knee link", 5 + off, P("E"), P("F"), (c) => bar(s, c, S(J.f), "Knee link"));
-    await place("Foot", 6 + off, P("D"), P("F"), (c) => plate(s, c, J.g, G_LOCAL.x, sgn * G_LOCAL.y, "Foot"));
+    const lay = (part: Part) => layerOf(part, L.mirror);
+    // a boss on `carrier` at its corner `at`, reaching through the parts on `others` to 0.5 mm past the last
+    const pin = (carrier: Part, at: number, ...others: Part[]): Boss => {
+      const span = Math.max(...others.map((o) => Math.abs(lay(o) - lay(carrier))));
+      return { at, dir: lay(others[0]) > lay(carrier) ? 1 : -1, len: span * PITCH + T + 0.5 };
+    };
+    await place("Rocker", lay("Rocker"), B, P("D"), (c) => bar(s, c, S(J.c), "Rocker", pin("Rocker", 1, "Foot", "Lower link")));
+    await place("Upper triangle", lay("Upper triangle"), B, P("C"), (c) => plate(s, c, J.b, E_LOCAL.x, sgn * E_LOCAL.y, "Upper triangle", [0, 1, 2]));
+    await place("Upper link", lay("Upper link"), P("A"), P("C"), (c) => bar(s, c, S(J.j), "Upper link", pin("Upper link", 1, "Upper triangle")));
+    await place("Lower link", lay("Lower link"), P("A"), P("D"), (c) => bar(s, c, S(J.k), "Lower link"));
+    await place("Knee link", lay("Knee link"), P("E"), P("F"), (c) => bar(s, c, S(J.f), "Knee link", pin("Knee link", 0, "Upper triangle")));
+    await place("Foot", lay("Foot"), P("D"), P("F"), (c) => plate(s, c, J.g, G_LOCAL.x, sgn * G_LOCAL.y, "Foot", [0], pin("Foot", 1, "Knee link")));
   }
 
   // ---- the crankshaft: per throw two webs and a crank pin; journals in the bays between throws ----
@@ -232,13 +265,20 @@ export async function buildWalker(s: CadSession): Promise<{ legs: string[] }> {
     for (let q = 0; q < 4; q++) await dis(s, "sketch.addLine", { sketch: sk, start: { ref: corner[q] }, end: { ref: corner[(q + 1) % 4] } });
     await circleAt(sk, "0", "0", AXLE + 0.4);   // the journal's bearing
     await fjoin(sk, GAP - 2, `Bulkhead ${k + 1}`);
+    // stubs for the fixed pivots on either side: through the web's layer and on through the rocker and
+    // the triangle on B, to 0.5 mm past the further — the leg's from this bulkhead into the next throw,
+    // its mirrored twin's from the next bulkhead back into the last
     if (k < PHASES.length) {
-      // stubs for this throw's fixed pivots (B and its mirror), through the web's layer and the two bars on it
-      for (const sx of ["-", ""]) {
-        const ssk = await xz(y0 + GAP - 2 - 0.01, `Pivot ${k + 1}`, frame);
-        await circleAt(ssk, `${sx}${S(J.a)}`, `-${S(J.l)}`, PIN);
-        await fjoin(ssk, layerY(k, 3) - (y0 + GAP - 2) - 0.5, `Pivot ${k + 1}`);
-      }
+      const ssk = await xz(y0 + GAP - 2 - 0.01, `Pivot ${k + 1}`, frame);
+      await circleAt(ssk, `-${S(J.a)}`, `-${S(J.l)}`, PIN);
+      const far = Math.max(layerOf("Rocker", false), layerOf("Upper triangle", false));
+      await fjoin(ssk, layerY(k, far) + T + 0.5 - (y0 + GAP - 2), `Pivot ${k + 1}`);
+    }
+    if (k > 0) {
+      const ssk = await xz(y0 + 0.01, `Pivot ${k}, mirrored`, frame);
+      await circleAt(ssk, S(J.a), `-${S(J.l)}`, PIN);
+      const far = Math.min(layerOf("Rocker", true), layerOf("Upper triangle", true));
+      await dis(s, "feature.extrude", { sketch: ssk, distance: n(y0 + 0.01 - (layerY(k - 1, far) - 0.5)), operation: "join", body: fbody, name: `Pivot ${k}, mirrored` });
     }
   }
   // two rails along the top, tying the bulkheads together
@@ -266,6 +306,38 @@ function feet(s: CadSession, t: number): { x: number; z: number }[] {
     const a = Math.atan2(F.z - D.z, F.x - D.x), s2 = sc.s;
     const gx = D.x + s2 * (G_LOCAL.x * Math.cos(a) - G_LOCAL.y * Math.sin(a)), gz = D.z + s2 * (G_LOCAL.x * Math.sin(a) + G_LOCAL.y * Math.cos(a));
     out.push({ x: mirror ? -gx : gx, z: gz });
+  }
+  return out;
+}
+
+/** Where a line along Y through (x, z) runs inside a body: its [y0, y1] spans, from its mesh. */
+function runsAlongY(b: SolidEval, x: number, z: number): [number, number][] {
+  const bb = b.bounds!;
+  if (x < bb.min.x || x > bb.max.x || z < bb.min.z || z > bb.max.z) return [];
+  const P = b.mesh!.positions, I = b.mesh!.indices, ys: number[] = [];
+  for (let i = 0; i < I.length; i += 3) {
+    const a = I[i] * 3, p = I[i + 1] * 3, c = I[i + 2] * 3;
+    const ux = P[p] - P[a], uz = P[p + 2] - P[a + 2], vx = P[c] - P[a], vz = P[c + 2] - P[a + 2];
+    const d = ux * vz - vx * uz;
+    if (Math.abs(d) < 1e-12) continue;   // a facet edge-on to the line
+    const u = ((x - P[a]) * vz - vx * (z - P[a + 2])) / d, v = (ux * (z - P[a + 2]) - (x - P[a]) * uz) / d;
+    if (u < 0 || v < 0 || u + v > 1) continue;
+    ys.push(P[a + 1] + u * (P[p + 1] - P[a + 1]) + v * (P[c + 1] - P[a + 1]));
+  }
+  ys.sort((p, q) => p - q);
+  expect(ys.length % 2, `${b.name}: a line through its mesh crosses it an odd number of times`).toBe(0);
+  const out: [number, number][] = [];
+  for (let i = 0; i < ys.length; i += 2) out.push([ys[i], ys[i + 1]]);
+  return mergeRuns(out);
+}
+
+/** Runs along a line, those that touch or overlap joined. */
+function mergeRuns(runs: [number, number][]): [number, number][] {
+  const out: [number, number][] = [];
+  for (const r of [...runs].sort((p, q) => p[0] - q[0])) {
+    const last = out[out.length - 1];
+    if (last && r[0] <= last[1] + 1e-3) last[1] = Math.max(last[1], r[1]);
+    else out.push([...r]);
   }
   return out;
 }
@@ -320,6 +392,42 @@ describe("Jansen walker", () => {
       expect(down.length, `t = ${t}`).toBeGreaterThanOrEqual(4);
     }
   });
+
+  it("goes together: a pin runs through every part on each of a leg's six joints, and the parts on a moving joint sit adjacent", () => {
+    const sc = resolveParameters(s.doc.parameters).scope;
+    const doc = { ...s.doc, sketches: Object.fromEntries(Object.entries(s.doc.sketches).map(([k, v]) => [k, { ...v }])) };
+    placeComponentSketches(doc, sc);
+    const bodies = Object.values(evaluateFeatures(doc, sc)).filter((b) => b.mesh);
+    const compName = (b: SolidEval) => Object.values(doc.components).find((c) => c.sketches.includes(b.sketchId))?.name;
+    const byName = new Map(bodies.map((b) => [compName(b), b]));
+    const JOINTS: Record<string, Part[]> = {
+      A: ["Upper link", "Lower link"], B: ["Rocker", "Upper triangle"], C: ["Upper triangle", "Upper link"],
+      D: ["Rocker", "Foot", "Lower link"], E: ["Upper triangle", "Knee link"], F: ["Knee link", "Foot"],
+    };
+    const problems: string[] = [];
+    for (const key of Object.keys(sc).filter((k) => /^w\dm?Ax$/.test(k)).map((k) => k.slice(0, -2))) {
+      const mirror = key.endsWith("m");
+      for (const [q, parts] of Object.entries(JOINTS)) {
+        const x = (q === "B" ? -J.a * sc.s : sc[`${key}${q}x`]) * (mirror ? -1 : 1), z = q === "B" ? -J.l * sc.s : sc[`${key}${q}z`];
+        // each part's slab: along a line 3 mm off the pin's axis, between its hole (2.3) and its edge (4)
+        const slabs = parts.map((p) => {
+          const runs = runsAlongY(byName.get(`${p} ${key}`)!, x + 1.8, z + 2.4);
+          expect(runs.length, `${p} ${key} at ${q}`).toBe(1);
+          return runs[0];
+        }).sort((a, b) => a[0] - b[0]);
+        // the pin: wherever any body is solid on the axis (a hole's facets come no nearer than 2.2)
+        const axis = mergeRuns(bodies.flatMap((b) => runsAlongY(b, x + 0.0123, z + 0.0071)));
+        if (!axis.some(([lo, hi]) => slabs.every(([a, b]) => lo <= a + 1e-3 && hi >= b - 1e-3))) {
+          problems.push(`${key} ${q}: parts ${slabs.map((r) => r.map((v) => v.toFixed(1)).join("–")).join(", ")}; pin ${axis.map((r) => r.map((v) => v.toFixed(1)).join("–")).join(", ") || "none"}`);
+        }
+        if (q !== "A" && q !== "B") {
+          const gap = Math.max(...slabs.slice(1).map((r, i) => r[0] - slabs[i][1]));
+          if (gap > PITCH - T + 1e-3) problems.push(`${key} ${q}: a ${gap.toFixed(1)} mm gap between its parts`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  }, 600000);
 
   // the suite sweeps `t` every 90° by default; these phases fall between its samples
   for (const t of [47, 133]) {
