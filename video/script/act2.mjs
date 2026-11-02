@@ -13,7 +13,7 @@ export async function preroll(d) {
     }
     await st.dispatch("feature.primitive", { shape: "box", x: "width", y: "depth", z: String(S.base), at: { x: 0, y: 0, z: S.base / 2 }, name: "Base" });
     const back = await D.standStep("sideSketch");
-    await D.standStep("backProfile", back);
+    await D.standStep("backProfile", back, S, "phone");
     await D.standStep("across", back);
     const lip = await D.standStep("sideSketch");
     await D.standStep("lipProfile", lip, S, "phone");

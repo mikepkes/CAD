@@ -37,7 +37,7 @@ export const LINES = {
     title:
       "",
     "cold-open":
-      "In this tutorial you'll model this phone stand from a blank page. It's parametric: drag one number, the phone's thickness, and the whole stand adapts. You'll shape it by hand, make it parametric, then round it, check it and export it to print.",
+      "In this tutorial you'll model this phone stand from a blank page. It's parametric: drag one number, the phone's thickness, and the back plate moves back, the lip moves forward, and the lip grows taller to hold it. You'll shape it by hand, make it parametric, then round it, check it and export it to print.",
     "get-vibecad":
       "VibeCAD runs in your browser at mikepkes dot github dot io slash CAD, or as a desktop app from the project's GitHub releases. It's free, and it's open source under the MIT licence.",
     "the-room":
@@ -49,11 +49,11 @@ export const LINES = {
     "what-it-kept":
       "Here's the quiet part: VibeCAD kept a recipe of everything you did by hand. Every push and every sketch is a step in the history. Drag back through it, and forward again. Nothing has to be redone, and every step can still change.",
     "make-it-parametric":
-      "Now make it parametric. Open the base and name the numbers that matter: its depth and its width. Add a phone parameter, and tell the lip to sit phone plus two millimetres in front of the back.",
+      "Now make it parametric. Open the base and name the numbers that matter: its depth and its width. Add a phone parameter and size the slot from it: phone plus two millimetres wide, the back plate and the lip each half of that from its middle, so the phone's weight stays over the base. And the lip stands phone plus one tall.",
     "turn-the-dials":
-      "Now turn the dial. A thicker phone, and the lip moves to make room. That's all parametric means: change one number, and everything that depends on it follows. And Command Z puts it back.",
+      "Now turn the dial. A thicker phone, and the back plate leans further back, the lip steps forward, and it grows to hold the phone. That's all parametric means: change one number, and everything that depends on it follows. And Command Z puts it back.",
     "just-type-it":
-      "Or skip the mouse. Command K, and type what you want. Right, for a side view. Phone fourteen, and the lip makes room. Back to step two, and the history rolls back with it; roll to the end, and it's all there again.",
+      "Or skip the mouse. Command K, and type what you want. Right, for a side view. Phone fourteen, and the slot opens to fit it. Back to step two, and the history rolls back with it; roll to the end, and it's all there again.",
     "keep-it":
       "Save it to a file whenever you like. VibeCAD also keeps your work as you go, so you can experiment freely.",
   },

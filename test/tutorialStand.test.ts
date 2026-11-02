@@ -6,7 +6,7 @@ import { initKernel } from "../src/core/occ/kernel";
 import { evaluateFeatures } from "../src/core/features";
 import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
-import { STAND, box, sideSketch, backProfile, lipProfile, across, lipOutline } from "../src/demo/stand";
+import { STAND, box, sideSketch, backProfile, lipProfile, across, lipOutline, backOutline, lipHeight } from "../src/demo/stand";
 import { featureRows, pinAnchor } from "../src/model/concepts/featureCatalog";
 
 const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
@@ -20,12 +20,12 @@ async function build(parametric: boolean) {
   if (parametric) await s.dispatch("parameter.add", { name: "phone", expression: String(STAND.phone) });
   await box(h);
   const back = await sideSketch(h);
-  await backProfile(h, back);
+  await backProfile(h, back, STAND, parametric ? "phone" : undefined);
   await across(h, back);
   const lip = await sideSketch(h);
   const corners = await lipProfile(h, lip, STAND, parametric ? "phone" : undefined);
   await across(h, lip);
-  return { s, lip, corners };
+  return { s, back, lip, corners };
 }
 
 describe("the tutorial's phone stand", () => {
@@ -38,14 +38,24 @@ describe("the tutorial's phone stand", () => {
     expect(b[0].bounds!.max.x).toBeCloseTo(STAND.width / 2, 3);
   });
 
-  it("moves the lip with the phone parameter", async () => {
-    const { s, lip, corners } = await build(true);
-    const back = () => s.doc.sketches[lip].entities[corners[1]] as unknown as { x: number; y: number };
-    expect(back().x).toBeCloseTo(lipOutline().at(1)!.y, 6); // the plate front, less phone + 2
+  it("opens the slot about its middle with the phone parameter: the plate back, the lip forward and taller", async () => {
+    const { s, back, lip, corners } = await build(true);
+    const pt = (sk: string, id: string) => s.doc.sketches[sk].entities[id] as unknown as { x: number; y: number };
+    const lipBack = () => pt(lip, corners[1]), lipTop = () => pt(lip, corners[2]);
+    // the plate's corners, as the sketch has them (by where the outline drew them)
+    const plate = Object.values(s.doc.sketches[back].entities).filter((e) => e.kind === "point" && e.id !== s.doc.sketches[back].originPointId) as unknown as { id: string; x: number; y: number }[];
+    const near = (q: { y: number; z: number }) => plate.reduce((b, p) => (Math.hypot(p.x - q.y, p.y - q.z) < Math.hypot(b.x - q.y, b.y - q.z) ? p : b)).id;
+    const ids = backOutline().map(near);
+    expect(lipBack().x).toBeCloseTo(lipOutline().at(1)!.y, 6);
+    expect(lipTop().y).toBeCloseTo(STAND.base + lipHeight(), 6);
     const op = s.timeline.find((o) => o.type === "parameter.add")!;
     await s.editOperation(op.opId, { ...op.params, expression: "14" });
-    expect(back().x).toBeCloseTo(STAND.plateFront - 16, 6);
-    expect(back().y).toBeCloseTo(STAND.base, 6);
+    const at14 = { ...STAND, phone: 14 };
+    expect(lipBack().x).toBeCloseTo(STAND.slot - 8, 6); // half of 14 + 2 in front of the slot's middle
+    expect(lipBack().y).toBeCloseTo(STAND.base, 6);
+    expect(lipTop().y).toBeCloseTo(STAND.base + 15, 6); // phone + 1 tall
+    backOutline(at14).forEach((q, k) => { expect(pt(back, ids[k]).x).toBeCloseTo(q.y, 6); expect(pt(back, ids[k]).y).toBeCloseTo(q.z, 6); }); // the plate moved back whole
+    expect(pt(back, ids[0]).x).toBeCloseTo(STAND.slot + 8, 6);
     expect(bodies(s).length).toBe(1);
   });
 
@@ -59,7 +69,7 @@ describe("the tutorial's phone stand", () => {
     const l = lipOutline();
     expect(lip.y).toBeGreaterThanOrEqual(l[0].y - 1e-6);
     expect(lip.y).toBeLessThanOrEqual(l[1].y + 1e-6);
-    expect(lip.z).toBeLessThanOrEqual(STAND.base + STAND.lipH + 1e-6);
+    expect(lip.z).toBeLessThanOrEqual(STAND.base + lipHeight() + 1e-6);
   });
 
   it("keeps a box's pin on its top while it's resized, even when a side becomes the largest face", async () => {

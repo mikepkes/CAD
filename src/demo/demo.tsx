@@ -296,6 +296,11 @@ const api = {
     await stand.dimensionLip(host, sketchId, phoneExpr);
     await api.settle();
   },
+  async backDims(sketchId: string, phoneExpr: string) {
+    const host: stand.StandHost = { dispatch: (t, p) => useStore.getState().dispatch(t, p), doc: () => useStore.getState().session.doc };
+    await stand.dimensionBack(host, sketchId, phoneExpr);
+    await api.settle();
+  },
   cameraPose: () => getActiveScene()?.cameraPose() ?? null,
   /** Close the feature card and the face card, as clicking away would (keeps the next face click clear of them). */
   closeCards() { useUi.getState().setOpenFeature(null); useStore.getState().selectFace(null); },
