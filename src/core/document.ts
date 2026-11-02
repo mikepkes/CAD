@@ -296,6 +296,11 @@ export interface SheetFoldDef {
   /** In a collapse: the paper may bend (the whole step): it moves by least energy, faces bending a little and old
    *  creases easing open, rather than rigidly (an inside reverse fold, a flap folded through layers tied in). */
   bend?: boolean;
+  /** A reverse fold, a step of its own (two in one step: a crimp): the line is the crease across a point of the
+   *  model, through every layer of it; the point folds back on itself (its mirror image across the line, its creases
+   *  reversed) and its layers land between the point's two halves (inside) or wrapped round them (outside). With
+   *  `bend`, the paper bends its way there between the keyframes. */
+  reverse?: "inside" | "outside";
 }
 
 /** A sheet-metal (or paper) part: a flat blank of uniform thickness folded

@@ -104,7 +104,7 @@ function buildSequenced(s: SheetState): SheetBuild {
     loop.pop(); // back at the start
     const gap = Math.max(s.thickness, MIN_LAYER_GAP);
     for (const f of s.folds) if (f.angle == null) throw new Error(`fold "${f.id}" needs an angle (folds made in steps aren't solved)`);
-    const seq = planSequence(loop, s.folds.map((f) => ({ id: f.id, a: f.a, b: f.b, angle: f.angle!, step: f.step!, turn: f.turn, flip: f.flip, collapse: f.collapse, with: f.with, solve: f.solve, through: f.through, depth: f.depth, bend: f.bend })), s.fixed, gap);
+    const seq = planSequence(loop, s.folds.map((f) => ({ id: f.id, a: f.a, b: f.b, angle: f.angle!, step: f.step!, turn: f.turn, flip: f.flip, collapse: f.collapse, with: f.with, solve: f.solve, through: f.through, depth: f.depth, bend: f.bend, reverse: f.reverse })), s.fixed, gap);
     const crease = seq.creases.filter((c) => !c.bend).map((c) => ({ id: seq.folds[c.folds[c.folds.length - 1]].id, a: c.a, b: c.b, angle: deg(c.angle), radius: 0, allowance: 0 }));
     const pattern: FlatPattern = { outline, folds: crease, min, max, thickness: s.thickness, kFactor: s.kFactor };
     const angles = sequenceAngles(seq, s.unfolded ? 0 : s.progress);

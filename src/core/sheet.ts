@@ -60,6 +60,8 @@ export interface SheetFold {
   through?: "up" | "down" | "both";
   depth?: number;
   bend?: boolean;
+  /** An inside or outside reverse fold of the point beyond the line (core/sheetSequence.ts). */
+  reverse?: "inside" | "outside";
 }
 
 /** Material added to (a flange) or cut from (a relief) the blank, in order. */

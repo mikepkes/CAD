@@ -1,0 +1,147 @@
+// Layer order as data (core/sheetLayers.ts): read from a plan after each step, checked by Flat-Folder's conditions,
+// and the fold operations that declare it — an inside reverse fold puts a point between a flap's layers, an outside
+// one wraps it round them (the same shape; a different order).
+import { describe, it, expect } from "vitest";
+import { planSequence, sequenceAngles, poseSequence, sequenceClashes, sequenceFaces, SeqFoldDef } from "../src/core/sheetSequence";
+import { layerOrderOf, validateLayers, layerRanks } from "../src/core/sheetLayers";
+import { applyPoint, IDENTITY, rotationAbout, translation, compose } from "../src/math/transform";
+
+const PI = Math.PI;
+const rect = (w: number, h: number) => [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }];
+const facetAt = (seq: ReturnType<typeof planSequence>, x: number, y: number) =>
+  seq.facets.findIndex((fc) => fc.poly.every((p, i) => { const r = fc.poly[(i + 1) % fc.poly.length]; return (r.x - p.x) * (y - p.y) - (r.y - p.y) * (x - p.x) >= -1e-9; }));
+const sweepClear = (seq: ReturnType<typeof planSequence>, from: number, to: number, margin: number) => {
+  const bad: number[] = [];
+  for (let k = from * 20; k <= to * 20; k++) if (sequenceClashes(seq, sequenceAngles(seq, k / 20), margin).length) bad.push(k / 20);
+  return bad;
+};
+
+describe("layer order", () => {
+  it("a two-layer flap: the order after each step, as data, the ranks a gap apart", () => {
+    const seq = planSequence(rect(100, 60), [
+      { id: "half", a: { x: 50, y: 0 }, b: { x: 50, y: 60 }, angle: PI, step: 1 },
+      { id: "quarter", a: { x: 0, y: 30 }, b: { x: 50, y: 30 }, angle: PI, step: 2 },
+    ], { x: 10, y: 10 }, 0.1);
+    expect(seq.layers?.length).toBe(2);
+    // after step 1: the right half lies on the left (two facets each, cut by step 2's line): b above a
+    const L1 = seq.layers![0], T1 = poseSequence(seq, sequenceAngles(seq, 1));
+    expect(L1.above.length).toBe(2);
+    for (const [a, b] of L1.above) {
+      const za = applyPoint(T1[a], { ...seq.facets[a].poly[0], z: 0 }).z, zb = applyPoint(T1[b], { ...seq.facets[b].poly[0], z: 0 }).z;
+      expect((zb - za) * L1.families[0].n.z).toBeGreaterThan(0); // b above a along the family's normal
+      expect(Math.sign(zb - za)).toBe(seq.facets[b].poly.every((p) => p.x >= 50 - 1e-9) ? 1 : -1); // the right half is the higher
+    }
+    // after step 2: four layers, every pair ordered, ranks 0…3 in one stack
+    const L2 = seq.layers![1];
+    expect(L2.above.length).toBe(6);
+    const T = poseSequence(seq, sequenceAngles(seq, 2));
+    const ranks = layerRanks(L2, seq.facets.length);
+    expect([...ranks].sort()).toEqual([0, 1, 2, 3]);
+    const z = seq.facets.map((f, i) => applyPoint(T[i], { ...f.poly[0], z: 0 }).z);
+    seq.facets.forEach((_, i) => expect(z[i]).toBeCloseTo(ranks[i] * 0.1, 9)); // a gap per rank
+  });
+
+  it("the checker: a layer passing through a crease folded flat is named, with the crease", () => {
+    // A and B: a sheet folded in half at x = 50 (B on A's top); C: a loose layer lying between them, across the crease
+    const A = [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 60 }, { x: 0, y: 60 }];
+    const B = [{ x: 50, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 60 }, { x: 50, y: 60 }];
+    const C = [{ x: 20, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 50 }, { x: 20, y: 50 }];
+    const TB = compose(translation({ x: 0, y: 0, z: 0.2 }), rotationAbout({ x: 0, y: 1, z: 0 }, PI, { x: 50, y: 0, z: 0 }));
+    const polys = [A, B, C], T = [IDENTITY, TB, translation({ x: 0, y: 0, z: 0.1 })];
+    const order = layerOrderOf(polys, T, 0.1, 100, 1);
+    const errs = validateLayers(polys, T, order, [{ facets: [0, 1], a: { x: 50, y: 0 }, b: { x: 50, y: 60 }, fold: '"half"', made: true }], 0.1, 100, 'step 1 (fold "half")');
+    expect(errs.length).toBe(1);
+    expect(errs[0]).toContain('would pass through the paper at crease "half"');
+    expect(errs[0]).toContain("(40.0, 30.0)"); // the layer named by where it is on the sheet
+    // the same layer outside the fold is fine
+    const ok = validateLayers(polys, [IDENTITY, TB, translation({ x: 0, y: 0, z: 0.3 })], layerOrderOf(polys, [IDENTITY, TB, translation({ x: 0, y: 0, z: 0.3 })], 0.1, 100, 1), [{ facets: [0, 1], a: { x: 50, y: 0 }, b: { x: 50, y: 60 }, fold: '"half"', made: true }], 0.1, 100);
+    expect(ok).toEqual([]);
+  });
+
+});
+
+/** A diamond folded in half on its long axis (step 1): a two-layer flap, its point at the top. */
+const diamond = [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }];
+const HELD = { x: -0.4, y: -0.2 };
+const flap = (reverse: "inside" | "outside", bend = false): SeqFoldDef[] => [
+  { id: "spine", a: { x: 0, y: -1 }, b: { x: 0, y: 1 }, angle: PI, step: 1 },
+  // the reverse crease, drawn on the right half (the top layer once folded): from the spine at y = 0.4 to the edge
+  { id: "rev", a: { x: 0, y: 0.4 }, b: { x: 0.3, y: 0.7 }, angle: PI, step: 2, reverse, ...(bend ? { bend: true } : {}) },
+];
+
+describe("reverse folds", () => {
+  it("an inside reverse fold: the point between the flap's layers, its spine reversed", () => {
+    const gap = 0.01;
+    const seq = planSequence(diamond, flap("inside"), HELD, gap);
+    const T = poseSequence(seq, sequenceAngles(seq, 2));
+    const z = (x: number, y: number) => applyPoint(T[facetAt(seq, x, y)], { x, y, z: 0 }).z;
+    // the point's layers: the mirror image of where they were across the crease (the tip (0.02, 0.95) reflected in
+    // the line lands at (0.55, 0.42); x mirrored by the spine fold), each layer in the flap's plane
+    const tipR = applyPoint(T[facetAt(seq, 0.02, 0.95)], { x: 0.02, y: 0.95, z: 0 }), tipL = applyPoint(T[facetAt(seq, -0.02, 0.95)], { x: -0.02, y: 0.95, z: 0 });
+    for (const p of [tipR, tipL]) { expect(p.x).toBeCloseTo(-0.55, 1); expect(p.y).toBeCloseTo(0.42, 1); expect(Math.abs(p.z)).toBeLessThan(0.1); }
+    // layer order: body L (held, z 0) and R (on its top) either side of the point
+    const bodyL = z(-0.4, 0.2), bodyR = z(0.4, 0.2), pointL = z(-0.05, 0.9), pointR = z(0.05, 0.9);
+    expect(bodyL).toBeLessThan(pointL); expect(pointL).toBeLessThan(pointR); expect(pointR).toBeLessThan(bodyR);
+    // every crease on the point reversed: the spine beyond the crease is now a valley where it was a mountain
+    const spine = (lo: number, hi: number) => seq.creases.filter((c) => Math.abs(c.a.x) < 1e-6 && Math.abs(c.b.x) < 1e-6 && Math.min(c.a.y, c.b.y) >= lo - 1e-6 && Math.max(c.a.y, c.b.y) <= hi + 1e-6);
+    const body = spine(-1, 0.4), point = spine(0.4, 1);
+    expect(body.length).toBeGreaterThan(0); expect(point.length).toBeGreaterThan(0);
+    for (const c of body) expect(Math.sign(c.angle)).toBe(1);
+    for (const c of point) expect(Math.sign(c.angle)).toBe(-1);
+    // the layer order holds the checks; the keyframes are clear of clashes (the rigid swing between them isn't:
+    // the point's layers settle through each other by a few gaps at the end — the bending transition is the fix)
+    expect(seq.layers?.length).toBe(2);
+    expect(sweepClear(seq, 0, 1, 0.02)).toEqual([]);
+    expect(sequenceClashes(seq, sequenceAngles(seq, 2), 0.02)).toEqual([]);
+  });
+
+  it("an outside reverse fold wraps the point round the flap; on a flap wider than the point it's refused", () => {
+    // a strip folded in half lengthwise (two layers 100 × 15), its end reversed at 45° over the outside
+    const strip = [
+      { id: "spine", a: { x: 0, y: 15 }, b: { x: 100, y: 15 }, angle: PI, step: 1 },
+      { id: "rev", a: { x: 70, y: 15 }, b: { x: 85, y: 0 }, angle: PI, step: 2, reverse: "outside" as const },
+    ];
+    const seq = planSequence(rect(100, 30), strip, { x: 10, y: 5 }, 0.1);
+    const T = poseSequence(seq, sequenceAngles(seq, 2));
+    const z = (x: number, y: number) => applyPoint(T[facetAt(seq, x, y)], { x, y, z: 0 }).z;
+    // the end turned square off the strip (the tip at (100, 7.5) lands at (77.5, −15)), its layers either side of the body
+    const tip = applyPoint(T[facetAt(seq, 99, 7)], { x: 99, y: 7, z: 0 });
+    expect(tip.x).toBeCloseTo(78, 0); expect(tip.y).toBeCloseTo(-14, 0);
+    const bodyB = z(50, 5), bodyT = z(50, 25), pointB = z(95, 7), pointT = z(95, 23);
+    expect(pointB).toBeLessThan(bodyB); expect(bodyB).toBeLessThan(bodyT); expect(bodyT).toBeLessThan(pointT);
+    expect(sequenceClashes(seq, sequenceAngles(seq, 2), 0.2)).toEqual([]);
+    // on the diamond, the point folded back would lie across the body: its spine would have to pass through the body
+    expect(() => planSequence(diamond, flap("outside"), HELD, 0.01)).toThrow(/pass through the paper at crease/);
+  });
+
+  it("bending between the keyframes: the point goes through, nothing passes through anything, and the paper ends rigid", () => {
+    const gap = 0.01;
+    const rigid = planSequence(diamond, flap("inside"), HELD, gap);
+    const t0 = Date.now();
+    const seq = planSequence(diamond, flap("inside", true), HELD, gap);
+    const ms = Date.now() - t0;
+    expect(ms).toBeLessThan(5000);
+    // the same keyframe when done: every point of the sheet where the rigid plan put it
+    const Tr = poseSequence(rigid, sequenceAngles(rigid, 2)), Tb = poseSequence(seq, sequenceAngles(seq, 2));
+    for (const [x, y] of [[0.05, 0.9], [-0.05, 0.9], [0.4, 0.2], [-0.4, 0.2], [0.02, 0.5]]) {
+      const a = applyPoint(Tr[facetAt(rigid, x, y)], { x, y, z: 0 }), b = applyPoint(Tb[facetAt(seq, x, y)], { x, y, z: 0 });
+      expect(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)).toBeLessThan(1e-6);
+    }
+    // the mesh's seams merge back: as many faces as the rigid plan, before and after the step
+    expect(sequenceFaces(seq, sequenceAngles(seq, 1)).length).toBe(sequenceFaces(rigid, sequenceAngles(rigid, 1)).length);
+    expect(sequenceFaces(seq, sequenceAngles(seq, 2)).length).toBe(sequenceFaces(rigid, sequenceAngles(rigid, 2)).length);
+    // along the way the point's layers part and the spine opens; no facet passes through another
+    expect(sweepClear(seq, 1, 2, 0.03)).toEqual([]);
+  });
+
+  it("an inside reverse fold needs a spine; a crimp is two reverse folds in one step", () => {
+    expect(() => planSequence(rect(100, 60), [{ id: "rev", a: { x: 60, y: 0 }, b: { x: 80, y: 60 }, angle: PI, step: 1, reverse: "inside" }], { x: 10, y: 10 }, 0.1)).toThrow(/spine/);
+    const seq = planSequence(diamond, [
+      flap("inside")[0],
+      { id: "crimpA", a: { x: 0, y: 0.3 }, b: { x: 0.3, y: 0.6 }, angle: PI, step: 2, reverse: "inside" },
+      { id: "crimpB", a: { x: 0, y: 0.55 }, b: { x: 0.3, y: 0.85 }, angle: PI, step: 2, reverse: "inside" },
+    ], HELD, 0.01);
+    expect(seq.steps).toBe(2);
+    expect(seq.layers?.length).toBe(2);
+  });
+});
