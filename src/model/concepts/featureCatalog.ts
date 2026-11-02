@@ -107,6 +107,8 @@ const SPECS: FeatureSpec[] = [
     sentence: (op) => [T(`Add a flange on ${String(op.params.edge)}, `), P("length"), T(" long"), ...(op.params.angle != null ? [T(" at "), P("angle")] : []), T(".")] },
   { kind: "fold", op: "feature.fold", label: "Fold", params: [deg("angle", "Angle"), mm("radius", "Bend radius", 0, 25, 0.1)], pushParam: "angle",
     sentence: () => [T("Fold along the line by "), P("angle"), T(".")] },
+  { kind: "sheet", op: "feature.sheet.edit", label: "Folds", params: [],
+    sentence: (op) => [T(`Set the sheet's ${Array.isArray(op.params.folds) ? `${(op.params.folds as unknown[]).length} folds` : "folds"}${Array.isArray(op.params.cuts) && (op.params.cuts as unknown[]).length ? ` and ${(op.params.cuts as unknown[]).length} cuts` : ""}.`)] },
   { kind: "unfold", op: "feature.unfold", label: "Unfold", params: [], sentence: () => [T("Unfold it flat.")] },
   { kind: "refold", op: "feature.refold", label: "Refold", params: [], sentence: () => [T("Fold it back up.")] },
   { kind: "member", op: "feature.member", label: "Member", params: [],

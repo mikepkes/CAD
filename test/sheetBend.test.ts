@@ -90,8 +90,10 @@ describe("bending paper (sheetBend)", () => {
     const at = (x: number, y: number) => seq.facets.findIndex((f) => f.poly.every((p, i) => { const r = f.poly[(i + 1) % f.poly.length]; return (r.x - p.x) * (y - p.y) - (r.y - p.y) * (x - p.x) >= -1e-9; }));
     expect(Math.abs(T[at(-0.5, 0.1)].z.z)).toBeCloseTo(1, 2);
     expect(Math.abs(T[at(0.5, 0.1)].z.z)).toBeLessThan(0.05);
-    // before the step the sheet's halves are each one face; after it, panels apart
+    // before the step the sheet's halves are each one face; after it, panels apart where the paper bent (a seam
+    // that ends flat merges back into its face)
     expect(sequenceFaces(seq, sequenceAngles(seq, 1)).length).toBe(2);
-    expect(sequenceFaces(seq, sequenceAngles(seq, 2)).length).toBeGreaterThan(2);
+    expect(sequenceFaces(seq, sequenceAngles(seq, 2)).length).toBeGreaterThanOrEqual(2);
+    expect(sequenceFaces(seq, sequenceAngles(seq, 1.5)).length).toBeGreaterThan(2);
   });
 });

@@ -1282,10 +1282,10 @@ export function poseSequence(seq: Pick<SheetSequence, "facets" | "folds" | "coll
   });
 }
 
-/** A crease shows once its fold has started. A bending transition's seam is one only while its step runs: when the
- *  step is done the panels lie flat in their facet again, and the seam merges back. */
+/** A crease shows once its fold has started. A bending transition's seam (flat when its step is done) is one only
+ *  while the step runs: then the panels lie flat in their facet again, and the seam merges back. */
 export const creaseMade = (c: SeqCrease, angles: number[], folds?: Pick<SeqFold, "angle">[]) =>
-  c.folds.some((j) => Math.abs(angles[j]) > 1e-9) && !(c.bend && folds && c.folds.every((j) => Math.abs(angles[j]) < 1e-9 || Math.abs(angles[j]) > Math.abs(folds[j].angle) - 1e-9));
+  c.folds.some((j) => Math.abs(angles[j]) > 1e-9) && !(c.bend && Math.abs(c.angle) < 1e-9 && folds && c.folds.every((j) => Math.abs(angles[j]) < 1e-9 || Math.abs(angles[j]) > Math.abs(folds[j].angle) - 1e-9));
 
 /** A triangle mesh of the sheet posed at `angles` (world = frame ∘ facet placement): the
  *  facets fanned (front faces on the paper's top), their flat coordinates as uvs, and as
