@@ -108,15 +108,85 @@ export async function act3(d) {
       await d.api("poseSweep", "turn", 3204, 4068, 3000, { ease: false });
     });
   } else d.note("no clockwork example yet: gears clip skipped");
+  /**
+   * The walker's leg nearest the camera (lowest y: the side its close-up looks from), found by the example's
+   * structure, not by ids: a leg is a parent component named like one ("Leg w0", its bars as children), else the
+   * components sharing a leg tag, the first word with a digit in their names ("Rocker w0" … "Foot w0"; "w0m" its
+   * mirror). Parts jointed to one leg's bars only (pins) go with that leg. Returns its name, its world box at the
+   * built pose, and what to hide for its close-up: every other leg (top ids), the fixed bodies between it and the
+   * camera (the frame, whose end wall covers the leg's upper bars) and the sketches still shown (each bar's outline
+   * stays at the built pose while the posed bar moves); null when fewer than two legs are found.
+   */
+  const walkerLeg = () => d.run(() => {
+    const st = window.__vibecadDemo.store.getState(), doc = st.session.doc, root = doc.rootComponentId;
+    const comps = Object.values(doc.components).filter((c) => c.id !== root);
+    const tree = (id, out = new Set()) => { if (out.has(id)) return out; out.add(id); for (const k of doc.components[id]?.children ?? []) tree(k, out); return out; };
+    let legs = comps.filter((c) => c.children?.length && /\bleg\b/i.test(c.name)).map((c) => ({ name: c.name, top: [c.id], ids: tree(c.id) }));
+    if (legs.length < 2) {
+      const byTag = new Map();
+      for (const c of comps) {
+        const tag = c.name.split(/\s+/).find((w) => /\d/.test(w));
+        if (tag) byTag.set(tag, [...(byTag.get(tag) ?? []), c]);
+      }
+      legs = [...byTag].map(([tag, cs]) => {
+        const ids = new Set(); for (const c of cs) tree(c.id, ids);
+        return { name: `leg ${tag}`, top: cs.filter((c) => !cs.some((p) => p.id === c.parentId)).map((c) => c.id), ids };
+      }).filter((l) => l.ids.size >= 3);
+    }
+    if (legs.length < 2) return null;
+    const legOf = (id) => legs.find((l) => l.ids.has(id));
+    for (const c of comps) {
+      if (legOf(c.id)) continue;
+      const touched = new Set(Object.values(doc.joints ?? {}).flatMap((j) => (j.moved === c.id ? [j.base] : j.base === c.id ? [j.moved] : [])).map(legOf).filter(Boolean));
+      if (touched.size === 1) { const l = [...touched][0]; l.top.push(c.id); tree(c.id, l.ids); }
+    }
+    const boxOf = (ids) => {
+      const lo = { x: Infinity, y: Infinity, z: Infinity }, hi = { x: -Infinity, y: -Infinity, z: -Infinity };
+      for (const b of Object.values(st.solids)) {
+        const cid = (b.sketchId ? doc.sketches[b.sketchId]?.componentId : undefined) ?? root;
+        if (!b.mesh || !b.bounds || !ids.has(cid)) continue;
+        for (const k of ["x", "y", "z"]) { lo[k] = Math.min(lo[k], b.bounds.min[k]); hi[k] = Math.max(hi[k], b.bounds.max[k]); }
+      }
+      return lo.x <= hi.x ? { min: lo, max: hi } : null;
+    };
+    const boxed = legs.map((l) => ({ ...l, box: boxOf(l.ids) })).filter((l) => l.box);
+    if (boxed.length < 2) return null;
+    const near = boxed.reduce((a, b) => (b.box.min.y + b.box.max.y < a.box.min.y + a.box.max.y ? b : a));
+    const others = boxed.filter((l) => l !== near), inLeg = (cid) => boxed.some((l) => l.ids.has(cid));
+    // the fixed frame reaches from the camera's side past the leg (its end wall covers the leg's upper bars); what a
+    // joint moves (the crankshaft) stays, as part of the mechanism
+    const moved = new Set(Object.values(doc.joints ?? {}).map((j) => j.moved));
+    const front = Object.values(st.solids).filter((b) => {
+      const cid = (b.sketchId ? doc.sketches[b.sketchId]?.componentId : undefined) ?? root;
+      return b.mesh && b.bounds && !inLeg(cid) && !moved.has(cid) && b.bounds.min.y <= near.box.min.y + 0.01;
+    }).map((b) => b.featureId.split("/")[0]);
+    const sketches = Object.values(doc.sketches).filter((sk) => !others.some((l) => l.ids.has(sk.componentId))).map((sk) => sk.id);
+    return { name: near.name, box: near.box, hide: [...others.flatMap((l) => l.top), ...new Set(front), ...sketches] };
+  });
   if (hasExample("walker")) {
     await clip("walker", "walker", "Jansen wind walker", "one crank, twelve legs, overlapping strides", async () => {
-      // posed from the crank angle: the legs' joint positions are parameters that follow `t`
-      await d.api("aim", { dir: [0.35, -1, 0.3], ms: 1000, margin: 0.85 });
-      await d.api("poseSweep", "t", 0, 360, 3600, { ease: false });
+      // posed from the crank angle: the legs' joint positions are parameters that follow `t`. The crank never stops
+      // (120°/s, then 90°/s on the one leg): the camera moves while it turns, and the hiding is cut from the edit.
+      const turn = (from, to, ms) => d.api("poseSweep", "t", from, to, ms, { ease: false });
+      await Promise.all([d.api("aim", { dir: [0.35, -1, 0.3], ms: 1000, margin: 0.85 }), turn(0, 360, 3000)]);
       d.pick("walker");
-      await d.api("poseSweep", "t", 360, 540, 1800, { ease: false });
-      await d.api("aim", { dir: [0.9, -0.6, 0.15], ms: 1500, margin: 0.8 });
-      await d.api("poseSweep", "t", 540, 900, 3000, { ease: false });
+      await Promise.all([d.api("aim", { dir: [0.9, -0.6, 0.15], ms: 1500, margin: 0.8 }), turn(360, 720, 3000)]);
+      await turn(720, 1440, 6000);
+      // "…while the rest lift and swing forward": every leg but one goes, and the camera closes in on that one
+      const leg = await d.cut(async () => {
+        const found = await walkerLeg();
+        if (!found) return null;
+        // PUPPET: hidden by command, as clicking their eye toggles in the browser would (the panels are closed for
+        // the montage). Hiding re-evaluates the document (seconds, frozen): cut, and the crank resumes where it was.
+        await d.run(async (ids) => { await window.__vibecadDemo.store.getState().setVisibility(ids, false); }, found.hide);
+        await turn(1440, 1440, 1); // re-pose the visible bodies inside the cut too
+        return found;
+      });
+      if (!leg) { d.note("walker: no leg assembly found among the example's components; the whole walker kept turning"); console.error("  ✗ walker: no leg assembly found"); }
+      else d.event("view", `one leg: ${leg.name}`);
+      // in from the side, along the crank axis, so the leg's linkage reads; it ends on a whole turn (the built pose),
+      // so putting the parts back shows no jump
+      await Promise.all([leg && d.api("aim", { dir: [0.25, -1, 0.12], box: leg.box, ms: 1400, margin: 1.15 }), turn(1440, 1800, 4000)]);
       await d.api("poseEnd");
     });
   } else d.note("no walker example yet: walker clip skipped");
