@@ -66,16 +66,34 @@ export function selectVoices({ voices = process.env.VIDEO_VOICES, engine = proce
 // bistable: misaki already marks the stress (bIstˈAbᵊl) but Kokoro still says the long "bi" louder than a short, quiet
 // "sta"; lengthening the stressed vowel (ː) brings it to the level and pitch of a stressed syllable (as in "sustainable").
 // GitHub: misaki shifts the stress to "hub" before a noun ("GitHub releases").
+// mikepkes: one word, "mike-p-kess" (an s, not a z).
 const IPA = {
-  a: { VibeCAD: "vˈIb kˈæd", Roubo: "ɹˈubO", mikepkes: "mˈIk pˈi kˈɛz", fillet: "fˈɪlɪt", bistable: "bIstˈAːbᵊl", Bistable: "bIstˈAːbᵊl", GitHub: "ɡˈɪthʌb" },
-  b: { VibeCAD: "vˈIb kˈad", Roubo: "ɹˈubQ", mikepkes: "mˈIk pˈiː kˈɛz", fillet: "fˈɪlɪt", bistable: "bIstˈAːbᵊl", Bistable: "bIstˈAːbᵊl", GitHub: "ɡˈɪthʌb" },
+  a: { VibeCAD: "vˈIb kˈæd", Roubo: "ɹˈubO", mikepkes: "mˈIkpikɛs", fillet: "fˈɪlɪt", bistable: "bIstˈAːbᵊl", Bistable: "bIstˈAːbᵊl", GitHub: "ɡˈɪthʌb" },
+  b: { VibeCAD: "vˈIb kˈad", Roubo: "ɹˈubQ", mikepkes: "mˈIkpiːkɛs", fillet: "fˈɪlɪt", bistable: "bIstˈAːbᵊl", Bistable: "bIstˈAːbᵊl", GitHub: "ɡˈɪthʌb" },
 };
-const SAY_AS = { mikepkes: "mike p kes", PETG: "P E T G", PLA: "P L A", fillet: "fillit", Roubo: "Roobo" };
+/** Phrases said as one word: a compound noun, stressed on its first part ("PHONE-stand", not "phone STAND"). */
+const IPA_PHRASES = {
+  a: { "phone stand": "fˈOnstˌænd" },
+  b: { "phone stand": "fˈOnstˌand" },
+};
+const SAY_AS = { mikepkes: "mike p kess", PETG: "P E T G", PLA: "P L A", fillet: "fillit", Roubo: "Roobo" };
 
 /** The text an engine is given for a line. */
 export function spokenText(text, voice) {
-  const map = voice.engine === "kokoro" ? Object.fromEntries(Object.entries(IPA[voice.lang]).map(([w, p]) => [w, `[${w}](/${p}/)`])) : SAY_AS;
-  return text.replace(/\b[\w']+\b/g, (w) => map[w] ?? w);
+  if (voice.engine !== "kokoro") return text.replace(/\b[\w']+\b/g, (w) => SAY_AS[w] ?? w);
+  // phrases first (their words then sit inside the [..](/..) markup and are left alone), then single words
+  const phrases = Object.entries(IPA_PHRASES[voice.lang] ?? {});
+  const parts = [];
+  let rest = text;
+  for (;;) {
+    let best = null;
+    for (const [ph, ipa] of phrases) { const m = new RegExp(`\\b${ph.replace(/ /g, "\\s+")}\\b`, "i").exec(rest); if (m && (!best || m.index < best.m.index)) best = { m, ipa }; }
+    if (!best) { parts.push({ text: rest }); break; }
+    parts.push({ text: rest.slice(0, best.m.index) }, { said: `[${best.m[0]}](/${best.ipa}/)` });
+    rest = rest.slice(best.m.index + best.m[0].length);
+  }
+  const map = Object.fromEntries(Object.entries(IPA[voice.lang]).map(([w, p]) => [w, `[${w}](/${p}/)`]));
+  return parts.map((p) => p.said ?? p.text.replace(/\b[\w']+\b/g, (w) => map[w] ?? w)).join("");
 }
 
 export function lineHash(text, voice) {
