@@ -152,7 +152,38 @@ export async function act3(d) {
     await d.wait(800);
     await d.api("poseEnd");
   });
-  await clip("scissor-jointed", "scissor-jointed", "Jointed scissor lift", "the stage count is a slider, and it still moves", async () => { await sweep(d, "stages", [3, 4, 5, 4, 3], 2600); d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600); });
+  // the stage count grows the lift, so the camera dollies out ahead of the new stages and back in once they're gone
+  const liftView = { dir: [1, -1, 0.8], margin: 1.2 }; // the iso view, a little room round the lift
+  const setStages = (n) => d.run(async (x) => { await window.__vibecadDemo.store.getState().setParameterExpr("stages", String(x)); }, n);
+  const liftBox = () => d.run(() => window.__vibecadDemo.bounds().reduce((a, b) => ({
+    min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y), z: Math.min(a.min.z, b.min.z) },
+    max: { x: Math.max(a.max.x, b.max.x), y: Math.max(a.max.y, b.max.y), z: Math.max(a.max.z, b.max.z) },
+  })));
+  // a glide that doesn't wait: the stages keep changing under it
+  const dolly = (box, ms) => { d.event("view", "aim"); return d.run((o) => { window.__vibecadDemo.aim(o); }, { ...liftView, box, ms }); };
+  await load(d, "scissor-jointed");
+  const lift = await d.cut(async () => { // the lift's box at each stage count, built off camera; then framed at three
+    const boxes = {};
+    for (const n of [4, 5, 3]) { await setStages(n); await d.settle(100); boxes[n] = await liftBox(); }
+    await d.api("aim", { ...liftView, box: boxes[3], ms: 300 });
+    return boxes;
+  });
+  await d.beat("scissor-jointed", async () => {
+    await d.lower("Jointed scissor lift", "the stage count is a slider, and it still moves");
+    // 3→4→5→4→3 (as `sweep`): out to five stages across the first two steps, hold, then in to three once the fifth is gone
+    const values = [3, 4, 5, 4, 3], step = 2600 / values.length, t0 = Date.now(), start = d.now();
+    await dolly(lift[5], 2 * step);
+    for (const [i, v] of values.entries()) {
+      const t = Date.now();
+      await setStages(v);
+      await d.settle(60, { camera: false });
+      if (i === 3) await dolly(lift[3], 2 * step);
+      const left = step - (Date.now() - t);
+      if (left > 0) await d.wait(left);
+    }
+    if (Date.now() - t0 > 2600 * 1.6) d.timing.fast.push({ label: "rebuilding stages", start, end: d.now() });
+    d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600);
+  }, { minMs: 6500 });
   await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", async () => { await sweep(d, "width", [64, 76], 900); d.pick("star box"); await sweep(d, "width", [88, 76, 64], 2100); });
 
   // the bistable switch: ask Claude, which opens the force analysis itself (set_panel / run_action), sweeps it, and puts the lens on strain
