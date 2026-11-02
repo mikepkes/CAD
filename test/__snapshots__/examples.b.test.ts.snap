@@ -264,3 +264,23 @@ exports[`bundled examples > public/examples/origami.json > replays, builds on bo
   },
 ]
 `;
+
+exports[`bundled examples > public/examples/popup-card.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet145",
+    "max": [
+      90,
+      130,
+      90,
+    ],
+    "min": [
+      0,
+      0,
+      0,
+    ],
+    "name": "Card",
+    "volume": 0,
+  },
+]
+`;

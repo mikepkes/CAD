@@ -25,14 +25,14 @@ exports[`bundled examples > public/examples/crane.json > replays, builds on both
   {
     "body": "sheet219",
     "max": [
-      56.5,
+      56.8,
       49.8,
-      88.3,
+      46.9,
     ],
     "min": [
-      -93.8,
+      -93.5,
       -69,
-      -61.7,
+      -65.5,
     ],
     "name": "Crane",
     "volume": 0,
