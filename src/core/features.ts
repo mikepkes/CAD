@@ -166,7 +166,7 @@ interface Body {
   id: string; name: string; sketchId: string; distance: number; shape: Shape3D; decals?: ThreadDecal[];
   /** A gear placed as is: its local solid's key, where it was put, and the shape it put there (once
    *  another feature changes the body, its shape is another and the pose no longer describes it). */
-  pose?: { key: string; T: Rigid; shape: Shape3D };
+  pose?: { key: string; T: Rigid; shape: Shape3D; sharp?: Parameters<typeof localGearSolid>[0] };
   /** Round bodies (a gear, a pin): annuli about world axes that hold all of `shape` — what a
    *  collision check rules pairs out with before a boolean. Stale once the shape is another. */
   hull?: { shape: Shape3D; parts: Hull[] };
@@ -453,9 +453,10 @@ function applyGear(doc: CadDocument, scope: Scope, f: GearFeature, bodies: Body[
       type: f.gearType, module: v.module, teeth: v.teeth, faceWidth: v.faceWidth, pressureAngle: v.pressureAngle, helixAngle: v.helixAngle,
       herringbone: !!f.herringbone, backlash: v.backlash, addendum: v.addendum, dedendum: v.dedendum, rootFillet: v.rootFillet, rim: v.rim,
       mateTeeth: v.mateTeeth, wormDiameter: v.wormDiameter, bore: v.bore, dFlat: v.dFlat, keyway: v.keyway, keywayDepth: v.keywayDepth > 0 ? v.keywayDepth : undefined,
-      hubDiameter: v.hubDiameter, hubLength: v.hubLength, spokes: v.spokes,
+      hubDiameter: v.hubDiameter, hubLength: v.hubLength, spokes: v.spokes, ...(f.chamfer ? { chamfer: true } : {}),
     };
-    const { key, shape: local } = localGearSolid(spec);
+    const { key, shape: local, warning } = localGearSolid(spec);
+    if (warning) out[f.id] = { ...modifierRow(f), sketchId: f.sketchId, warning };
     const wp = resolveSketchPlane(sk);
     const a = (v.rotation * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
     const T: Rigid = {
@@ -468,7 +469,8 @@ function applyGear(doc: CadDocument, scope: Scope, f: GearFeature, bodies: Body[
     let local0 = GEAR_LOCAL.get(key);
     if (!local0) { local0 = { geoms: faceKinds(local), extent: gearExtent(spec) }; GEAR_LOCAL.set(key, local0); while (GEAR_LOCAL.size > 48) GEAR_LOCAL.delete(GEAR_LOCAL.keys().next().value as string); }
     tool = { shape: placeShape(local, T), names: genericNames(f.id, local0.geoms) };
-    pose = { key, T, shape: tool.shape };
+    // a gear with its edges broken collides as its sharp self (see collideFeatures)
+    pose = { key, T, shape: tool.shape, ...(spec.chamfer ? { sharp: { ...spec, chamfer: undefined } } : {}) };
   } catch (e) {
     out[f.id] = { ...modifierRow(f), sketchId: f.sketchId, error: kernelErrorMessage(e) };
     return;
@@ -2033,9 +2035,17 @@ export function collideFeatures(doc: CadDocument, scope: Scope): CollisionResult
   const buildError = Object.values(out).find((o) => o.error)?.error;
   const overlaps: CollisionResult["overlaps"] = [];
   let maxOverlap = 0;
+  // A gear placed as is, its edges broken, is checked as its sharp self: that holds it (the chamfer
+  // only takes material away), so clear sharp is clear chamfered — and a boolean on the sharp solid
+  // keeps a third of the kernel memory (a motion study runs hundreds).
+  const proxies: Shape3D[] = [];
+  const shapes = bodies.map((b) => {
+    if (!b.pose?.sharp || b.pose.shape !== b.shape) return b.shape;
+    try { const p = placeShape(localGearSolid(b.pose.sharp).shape, b.pose.T); proxies.push(p); return p; } catch { return b.shape; }
+  });
   try {
     // bodies whose boxes don't meet can't overlap: skip the boolean (a gear train is mostly such pairs)
-    const boxes = bodies.map((b) => safeBounds(b.shape));
+    const boxes = shapes.map((sh) => safeBounds(sh));
     // (boxes that only touch — OCC pads each by its tolerance — hold no common volume either)
     const T = 1e-5;
     const boxApart = (a: Bounds3, b: Bounds3) => a.max.x < b.min.x + T || b.max.x < a.min.x + T || a.max.y < b.min.y + T || b.max.y < a.min.y + T || a.max.z < b.min.z + T || b.max.z < a.min.z + T;
@@ -2056,7 +2066,7 @@ export function collideFeatures(doc: CadDocument, scope: Scope): CollisionResult
         if (apart(i, j)) continue;
         let vol = 0;
         try {
-          const inter = intersectShapes(bodies[i].shape, bodies[j].shape);
+          const inter = intersectShapes(shapes[i], shapes[j]);
           try { const v = volumeOfShape(inter); if (Number.isFinite(v)) vol = Math.abs(v); } finally { inter.delete(); }
         } catch { vol = 0; } // disjoint / touching solids → no common volume
         if (vol > 1e-4) { overlaps.push({ a: bodies[i].name, b: bodies[j].name, aId: bodies[i].id, bId: bodies[j].id, volume: vol }); maxOverlap = Math.max(maxOverlap, vol); }
@@ -2064,6 +2074,7 @@ export function collideFeatures(doc: CadDocument, scope: Scope): CollisionResult
     }
   } finally {
     for (const b of bodies) { try { b.shape.delete(); } catch { /* already freed */ } }
+    for (const p of proxies) { try { p.delete(); } catch { /* already freed */ } }
   }
   return { maxOverlap, overlaps, buildError };
 }

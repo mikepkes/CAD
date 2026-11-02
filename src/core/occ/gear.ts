@@ -12,7 +12,7 @@
 // width (a bevel gear's heel at z = 0, its apex up the axis; a rack along X
 // with teeth toward +Y; a worm along +Z). The feature places it.
 
-import { getOC, makeLine, makeCircle, makeThreePointArc, makeBezierCurve, assembleWire, makeFace, makeSolid, twistExtrude, loft, makeBox, type Shape3D, type Wire, type Edge } from "replicad";
+import { getOC, makeLine, makeCircle, makeThreePointArc, makeBezierCurve, assembleWire, makeFace, makeSolid, makePolygon, makeCompound, revolution, twistExtrude, loft, makeBox, type Shape3D, type Wire, type Edge } from "replicad";
 import { gearOutline, bevelOutline, GearOutline, GearType, OutlineEdge, wormGeometry } from "../geometry/gear";
 import type { Pt } from "../geometry/spline";
 import type { Rigid } from "../../math/transform";
@@ -54,6 +54,9 @@ export interface GearSolidSpec {
   hubLength?: number;
   /** Spokes: cut this many windows through the web between the hub and the rim (0 = solid). */
   spokes?: number;
+  /** Break the edges: a small chamfer (see chamferSize) all round the teeth at each end face, a round
+   *  bore, a ring's rim and a hub's end — so the edges catch the light. Off when absent. */
+  chamfer?: boolean;
 }
 
 const DEG = Math.PI / 180;
@@ -232,9 +235,20 @@ function piecesWire(pieces: Piece[], z: number, k = 1): Wire {
 // bodies are sewn from their shells and caps rather than fused — a boolean
 // between two sweeps of a hundred flanks takes seconds, sewing coincident
 // edges takes milliseconds.
+//
+// Edge breaks (`chamfer`) are built in the same way, not cut: a broken loop's
+// section is offset into the material by c at the end face (see offsetPieces)
+// and joined by a ruled band to the full section 1.25·c in from it — a chamfer
+// all round the loop's edge, a little steeper than 45° (CHAMFER_DEPTH) — and
+// the sweep runs between the bands. Cutting the chamfer afterwards (a boolean
+// with revolved cutters, or OCC's own chamfer, which also fails on a worm)
+// costs seconds a gear, as each of the hundred flanks is intersected with the
+// cutter; built in, it costs a ruled loft and a sewing. The bands only take
+// material off within 1.25·c of an end face: the sections in between — the
+// pitch circle, the involute — are the sharp gear's.
 
 /** A loop of the region: gear pieces (which twist, unless `fixed`: a bore or a window) or a plain circle about the axis. */
-type RegionLoop = { pieces: Piece[]; fixed?: boolean } | { circle: number };
+type RegionLoop = { pieces: Piece[]; fixed?: boolean; unbroken?: number[] } | { circle: number };
 
 function loopWire(l: RegionLoop, z: number): Wire {
   if ("circle" in l) {
@@ -244,48 +258,240 @@ function loopWire(l: RegionLoop, z: number): Wire {
   return piecesWire(l.pieces, z);
 }
 
-/** One loop carried from z0 to z1 as an open shell, with its start and end wires. A loop that
- *  doesn't turn (a rim, a bore, a window) is a prism — exact planes and cylinders; one that turns
- *  follows an auxiliary helix (replicad's twisted extrude). */
-function sweptLoop(l: RegionLoop, z0: number, z1: number, twistPerMm: number): [Shape3D, Wire, Wire] {
+const mapPiece = (p: Piece, f: (q: Pt) => Pt): Piece =>
+  p.kind === "line" ? { kind: "line", a: f(p.a), b: f(p.b) }
+    : p.kind === "arc" ? { kind: "arc", a: f(p.a), m: f(p.m), b: f(p.b) }
+      : { kind: "cubic", c: p.c.map(f) as [Pt, Pt, Pt, Pt] };
+
+/** A loop turned `a` radians about the axis. */
+function turnLoop(l: RegionLoop, a: number): RegionLoop {
+  if ("circle" in l || Math.abs(a) < 1e-12) return l;
+  const c = Math.cos(a), s = Math.sin(a);
+  return { ...l, pieces: l.pieces.map((p) => mapPiece(p, (q) => ({ x: c * q.x - s * q.y, y: s * q.x + c * q.y }))) };
+}
+
+/** Whether a loop turns along a helical sweep. */
+const turns = (l: RegionLoop, twistPerMm: number) => Math.abs(twistPerMm) > 1e-12 && "pieces" in l && !l.fixed;
+
+/** One loop carried from z0 to z1 as an open shell, with its start and end wires; a turning loop
+ *  starts turned a0. A loop that doesn't turn (a rim, a bore, a window) is a prism — exact planes
+ *  and cylinders; one that turns follows an auxiliary helix (replicad's twisted extrude). */
+function sweptLoop(l: RegionLoop, z0: number, z1: number, twistPerMm: number, a0 = 0): [Shape3D, Wire, Wire] {
   const h = z1 - z0;
-  const turn = "circle" in l || l.fixed ? 0 : twistPerMm * h; // radians
+  const turn = turns(l, twistPerMm) ? twistPerMm * h : 0; // radians
+  const w = loopWire(turnLoop(l, turn ? a0 : 0), z0);
   if (Math.abs(turn) < 1e-9) {
-    const w = loopWire(l, z0);
     return [prism(w, [0, 0, h]), w, translateShape(w as unknown as Shape3D, { x: 0, y: 0, z: h }) as unknown as Wire];
   }
-  const w = loopWire(l, z0);
   try {
     return twistExtrude(w, turn / DEG, [0, 0, z0], [0, 0, h], undefined, true) as unknown as [Shape3D, Wire, Wire];
   } finally { free(w); }
 }
 
-/** The region from z0 to z1, straight (twist 0), helical, or herringbone (see above). */
-function regionBody(loops: RegionLoop[], z0: number, z1: number, twistPerMm: number, herringbone: boolean): Shape3D {
-  const twists = Math.abs(twistPerMm) > 1e-12 && loops.some((l) => "pieces" in l && !l.fixed);
-  if (!twists) {
+/** A ruled shell between two wires of matching edges (edge i to edge i). */
+function ruledShell(a: Wire, b: Wire): Shape3D {
+  const oc = getOC() as OcAny;
+  const t = new oc.BRepOffsetAPI_ThruSections(false, true, 1e-6);
+  try {
+    t.AddWire(raw(a)); t.AddWire(raw(b));
+    t.CheckCompatibility(false);
+    t.Build();
+    if (!t.IsDone()) throw new Error("the chamfer band did not loft");
+    return castOwned(t.Shape());
+  } finally { t.delete(); }
+}
+
+/** Edge breaks at a region's ends: per loop (in the order of `loops`), the chamfer at its bottom and at
+ *  its top, mm (0 = sharp). */
+type Breaks = { lo: number[]; hi: number[] };
+
+/** The region from z0 to z1, straight (twist 0), helical, or herringbone (see above), its loops' edges
+ *  broken as `breaks` says (a herringbone gear's upper half is a mirrored lower half, broken as `hi`). */
+function regionBody(loops: RegionLoop[], z0: number, z1: number, twistPerMm: number, herringbone: boolean, breaks?: Breaks): Shape3D {
+  const twists = loops.some((l) => turns(l, twistPerMm));
+  const none = loops.map(() => 0);
+  const lo = breaks?.lo ?? none, hi = breaks?.hi ?? none;
+  if (!twists && ![...lo, ...hi].some((c) => c > 0)) {
     const wires = loops.map((l) => loopWire(l, z0));
     const face = capFace(wires[0], wires.slice(1));
     try { return prism(face, [0, 0, z1 - z0]); } finally { free(face, ...wires); }
   }
   const zEnd = herringbone ? (z0 + z1) / 2 : z1;
-  const swept = loops.map((l) => sweptLoop(l, z0, zEnd, twistPerMm));
-  const shells = swept.map((x) => x[0]);
-  const startFace = capFace(swept[0][1], swept.slice(1).map((x) => x[1]));
-  const pieces: Shape3D[] = [startFace, ...shells];
-  if (herringbone) pieces.push(...[startFace, ...shells].map((x) => mirrorZ(x, zEnd)));
-  else pieces.push(capFace(swept[0][2], swept.slice(1).map((x) => x[2])));
+  const pieces = regionShells(loops, z0, zEnd, twistPerMm, lo, herringbone ? none : hi, !herringbone);
+  const owned = [...pieces];
+  if (herringbone) {
+    const same = lo.every((c, i) => c === hi[i]);
+    const upper = same ? pieces : regionShells(loops, z0, zEnd, twistPerMm, hi, none, false);
+    if (!same) owned.push(...upper);
+    const mirrored = upper.map((x) => mirrorZ(x, zEnd));
+    pieces.push(...mirrored);
+    owned.push(...mirrored);
+  }
   try {
     const solid = makeSolid(pieces as never) as unknown as Shape3D;
     if (!(volumeOfShape(solid) > 0)) { free(solid); throw new Error("the helical sweep did not close into a solid"); }
     return solid;
-  } finally { free(...pieces, ...swept.flatMap((x) => [x[1], x[2]])); }
+  } finally { free(...owned); }
+}
+
+/** The faces and shells that bound a region from za to zb — the cap at za, and at zb when `capTop` —
+ *  each loop broken by lo[i] at za and hi[i] at zb (see above). A turning loop is at its za angle at za. */
+function regionShells(loops: RegionLoop[], za: number, zb: number, twistPerMm: number, lo: number[], hi: number[], capTop: boolean): Shape3D[] {
+  const shells: Shape3D[] = [];
+  const bottoms: Wire[] = [], tops: Wire[] = [], wires = new Set<Wire>();
+  try {
+    loops.forEach((l, i) => {
+      const tw = turns(l, twistPerMm) ? twistPerMm : 0;
+      const zs = za + CHAMFER_DEPTH * lo[i], ze = zb - CHAMFER_DEPTH * hi[i];
+      const [shell, ws, we] = sweptLoop(l, zs, ze, tw, tw * (zs - za));
+      shells.push(shell); wires.add(ws); wires.add(we);
+      let wb = ws, wt = we;
+      if (lo[i] > 0) { wb = loopWire(offsetLoop(l, lo[i], i === 0), za); wires.add(wb); shells.push(ruledShell(wb, ws)); }
+      if (hi[i] > 0) { wt = loopWire(turnLoop(offsetLoop(l, hi[i], i === 0), tw * (zb - za)), zb); wires.add(wt); shells.push(ruledShell(we, wt)); }
+      bottoms.push(wb); tops.push(wt);
+    });
+    const out = [capFace(bottoms[0], bottoms.slice(1)), ...shells];
+    if (capTop) out.push(capFace(tops[0], tops.slice(1)));
+    return out;
+  } catch (e) { free(...shells); throw e; } finally { free(...wires); }
 }
 
 /** Mirror a shape in the plane z = c (a copy). */
 function mirrorZ(shape: Shape3D, c: number): Shape3D {
   const copy = (shape as unknown as { clone: () => Shape3D }).clone();
   return (copy as unknown as { mirror: (n: P3, o: P3) => Shape3D }).mirror([0, 0, 1], [0, 0, c]);
+}
+
+// ---- offsetting a section into the material (for the edge breaks) ----------------------------
+
+/** A circular arc through a, m, b: its centre, radius, start angle, signed sweep. */
+function arcOf(a: Pt, m: Pt, b: Pt) {
+  const d = 2 * (a.x * (m.y - b.y) + m.x * (b.y - a.y) + b.x * (a.y - m.y));
+  const sq = (p: Pt) => p.x * p.x + p.y * p.y;
+  const o = { x: (sq(a) * (m.y - b.y) + sq(m) * (b.y - a.y) + sq(b) * (a.y - m.y)) / d, y: (sq(a) * (b.x - m.x) + sq(m) * (a.x - b.x) + sq(b) * (m.x - a.x)) / d };
+  const ccw = (m.x - a.x) * (b.y - a.y) - (m.y - a.y) * (b.x - a.x) > 0; // a → m → b turns left: counter-clockwise
+  const a0 = Math.atan2(a.y - o.y, a.x - o.x);
+  let a1 = Math.atan2(b.y - o.y, b.x - o.x);
+  if (ccw) { while (a1 <= a0) a1 += 2 * Math.PI; } else { while (a1 >= a0) a1 -= 2 * Math.PI; }
+  return { o, r: Math.hypot(a.x - o.x, a.y - o.y), a0, sweep: a1 - a0 };
+}
+
+/** Points along a piece and the unit tangent (direction of travel) at each. */
+function sampled(p: Piece): { pts: Pt[]; tan: Pt[] } {
+  if (p.kind === "line") { const t = norm({ x: p.b.x - p.a.x, y: p.b.y - p.a.y }); return { pts: [p.a, p.b], tan: [t, t] }; }
+  const n = 16;
+  if (p.kind === "cubic") {
+    const pts: Pt[] = [], tan: Pt[] = [];
+    for (let i = 0; i <= n; i++) {
+      const s = i / n;
+      pts.push(bez(p.c, s));
+      let d = bezD(p.c, s);
+      if (Math.hypot(d.x, d.y) < 1e-12) d = bezD(p.c, Math.min(1, Math.max(0, s + (i === 0 ? 1e-3 : -1e-3))));
+      tan.push(norm(d));
+    }
+    return { pts, tan };
+  }
+  const g = arcOf(p.a, p.m, p.b), sgn = Math.sign(g.sweep);
+  const pts: Pt[] = [], tan: Pt[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = g.a0 + (g.sweep * i) / n;
+    pts.push(i === 0 ? p.a : i === n ? p.b : { x: g.o.x + g.r * Math.cos(t), y: g.o.y + g.r * Math.sin(t) });
+    tan.push({ x: -Math.sin(t) * sgn, y: Math.cos(t) * sgn });
+  }
+  return { pts, tan };
+}
+
+/** Twice the signed area of a closed polygon (positive counter-clockwise). */
+const area2 = (pts: Pt[]) => pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length]; return s + p.x * q.y - q.x * p.y; }, 0);
+
+/** A loop's section offset by d into the material: an outer loop inward, a hole outward (but for its
+ *  `unbroken` pieces, which stay put, their neighbours meeting them). */
+function offsetLoop(l: RegionLoop, d: number, outer: boolean): RegionLoop {
+  if ("circle" in l) return { circle: outer ? l.circle - d : l.circle + d };
+  const ccw = area2(l.pieces.flatMap((p) => sampled(p).pts.slice(0, -1))) > 0;
+  return { ...l, pieces: offsetPieces(l.pieces, ccw === outer ? d : -d, l.unbroken) };
+}
+
+/**
+ * A closed chain of pieces offset sideways by d (to the left of travel; negative to the right), piece
+ * for piece — the same count, so a ruled loft joins each to its original. Each piece is offset along
+ * its normals (a line stays a line, an arc a concentric arc, a cubic is refitted); where two met
+ * smoothly their offsets still meet, and at a corner the two offsets are trimmed back to where they
+ * cross (a convex corner) or carried on along their tangents until they do (a concave one). Throws
+ * if a piece is trimmed away entirely (a tooth tip narrower than the chamfer). The pieces listed in
+ * `keep` aren't offset (the rest meet them as they would each other).
+ */
+function offsetPieces(pieces: Piece[], d: number, keep: number[] = []): Piece[] {
+  const n = pieces.length, L = 6 * Math.abs(d);
+  const off = pieces.map((p, k) => {
+    const { pts, tan } = sampled(p), dk = keep.includes(k) ? 0 : d;
+    return { pts: pts.map((q, i) => ({ x: q.x - dk * tan[i].y, y: q.y + dk * tan[i].x })), t0: tan[0], t1: tan[tan.length - 1] };
+  });
+  // smooth joints: the offsets' ends coincide (to the fit), so meet them in the middle
+  const smooth = off.map((A, i) => {
+    const B = off[(i + 1) % n], a = A.pts[A.pts.length - 1], b = B.pts[0];
+    if (Math.hypot(a.x - b.x, a.y - b.y) > 0.05 * Math.abs(d) + 1e-9) return false;
+    const m = lerp(a, b, 0.5);
+    A.pts[A.pts.length - 1] = m; B.pts[0] = m;
+    return true;
+  });
+  // each offset as a polyline carried on L past both ends, and arc-length positions along it
+  const ext = off.map((A) => {
+    const a = A.pts[0], b = A.pts[A.pts.length - 1];
+    const pts = [{ x: a.x - A.t0.x * L, y: a.y - A.t0.y * L }, ...A.pts, { x: b.x + A.t1.x * L, y: b.y + A.t1.y * L }];
+    const s = [0];
+    for (let i = 1; i < pts.length; i++) s.push(s[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+    return { pts, s, from: L, to: s[s.length - 1] - L };
+  });
+  const cut0 = ext.map((e) => e.from), cut1 = ext.map((e) => e.to);
+  for (let i = 0; i < n; i++) {
+    if (smooth[i]) continue;
+    const A = ext[i], j = (i + 1) % n, B = ext[j];
+    let best: { sa: number; sb: number; cost: number } | null = null;
+    for (let u = 0; u < A.pts.length - 1; u++) {
+      for (let v = 0; v < B.pts.length - 1; v++) {
+        const x = segX(A.pts[u], A.pts[u + 1], B.pts[v], B.pts[v + 1]);
+        if (!x) continue;
+        const sa = A.s[u] + x.t * (A.s[u + 1] - A.s[u]), sb = B.s[v] + x.w * (B.s[v + 1] - B.s[v]);
+        const cost = Math.abs(sa - A.to) + Math.abs(sb - B.from);
+        if (!best || cost < best.cost) best = { sa, sb, cost };
+      }
+    }
+    if (!best) throw new Error("the chamfer's offset corner did not close");
+    cut1[i] = best.sa; cut0[j] = best.sb;
+  }
+  return pieces.map((p, i) => {
+    const e = ext[i];
+    if (!(cut1[i] - cut0[i] > 1e-6)) throw new Error("the chamfer is wider than a tooth tip");
+    const poly = slicePoly(e.pts, e.s, cut0[i], cut1[i]);
+    if (p.kind === "line") return { kind: "line", a: poly[0], b: poly[poly.length - 1] };
+    if (p.kind === "arc") return { kind: "arc", a: poly[0], m: slicePoly(e.pts, e.s, (cut0[i] + cut1[i]) / 2, (cut0[i] + cut1[i]) / 2)[0], b: poly[poly.length - 1] };
+    return { kind: "cubic", c: fitCubic(poly) };
+  });
+}
+
+/** Where segments p0p1 and q0q1 cross: their parameters, or null. */
+function segX(p0: Pt, p1: Pt, q0: Pt, q1: Pt): { t: number; w: number } | null {
+  const rx = p1.x - p0.x, ry = p1.y - p0.y, sx = q1.x - q0.x, sy = q1.y - q0.y;
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-18) return null;
+  const qx = q0.x - p0.x, qy = q0.y - p0.y;
+  const t = (qx * sy - qy * sx) / den, w = (qx * ry - qy * rx) / den;
+  return t >= -1e-9 && t <= 1 + 1e-9 && w >= -1e-9 && w <= 1 + 1e-9 ? { t, w } : null;
+}
+
+/** The part of a polyline (with arc-length positions s) from position a to b. */
+function slicePoly(pts: Pt[], s: number[], a: number, b: number): Pt[] {
+  const at = (x: number): Pt => {
+    let k = 0;
+    while (k < s.length - 2 && s[k + 1] < x) k++;
+    const f = s[k + 1] > s[k] ? (x - s[k]) / (s[k + 1] - s[k]) : 0;
+    return lerp(pts[k], pts[k + 1], Math.min(1, Math.max(0, f)));
+  };
+  const out = [at(a)];
+  for (let k = 0; k < pts.length; k++) if (s[k] > a + 1e-9 && s[k] < b - 1e-9) out.push(pts[k]);
+  out.push(at(b));
+  return out;
 }
 
 // ---- the printable extras ---------------------------------------------------------------
@@ -332,8 +538,8 @@ function spokeLoops(n: number, r0: number, r1: number, spoke: number): RegionLoo
   return out;
 }
 
-/** The holes a round gear's web carries: the bore and, with spokes, the windows between the hub and
- *  a rim `rim` inside `rInner` (the root circle). */
+/** The holes a round gear's web carries: the bore (first, if any) and, with spokes, the windows
+ *  between the hub and a rim `rim` inside `rInner` (the root circle). */
 function webHoles(s: GearSolidSpec, rInner: number): RegionLoop[] {
   const holes: RegionLoop[] = [];
   const bore = boreLoop(s);
@@ -349,14 +555,21 @@ function webHoles(s: GearSolidSpec, rInner: number): RegionLoop[] {
   return holes;
 }
 
-/** A hub of diameter `hubDiameter`, `hubLength` beyond the face at z (upward when dir = 1), bored like the gear. */
-function hubSolid(s: GearSolidSpec, z: number, dir: 1 | -1): Shape3D | null {
+const hasHub = (s: GearSolidSpec) => (s.hubDiameter ?? 0) > 0 && (s.hubLength ?? 0) > 0;
+/** The edge break a round bore gets, in a wall `wall` thick (a D-flat or keyed bore stays sharp). */
+const boreBreak = (s: GearSolidSpec, c: number, wall: number) => (c > 0 && boreLoop(s) && "circle" in boreLoop(s)! ? Math.min(c, wall / 4) : 0);
+
+/** A hub of diameter `hubDiameter`, `hubLength` beyond the face at z (upward when dir = 1), bored like
+ *  the gear; its far end broken by c (outside and a round bore). */
+function hubSolid(s: GearSolidSpec, z: number, dir: 1 | -1, c = 0): Shape3D | null {
   const d = s.hubDiameter ?? 0, L = s.hubLength ?? 0;
   if (!(d > 0 && L > 0)) return null;
   const bore = boreLoop(s);
   // overlap the gear by a hair so the fuse has volume to merge
   const z0 = dir > 0 ? z - 1e-3 : z - L, z1 = dir > 0 ? z + L : z + 1e-3;
-  return regionBody([{ circle: d / 2 }, ...(bore ? [bore] : [])], z0, z1, 0, false);
+  const wall = d / 2 - (s.bore ?? 0) / 2;
+  const far = [Math.min(c, wall / 4), boreBreak(s, c, wall)].slice(0, bore ? 2 : 1), near = far.map(() => 0);
+  return regionBody([{ circle: d / 2 }, ...(bore ? [bore] : [])], z0, z1, 0, false, c > 0 ? (dir > 0 ? { lo: near, hi: far } : { lo: far, hi: near }) : undefined);
 }
 
 /** Join a hub onto a gear body (consumes the body). */
@@ -366,6 +579,8 @@ function withHub(body: Shape3D, hub: Shape3D | null): Shape3D {
 }
 
 // ---- the gear types ---------------------------------------------------------------------
+//
+// Each takes the edge break c (0 = sharp; see buildGearSolid).
 
 const profileSpec = (s: GearSolidSpec, type: GearType, teeth = s.teeth) => ({
   type, module: s.module, teeth, pressureAngle: s.pressureAngle, addendum: s.addendum, dedendum: s.dedendum,
@@ -376,23 +591,34 @@ const profileSpec = (s: GearSolidSpec, type: GearType, teeth = s.teeth) => ({
 /** Twist rate (rad/mm) of a helical gear of pitch radius rp: a tooth advances tan β per mm along the axis. */
 const twistRate = (helixDeg: number, rp: number) => Math.tan(helixDeg * DEG) / rp;
 
-function cylindricalGear(s: GearSolidSpec): Shape3D {
+function cylindricalGear(s: GearSolidSpec, c: number): Shape3D {
   const o = gearOutline(profileSpec(s, "external"));
-  const helix = s.type === "spur" ? 0 : (s.helixAngle ?? 0);
-  const body = regionBody([{ pieces: outlinePieces(o) }, ...webHoles(s, o.radii!.root)], 0, s.faceWidth, twistRate(helix, o.radii!.pitch), s.type === "herringbone" || !!s.herringbone);
-  return withHub(body, hubSolid(s, s.faceWidth, 1));
+  const holes = webHoles(s, o.radii!.root);
+  // the teeth broken at both faces, a round bore at both unless the hub carries it on (windows stay sharp)
+  const cb = boreBreak(s, c, o.radii!.root - (s.bore ?? 0) / 2);
+  const lo = [c, ...holes.map((_, i) => (i === 0 ? cb : 0))], hi = [c, ...holes.map((_, i) => (i === 0 && !hasHub(s) ? cb : 0))];
+  const body = regionBody([{ pieces: outlinePieces(o) }, ...holes], 0, s.faceWidth, twistRate(s.type === "spur" ? 0 : (s.helixAngle ?? 0), o.radii!.pitch), s.type === "herringbone" || !!s.herringbone, c > 0 ? { lo, hi } : undefined);
+  return withHub(body, hubSolid(s, s.faceWidth, 1, c));
 }
 
-function ringGear(s: GearSolidSpec): Shape3D {
+function ringGear(s: GearSolidSpec, c: number): Shape3D {
   const o = gearOutline(profileSpec(s, "internal"));
-  const rOut = o.radii!.root + (s.rim ?? 3 * s.module);
-  return regionBody([{ circle: rOut }, { pieces: outlinePieces(o) }], 0, s.faceWidth, twistRate(s.helixAngle ?? 0, o.radii!.pitch), !!s.herringbone);
+  const rim = s.rim ?? 3 * s.module;
+  const br = [Math.min(c, rim / 4), c];
+  return regionBody([{ circle: o.radii!.root + rim }, { pieces: outlinePieces(o) }], 0, s.faceWidth, twistRate(s.helixAngle ?? 0, o.radii!.pitch), !!s.herringbone, c > 0 ? { lo: br, hi: br } : undefined);
 }
 
-function rackGear(s: GearSolidSpec): Shape3D {
+function rackGear(s: GearSolidSpec, c: number): Shape3D {
   const h = s.faceWidth;
   const slope = Math.tan((s.helixAngle ?? 0) * DEG); // x shift per mm along Z
-  if (Math.abs(slope) < 1e-12) return regionBody([{ pieces: outlinePieces(gearOutline(profileSpec(s, "rack"))) }], 0, h, 0, false);
+  if (Math.abs(slope) < 1e-12) {
+    // broken all round the end faces but at the bar's square ends (whose half root spaces can be
+    // shorter than the chamfer)
+    const pieces = outlinePieces(gearOutline(profileSpec(s, "rack")));
+    const L = Math.round(s.teeth) * Math.PI * s.module;
+    const ends = pieces.flatMap((p, i) => (p.kind === "line" && Math.abs(Math.abs(p.a.x) - L / 2) < 1e-9 && Math.abs(p.b.x - p.a.x) < 1e-9 ? [i] : []));
+    return regionBody([{ pieces, unbroken: ends }], 0, h, 0, false, c > 0 ? { lo: [c], hi: [c] } : undefined);
+  }
   // The profile carried along a slanted vector: a prism of the wire (a shell) capped at both ends;
   // herringbone mirrors the lower half (sewn, like the round gears). It runs a few teeth long at
   // each end (on the same pitch lattice) so the square-trimmed bar is full at both ends.
@@ -413,29 +639,48 @@ function rackGear(s: GearSolidSpec): Shape3D {
   // trim the slanted ends square
   const ys = o.rack!.pitchLineV;
   const box = makeBox([-L / 2, ys - 100 * s.module, -1], [L / 2, ys + 100 * s.module, h + 1]) as unknown as Shape3D;
-  try { return intersectShapes(body, box); } finally { free(body, box); }
+  let bar: Shape3D;
+  try { bar = intersectShapes(body, box); } finally { free(body, box); }
+  return c > 0 ? slantedRackBreaks(bar, s, c) : bar;
 }
 
-function bevelGear(s: GearSolidSpec): Shape3D {
+function bevelGear(s: GearSolidSpec, c: number): Shape3D {
   const o = bevelOutline({ ...profileSpec(s, "external"), mateTeeth: s.mateTeeth ?? s.teeth });
   const bg = o.bevel;
   if (!(s.faceWidth < bg.coneDistance * 0.6)) throw new Error(`bevel face width must be under ${(bg.coneDistance * 0.6).toFixed(2)} (60% of the cone distance)`);
   const pieces = outlinePieces(o);
   const k = 1 - s.faceWidth / bg.coneDistance;  // the toe is the heel scaled toward the apex
-  const zt = s.faceWidth * Math.cos(bg.pitchAngle);
-  const heel = piecesWire(pieces, 0, 1), toe = piecesWire(pieces, zt, k);
+  const cosA = Math.cos(bg.pitchAngle), zt = s.faceWidth * cosA;
+  // sections along the cone, scaled toward the apex: heel and toe, and with an edge break, the heel's
+  // and toe's outlines offset into the tooth by c (the toe's by c scaled) at the faces, the full
+  // outline c (c·k) along the cone from each
+  const scaled = (kk: number) => pieces.map((p) => mapPiece(p, (q) => ({ x: q.x * kk, y: q.y * kk })));
+  const at = (slant: number): [Piece[], number] => [scaled(1 - slant / bg.coneDistance), slant * cosA];
+  const sections: [Piece[], number][] = c > 0
+    ? [[(offsetLoop({ pieces }, c, true) as { pieces: Piece[] }).pieces, 0], at(CHAMFER_DEPTH * c), at(s.faceWidth - CHAMFER_DEPTH * c * k), [(offsetLoop({ pieces: scaled(k) }, c * k, true) as { pieces: Piece[] }).pieces, zt]]
+    : [[pieces, 0], [scaled(k), zt]];
+  const wires = sections.map(([p, z]) => piecesWire(p, z));
   let body: Shape3D;
-  try { body = loft([heel, toe], { ruled: true }) as unknown as Shape3D; } finally { free(heel, toe); }
+  try { body = loft(wires, { ruled: true }) as unknown as Shape3D; } finally { free(...wires); }
   // the bore and windows cut through the cone, then the hub behind the heel
   const holes = webHoles(s, o.radii!.root * k);
-  if (holes.length) {
-    for (const h of holes) {
-      const tool = regionBody([h], -1, zt + 1, 0, false);
-      const cut = cutShapes(body, tool); free(body, tool);
-      body = cut;
-    }
+  const bore = boreLoop(s);
+  for (const [i, h] of holes.entries()) {
+    const cb = i === 0 && bore ? boreBreak(s, c, o.radii!.root * k - (s.bore ?? 0) / 2) : 0;
+    const tool = cb > 0 ? flaredBore((s.bore ?? 0) / 2, hasHub(s) ? 0 : cb, cb * k, zt) : regionBody([h], -1, zt + 1, 0, false);
+    const cut = cutShapes(body, tool); free(body, tool);
+    body = cut;
   }
-  return withHub(body, hubSolid(s, 0, -1));
+  return withHub(body, hubSolid(s, 0, -1, c));
+}
+
+/** A round bore's cutter from z = 0 to zt, flared by cLo at the bottom and cHi at the top (CHAMFER_DEPTH
+ *  deep; on past both faces, so it never runs along one). */
+function flaredBore(r: number, cLo: number, cHi: number, zt: number): Shape3D {
+  const e = 1, D = CHAMFER_DEPTH;
+  const pts: P3[] = [[0, 0, -e], [r + cLo + e / D, 0, -e], [r, 0, D * cLo], [r, 0, zt - D * cHi], [r + cHi + e / D, 0, zt + e], [0, 0, zt + e]];
+  const face = makePolygon(pts);
+  try { return revolution(face, [0, 0, 0], [0, 0, 1], 360); } finally { free(face); }
 }
 
 /** A worm's transverse section (z = 0). Its thread's axial section is the basic rack — straight
@@ -474,26 +719,102 @@ function mirrorPieceY(p: Piece): Piece {
 
 /** A worm: the transverse section swept along the axis turning once per lead (right hand unless
  *  helixAngle < 0), with its bore. */
-function worm(s: GearSolidSpec): Shape3D {
+function worm(s: GearSolidSpec, c: number): Shape3D {
   const leftHand = (s.helixAngle ?? 1) < 0;
   const w = wormGeometry(s.module, Math.max(1, Math.round(s.teeth)), s.wormDiameter ?? 10 * s.module, { pressureAngle: s.pressureAngle, addendum: s.addendum, dedendum: s.dedendum, backlash: s.backlash });
   const bore = boreLoop(s);
   if (bore && (s.bore ?? 0) / 2 > w.rootRadius - 0.8) throw new Error(`worm bore must leave a wall: at most ${(2 * (w.rootRadius - 0.8)).toFixed(2)} mm`);
-  return regionBody([{ pieces: wormSection(w, leftHand) }, ...(bore ? [bore] : [])], 0, s.faceWidth, ((leftHand ? -1 : 1) * 2 * Math.PI) / w.lead, false);
+  const br = [c, ...(bore ? [boreBreak(s, c, w.rootRadius - (s.bore ?? 0) / 2)] : [])];
+  return regionBody([{ pieces: wormSection(w, leftHand) }, ...(bore ? [bore] : [])], 0, s.faceWidth, ((leftHand ? -1 : 1) * 2 * Math.PI) / w.lead, false, c > 0 ? { lo: br, hi: br } : undefined);
 }
 
-/** Build a gear solid in its own frame (axis +Z; see the module comment). */
-export function buildGearSolid(s: GearSolidSpec): Shape3D {
+/** Build a gear solid in its own frame (axis +Z; see the module comment). With `chamfer`, its edges
+ *  are broken (see chamferSize); if that can't be built — a tooth tip too narrow for it, or the
+ *  kernel failing — it is tried at half the size, then left sharp and reported to `warn`. */
+export function buildGearSolid(s: GearSolidSpec, warn?: (msg: string) => void): Shape3D {
   if (!(s.module > 0)) throw new Error("module must be positive");
   if (!(s.faceWidth > 0)) throw new Error("face width must be positive");
-  switch (s.type) {
-    case "spur": case "helical": case "herringbone": return cylindricalGear(s);
-    case "ring": return ringGear(s);
-    case "rack": return rackGear(s);
-    case "bevel": return bevelGear(s);
-    case "worm": return worm(s);
+  const build = (c: number): Shape3D => {
+    switch (s.type) {
+      case "spur": case "helical": case "herringbone": return cylindricalGear(s, c);
+      case "ring": return ringGear(s, c);
+      case "rack": return rackGear(s, c);
+      case "bevel": return bevelGear(s, c);
+      case "worm": return worm(s, c);
+    }
+    throw new Error(`unknown gear type "${s.type}"`);
+  };
+  const c = s.chamfer ? chamferSize(s) : 0;
+  if (!c) return build(0);
+  for (const f of [1, 0.5]) {
+    if (c * f < 0.02) break;
+    try {
+      const body = build(c * f);
+      if (isValidSolid(body)) return body;
+      free(body);
+    } catch { /* tried smaller, or left sharp below */ }
   }
-  throw new Error(`unknown gear type "${s.type}"`);
+  const body = build(0); // a sharp gear that can't be built throws as it always did
+  warn?.("its edges couldn't be chamfered, so it is built sharp");
+  return body;
+}
+
+// ---- edge breaks ---------------------------------------------------------------------------
+//
+// A machined gear has its sharp edges broken, and that thin bevel is what catches
+// the light round each tooth. Round gears, rings, straight racks and worms get it
+// built in (regionBody, above): the whole toothed outline at each end face —
+// tips, flanks and roots — the rim of a ring, a round bore and a hub's far end.
+// A bevel gear is lofted through its heel and toe outlines offset the same way,
+// its round bore cut with flared ends. A slanted rack (trimmed square from a
+// longer slanted bar) has its tips and back broken by cutting prisms along it,
+// which is cheap on its plane faces. Spoke windows and a D-flat's or keyway's
+// bore stay sharp.
+
+/** How far an edge break runs along the axis, for each mm it cuts in from the side: a little steeper
+ *  than 45°, so a break on the face a gear prints on never overhangs past 45° (as tessellated). */
+const CHAMFER_DEPTH = 1.25;
+
+/** The edge break's size (its width across the end face), mm: 0.15 × module, at most a quarter of the addendum and a sixth of the
+ *  face width; 0 when that's too small to cut cleanly (under 0.02 mm). */
+export function chamferSize(s: GearSolidSpec): number {
+  const c = Math.min(0.15 * s.module, 0.25 * (s.addendum ?? 1) * s.module, s.faceWidth / 6);
+  return c >= 0.02 ? c : 0;
+}
+
+/** A slanted rack with its tips and back broken by c at both end faces (consumes `bar`): a prism of
+ *  triangular section along X takes each corner off (CHAMFER_DEPTH deep), grown past the faces it meets. */
+function slantedRackBreaks(bar: Shape3D, s: GearSolidSpec, c: number): Shape3D {
+  const m = s.module, H = s.faceWidth;
+  const tip = (s.addendum ?? 1) * m, back = -(s.dedendum ?? 1.25) * m - (s.rim ?? 2 * m);
+  const e = Math.max(0.05, 0.5 * c), half = (Math.round(s.teeth) * Math.PI * m) / 2 + 2 * m;
+  // corners in (y, z): K, and the directions of its two sides into the material
+  const corners: [Pt, Pt, Pt][] = [
+    [{ x: tip, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }], [{ x: tip, y: H }, { x: -1, y: 0 }, { x: 0, y: -1 }],
+    [{ x: back, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }], [{ x: back, y: H }, { x: 1, y: 0 }, { x: 0, y: -1 }],
+  ];
+  const cutters = corners.map(([K, d1, d2]) => {
+    const P = { x: K.x + c * d1.x, y: K.y + c * d1.y }, Q = { x: K.x + CHAMFER_DEPTH * c * d2.x, y: K.y + CHAMFER_DEPTH * c * d2.y };
+    const u = norm({ x: P.x - Q.x, y: P.y - Q.y });
+    const tri = [{ x: P.x + e * u.x, y: P.y + e * u.y }, { x: K.x - e * (d1.x + d2.x), y: K.y - e * (d1.y + d2.y) }, { x: Q.x - e * u.x, y: Q.y - e * u.y }];
+    const face = makePolygon(tri.map((p) => [-half, p.x, p.y] as P3)) as unknown as Shape3D;
+    try { return prism(face, [2 * half, 0, 0]); } finally { free(face); }
+  });
+  const tool = makeCompound(cutters) as unknown as Shape3D;
+  try { return cutShapes(bar, tool); } finally { free(bar, tool, ...cutters); }
+}
+
+/** One valid solid (BRepCheck), as a broken gear must be. */
+function isValidSolid(shape: Shape3D): boolean {
+  const oc = getOC() as OcAny;
+  const a = new oc.BRepCheck_Analyzer(raw(shape), true, false, false);
+  try {
+    if (!a.IsValid()) return false;
+  } finally { a.delete(); }
+  const ex = new oc.TopExp_Explorer(raw(shape), oc.TopAbs_ShapeEnum.TopAbs_SOLID, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  let n = 0;
+  try { for (; ex.More(); ex.Next()) n++; } finally { ex.delete(); }
+  return n === 1 && volumeOfShape(shape) > 0;
 }
 
 
@@ -538,6 +859,7 @@ export function gearExtent(s: GearSolidSpec): Annulus[] | null {
 }
 
 const LOCAL = new Map<string, Shape3D>();
+const LOCAL_WARN = new Map<string, string>();
 const LOCAL_MAX = 48;
 
 /** A stable key for a gear spec (the same numbers → the same key). */
@@ -545,19 +867,23 @@ export function gearSolidKey(s: GearSolidSpec): string {
   return JSON.stringify(Object.keys(s).sort().flatMap((k) => { const v = (s as unknown as Record<string, unknown>)[k]; return v === undefined ? [] : [[k, v]]; }));
 }
 
-/** The gear in its own frame, built once per spec. Owned by the memo: place it, don't delete it. */
-export function localGearSolid(s: GearSolidSpec): { key: string; shape: Shape3D } {
+/** The gear in its own frame, built once per spec, and what went wrong on the way (a chamfer left
+ *  off). Owned by the memo: place it, don't delete it. */
+export function localGearSolid(s: GearSolidSpec): { key: string; shape: Shape3D; warning?: string } {
   const key = gearSolidKey(s);
   const hit = LOCAL.get(key);
-  if (hit) { LOCAL.delete(key); LOCAL.set(key, hit); return { key, shape: hit }; }
-  const shape = buildGearSolid(s);
+  if (hit) { LOCAL.delete(key); LOCAL.set(key, hit); return { key, shape: hit, warning: LOCAL_WARN.get(key) }; }
+  let warning: string | undefined;
+  const shape = buildGearSolid(s, (w) => { warning = w; });
   LOCAL.set(key, shape);
+  if (warning) LOCAL_WARN.set(key, warning);
   while (LOCAL.size > LOCAL_MAX) {
     const [k, old] = LOCAL.entries().next().value as [string, Shape3D];
     LOCAL.delete(k);
+    LOCAL_WARN.delete(k);
     free(old); // placed copies hold their own handle to the geometry
   }
-  return { key, shape };
+  return { key, shape, warning };
 }
 
 /** The memo's local solid for a key, if it still holds it (not counted as a use). */

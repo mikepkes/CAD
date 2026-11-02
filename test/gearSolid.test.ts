@@ -45,19 +45,24 @@ const ANGLES = [0, 7, 19, 41];
 describe("feature.gear", () => {
   beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
 
+  // These two measure the sharp solids against the profile maths, so their gears are made without
+  // the edge break (`chamfer`, on by default; test/gearChamfer.test.ts checks it). The meshed pairs
+  // below keep it, so they turn clear with their edges broken.
+  const sharp = (s: CadSession, params: Record<string, unknown>) => dis(s, "feature.gear", { ...params, chamfer: false });
+
   it("builds every gear type as one feature, sized as the maths says", async () => {
     const s = realSession();
     const m = 2;
     const ids: Record<string, string> = {};
-    ids.spur = (await dis(s, "feature.gear", { type: "spur", module: m, teeth: 20, faceWidth: 8 }))[0];
-    ids.helical = (await dis(s, "feature.gear", { type: "helical", module: m, teeth: 20, faceWidth: 8, helixAngle: 20, x: 60 }))[0];
-    ids.herringbone = (await dis(s, "feature.gear", { type: "herringbone", module: m, teeth: 20, faceWidth: 10, x: 120 }))[0];
-    ids.ring = (await dis(s, "feature.gear", { type: "ring", module: m, teeth: 36, faceWidth: 6, rim: 5, y: 100 }))[0];
-    ids.ringHerringbone = (await dis(s, "feature.gear", { type: "ring", module: m, teeth: 36, faceWidth: 8, helixAngle: 20, herringbone: true, x: 100, y: 100 }))[0];
-    ids.rack = (await dis(s, "feature.gear", { type: "rack", module: m, teeth: 10, faceWidth: 8, y: -60 }))[0];
-    ids.rackHelical = (await dis(s, "feature.gear", { type: "rack", module: m, teeth: 10, faceWidth: 8, helixAngle: 20, x: 80, y: -60 }))[0];
-    ids.bevel = (await dis(s, "feature.gear", { type: "bevel", module: m, teeth: 16, mateTeeth: 24, faceWidth: 8, x: -60 }))[0];
-    ids.worm = (await dis(s, "feature.gear", { type: "worm", module: m, teeth: 1, wormDiameter: 16, faceWidth: 30, x: -60, y: -60 }))[0];
+    ids.spur = (await sharp(s, { type: "spur", module: m, teeth: 20, faceWidth: 8 }))[0];
+    ids.helical = (await sharp(s, { type: "helical", module: m, teeth: 20, faceWidth: 8, helixAngle: 20, x: 60 }))[0];
+    ids.herringbone = (await sharp(s, { type: "herringbone", module: m, teeth: 20, faceWidth: 10, x: 120 }))[0];
+    ids.ring = (await sharp(s, { type: "ring", module: m, teeth: 36, faceWidth: 6, rim: 5, y: 100 }))[0];
+    ids.ringHerringbone = (await sharp(s, { type: "ring", module: m, teeth: 36, faceWidth: 8, helixAngle: 20, herringbone: true, x: 100, y: 100 }))[0];
+    ids.rack = (await sharp(s, { type: "rack", module: m, teeth: 10, faceWidth: 8, y: -60 }))[0];
+    ids.rackHelical = (await sharp(s, { type: "rack", module: m, teeth: 10, faceWidth: 8, helixAngle: 20, x: 80, y: -60 }))[0];
+    ids.bevel = (await sharp(s, { type: "bevel", module: m, teeth: 16, mateTeeth: 24, faceWidth: 8, x: -60 }))[0];
+    ids.worm = (await sharp(s, { type: "worm", module: m, teeth: 1, wormDiameter: 16, faceWidth: 30, x: -60, y: -60 }))[0];
     const out = solidsOf(s);
     for (const [k, id] of Object.entries(ids)) expect(out[id].error, k).toBeUndefined();
     const b = (k: string) => out[ids[k]].bounds!, v = (k: string) => out[ids[k]].volume!;
@@ -95,12 +100,12 @@ describe("feature.gear", () => {
   it("adds a bore (round, D-flat, keyed), a hub and spokes", async () => {
     const s = realSession();
     const base = { type: "spur", module: 2, teeth: 24, faceWidth: 6 };
-    const plain = (await dis(s, "feature.gear", { ...base }))[0];
-    const bored = (await dis(s, "feature.gear", { ...base, bore: 8, x: 60 }))[0];
-    const dShaft = (await dis(s, "feature.gear", { ...base, bore: 8, dFlat: 7, x: 120 }))[0];
-    const keyed = (await dis(s, "feature.gear", { ...base, bore: 8, keyway: 3, x: 180 }))[0];
-    const hubbed = (await dis(s, "feature.gear", { ...base, bore: 8, hubDiameter: 16, hubLength: 5, y: 60 }))[0];
-    const spoked = (await dis(s, "feature.gear", { ...base, bore: 8, hubDiameter: 16, hubLength: 5, spokes: 5, x: 60, y: 60 }))[0];
+    const plain = (await sharp(s, { ...base }))[0];
+    const bored = (await sharp(s, { ...base, bore: 8, x: 60 }))[0];
+    const dShaft = (await sharp(s, { ...base, bore: 8, dFlat: 7, x: 120 }))[0];
+    const keyed = (await sharp(s, { ...base, bore: 8, keyway: 3, x: 180 }))[0];
+    const hubbed = (await sharp(s, { ...base, bore: 8, hubDiameter: 16, hubLength: 5, y: 60 }))[0];
+    const spoked = (await sharp(s, { ...base, bore: 8, hubDiameter: 16, hubLength: 5, spokes: 5, x: 60, y: 60 }))[0];
     const out = solidsOf(s);
     for (const id of [plain, bored, dShaft, keyed, hubbed, spoked]) expect(out[id].error).toBeUndefined();
     const v = (id: string) => out[id].volume!;

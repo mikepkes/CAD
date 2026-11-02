@@ -2246,6 +2246,7 @@ export const BUILTINS: CommandDef<any>[] = [
         faceWidth: { type: ["string", "number"], description: "Face width / rack depth / worm length, mm (expr; default 5 × module)." },
         helixAngle: { type: ["string", "number"], description: "Helix angle at the pitch circle, degrees; + right hand, − left (expr)." },
         herringbone: { type: "boolean", description: "ring / rack: double helical." },
+        chamfer: { type: "boolean", description: "Break the edges with a small chamfer (0.15 × module wide, capped; a little steeper than 45°, so it prints without support) all round the teeth at each end face, a round bore, a ring's rim and a hub's end, so they catch the light; only within it of an end face, so the teeth mesh as before. On for a new gear (default true); false for sharp edges." },
         pressureAngle: { type: ["string", "number"], description: "Degrees (expr; default 20)." },
         backlash: { type: ["string", "number"], description: "Tooth thinning at the pitch line, mm (expr; default 0.1)." },
         addendum: { type: ["string", "number"], description: "× module (expr; default 1)." },
@@ -2281,7 +2282,9 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A 16:24 bevel pair's pinion", params: { type: "bevel", module: 2, teeth: 16, mateTeeth: 24, faceWidth: 8, bore: 5 } },
       { note: "A single-start worm, 16 mm pitch diameter, 40 long, along X", params: { type: "worm", plane: "YZ", module: 2, teeth: 1, wormDiameter: 16, faceWidth: 40, bore: 5 } },
     ],
-    apply(draft, p: Record<string, unknown> & { type?: GearKind; sketch?: string; plane?: string; component?: string; mesh?: { gear: string; angle?: string | number; along?: string | number }; herringbone?: boolean; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+    // a new gear's edges are broken unless it says not; one recorded before `chamfer` existed replays sharp
+    stampNew: (p) => (p.chamfer === undefined ? { ...p, chamfer: true } : p),
+    apply(draft, p: Record<string, unknown> & { type?: GearKind; sketch?: string; plane?: string; component?: string; mesh?: { gear: string; angle?: string | number; along?: string | number }; herringbone?: boolean; chamfer?: boolean; operation?: "new" | "join" | "cut" | "intersect"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
       const type: GearKind = p.type ?? "spur";
       if (p.sketch && !draft.sketches[p.sketch]) throw new Error(`No sketch "${p.sketch}"`);
       if (p.component && !draft.components[p.component]) throw new Error(`No component "${p.component}"`);
@@ -2327,7 +2330,7 @@ export const BUILTINS: CommandDef<any>[] = [
       const label = GEAR_LABEL[type];
       draft.features[id] = {
         id, kind: "gear", name: p.name ?? label, sketchId, gearType: type, dims,
-        ...(p.herringbone ? { herringbone: true } : {}), operation: p.operation ?? "new",
+        ...(p.herringbone ? { herringbone: true } : {}), ...(p.chamfer ? { chamfer: true } : {}), operation: p.operation ?? "new",
         ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}),
       };
       const m = num.module ?? 2, z = num.teeth ?? (type === "worm" ? 1 : 20);

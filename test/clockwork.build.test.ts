@@ -2,9 +2,12 @@
 // slider. Turn the knob (`turn`, degrees) and:
 //   - a planetary stage reduces it 4:1 — the sun on the knob's shaft, three
 //     planets riding a carrier inside a ring gear fixed to the base;
-//   - the carrier's spur gear drives a rack along the front of the base, and a
-//     spur pair, a helical pair and a herringbone pair stepping the speed back
-//     up, ×2 each;
+//   - the carrier's spur gear A drives a spur pair, a helical pair and a
+//     herringbone pair stepping the speed back up, ×2 each;
+//   - A also turns spur K in front of it, whose crank pin rides in a slot
+//     under the rack (a Scotch yoke): turn the knob on and on and the rack
+//     runs back and forth along the front, never off its posts, rocking a
+//     pinion with a hand to and fro;
 //   - a straight bevel pair turns the drive through 90° onto a cross shaft;
 //   - a worm on the cross shaft drives a wheel with a hand: the slow "clock";
 //   - spur G off A turns a Geneva crank: its pin steps a four-slot star a
@@ -43,7 +46,8 @@ const Z = {
   I: 14,                               // bevel I: the cross shaft, with the worm
   J: 24, starts: 1,                    // the worm wheel
   G: 12,                               // the Geneva crank's spur, meshing A
-  rack: 17,
+  K: 12,                               // the Scotch yoke's crank, meshing A in front
+  rack: 17, P: 12,                     // the rack, and the pinion it rocks
 };
 const RANGE = 180;                     // turn: ±180°
 const HELIX = 20, CHEVRON = 30;        // helical, herringbone helix angles
@@ -73,7 +77,15 @@ const W = wormGeometry(M, Z.starts, WORM.d, { backlash: 0.1 });
 const WORM_X1 = I_HEEL_X - 14, WORM_X0 = WORM_X1 - WORM.L; // the worm, past a bearing post
 const JC = { x: (WORM_X0 + WORM_X1) / 2, y: S4.y - (WORM.d + M * Z.J) / 2 }; // the wheel: beside the worm, like the gear test
 const J_Z0 = H_APEX - FW / 2;                            // wheel faces, its middle on the worm's axis
-const RACK_Y = -(M * Z.A) / 2;                           // the rack's pitch line, under A
+// the Scotch yoke: K in front of A, its crank pin (radius YOKE.r, pointing at A at rest) in a slot
+// across a plate under the rack, which rides on two posts at L_RACK, clear above A and K; the rack's
+// teeth face A, and pinion P meshes them from behind, off to the left
+const SK = add(S1, (M * (Z.A + Z.K)) / 2, -90);
+const YOKE = { r: 7, pin: 1.5, gap: 0.15, z0: L2 + FW + 1, z1: L2 + FW + 3.5 }; // crank radius, pin radius, slot clearance, plate
+const L_RACK = YOKE.z1;                                  // the rack's (and P's) bottom face
+const RACK_Y = SK.y + 2;                                 // its pitch line: the body behind it, over the slot
+const RACK_RIM = 6;
+const P_ALONG = -30;                                     // P, along the rack from its middle
 // the Geneva drive: crank shaft S5 off A, the star a centre distance GC from it
 const GENEVA = { n: 4, a: 18, pin: 2.5, slot: 5.4, star: 18.2 }; // slots, crank radius, crank pin radius, slot width, star radius
 const S5 = add(S1, (M * (Z.A + Z.G)) / 2, -10);
@@ -90,7 +102,9 @@ const s4 = `-${carrier}*${Z.A}/${Z.B}*${Z.C}/${Z.D}*${Z.E}/${Z.F}`;
 const cross = `${carrier}*${Z.A}/${Z.B}*${Z.C}/${Z.D}*${Z.E}/${Z.F}*${Z.H}/${Z.I}`; // −(S4)·H/I, about +X
 const dial = `${cross}*${Z.starts}/${Z.J}`;
 const planet = `-(turn - ${carrier})*${Z.sun}/${Z.planet}`;    // relative to the carrier
-const rack = `${carrier}*pi*${M}*${Z.A}/360`;                  // mm along X
+const kTurn = `(-${carrier}*${Z.A}/${Z.K})`;
+const rack = `-${YOKE.r}*sin(rad(${kTurn}))`;                 // mm along X: the crank pin's x (at 90° at rest)
+const pinion = `(${rack})*360/(pi*${M}*${Z.P})`;              // rolled along by the rack
 const crank = `(-${carrier}*${Z.A}/${Z.G})`;
 /** The star's turn for a crank turned `t`: whole steps of 360/n, plus the step in progress while the pin is in a slot
  *  (|ψ| < 90 − 180/n from the line of centres), where the slot follows the pin: atan2(sin ψ, GC/a − cos ψ). */
@@ -145,10 +159,11 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   const frame = await part("Frame", slate);
   const pins = await part("Pins", steel);
   const xs = [JC.x - 30, WORM_X0 - 12], xe = [66, S2.x + 22, STAR.x + GENEVA.star + 6];
-  await block(s, frame, Math.min(...xs), -48, Math.max(...xe), S2.y + 24, -BASE_T, 0, "Base plate", 8);
-  const rail = { y0: RACK_Y - 2.5 - 6, y1: RACK_Y - 2.5 - 1 };
-  await block(s, frame, -70, rail.y0, -14, rail.y1, 0, L2, "Rail, left");
-  await block(s, frame, 14, rail.y0, 62, rail.y1, 0, L2, "Rail, right");
+  await block(s, frame, Math.min(...xs), SK.y - 20, Math.max(...xe), S2.y + 24, -BASE_T, 0, "Base plate", 8);
+  // the rack's posts, under its ends: it slides along their tops
+  const post = { y0: RACK_Y - 2.5 - RACK_RIM + 0.5, y1: RACK_Y - 2.5 - 0.5 };
+  await block(s, frame, -50, post.y0, -42, post.y1, 0, L_RACK, "Rack post, left");
+  await block(s, frame, 42, post.y0, 50, post.y1, 0, L_RACK, "Rack post, right");
   for (const [x, name] of [[WORM_X1 + 3, "Bearing, bevel side"], [WORM_X0 - 9, "Bearing, far"]] as const) {
     const sk = (await dis(s, "sketch.create", { plane: "YZ", offset: x, component: frame, name }))[0];
     await dis(s, "sketch.addRectangle", { sketch: sk, corner: { x: r3(S4.y - 7), y: 0 }, opposite: { x: r3(S4.y + 7), y: r3(H_APEX + 7) }, cornerRadius: 3 });
@@ -159,6 +174,7 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   await discs(s, pins, 0, L3 + 4, [{ ...S4, r: PIN }], "Pin S4");
   await discs(s, pins, 0, J_Z0 + FW, [{ ...JC, r: PIN }], "Pin, wheel");
   await discs(s, pins, 0, G_STAR.z1, [{ ...S5, r: PIN }, { ...STAR, r: PIN }], "Pins, Geneva");
+  await discs(s, pins, 0, L2 + FW, [{ ...SK, r: PIN }], "Pin, crank K");
 
   // ---- the planetary stage: ring fixed, sun on the knob, carrier out at 12/48 ----
   const ringC = await part("Ring", brass);
@@ -191,10 +207,29 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   }
   await discs(s, carrierC, L1, CARRIER.z0 - L1, [0, 1, 2].map((i) => ({ ...add(S1, pr, 90 + 120 * i), r: PIN })), "Planet pins");
 
-  // ---- the rack, and the spur that drives it (and the train) ----
+  // ---- spur A on the carrier: it drives the train, the Geneva crank and the rack's crank ----
+  await gear("A", carrierC, { type: "spur", module: M, teeth: Z.A, faceWidth: FW, bore: BORE + 0.2, spokes: 5, hubDiameter: 12, offset: L2, rotation: -96, name: "Spur A" });
+
+  // ---- the rack on a Scotch yoke: K's crank pin, in a slot across the plate under the rack, carries it
+  // back and forth as K turns on; the rack rocks P to and fro ----
+  const crankKC = await part("Crank K", bronze);
+  await gear("K", crankKC, { type: "spur", teeth: Z.K, faceWidth: FW, bore: BORE, mesh: { gear: ids.A, angle: -90 }, name: "Spur K" });
+  await discs(s, crankKC, L2 + FW, YOKE.z1 - 0.2 - (L2 + FW), [{ x: r3(SK.x), y: r3(SK.y + YOKE.r), r: YOKE.pin }], "Crank pin");
   const rackC = await part("Rack", brass);
-  await gear("rack", rackC, { type: "rack", module: M, teeth: Z.rack, faceWidth: FW, y: RACK_Y, offset: L2, rim: 6, name: "Rack" });
-  await gear("A", carrierC, { type: "spur", teeth: Z.A, faceWidth: FW, bore: BORE + 0.2, spokes: 5, hubDiameter: 12, mesh: { gear: ids.rack, along: 0 }, name: "Spur A" });
+  await gear("rack", rackC, { type: "rack", module: M, teeth: Z.rack, faceWidth: FW, y: r3(RACK_Y), offset: L_RACK, rim: RACK_RIM, name: "Rack" });
+  {
+    // the yoke: a plate under the rack's middle, slotted across (along Y) for the pin, room for its whole circle
+    const sk = (await dis(s, "sketch.create", { plane: "XY", offset: YOKE.z0, component: rackC, name: "Yoke" }))[0];
+    const w = YOKE.pin + YOKE.gap, half = 6;
+    await dis(s, "sketch.addRectangle", { sketch: sk, corner: { x: -half, y: r3(SK.y - YOKE.r - w - 3) }, opposite: { x: half, y: r3(SK.y + YOKE.r + w + 3) }, cornerRadius: 2 });
+    await dis(s, "sketch.addRectangle", { sketch: sk, corner: { x: r3(-w), y: r3(SK.y - YOKE.r - w) }, opposite: { x: r3(w), y: r3(SK.y + YOKE.r + w) }, cornerRadius: r3(w - 0.01) });
+    await dis(s, "feature.extrude", { sketch: sk, distance: String(r3(YOKE.z1 - YOKE.z0)), name: "Yoke" });
+  }
+  const pinionC = await part("Pinion P", bronze);
+  await gear("P", pinionC, { type: "spur", teeth: Z.P, faceWidth: FW, bore: BORE, mesh: { gear: ids.rack, along: P_ALONG }, name: "Pinion P" });
+  const SP = { x: P_ALONG, y: RACK_Y + (M * Z.P) / 2 };
+  await discs(s, pins, 0, L_RACK + FW, [{ ...SP, r: PIN }], "Pin, pinion P");
+  await block(s, pinionC, SP.x - 1.5, SP.y + 2, SP.x + 1.5, SP.y + 13, L_RACK + FW, L_RACK + FW + 1.5, "Pinion hand");
 
   // ---- S2: spur B (meshing A), helical C above it ----
   const s2C = await part("Shaft 2", brass);
@@ -275,7 +310,9 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   await joint(drive, at(S1), up, "turn", "Knob");
   await joint(carrierC, at(S1), up, carrier, "Carrier");
   for (let i = 0; i < 3; i++) await joint(planets[i], at(add(S1, pr, 90 + 120 * i)), up, planet, `Planet ${i + 1}`, "revolute", carrierC);
+  await joint(crankKC, at(SK), up, kTurn, "Crank K");
   await joint(rackC, at(S1), alongX, rack, "Rack", "slider");
+  await joint(pinionC, at(SP), up, pinion, "Pinion P");
   await joint(s2C, at(S2), up, s2, "Shaft 2");
   await joint(s3C, at(S3), up, s3, "Shaft 3");
   await joint(s4C, at(S4), up, s4, "Shaft 4");
@@ -288,7 +325,7 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   const hid = await s.setVisibility(cuts, false);
   if (!hid.ok) throw new Error(hid.error);
   // how it reads in the customize viewer: a title, a line about it, and each control's label and unit
-  await describeExample(s, {"title": "Clockwork", "description": "Every kind of gear VibeCAD makes, all turned by one knob: a planetary stage, spur, helical and herringbone pairs, a rack, bevels, a worm and a Geneva drive."}, {"turn": {"label": "Knob", "unit": "°", "description": "Turn the knob: every gear train follows"}});
+  await describeExample(s, {"title": "Clockwork", "description": "Every kind of gear VibeCAD makes, all turned by one knob: a planetary stage, spur, helical and herringbone pairs, a rack on a Scotch yoke that runs back and forth, bevels, a worm and a Geneva drive."}, {"turn": {"label": "Knob", "unit": "°", "description": "Turn the knob: every gear train follows"}});
   return ids;
 }
 
@@ -323,7 +360,7 @@ describe("clockwork", () => {
     // the meshed placements land on the planned shafts
     const scope = resolveParameters(s.doc.parameters).scope; // the placement maths, without building (gearValues is what the build reads)
     const v = (k: string) => gearValues(structuredClone(s.doc.features[ids[k]]) as GearFeature, scope);
-    for (const [k, p] of [["A", S1], ["B", S2], ["D", S3], ["F", S4], ["G", S5]] as const) {
+    for (const [k, p] of [["A", S1], ["B", S2], ["D", S3], ["F", S4], ["G", S5], ["K", SK], ["P", { x: P_ALONG, y: RACK_Y + (M * Z.P) / 2 }]] as const) {
       expect(v(k).x, k).toBeCloseTo(p.x, 3);
       expect(v(k).y, k).toBeCloseTo(p.y, 3);
     }
@@ -339,7 +376,10 @@ describe("clockwork", () => {
     expect(ev("Knob")).toBeCloseTo(96, 9);
     expect(ev("Carrier")).toBeCloseTo(c, 9);
     expect(ev("Planet 1")).toBeCloseTo(-(96 - c) * Z.sun / Z.planet, 9);
-    expect(ev("Rack")).toBeCloseTo(c * Math.PI * M * Z.A / 360, 9);
+    const k = -c * Z.A / Z.K;
+    expect(ev("Crank K")).toBeCloseTo(k, 9);
+    expect(ev("Rack")).toBeCloseTo(-YOKE.r * Math.sin(k * deg), 9);
+    expect(ev("Pinion P")).toBeCloseTo(-YOKE.r * Math.sin(k * deg) * 360 / (Math.PI * M * Z.P), 9);
     expect(ev("Shaft 2")).toBeCloseTo(-c * Z.A / Z.B, 9);
     expect(ev("Shaft 3")).toBeCloseTo(c * Z.A / Z.B * Z.C / Z.D, 9);
     expect(ev("Shaft 4")).toBeCloseTo(-c * Z.A / Z.B * Z.C / Z.D * Z.E / Z.F, 9);
@@ -363,6 +403,39 @@ describe("clockwork", () => {
       expect(Math.cos((Math.atan2(pin.y - STAR.y, pin.x - STAR.x) / deg - slot) * deg), `crank ${t}`).toBeCloseTo(1, 6);
     }
   }, 60000);
+
+  // the rack turns round by itself: K's crank carries it ±YOKE.r however far the knob is turned, out
+  // to an end of its travel where the crank lies along the rack (turn = 144° + 576°k one way, −144° the
+  // other) and back, so it never leaves its posts; P rocks with it
+  it("the rack runs back and forth on its own as the knob turns on", async () => {
+    const at = (t: number) => { posed(s, t); const j = (n: string) => Object.values(s.doc.joints).find((x) => x.name === n)!.valueValue!; return { x: j("Rack"), p: j("Pinion P") }; };
+    const T = 360 / (((Z.sun / (Z.sun + Z.ring)) * Z.A) / Z.K); // a turn of K: 576° of the knob
+    for (const t of [T / 4, T / 4 + T, T / 4 + 3 * T, -3 * T / 4]) expect(at(t).x, `turn ${t}`).toBeCloseTo(YOKE.r, 6);
+    for (const t of [-T / 4, 3 * T / 4, 3 * T / 4 + 2 * T]) expect(at(t).x, `turn ${t}`).toBeCloseTo(-YOKE.r, 6);
+    // it reverses: out to an end and back as the knob turns one way, and never past
+    let last = at(0).x, dir = 1, turnarounds = 0;
+    for (let t = 5; t <= 2 * T; t += 5) {
+      const { x, p } = at(t);
+      expect(Math.abs(x)).toBeLessThanOrEqual(YOKE.r + 1e-9);
+      expect(p).toBeCloseTo((x * 360) / (Math.PI * M * Z.P), 9);
+      if (Math.sign(x - last) === -dir) { dir = -dir; turnarounds++; }
+      last = x;
+    }
+    expect(turnarounds).toBe(4);
+    // the knob's slider reaches both turnarounds
+    expect(RANGE).toBeGreaterThan(T / 4);
+  }, 60000);
+
+  // clear with the rack at an end of its travel (the crank pin at the end of the slot), from the slider's
+  // own range and (extended run) a few turns on, the other end and back through the middle
+  for (const t of [144, -144, 576 + 144, 576 + 288 + 50]) {
+    (t === 144 ? it : itFull)(`the Scotch yoke and rack are clear at turn = ${t}°`, async () => {
+      const { doc, scope } = posed(s, t);
+      const c = collideFeatures(doc, scope);
+      expect(c.buildError).toBeUndefined();
+      for (const o of c.overlaps) expect(o.volume, `${o.a} × ${o.b} at turn ${t}`).toBeLessThan(0.01);
+    }, 180000);
+  }
 
   // the check can fail: knock one shaft half a tooth out of phase and its teeth hit
   // (extended run: test/gearSolid.test.ts makes the same check on a spur pair in the default run)

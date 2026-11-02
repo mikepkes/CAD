@@ -174,6 +174,9 @@ export interface GearFeature {
   dimValues?: Partial<Record<GearDim, number>>;
   /** Ring / rack: double helical. (The "herringbone" type is the round gear.) */
   herringbone?: boolean;
+  /** Break the edges with a small chamfer (tooth tips at the end faces, bore, rim, hub). New gears
+   *  get it unless asked not to; a gear from before it existed (absent) stays sharp. */
+  chamfer?: boolean;
   operation?: BooleanOp;
   body?: string;
   requireEffect?: boolean;
