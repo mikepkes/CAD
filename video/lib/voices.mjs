@@ -46,8 +46,10 @@ export const SAY = [{ id: "say-daniel", engine: "say", voice: "Daniel", name: "D
 
 export const ALL_VOICES = [...KOKORO, ...SAY];
 
-/** The voice set in use: VIDEO_VOICES="af_heart,bm_george" (ids), or VIDEO_TTS=say for the fallback; default all of KOKORO. */
+/** The voice set in use: the default voice (Heart) alone; VIDEO_VOICES="af_heart,bm_george" (ids) or "all" (every
+ *  Kokoro voice, the first the default) for more, or VIDEO_TTS=say for the fallback. */
 export function selectVoices({ voices = process.env.VIDEO_VOICES, engine = process.env.VIDEO_TTS } = {}) {
+  if (voices === "all") return KOKORO;
   if (voices) {
     return String(voices).split(",").map((id) => {
       const v = ALL_VOICES.find((x) => x.id === id.trim());
@@ -56,7 +58,7 @@ export function selectVoices({ voices = process.env.VIDEO_VOICES, engine = proce
     });
   }
   if (engine === "say") return SAY;
-  return KOKORO;
+  return KOKORO.slice(0, 1);
 }
 
 // ---- pronunciation: how the engines should say the words they get wrong (the captions keep the written words) ----

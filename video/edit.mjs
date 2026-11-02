@@ -54,6 +54,7 @@ const chyrons = []; // { from, to, text } in output frames
 const captions = []; // { from, to, text }
 const cues = [];
 const chapters = []; // { from, title } in output frames, in order
+const events = []; // what the picture shows (clicks, keys, cards, callouts, …), in cut seconds, for video/checks/sync.mjs
 let outFrame = 0;
 
 /** Spoken addresses as written, for the captions: "mikepkes dot github dot io slash CAD" → "mikepkes.github.io/CAD".
@@ -144,6 +145,12 @@ for (const n of acts) {
     t += (s ? s.factor : 1) / FPS;
   }
   const toOut = (src) => { let best = srcToOut[0]?.[1] ?? 0; for (const [st, of] of srcToOut) { if (st <= src) best = of; else break; } return best; };
+  for (const e of timing.events ?? []) {
+    const s = spanAt(e.t);
+    if (s && s.factor === Infinity) continue; // in a span the edit removes
+    const beat = [...timing.beats].reverse().find((b) => b.start <= e.t + 1e-6);
+    events.push({ act: n, beat: beat?.id ?? null, t: +(toOut(e.t) / FPS).toFixed(3), kind: e.kind, label: e.label, ...(s ? { fast: s.factor } : {}) });
+  }
   for (const b of timing.beats) {
     // how much longer the beat is for the slowest voice than it would be for the default voice alone
     if (b.wantMs != null) beatsExtra += (Math.max(b.actionsMs, b.wantMs) - Math.max(b.actionsMs, b.defaultWantMs)) / 1000;
@@ -163,7 +170,7 @@ for (const n of acts) {
 
 // ---- the voiceover: each line's clip, in every voice, starts at its beat's start in the cut ----
 const totalSamples = Math.round((outFrame / FPS) * SR);
-const timeline = { fps: FPS, durationMs: Math.round((outFrame / FPS) * 1000), tailMs: VO_TAIL_MS, voices: vo?.voices.map((v) => ({ id: v.id, title: v.title })) ?? [], cues: [] };
+const timeline = { fps: FPS, durationMs: Math.round((outFrame / FPS) * 1000), tailMs: VO_TAIL_MS, voices: vo?.voices.map((v) => ({ id: v.id, title: v.title })) ?? [], cues: [], events };
 for (const c of cues) {
   const clips = vo?.clips(`act${c.act}-${c.id}`, c.text) ?? [];
   c.clips = clips;
@@ -173,18 +180,25 @@ const voiced = cues.some((c) => c.clips.length);
 const mixes = []; // { voice, wav } per voice with any clip
 if (voiced) {
   mkdirSync(join(out, "vo"), { recursive: true });
-  for (const v of vo.voices) {
+  for (const [vi, v] of vo.voices.entries()) {
     const mix = new Float32Array(totalSamples);
-    let n = 0;
-    for (const c of cues) {
+    let n = 0, free = 0, slip = 0;
+    for (const [ci, c] of cues.entries()) {
       const clip = c.clips.find((k) => k.voice === v);
       if (!clip) { if (c.clips.length) console.warn(`  ${v.id}: no clip for ${c.id}`); continue; }
       const { samples, sampleRate } = readWav(clip.file);
       if (sampleRate !== SR) throw new Error(`${clip.file}: ${sampleRate} Hz, expected ${SR} (re-run video/vo.mjs)`);
-      const at = Math.round((c.from / FPS) * SR);
+      // the beats are timed to the default voice; another voice starts each line at its beat or, when it's still saying
+      // the last one, a breath after it (slipping behind the picture rather than talking over itself)
+      const at = vi === 0 ? Math.round((c.from / FPS) * SR) : Math.max(Math.round((c.from / FPS) * SR), free + Math.round(0.15 * SR));
+      slip = Math.max(slip, at / SR - c.from / FPS);
+      timeline.cues[ci].clips[v.id].startMs = Math.round((at / SR) * 1000);
       for (let i = 0; i < samples.length && at + i < totalSamples; i++) mix[at + i] += samples[i];
+      free = at + samples.length;
       n++;
     }
+    if (slip > 0.05) console.log(`  ${v.id}: slips up to ${slip.toFixed(1)} s behind the picture`);
+    if (free > totalSamples) console.warn(`  ${v.id}: its last line runs ${((free - totalSamples) / SR).toFixed(1)} s past the end of the video (cut off)`);
     if (!n) continue;
     const wav = join(out, "vo", `${v.id}.wav`);
     writeWav(wav, mix, SR);
@@ -260,6 +274,7 @@ server.close();
 closeSync(fd);
 
 // ---- every voice as its own audio track (the full render; the preview keeps the default voice only) ----
+if (!preview) rmSync(join(out, "tracks.json"), { force: true }); // from an earlier multi-voice render
 if (!preview && mixes.length > 1 && !process.argv.includes("--one-voice")) {
   try { muxVoices(); } catch (e) { console.error(`✗ multi-voice mux failed, the MP4 keeps just ${mixes[0].voice.id}: ${e.message.split("\n").slice(0, 6).join("\n")}`); }
 }

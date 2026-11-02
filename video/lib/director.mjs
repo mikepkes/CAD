@@ -3,9 +3,12 @@
 // real (Playwright mouse and keyboard through CDP), so the app reacts exactly as
 // it would to a person; the app's demo layer (src/demo/demo.tsx, `?demo`) draws
 // the cursor and keycaps. Each beat's line comes from video/script/lines.mjs,
-// and the beat is padded until its voiceover has played: the longest of its
-// clips across the voices (video/vo.mjs) plus a short tail, or, with no clips
-// yet, the time the line takes to read.
+// and the beat is padded until its voiceover has played in the default voice
+// (video/vo.mjs; the others slip behind it in the edit) plus a short tail, or,
+// with no clips yet, the time the line takes to read. Everything the script does
+// on screen (clicks, keys, the ring, the intent line, cards and callouts) is
+// logged as an event, for checking the picture against the words
+// (video/checks/sync.mjs).
 //
 // One take = one act: video/takes/<run>/<act>/frames/*.jpg + frames.json +
 // timing.json. video/edit.mjs turns takes into the finished video.
@@ -51,7 +54,14 @@ export class Director {
     this.pointer = { x: VIEW.width / 2, y: VIEW.height / 2 };
     this.lines = act == null ? {} : LINES[act] ?? {};
     this.vo = loadClips();
-    this.timing = { view: VIEW, beats: [], fast: [], captions: [], notes: [], picks: [], vo: { voices: this.vo.voices.map((v) => v.id), tailMs: VO_TAIL_MS, clips: this.vo.any } };
+    this.timing = { view: VIEW, beats: [], fast: [], captions: [], notes: [], picks: [], events: [], vo: { voices: this.vo.voices.map((v) => v.id), tailMs: VO_TAIL_MS, clips: this.vo.any } };
+    // every key the script presses, however it presses it (this.key, page.keyboard.press/down), with the
+    // modifiers held at the time: "Meta+k", "Enter", "s"
+    const kb = page.keyboard, held = new Set(), MODS = { Meta: "Meta", Control: "Control", Shift: "Shift", Alt: "Alt" };
+    const down = kb.down.bind(kb), up = kb.up.bind(kb), press = kb.press.bind(kb);
+    kb.down = async (k, o) => { if (MODS[k]) held.add(k); else if (k !== " ") this.event("key", [...held, k].join("+")); return down(k, o); };
+    kb.up = async (k, o) => { held.delete(k); return up(k, o); };
+    kb.press = async (k, o) => { this.event("key", [...held, k].join("+")); return press(k, o); };
     this.frames = [];
     this.t0 = null;
   }
@@ -87,8 +97,15 @@ export class Director {
   now() { return this.t0 == null ? 0 : Date.now() / 1000 - this.t0; }
 
   // ---- the app ----
-  /** Call window.__vibecadDemo[name](...args) in the page. */
-  api(name, ...args) { return this.page.evaluate(([n, a]) => window.__vibecadDemo[n](...a), [name, args]); }
+  /** Call window.__vibecadDemo[name](...args) in the page (cards, callouts and camera moves are logged as events). */
+  api(name, ...args) {
+    if (name === "titleCard") this.event("card", args[0]?.title ?? "(off)");
+    else if (name === "lowerThird") this.event("callout", args[0] ? `${args[0].title}${args[0].sub ? ` · ${args[0].sub}` : ""}` : "(off)");
+    else if (["turntable", "aim", "view", "newDocument", "sideWidth"].includes(name)) this.event("view", `${name}${args[0] != null && typeof args[0] !== "object" ? ` ${args[0]}` : ""}`);
+    return this.page.evaluate(([n, a]) => window.__vibecadDemo[n](...a), [name, args]);
+  }
+  /** Log something the picture shows now (seconds into the take), for the sync check. */
+  event(kind, label) { if (this.t0 != null) this.timing.events.push({ t: +this.now().toFixed(3), kind, label: String(label) }); }
   /** Run `fn(demo, arg)` in the page (fn must be self-contained). */
   run(fn, arg) { return this.page.evaluate(fn, arg); }
   async settle(quietMs = 250, { camera = true } = {}) { const ok = await this.api("settle", quietMs, 20000, camera); if (!ok) this.note("settle timed out"); return ok; }
@@ -104,14 +121,14 @@ export class Director {
   }
 
   // ---- beats ----
-  /** How long a beat must last on screen for its line: the longest of its clips across the voices plus the tail, and
-   *  the same for the default voice alone (to report what the other voices cost); the read time when it has no clips. */
+  /** How long a beat must last on screen for its line: the default voice's clip plus the tail (the other voices slip
+   *  behind it in the edit; the longest is reported); the read time when it has no clips. */
   lineMs(id, narration) {
     const clips = narration.trim() && this.act != null ? this.vo.clips(`act${this.act}-${id}`, narration) : [];
     if (!clips.length) return { ms: readMs(narration), defaultMs: readMs(narration), clips: 0, longest: null };
     const longest = clips.reduce((a, b) => (b.ms > a.ms ? b : a));
     const def = clips.find((c) => c.voice === this.vo.voices[0]) ?? longest;
-    return { ms: longest.ms + VO_TAIL_MS, defaultMs: def.ms + VO_TAIL_MS, clips: clips.length, longest: longest.voice.id };
+    return { ms: def.ms + VO_TAIL_MS, defaultMs: def.ms + VO_TAIL_MS, longestMs: longest.ms + VO_TAIL_MS, clips: clips.length, longest: longest.voice.id };
   }
 
   /** One beat: run `fn`, then hold until its line has been said (sped-up spans count at their sped length).
@@ -122,9 +139,13 @@ export class Director {
       narration = this.lines[id];
       if (narration == null) { this.note(`beat ${id} has no line in video/script/lines.mjs (act ${this.act})`); console.error(`  ✗ ${id}: no line`); narration = ""; }
     }
+    // VIDEO_ONLY=walker,skadis: shoot just these beats (each of Act 3's clips loads its own model, so one can be
+    // re-shot alone); the rest are skipped, their setup between beats still running
+    if (process.env.VIDEO_ONLY && !process.env.VIDEO_ONLY.split(",").includes(id)) { console.log(`  beat ${id} (skipped)`); return; }
     const start = this.now();
     const fastBefore = this.timing.fast.length;
     console.log(`  beat ${id}`);
+    this.event("beat", id);
     try { await fn(); }
     catch (e) { this.note(`beat ${id} failed: ${e.message}`); console.error(`  ✗ ${id}: ${e.message}`); }
     const fast = this.timing.fast.slice(fastBefore);
@@ -133,8 +154,9 @@ export class Director {
     const line = this.lineMs(id, narration);
     const want = Math.max(line.ms, opts.minMs ?? 0);
     if (onScreen < want) await sleep(want - onScreen);
-    // what set the beat's length: its actions (actionsMs), or its line (wantMs: the longest voice; defaultWantMs: the default voice alone)
-    this.timing.beats.push({ id, start, end: this.now(), narration, lower: opts.lower ?? null, actionsMs: Math.round(onScreen), wantMs: want, defaultWantMs: Math.max(line.defaultMs, opts.minMs ?? 0), voClips: line.clips, longest: line.longest });
+    // what set the beat's length: its actions (actionsMs), or its line in the default voice (wantMs); the longest voice
+    // (longestMs) slips past it in the edit
+    this.timing.beats.push({ id, start, end: this.now(), narration, lower: opts.lower ?? null, actionsMs: Math.round(onScreen), wantMs: want, defaultWantMs: want, longestMs: line.longestMs ?? want, voClips: line.clips, longest: line.longest });
   }
   /** Mark everything `fn` does as a span the edit speeds up, with `label` on the speed chyron. */
   async fast(label, fn) {
@@ -159,7 +181,7 @@ export class Director {
   note(text) { this.timing.notes.push({ t: this.now(), text }); }
   /** Mark this moment for the intro montage: the edit cuts a fraction of a second from here into the cold open. */
   /** Mark a moment for the intro montage: a third of a second from here, or `len` seconds played `speed` times fast. */
-  pick(label, { len, speed } = {}) { this.timing.picks.push({ t: this.now(), label, ...(len ? { len } : {}), ...(speed ? { speed } : {}) }); }
+  pick(label, { len, speed } = {}) { this.timing.picks.push({ t: this.now(), label, ...(len ? { len } : {}), ...(speed ? { speed } : {}) }); this.event("pick", label); }
   async lower(title, sub) { await this.api("lowerThird", title ? { title, sub } : null); }
 
   // ---- input ----
@@ -174,9 +196,10 @@ export class Director {
     this.pointer = { x, y };
   }
   async moveTo(r, ms) { await this.move(r.cx ?? r.x, r.cy ?? r.y, ms); }
-  async click(x, y, { ms = 450, pause = 120, button = "left" } = {}) {
+  async click(x, y, { ms = 450, pause = 120, button = "left", label } = {}) {
     await this.move(x, y, ms);
     await sleep(pause);
+    this.event("click", label ?? "here");
     await this.page.mouse.down({ button });
     await sleep(70);
     await this.page.mouse.up({ button });
@@ -194,10 +217,11 @@ export class Director {
     }
     return inMenu;
   }
-  async clickEl(selector, text, opts) { const r = await this.rect(selector, text); await this.click(r.cx, r.cy, opts); return r; }
-  async clickWorld(p, opts) { const s = await this.world(p); await this.click(s.x, s.y, opts); return s; }
+  async clickEl(selector, text, opts) { const r = await this.rect(selector, text); await this.click(r.cx, r.cy, { label: text ?? selector, ...opts }); return r; }
+  async clickWorld(p, opts) { const s = await this.world(p); await this.click(s.x, s.y, { label: "the model", ...opts }); return s; }
   async drag(from, to, ms = 900) {
     await this.move(from.x, from.y);
+    this.event("drag", "drag");
     await this.page.mouse.down();
     await sleep(80);
     await this.move(to.x, to.y, ms);
@@ -205,7 +229,7 @@ export class Director {
     await this.page.mouse.up();
     await sleep(150);
   }
-  async key(k, hold = 70) { await this.page.keyboard.down(k); await sleep(hold); await this.page.keyboard.up(k); await sleep(180); }
+  async key(k, hold = 70) { await this.page.keyboard.down(k); await sleep(hold); await this.page.keyboard.up(k); await sleep(180); } // logged by the keyboard hook
   /** Use the action ring: hold Space (it opens at the pointer), glide to the slot labelled `label`, release to run it. */
   async ring(label, { glide = 650, dwell = 450 } = {}) {
     await this.page.keyboard.down(" ");
@@ -219,6 +243,7 @@ export class Director {
       await this.key("Escape"); // never leave the ring open over the next beat
       throw e;
     }
+    this.event("ring", label);
     await this.page.keyboard.up(" ");
     await sleep(300);
   }
@@ -231,9 +256,11 @@ export class Director {
     await sleep(dwell);
     const top = await this.page.$eval(".intent-option.on .intent-label", (e) => e.textContent).catch(() => null);
     if (!top || !top.includes(expect)) { await this.key("Escape"); throw new Error(`intent "${text}": top suggestion is ${JSON.stringify(top)}, expected "${expect}"`); }
+    this.event("intent", expect);
     await this.key("Enter");
     await this.settle(300);
   }
-  async type(text, cps = 14) { for (const ch of text) { await this.page.keyboard.type(ch); await sleep(1000 / cps); } }
+  async type(text, cps = 14) {
+    this.event("type", text); for (const ch of text) { await this.page.keyboard.type(ch); await sleep(1000 / cps); } }
   wait(ms) { return sleep(ms); }
 }
