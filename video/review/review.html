@@ -23,6 +23,9 @@ h1 b { color: var(--accent); font-weight: 600; }
 .cuts button { font: 500 14px var(--sans); color: var(--fg); background: var(--raise); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; min-height: 36px; cursor: pointer; }
 .cuts button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .cuts small { font-family: var(--mono); font-size: 11px; opacity: .75; margin-left: 6px; }
+.version { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
+.version select { font: 500 14px var(--mono); color: var(--fg); background: var(--raise); border: 1px solid var(--line); border-radius: 8px; min-height: 36px; padding: 0 8px; }
+.note .pass { font: 500 11px var(--mono); color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
 main { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 1000px) { main { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; } }
 .player { display: grid; gap: 10px; min-width: 0; }
@@ -80,6 +83,7 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
   <header>
     <h1><b>VibeCAD</b> cut review</h1>
     <div class="cuts" id="cuts" role="group" aria-label="Videos"></div>
+    <label class="version" for="version">Version <select id="version"></select></label>
   </header>
   <main>
     <section class="player" aria-label="Player">
@@ -238,39 +242,61 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
     marks.textContent = "";
     if (!d) return;
     for (const c of state.current?.chapters || []) { const el = document.createElement("div"); el.className = "tick"; el.style.left = (c.t / d) * 100 + "%"; el.title = c.title; marks.append(el); }
-    for (const n of notesFor()) { const el = document.createElement("div"); el.className = "pin" + (n.done ? " done" : ""); el.style.left = (n.t / d) * 100 + "%"; el.title = tcText(n.t); marks.append(el); }
+    for (const n of notesFor().filter((x) => state.filter === "all" || !x.done)) { const el = document.createElement("div"); el.className = "pin" + (n.done ? " done" : ""); el.style.left = (Math.min(n.t, d) / d) * 100 + "%"; el.title = tcText(n.t); marks.append(el); }
   }
 
-  // ---- cuts ----
+  // ---- cuts: each video (demo, tutorial) in versions (passes), newest first ----
+  const groupOf = (v) => v.video || v.id;
+  const passNo = (v) => Number(String(v.pass || "").match(/\d+/)?.[0] ?? 0);
+  const versionsOf = (g) => state.videos.filter((v) => groupOf(v) === g).sort((a, b) => passNo(b) - passNo(a) || (b.added || "").localeCompare(a.added || ""));
+  const groups = () => [...new Set(state.videos.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(groupOf))];
   function renderCuts() {
     const el = $("cuts"); el.textContent = "";
-    for (const v of state.videos) {
+    for (const g of groups()) {
+      const latest = versionsOf(g)[0];
       const b = document.createElement("button"); b.type = "button";
-      b.setAttribute("aria-pressed", String(state.current?.id === v.id));
-      b.append(document.createTextNode(v.title || v.id));
-      if (v.pass) { const s = document.createElement("small"); s.textContent = v.pass; b.append(s); }
-      b.onclick = () => choose(v.id);
+      b.setAttribute("aria-pressed", String(!!state.current && groupOf(state.current) === g));
+      b.append(document.createTextNode(latest.title || g));
+      b.onclick = () => chooseGroup(g);
       el.append(b);
     }
+    const sel = $("version"); sel.textContent = "";
+    if (!state.current) return;
+    versionsOf(groupOf(state.current)).forEach((v, i) => {
+      const o = document.createElement("option"); o.value = v.id;
+      o.textContent = `${v.pass || v.id}${i === 0 ? " (latest)" : ""}`;
+      o.selected = v.id === state.current.id; sel.append(o);
+    });
+  }
+  $("version").onchange = (e) => choose(e.target.value);
+  /** A video's version: the one last watched here, else the newest. */
+  function chooseGroup(g) {
+    const vs = versionsOf(g), kept = store.get(`review.version.${g}`);
+    choose((vs.find((v) => v.id === kept) || vs[0])?.id);
   }
   function choose(id) {
     const v = state.videos.find((x) => x.id === id) || state.videos[0];
     if (!v) return;
     const changed = state.current?.id !== v.id || state.current?.src !== v.src;
-    state.current = v; store.set("review.cut", v.id);
+    const at = changed && state.current && groupOf(state.current) === groupOf(v) ? video.currentTime : 0; // same video, another version: stay at the same moment
+    state.current = v; store.set("review.cut", groupOf(v)); store.set(`review.version.${groupOf(v)}`, v.id);
+    if (changed && at) video.addEventListener("loadedmetadata", () => seek(at), { once: true });
     if (changed) { video.src = v.src; video.load(); }
     $("empty").hidden = true;
     endDraw(); renderCuts(); renderNotes(); renderMarks(); tick();
   }
 
   // ---- notes ----
-  const notesFor = () => state.notes.filter((n) => state.current && n.video === state.current.id && (n.pass || "") === (state.current.pass || "")).sort((a, b) => a.t - b.t);
+  // the notes on this version and the ones before it: a note stays with the video until it's closed, so an open note
+  // from pass 6 is still open when pass 7 is reviewed (a later version's notes don't show on an earlier one)
+  const passOf = (pass) => Number(String(pass || "").match(/\d+/)?.[0] ?? 0);
+  const notesFor = () => state.notes.filter((n) => state.current && n.video === groupOf(state.current) && passOf(n.pass) <= passOf(state.current.pass)).sort((a, b) => a.t - b.t);
   async function renderNotes() {
     const all = notesFor(), shown = all.filter((n) => state.filter === "all" || !n.done), list = $("notes");
     $("count").textContent = all.length ? `${all.filter((n) => !n.done).length} open` : "";
     list.textContent = "";
     if (!state.current) { list.innerHTML = '<div class="msg">Pick a video above.</div>'; return; }
-    if (!shown.length) { const m = document.createElement("div"); m.className = "msg"; m.textContent = all.length ? "Everything here is resolved. Show All to see them." : "No notes on this cut yet. Pause where something should change and tap Note here."; list.append(m); renderMarks(); return; }
+    if (!shown.length) { const m = document.createElement("div"); m.className = "msg"; m.textContent = all.length ? "Every note up to this version is done. Show All to see them." : "No notes on this cut yet. Pause where something should change and tap Note here."; list.append(m); renderMarks(); return; }
     const ids = [...new Set(shown.map((n) => n.author).filter(Boolean))];
     const ps = user && ids.length ? await user.profiles(ids) : {};
     for (const n of shown) {
@@ -278,11 +304,18 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
       const when = document.createElement("button"); when.className = "when"; when.type = "button"; when.textContent = tcText(n.t);
       const text = document.createElement("div"); text.className = "text"; text.textContent = n.text || "(drawing only)";
       const meta = document.createElement("div"); meta.className = "meta";
+      if ((n.pass || "") !== (state.current.pass || "")) { const p = document.createElement("span"); p.className = "pass"; p.textContent = `from ${n.pass || "an earlier version"}`; meta.append(p); }
+      if (n.done) { const c = document.createElement("span"); c.className = "pass"; c.textContent = n.closedIn ? `done in ${n.closedIn}` : "done"; meta.append(c); }
       if (n.strokes?.length) { const s = document.createElement("span"); s.className = "sketch"; s.textContent = "✎ drawing"; meta.append(s); }
       const who = document.createElement("span"); who.textContent = (n.author && ps[n.author]?.name) || "Reviewer"; meta.append(who);
       if (state.canWrite) {
         const done = document.createElement("button"); done.type = "button"; done.textContent = n.done ? "Reopen" : "Mark done";
-        done.onclick = async (e) => { e.stopPropagation(); try { await db.collection("notes").doc(n.id).update({ done: !n.done }); } catch { flash("Couldn't update that note."); } };
+        // closing a note records the version it was closed in (and who), so "done in pass 7" says where the fix landed
+        done.onclick = async (e) => {
+          e.stopPropagation();
+          const patch = n.done ? { done: false, closedIn: null, closedBy: null, closedAt: null } : { done: true, closedIn: state.current.pass || "", closedBy: state.me, closedAt: new Date().toISOString() };
+          try { await db.collection("notes").doc(n.id).update(patch); } catch { flash("Couldn't update that note."); }
+        };
         meta.append(done);
         if (n.author && n.author === state.me) {
           const del = document.createElement("button"); del.type = "button"; del.textContent = "Delete";
@@ -300,7 +333,7 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
     }
     renderMarks(); paint();
   }
-  document.querySelectorAll("[data-filter]").forEach((b) => (b.onclick = () => { state.filter = b.dataset.filter; document.querySelectorAll("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); renderNotes(); }));
+  document.querySelectorAll("[data-filter]").forEach((b) => (b.onclick = () => { state.filter = b.dataset.filter; document.querySelectorAll("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); renderNotes(); renderMarks(); }));
 
   // ---- composer ----
   const composer = $("composer");
@@ -325,7 +358,7 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
     const text = $("noteText").value.trim();
     if (!text && !state.strokes.length) { flash("Write a note or draw something first."); return; }
     $("saveNote").disabled = true; flash("Saving…");
-    const note = { video: state.current.id, pass: state.current.pass || "", t: +Number(composer.dataset.t).toFixed(3), text, strokes: state.strokes.filter((s) => s.pts.length), author: state.me, created: new Date().toISOString(), done: false };
+    const note = { video: groupOf(state.current), pass: state.current.pass || "", t: +Number(composer.dataset.t).toFixed(3), text, strokes: state.strokes.filter((s) => s.pts.length), author: state.me, created: new Date().toISOString(), done: false };
     try { const ref = await db.collection("notes").add(note); state.active = ref.id; endDraw(); }
     catch (err) { flash(err && err.code === "quota_exceeded" ? "The notes store is full." : "Couldn't save. Check you're signed in and try again."); }
     finally { $("saveNote").disabled = false; }
@@ -356,8 +389,9 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
       if (!snap.metadata.fromCache) clearTimeout(slow);
       state.videos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       if (!state.videos.length) { $("empty").textContent = "No cuts uploaded yet."; renderCuts(); return; }
-      const hash = location.hash.slice(1), want = state.videos.find((v) => v.id === hash) ? hash : store.get("review.cut");
-      choose(state.current ? state.current.id : want);
+      if (state.current && state.videos.some((v) => v.id === state.current.id)) { choose(state.current.id); return; }
+      const hash = location.hash.slice(1), g = groups().includes(hash) ? hash : store.get("review.cut");
+      chooseGroup(groups().includes(g) ? g : groups()[0]);
     }, () => { clearTimeout(slow); $("empty").textContent = "Couldn't load the cuts."; });
     db.collection("notes").onSnapshot((snap) => {
       state.notes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
