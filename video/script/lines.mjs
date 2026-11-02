@@ -9,8 +9,15 @@
 
 /** The two videos: which acts each is cut from, in order, and the file it renders to (video/out/<run>/<video>/). */
 export const VIDEOS = {
-  demo: { title: "VibeCAD demo", file: "vibecad-demo", acts: [0, 3], montage: true },
-  tutorial: { title: "VibeCAD tutorial: model a phone stand", file: "vibecad-tutorial", acts: [1, 2] },
+  demo: {
+    title: "VibeCAD demo", file: "vibecad-demo", acts: [0, 3], montage: true,
+    // the YouTube description (video/youtube.mjs adds the chapters under it)
+    description: "VibeCAD is free, open-source parametric CAD that runs in your browser or as a desktop app. This demo shows what it can do: section views and motion studies, gears and linkages, compliant mechanisms and their forces, organic surfaces, folded paper, a shop drawing from a workbench, and parts built just by asking Claude.\n\nTry it: https://mikepkes.github.io/CAD\nSource (MIT): https://github.com/mikepkes/CAD\nTo learn to model, watch the phone stand tutorial.",
+  },
+  tutorial: {
+    title: "VibeCAD tutorial: model a phone stand", file: "vibecad-tutorial", acts: [1, 2],
+    description: "Model a parametric phone stand in VibeCAD, from a blank page: push and pull a box, sketch the slanted back and the lip, then name the numbers that matter so the whole stand follows the phone's thickness. Then round it, set a weight rule, compare versions in the design space, pick a material, check it will print, and export it.\n\nTry it: https://mikepkes.github.io/CAD\nSource (MIT): https://github.com/mikepkes/CAD\nTo see what else VibeCAD can do, watch the demo.",
+  },
 };
 
 /** The demo's intro montage line (the edit cuts the montage from Act 3's picks, before Act 0). */
