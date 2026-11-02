@@ -1,0 +1,353 @@
+<title>VibeCAD Cut Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a dark edit-bay. Phone: video, transport, timeline, then notes stacked; wide screens put notes beside the video. */
+:root {
+  --bg: #15161b; --panel: #1d1f26; --raise: #262933; --line: #343846;
+  --fg: #e9e7e1; --dim: #9a9cab; --accent: #f2a33a; --accent-ink: #1a1306;
+  --done: #6fbf8b; --danger: #e5675c;
+  --ink-amber: #f2a33a; --ink-red: #ff5a4f; --ink-cyan: #4fd1e6; --ink-white: #ffffff;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 32px; max-width: 1400px; margin: 0 auto; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+h1 b { color: var(--accent); font-weight: 600; }
+.cuts { display: flex; flex-wrap: wrap; gap: 6px; }
+.cuts button { font: 500 14px var(--sans); color: var(--fg); background: var(--raise); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; min-height: 36px; cursor: pointer; }
+.cuts button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.cuts small { font-family: var(--mono); font-size: 11px; opacity: .75; margin-left: 6px; }
+main { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { main { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; } }
+.player { display: grid; gap: 10px; min-width: 0; }
+.stage { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; background: #000; border-radius: 6px; overflow: hidden; }
+.stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.stage.drawing canvas { cursor: crosshair; outline: 2px solid var(--accent); outline-offset: -2px; }
+.stage .badge { position: absolute; left: 8px; top: 8px; font: 500 12px var(--mono); background: rgba(0,0,0,.6); color: #fff; padding: 3px 7px; border-radius: 4px; pointer-events: none; }
+.empty { display: grid; place-items: center; text-align: center; color: var(--dim); padding: 24px; position: absolute; inset: 0; }
+.transport { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.btn { font: 500 14px var(--sans); color: var(--fg); background: var(--raise); border: 1px solid var(--line); border-radius: 8px; min-height: 44px; min-width: 44px; padding: 0 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn:focus-visible, .cuts button:focus-visible, textarea:focus-visible, .note:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tc { font: 500 15px var(--mono); font-variant-numeric: tabular-nums; padding: 0 6px; color: var(--fg); }
+.tc span { color: var(--dim); }
+.spacer { flex: 1; }
+.rate { font: 500 13px var(--mono); }
+.timeline { position: relative; height: 40px; touch-action: none; cursor: pointer; }
+.timeline .track { position: absolute; left: 0; right: 0; top: 17px; height: 6px; border-radius: 3px; background: var(--line); }
+.timeline .fill { position: absolute; left: 0; top: 17px; height: 6px; border-radius: 3px; background: var(--dim); }
+.timeline .tick { position: absolute; top: 12px; width: 1px; height: 16px; background: #5a5f72; }
+.timeline .pin { position: absolute; top: 2px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); border: 1px solid var(--accent-ink); }
+.timeline .pin.done { background: var(--done); }
+.timeline .head { position: absolute; top: 9px; width: 4px; height: 22px; margin-left: -2px; border-radius: 2px; background: var(--fg); }
+.chapter { font-size: 13px; color: var(--dim); min-height: 1.4em; }
+.composer { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: 12px; }
+.composer .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.swatch { width: 36px; height: 36px; min-width: 36px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; }
+.swatch[aria-pressed="true"] { border-color: var(--fg); box-shadow: 0 0 0 2px var(--bg) inset; }
+textarea { width: 100%; box-sizing: border-box; min-height: 84px; resize: vertical; font: 15px/1.4 var(--sans); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+.hint { font-size: 12px; color: var(--dim); }
+aside { display: grid; gap: 10px; min-width: 0; }
+aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
+.filters { display: flex; gap: 6px; margin-left: auto; }
+.filters button { font: 500 12px var(--sans); text-transform: none; letter-spacing: 0; color: var(--dim); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; min-height: 30px; cursor: pointer; }
+.filters button[aria-pressed="true"] { color: var(--fg); border-color: var(--fg); }
+.notes { display: grid; gap: 8px; }
+.note { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; cursor: pointer; }
+.note.active { border-color: var(--accent); }
+.note.done { opacity: .6; }
+.note .when { font: 500 13px var(--mono); color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; align-self: start; }
+.note.done .when { color: var(--done); }
+.note .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.note .meta { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 12px; color: var(--dim); }
+.note .meta button { font: 500 12px var(--sans); background: none; border: none; color: var(--dim); padding: 6px 0; min-height: 32px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.note .meta .sketch { color: var(--accent); }
+.msg { color: var(--dim); font-size: 14px; padding: 8px 0; }
+@media (prefers-reduced-motion: no-preference) { .note, .cuts button, .btn { transition: border-color .15s, background-color .15s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><b>VibeCAD</b> cut review</h1>
+    <div class="cuts" id="cuts" role="group" aria-label="Videos"></div>
+  </header>
+  <main>
+    <section class="player" aria-label="Player">
+      <div class="stage" id="stage">
+        <video id="video" playsinline preload="metadata"></video>
+        <canvas id="ink" aria-hidden="true"></canvas>
+        <div class="badge" id="badge" hidden></div>
+        <div class="empty" id="empty">Loading the cuts…</div>
+      </div>
+      <div class="timeline" id="timeline" role="slider" aria-label="Position" tabindex="0" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+        <div class="track"></div><div class="fill" id="fill"></div><div id="marks"></div><div class="head" id="head"></div>
+      </div>
+      <div class="transport">
+        <button class="btn" id="back5" aria-label="Back 5 seconds">−5s</button>
+        <button class="btn" id="stepBack" aria-label="Back one frame">‹</button>
+        <button class="btn primary" id="play" aria-label="Play">Play</button>
+        <button class="btn" id="stepFwd" aria-label="Forward one frame">›</button>
+        <button class="btn" id="fwd5" aria-label="Forward 5 seconds">+5s</button>
+        <span class="tc" id="tc">0:00<span>.00</span></span>
+        <span class="spacer"></span>
+        <button class="btn rate" id="rate" aria-label="Playback speed">1×</button>
+        <button class="btn primary" id="addNote">Note here</button>
+      </div>
+      <div class="chapter" id="chapter"></div>
+      <form class="composer" id="composer" hidden>
+        <div class="row">
+          <strong id="composerAt" class="tc"></strong>
+          <span class="hint">Draw on the frame with your finger or mouse, then write the note.</span>
+        </div>
+        <div class="row" role="group" aria-label="Pen colour">
+          <button type="button" class="swatch" data-ink="amber" style="background: var(--ink-amber)" aria-label="Amber" aria-pressed="true"></button>
+          <button type="button" class="swatch" data-ink="red" style="background: var(--ink-red)" aria-label="Red" aria-pressed="false"></button>
+          <button type="button" class="swatch" data-ink="cyan" style="background: var(--ink-cyan)" aria-label="Cyan" aria-pressed="false"></button>
+          <button type="button" class="swatch" data-ink="white" style="background: var(--ink-white)" aria-label="White" aria-pressed="false"></button>
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="undo">Undo</button>
+          <button type="button" class="btn" id="clearInk">Clear</button>
+        </div>
+        <label for="noteText" class="hint">Note</label>
+        <textarea id="noteText" placeholder="What should change here?"></textarea>
+        <div class="row">
+          <button type="submit" class="btn primary" id="saveNote">Save note</button>
+          <button type="button" class="btn" id="cancelNote">Cancel</button>
+          <span class="hint" id="saveMsg" role="status"></span>
+        </div>
+      </form>
+    </section>
+    <aside aria-label="Notes">
+      <h2>Notes <span id="count"></span>
+        <span class="filters" role="group" aria-label="Show">
+          <button type="button" data-filter="open" aria-pressed="true">Open</button>
+          <button type="button" data-filter="all" aria-pressed="false">All</button>
+        </span>
+      </h2>
+      <div class="notes" id="notes"><div class="msg">Notes you add appear here, in time order. Tap one to jump to it.</div></div>
+    </aside>
+  </main>
+</div>
+
+<script>
+(() => {
+  const FPS = 60;
+  const INKS = { amber: "#f2a33a", red: "#ff5a4f", cyan: "#4fd1e6", white: "#ffffff" };
+  const $ = (id) => document.getElementById(id);
+  const video = $("video"), canvas = $("ink"), stage = $("stage"), ctx = canvas.getContext("2d");
+  const state = { videos: [], notes: [], current: null, filter: "open", drawing: false, strokes: [], ink: "amber", active: null, canWrite: true, me: null, rate: 1 };
+  let db = null, user = null;
+
+  const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+  const tc = (t) => { t = Math.max(0, t || 0); const m = Math.floor(t / 60), s = Math.floor(t % 60), f = Math.floor((t % 1) * FPS + 1e-6); return `${m}:${String(s).padStart(2, "0")}<span>.${String(f).padStart(2, "0")}</span>`; };
+  const tcText = (t) => tc(t).replace(/<\/?span>/g, "");
+
+  // ---- drawing ----
+  function sizeCanvas() {
+    const r = stage.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+    paint();
+  }
+  function strokesToShow() {
+    if (state.drawing) return state.strokes;
+    const n = state.active && state.notes.find((x) => x.id === state.active);
+    return n && video.paused && Math.abs(video.currentTime - n.t) < 0.25 ? n.strokes || [] : [];
+  }
+  function paint() {
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    for (const s of strokesToShow()) {
+      if (!s.pts || !s.pts.length) continue;
+      ctx.strokeStyle = INKS[s.ink] || INKS.amber; ctx.lineWidth = Math.max(2, w * 0.006); ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath();
+      s.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h)));
+      if (s.pts.length === 1) ctx.lineTo(s.pts[0][0] * w + 0.1, s.pts[0][1] * h);
+      ctx.stroke();
+    }
+  }
+  let pen = null;
+  const at = (e) => { const r = canvas.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+  canvas.addEventListener("pointerdown", (e) => { if (!state.drawing) return; e.preventDefault(); canvas.setPointerCapture(e.pointerId); pen = { ink: state.ink, pts: [at(e)] }; state.strokes.push(pen); paint(); });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!pen) return;
+    const p = at(e), q = pen.pts[pen.pts.length - 1];
+    if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.003) { pen.pts.push(p); paint(); }
+  });
+  const lift = () => { if (pen) pen.pts = pen.pts.map(([x, y]) => [+x.toFixed(4), +y.toFixed(4)]); pen = null; };
+  canvas.addEventListener("pointerup", lift); canvas.addEventListener("pointercancel", lift);
+  new ResizeObserver(sizeCanvas).observe(stage);
+
+  // ---- player ----
+  const play = $("play");
+  function syncPlay() { play.textContent = video.paused ? "Play" : "Pause"; play.setAttribute("aria-label", video.paused ? "Play" : "Pause"); }
+  play.onclick = () => { if (state.drawing) return; video.paused ? video.play().catch(() => {}) : video.pause(); };
+  video.addEventListener("play", syncPlay); video.addEventListener("pause", () => { syncPlay(); paint(); });
+  const seek = (t) => { if (!video.duration) return; video.currentTime = Math.min(video.duration, Math.max(0, t)); };
+  $("back5").onclick = () => seek(video.currentTime - 5);
+  $("fwd5").onclick = () => seek(video.currentTime + 5);
+  $("stepBack").onclick = () => { video.pause(); seek(video.currentTime - 1 / FPS); };
+  $("stepFwd").onclick = () => { video.pause(); seek(video.currentTime + 1 / FPS); };
+  const RATES = [1, 1.5, 2, 0.5];
+  $("rate").onclick = () => { state.rate = RATES[(RATES.indexOf(state.rate) + 1) % RATES.length]; video.playbackRate = state.rate; $("rate").textContent = `${state.rate}×`; };
+  function tick() {
+    const t = video.currentTime || 0, d = video.duration || 0;
+    $("tc").innerHTML = tc(t);
+    const pct = d ? (t / d) * 100 : 0;
+    $("fill").style.width = pct + "%"; $("head").style.left = pct + "%";
+    const tl = $("timeline"); tl.setAttribute("aria-valuemax", String(Math.round(d))); tl.setAttribute("aria-valuenow", String(Math.round(t)));
+    const ch = (state.current?.chapters || []).filter((c) => c.t <= t + 0.01).pop();
+    $("chapter").textContent = ch ? ch.title : "";
+    paint();
+  }
+  video.addEventListener("timeupdate", tick); video.addEventListener("seeked", tick); video.addEventListener("loadedmetadata", () => { tick(); renderMarks(); });
+  (function loop() { if (!video.paused) tick(); requestAnimationFrame(loop); })();
+
+  // timeline scrubbing (touch and mouse)
+  const tl = $("timeline");
+  const tAt = (e) => { const r = tl.getBoundingClientRect(); return ((e.clientX - r.left) / r.width) * (video.duration || 0); };
+  let scrubbing = false;
+  tl.addEventListener("pointerdown", (e) => { if (state.drawing) return; scrubbing = true; tl.setPointerCapture(e.pointerId); video.pause(); seek(tAt(e)); });
+  tl.addEventListener("pointermove", (e) => { if (scrubbing) seek(tAt(e)); });
+  tl.addEventListener("pointerup", () => (scrubbing = false)); tl.addEventListener("pointercancel", () => (scrubbing = false));
+  tl.addEventListener("keydown", (e) => { if (e.key === "ArrowLeft") { seek(video.currentTime - 5); e.preventDefault(); } if (e.key === "ArrowRight") { seek(video.currentTime + 5); e.preventDefault(); } });
+
+  function renderMarks() {
+    const d = video.duration || state.current?.duration || 0, marks = $("marks");
+    marks.textContent = "";
+    if (!d) return;
+    for (const c of state.current?.chapters || []) { const el = document.createElement("div"); el.className = "tick"; el.style.left = (c.t / d) * 100 + "%"; el.title = c.title; marks.append(el); }
+    for (const n of notesFor()) { const el = document.createElement("div"); el.className = "pin" + (n.done ? " done" : ""); el.style.left = (n.t / d) * 100 + "%"; el.title = tcText(n.t); marks.append(el); }
+  }
+
+  // ---- cuts ----
+  function renderCuts() {
+    const el = $("cuts"); el.textContent = "";
+    for (const v of state.videos) {
+      const b = document.createElement("button"); b.type = "button";
+      b.setAttribute("aria-pressed", String(state.current?.id === v.id));
+      b.append(document.createTextNode(v.title || v.id));
+      if (v.pass) { const s = document.createElement("small"); s.textContent = v.pass; b.append(s); }
+      b.onclick = () => choose(v.id);
+      el.append(b);
+    }
+  }
+  function choose(id) {
+    const v = state.videos.find((x) => x.id === id) || state.videos[0];
+    if (!v) return;
+    const changed = state.current?.id !== v.id || state.current?.src !== v.src;
+    state.current = v; store.set("review.cut", v.id);
+    if (changed) { video.src = v.src; video.load(); }
+    $("empty").hidden = true;
+    endDraw(); renderCuts(); renderNotes(); renderMarks(); tick();
+  }
+
+  // ---- notes ----
+  const notesFor = () => state.notes.filter((n) => state.current && n.video === state.current.id && (n.pass || "") === (state.current.pass || "")).sort((a, b) => a.t - b.t);
+  async function renderNotes() {
+    const all = notesFor(), shown = all.filter((n) => state.filter === "all" || !n.done), list = $("notes");
+    $("count").textContent = all.length ? `${all.filter((n) => !n.done).length} open` : "";
+    list.textContent = "";
+    if (!state.current) { list.innerHTML = '<div class="msg">Pick a video above.</div>'; return; }
+    if (!shown.length) { const m = document.createElement("div"); m.className = "msg"; m.textContent = all.length ? "Everything here is resolved. Show All to see them." : "No notes on this cut yet. Pause where something should change and tap Note here."; list.append(m); renderMarks(); return; }
+    const ids = [...new Set(shown.map((n) => n.author).filter(Boolean))];
+    const ps = user && ids.length ? await user.profiles(ids) : {};
+    for (const n of shown) {
+      const row = document.createElement("div"); row.className = "note" + (n.done ? " done" : "") + (state.active === n.id ? " active" : ""); row.tabIndex = 0;
+      const when = document.createElement("button"); when.className = "when"; when.type = "button"; when.textContent = tcText(n.t);
+      const text = document.createElement("div"); text.className = "text"; text.textContent = n.text || "(drawing only)";
+      const meta = document.createElement("div"); meta.className = "meta";
+      if (n.strokes?.length) { const s = document.createElement("span"); s.className = "sketch"; s.textContent = "✎ drawing"; meta.append(s); }
+      const who = document.createElement("span"); who.textContent = (n.author && ps[n.author]?.name) || "Reviewer"; meta.append(who);
+      if (state.canWrite) {
+        const done = document.createElement("button"); done.type = "button"; done.textContent = n.done ? "Reopen" : "Mark done";
+        done.onclick = async (e) => { e.stopPropagation(); try { await db.collection("notes").doc(n.id).update({ done: !n.done }); } catch { flash("Couldn't update that note."); } };
+        meta.append(done);
+        if (n.author && n.author === state.me) {
+          const del = document.createElement("button"); del.type = "button"; del.textContent = "Delete";
+          del.onclick = async (e) => {
+            e.stopPropagation();
+            if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Tap again to delete"; setTimeout(() => { del.dataset.armed = ""; del.textContent = "Delete"; }, 3000); return; }
+            try { await db.collection("notes").doc(n.id).delete(); } catch { flash("Couldn't delete that note."); }
+          };
+          meta.append(del);
+        }
+      }
+      const open = () => { state.active = n.id; video.pause(); seek(n.t); renderNotes(); stage.scrollIntoView({ block: "nearest", behavior: "smooth" }); };
+      row.onclick = open; row.onkeydown = (e) => { if (e.key === "Enter") open(); };
+      row.append(when, text, meta); list.append(row);
+    }
+    renderMarks(); paint();
+  }
+  document.querySelectorAll("[data-filter]").forEach((b) => (b.onclick = () => { state.filter = b.dataset.filter; document.querySelectorAll("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); renderNotes(); }));
+
+  // ---- composer ----
+  const composer = $("composer");
+  function startDraw() {
+    if (!state.current || !state.canWrite) return;
+    video.pause(); state.active = null;
+    state.drawing = true; state.strokes = []; stage.classList.add("drawing");
+    composer.hidden = false; $("composerAt").textContent = tcText(video.currentTime); composer.dataset.t = String(video.currentTime);
+    $("noteText").value = ""; $("saveMsg").textContent = "";
+    $("addNote").disabled = true; paint();
+    composer.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  function endDraw() { state.drawing = false; state.strokes = []; pen = null; stage.classList.remove("drawing"); composer.hidden = true; $("addNote").disabled = !state.canWrite || !state.current; paint(); }
+  $("addNote").onclick = startDraw;
+  $("cancelNote").onclick = endDraw;
+  $("undo").onclick = () => { state.strokes.pop(); paint(); };
+  $("clearInk").onclick = () => { state.strokes = []; paint(); };
+  document.querySelectorAll(".swatch").forEach((b) => (b.onclick = () => { state.ink = b.dataset.ink; document.querySelectorAll(".swatch").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); }));
+  const flash = (m) => { $("saveMsg").textContent = m; };
+  composer.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("noteText").value.trim();
+    if (!text && !state.strokes.length) { flash("Write a note or draw something first."); return; }
+    $("saveNote").disabled = true; flash("Saving…");
+    const note = { video: state.current.id, pass: state.current.pass || "", t: +Number(composer.dataset.t).toFixed(3), text, strokes: state.strokes.filter((s) => s.pts.length), author: state.me, created: new Date().toISOString(), done: false };
+    try { const ref = await db.collection("notes").add(note); state.active = ref.id; endDraw(); }
+    catch (err) { flash(err && err.code === "quota_exceeded" ? "The notes store is full." : "Couldn't save. Check you're signed in and try again."); }
+    finally { $("saveNote").disabled = false; }
+  });
+
+  // keyboard (desktop): space play/pause, arrows step, n note, escape cancel
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("textarea, input")) { if (e.key === "Escape") endDraw(); return; }
+    if (e.key === " " || e.key === "k") { e.preventDefault(); play.click(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); e.shiftKey ? seek(video.currentTime - 1) : $("stepBack").click(); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); e.shiftKey ? seek(video.currentTime + 1) : $("stepFwd").click(); }
+    else if (e.key === "n") { e.preventDefault(); startDraw(); }
+    else if (e.key === "Escape") endDraw();
+  });
+
+  // ---- data ----
+  (async () => {
+    [db, user] = await Promise.all([window.claude?.use("db") ?? null, window.claude?.use("user") ?? null]);
+    if (!db) { $("empty").textContent = "Sign in to claude.ai to see the cuts and notes."; $("addNote").disabled = true; return; }
+    state.me = user ? await user.id() : null;
+    const can = user ? await user.can("data.write") : null;
+    state.canWrite = can !== false;
+    $("addNote").disabled = !state.canWrite;
+    const slow = setTimeout(() => { if (!state.videos.length) $("empty").textContent = "Can't reach the cuts yet. They'll appear when the connection comes back."; }, 10000);
+    db.collection("videos").orderBy("order").onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) clearTimeout(slow);
+      state.videos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (!state.videos.length) { $("empty").textContent = "No cuts uploaded yet."; renderCuts(); return; }
+      const hash = location.hash.slice(1), want = state.videos.find((v) => v.id === hash) ? hash : store.get("review.cut");
+      choose(state.current ? state.current.id : want);
+    }, () => { clearTimeout(slow); $("empty").textContent = "Couldn't load the cuts."; });
+    db.collection("notes").onSnapshot((snap) => {
+      state.notes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      renderNotes();
+    }, () => { $("notes").innerHTML = '<div class="msg">Couldn’t load the notes.</div>'; });
+  })();
+  syncPlay(); tick();
+})();
+</script>
