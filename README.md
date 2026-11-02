@@ -88,9 +88,15 @@ the head, the wings down). Their hard steps are **collapses**: every crease of
 the step moves at once, some driven and the rest solved each moment so the
 paper stays joined across every crease, a crease can be carried through a whole
 stack of layers, and layers that land on each other are spaced in the order
-they come in. Two simplifications remain in the crane: its neck and tail turn
-over outside the body (an inside reverse fold needs paper that bends), and as
-the wings come down their hidden inner layers part from them inside the body.
+they come in. A collapse can also let the paper **bend** (`bend`): its paper
+is meshed into small panels that move by least energy, a bar-and-hinge model
+with the flexure joints' pseudo-rigid-body stiffness (faces bend a little, old
+creases ease open), for folds paper only makes by giving. Two simplifications
+remain in the crane: its neck and tail turn over outside the body (an inside
+reverse fold), and as the wings come down their inner layers come apart from
+them, in triangles you can see. Bending keeps those layers joined but doesn't
+yet keep them from passing through each other, so the crane doesn't use it
+yet.
 And **https://mikepkes.github.io/CAD/?mode=customize&example=handlebar** — a
 **mountain-bike cockpit** built from organic surfaces. The riser bar is one
 sweep along a 3D B-spline spine (straight through the clamp, a rise bend, a

@@ -287,6 +287,9 @@ export interface SheetFoldDef {
    *  drawn on, or both, where it crosses them, `depth` layers on at most. */
   through?: "up" | "down" | "both";
   depth?: number;
+  /** In a collapse: the paper may bend (the whole step): it moves by least energy, faces bending a little and old
+   *  creases easing open, rather than rigidly (an inside reverse fold, a flap folded through layers tied in). */
+  bend?: boolean;
 }
 
 /** A sheet-metal (or paper) part: a flat blank of uniform thickness folded

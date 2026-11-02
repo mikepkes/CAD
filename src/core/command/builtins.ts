@@ -2432,6 +2432,7 @@ export const BUILTINS: CommandDef<any>[] = [
               with: { type: "string", description: "Steps, in a collapse: the line of another fold of the step this one turns with — the same crease on a layer stacked with that one's (its own angle is ignored)." },
               through: { type: "string", enum: ["up", "down", "both"], description: "Steps, in a collapse: carry the crease on through every layer stacked on the top (up) or bottom (down) of the one it's drawn on, or both, where its segment crosses them — all turning alike." },
               depth: { type: "integer", minimum: 1, description: "Steps, with through: how many layers on the crease reaches (default: the whole stack)." },
+              bend: { type: "boolean", description: "Steps, in a collapse (any fold of it, for the whole step): the paper may bend — it's meshed and moves by least energy, faces bending a little and old creases easing open, instead of rigidly. For folds paper only makes by giving: an inside reverse fold, a flap folded down through layers tied into the body." },
             },
           },
         },
@@ -2448,7 +2449,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A U-channel from an open three-line profile, 1.5 mm, 40 deep", params: { sketch: "sketch2", mode: "contour", thickness: 1.5, width: 40 } },
       { note: "Paper folded in steps: in half, then in half again through both layers, driven by a `fold` parameter (0…2)", params: { sketch: "sketch1", thickness: 0.1, radius: 0, folds: [{ line: "l5", angle: 180, step: 1 }, { line: "l6", angle: 180, step: 2 }], progress: "fold" } },
     ],
-    apply(draft, p: { sketch: string; mode?: "base" | "contour"; thickness: unknown; radius?: unknown; kFactor?: unknown; reliefWidth?: unknown; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown; step?: number; turn?: boolean; flip?: boolean; collapse?: boolean; with?: string; through?: "up" | "down" | "both"; depth?: number }[]; progress?: unknown; width?: unknown; flip?: boolean; fixed?: { x: number; y: number }; name?: string }, ctx) {
+    apply(draft, p: { sketch: string; mode?: "base" | "contour"; thickness: unknown; radius?: unknown; kFactor?: unknown; reliefWidth?: unknown; folds?: { line: string; angle?: unknown; direction?: "valley" | "mountain"; radius?: unknown; step?: number; turn?: boolean; flip?: boolean; collapse?: boolean; with?: string; through?: "up" | "down" | "both"; depth?: number; bend?: boolean }[]; progress?: unknown; width?: unknown; flip?: boolean; fixed?: { x: number; y: number }; name?: string }, ctx) {
       const sk = draft.sketches[p.sketch];
       if (!sk) throw new Error(`No sketch "${p.sketch}"`);
       const ex = (v: unknown) => (v == null ? undefined : String(v));
@@ -2456,7 +2457,7 @@ export const BUILTINS: CommandDef<any>[] = [
         if (sk.entities[f.line]?.kind !== "line") throw new Error(`fold "${f.line}" isn't a line of ${sk.name}`);
         return {
           line: f.line, ...(f.angle != null ? { angleExpr: String(f.angle) } : {}), ...(f.direction ? { direction: f.direction } : {}), ...(f.radius != null ? { radiusExpr: String(f.radius) } : {}),
-          ...(f.step != null ? { step: f.step } : {}), ...(f.turn ? { turn: true } : {}), ...(f.flip ? { flip: true } : {}), ...(f.collapse ? { collapse: true } : {}), ...(f.with ? { with: f.with } : {}), ...(f.through ? { through: f.through } : {}), ...(f.depth != null ? { depth: f.depth } : {}),
+          ...(f.step != null ? { step: f.step } : {}), ...(f.turn ? { turn: true } : {}), ...(f.flip ? { flip: true } : {}), ...(f.collapse ? { collapse: true } : {}), ...(f.with ? { with: f.with } : {}), ...(f.through ? { through: f.through } : {}), ...(f.depth != null ? { depth: f.depth } : {}), ...(f.bend ? { bend: true } : {}),
         };
       });
       const stepped = folds?.filter((f) => f.step != null).length ?? 0;

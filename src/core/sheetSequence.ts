@@ -28,6 +28,7 @@
 
 import type { Pt } from "./geometry/profile";
 import { Rigid, IDENTITY, compose, invert, rotationAbout, applyPoint, applyVec, translation } from "../math/transform";
+import { meshFacets, meshHinges, dihedral, bendPath, hingeStiffness, fitPanel, type BendHinge } from "./sheetBend";
 
 type V3 = { x: number; y: number; z: number };
 
@@ -61,6 +62,11 @@ export interface SeqFoldDef {
   through?: "up" | "down" | "both";
   /** With `through`: how many layers on it reaches (one layer's spacing each); default every layer of the stack. */
   depth?: number;
+  /** In a collapse: the paper may bend (on any fold of the step, for the whole step). It's meshed into small panels
+   *  that move by least energy (core/sheetBend.ts) instead of rigidly: faces bend a little, old creases ease open
+   *  (more easily), the step's solved and `with` creases more easily still, while the driven ones fold to their
+   *  angle. For folds paper only makes by giving: an inside reverse fold, a flap folded through layers tied in. */
+  bend?: boolean;
 }
 
 export interface SeqFacet {
@@ -87,6 +93,9 @@ export interface SeqCollapse {
   /** Each node's shift when done, spacing layers that land on each other — in its own frame (as the step began),
    *  so it turns with the paper: off the layer it lies on, all the way. */
   lift: V3[];
+  /** A bending step (no tree, no table): each node is a triangle of the mesh, placed by fitting its three vertices,
+   *  at each sample of the path, relative to where it fitted at the start. */
+  bend?: { verts: Pt[]; tris: [number, number, number][]; path: number[][] };
 }
 
 export interface SeqFold {
@@ -112,6 +121,8 @@ export interface SeqCrease {
   facets: [number, number];
   /** Radians when folded, as seen from the paper's top here: + valley, − mountain. */
   angle: number;
+  /** A seam between panels of paper that bent (a bending step's mesh), not a fold: no line is drawn there. */
+  bend?: true;
 }
 
 export interface SheetSequence {
@@ -232,7 +243,7 @@ export function planSequence(sheet: Pt[], defs: SeqFoldDef[], fixed: Pt, gap: nu
   let work: Work[] = [{ poly: blank, T: IDENTITY, moves: [], nodes: [] }];
   const order = defs.map((d, i) => ({ d, i })).sort((x, y) => x.d.step - y.d.step || x.i - y.i).map((x) => x.d);
   const folds: SeqFold[] = [];
-  const chords: { fold: number; a: Pt; b: Pt; angle: number }[] = [];
+  const chords: Chord[] = [];
   const collapses: SeqCollapse[] = [];
 
   const held = () => { const k = work.findIndex((w) => inConvex(fixed, w.poly, tol)); return k < 0 ? 0 : k; };
@@ -399,7 +410,7 @@ export function planSequence(sheet: Pt[], defs: SeqFoldDef[], fixed: Pt, gap: nu
     const on = chords.filter((c) => sharedSpan(c.a, c.b, a, b, wtol));
     if (!on.length) continue;
     const last = on[on.length - 1];
-    creases.push({ folds: [...new Set(on.map((c) => c.fold))].sort((x, y) => x - y), a, b, facets: [i, j], angle: last.angle });
+    creases.push({ folds: [...new Set(on.map((c) => c.fold))].sort((x, y) => x - y), a, b, facets: [i, j], angle: last.angle, ...(on.every((c) => c.bend) ? { bend: true as const } : {}) });
   }
   const outline: SheetSequence["outline"] = [];
   facets.forEach((f, k) => {
@@ -420,7 +431,7 @@ export function planSequence(sheet: Pt[], defs: SeqFoldDef[], fixed: Pt, gap: nu
 
 // ---- collapses --------------------------------------------------------------------
 
-type Chord = { fold: number; a: Pt; b: Pt; angle: number };
+type Chord = { fold: number; a: Pt; b: Pt; angle: number; bend?: boolean };
 
 /** Samples of a collapse's motion, and how far before its end to look at which way layers come in to land. */
 const COLLAPSE_SAMPLES = 40, APPROACH = 0.1, rad1 = Math.PI / 180;
@@ -502,6 +513,7 @@ function collapseStep(work: Work[], group: SeqFoldDef[], step: number, fixed: Pt
   });
   // (a crease carried through the layers that only meets a layer's raw edge creases nothing there)
   group.forEach((d, k) => { if (!only.has(d) && !joins.some((J) => J.def === k)) throw new Error(`fold "${d.id}" (step ${step}): its crease doesn't run between two pieces of paper`); });
+  if (group.some((d) => d.bend)) return bendStep(work, group, joins, step, fixed, folds, chords, collapses, gap, scale, tol, first + driverAt);
 
   // the tree, from the held facet: 0-1 breadth first, rigid joins before creases
   const n = work.length, links = work.map(() => [] as number[]);
@@ -638,13 +650,6 @@ function collapseStep(work: Work[], group: SeqFoldDef[], step: number, fixed: Pt
 
   // layers that land on each other: in the order they come in, each a gap above what it covers
   const end = work.map((w, f) => compose(Mend[nodeOf[f]], w.T)), near = work.map((w, f) => compose(Mnear[nodeOf[f]], w.T));
-  const lift = order.map(() => ({ x: 0, y: 0, z: 0 }));
-  const fams: number[][] = [];
-  for (let f = 0; f < n; f++) {
-    const fam = fams.find((F) => Math.abs(dot3(end[F[0]].z, end[f].z)) > Math.cos(rad1)); // within a degree: lying on each other
-    if (fam) fam.push(f); else fams.push([f]);
-  }
-  const margin = Math.max(gap, 1e-4 * scale);
   /** Facets joined by a crease folded flat when the step is done: which side of a's top b lies (±1), else 0. */
   const foldedFlat = (fa: number, fb: number): number => {
     const q = joins.findIndex((J) => (J.i === fa && J.j === fb) || (J.i === fb && J.j === fa));
@@ -653,6 +658,34 @@ function collapseStep(work: Work[], group: SeqFoldDef[], step: number, fixed: Pt
     if (flat === 0 || Math.abs(fold - flat * Math.PI) > 3 * rad1) return 0;
     return Math.sign(flat); // valley: the far side lands on the near one's top (either way round)
   };
+  const spaced = spaceLayers(work, end, near, work.map((_, f) => !nodePath(nodes, nodeOf[f])), foldedFlat, gap, scale);
+  const lift = order.map((f) => spaced[f]);
+  // a node moves if a crease on its way to the held facet turns, or it's lifted
+  const moving = nodes.map(() => false);
+  nodes.forEach((nd, k) => { moving[k] = (nd.parent >= 0 && (moving[nd.parent] || nd.v >= 0)) || Math.hypot(lift[k].x, lift[k].y, lift[k].z) > 1e-12; });
+  collapses.push({ step, driver: first + driverAt, nodes, table, lift: lift.map((l, k) => applyVec(invert(Mend[k]), l)) });
+  work.forEach((w, f) => {
+    const k = nodeOf[f];
+    if (!moving[k]) return;
+    w.T = compose(translation(lift[k]), end[f]);
+    w.moves.push(first + driverAt); w.nodes.push(k);
+  });
+  return work;
+}
+
+/** Space the layers a step lands on each other a gap apart (each facet's shift, world, when the step is done), in
+ *  the order they lie or come in: `end` and `near` where each facet is when done and just before (APPROACH), `still`
+ *  the facets the step doesn't move (a stack goes whichever way moves those least), `foldedFlat(a, b)` which side of
+ *  a's top b lands on when a crease between them is folded flat (±1, else 0). */
+function spaceLayers(work: Work[], end: Rigid[], near: Rigid[], stillAll: boolean[], foldedFlat: (fa: number, fb: number) => number, gap: number, scale: number): V3[] {
+  const n = work.length;
+  const lift = work.map(() => ({ x: 0, y: 0, z: 0 }));
+  const fams: number[][] = [];
+  for (let f = 0; f < n; f++) {
+    const fam = fams.find((F) => Math.abs(dot3(end[F[0]].z, end[f].z)) > Math.cos(rad1)); // within a degree: lying on each other
+    if (fam) fam.push(f); else fams.push([f]);
+  }
+  const margin = Math.max(gap, 1e-4 * scale);
   /** Facets lying on each other when the step began: which side of b's top a was (±1), else 0. */
   const stackedBefore = (A: Work, B: Work): number => {
     const nb = B.T.z;
@@ -715,7 +748,7 @@ function collapseStep(work: Work[], group: SeqFoldDef[], step: number, fixed: Pt
       return H;
     };
     // each stack whichever way moves the paper that hasn't moved this step least (then the rest)
-    const still = fam.map((f) => !nodePath(nodes, nodeOf[f]));
+    const still = fam.map((f) => stillAll[f]);
     const cost = (H: number[], stack: number[]) => stack.reduce((a, k) => a + Math.abs(H[k] - h[k]) * (still[k] ? 1000 : 1), 0);
     const H = [...h], seen = new Set<number>();
     for (let k0 = 0; k0 < fam.length; k0++) {
@@ -726,19 +759,90 @@ function collapseStep(work: Work[], group: SeqFoldDef[], step: number, fixed: Pt
       const Hu = place(stack, true), Hd = place(stack, false), best = cost(Hd, stack) < cost(Hu, stack) ? Hd : Hu;
       for (const k of stack) H[k] = best[k];
     }
-    fam.forEach((f, k) => { if (Math.abs(H[k] - h[k]) > 1e-12) lift[nodeOf[f]] = mul3(N, H[k] - h[k]); });
+    fam.forEach((f, k) => { if (Math.abs(H[k] - h[k]) > 1e-12) lift[f] = mul3(N, H[k] - h[k]); });
   }
-  // a node moves if a crease on its way to the held facet turns, or it's lifted
-  const moving = nodes.map(() => false);
-  nodes.forEach((nd, k) => { moving[k] = (nd.parent >= 0 && (moving[nd.parent] || nd.v >= 0)) || Math.hypot(lift[k].x, lift[k].y, lift[k].z) > 1e-12; });
-  collapses.push({ step, driver: first + driverAt, nodes, table, lift: lift.map((l, k) => applyVec(invert(Mend[k]), l)) });
-  work.forEach((w, f) => {
-    const k = nodeOf[f];
-    if (!moving[k]) return;
-    w.T = compose(translation(lift[k]), end[f]);
-    w.moves.push(first + driverAt); w.nodes.push(k);
+  return lift;
+}
+
+/** Samples of a bending step's path; its mesh's panels, at most this fraction of the sheet's size across; and how
+ *  stiff, next to flat paper, are an old crease and a crease the step frees (creased paper is weaker along the line),
+ *  and the step's driven creases (held to their angle). */
+const BEND_SAMPLES = 16, BEND_SIZE = 1 / 6, OLD_CREASE = 0.2, FREE_CREASE = 0.02, DRIVEN = 1000;
+
+/** A collapse whose paper bends: mesh the facets into triangles, give every edge between two a hinge (stiff across a
+ *  face, softer along an old crease, softer still along a crease the step frees, driven along the driven ones), solve
+ *  the least-energy shape along the way (core/sheetBend.ts), and place each triangle by fitting its corners. The
+ *  triangles are the step's facets from here on; the edges between them that bent are seams (creases drawn as none). */
+function bendStep(work: Work[], group: SeqFoldDef[], joins: { i: number; j: number; a: Pt; b: Pt; def: number }[], step: number, fixed: Pt, folds: SeqFold[], chords: Chord[], collapses: SeqCollapse[], gap: number, scale: number, tol: number, driver: number): Work[] {
+  const wtol = 1e-5 * scale, first = folds.findIndex((f) => f.step === step);
+  const mesh = meshFacets(work.map((w) => w.poly), BEND_SIZE * scale, tol);
+  const nv = mesh.verts.length;
+  // where each vertex is as the step begins: the facets it's on agree up to the layers' spacing at a crease
+  const x0 = new Float64Array(3 * nv), count = new Float64Array(nv);
+  mesh.tris.forEach((T, t) => { for (const v of T) { const q = applyPoint(work[mesh.owner[t]].T, at3(mesh.verts[v])); x0[3 * v] += q.x; x0[3 * v + 1] += q.y; x0[3 * v + 2] += q.z; count[v]++; } });
+  for (let v = 0; v < nv; v++) for (let p = 0; p < 3; p++) x0[3 * v + p] /= count[v];
+  // each hinge: which triangles, what's between them
+  const left = new Map<string, number>();
+  mesh.tris.forEach((T, t) => { for (let i = 0; i < 3; i++) left.set(`${T[i]},${T[(i + 1) % 3]}`, t); });
+  const driven = (d: SeqFoldDef) => !d.with && !d.solve && Math.abs(d.angle) > 1e-9;
+  const onSpan = (a: Pt, b: Pt, p: Pt, q: Pt) => { const sp = sharedSpan(p, q, a, b, wtol); return !!sp && len2(sub2(sp[1], sp[0])) > len2(sub2(b, a)) - 2 * wtol; };
+  const kinds: ("face" | "old" | "crease")[] = [];
+  const hinges: BendHinge[] = meshHinges(mesh.tris).map((h) => {
+    const A = mesh.verts[h.a], B = mesh.verts[h.b], fa = mesh.owner[left.get(`${h.a},${h.b}`)!], fb = mesh.owner[left.get(`${h.b},${h.a}`)!];
+    const k0 = hingeStiffness(mesh.verts, h, BEND_SIZE * scale / 6);
+    // how far it's folded as the step begins: from the facets either side (not the averaged vertices, which the
+    // layers' spacing at a crease leaves a little askew), a fold pressed flat the way the far facet lies
+    const was = [...chords].reverse().find((c) => onSpan(A, B, c.a, c.b));
+    const Ta = work[fa].T, Tb = work[fb].T, P = applyPoint(Ta, at3(A)), e = unit3(sub3(applyPoint(Ta, at3(B)), P));
+    let rest = -Math.atan2(dot3(cross3(Ta.z, Tb.z), e), dot3(Ta.z, Tb.z));
+    if (Math.abs(rest) > Math.PI - 1e-3) rest = Math.PI * (Math.sign(dot3(sub3(applyPoint(Tb, at3(centroid(work[fb].poly))), P), Ta.z)) || 1);
+    const J = fa === fb ? undefined : joins.find((K) => ((K.i === fa && K.j === fb) || (K.i === fb && K.j === fa)) && onSpan(A, B, K.a, K.b));
+    if (J && J.def >= 0) {
+      kinds.push("crease");
+      const d = group[J.def];
+      return driven(d) ? { ...h, k: k0 * DRIVEN, rest, to: d.angle } : { ...h, k: k0 * FREE_CREASE, rest };
+    }
+    kinds.push(was ? "old" : "face");
+    // uncreased paper rests flat (where layers stacked at a crease start it tilted a little, it straightens)
+    return { ...h, k: k0 * (was ? OLD_CREASE : 1), rest: was ? rest : 0 };
   });
-  return work;
+  if (!hinges.some((h) => h.to != null)) throw new Error(`step ${step}: a bending collapse needs a crease driven through an angle`);
+  // held: the triangle the sheet is held by
+  const heldTri = Math.max(0, mesh.tris.findIndex((T) => inConvex(fixed, T.map((v) => mesh.verts[v]), tol)));
+  const path = bendPath({ flat: mesh.verts, tris: mesh.tris, x0, hinges, fixed: [...mesh.tris[heldTri]], thickness: gap }, BEND_SAMPLES);
+  const fit = (x: Float64Array, T: [number, number, number]) => fitPanel([mesh.verts[T[0]], mesh.verts[T[1]], mesh.verts[T[2]]], T.map((v) => ({ x: x[3 * v], y: x[3 * v + 1], z: x[3 * v + 2] })) as [V3, V3, V3]);
+  const start = mesh.tris.map((T) => invert(fit(path[0], T)));
+  const motion = (x: Float64Array) => mesh.tris.map((T, t) => compose(fit(x, T), start[t]));
+  const Mend = motion(path[path.length - 1]), Mnear = motion(path[Math.round((1 - APPROACH) * BEND_SAMPLES)]);
+  const panels: Work[] = mesh.tris.map((T, t) => {
+    const w = work[mesh.owner[t]];
+    return { poly: T.map((v) => mesh.verts[v]), T: w.T, moves: [...w.moves], nodes: [...w.nodes] };
+  });
+  const end = panels.map((w, t) => compose(Mend[t], w.T)), near = panels.map((w, t) => compose(Mnear[t], w.T));
+  // the hinges' angles when done, and the creases they make: the step's creases, and seams where the paper bent
+  const final = path[path.length - 1];
+  const th = hinges.map((h) => dihedral(final, h, h.to ?? h.rest).th);
+  const flatBetween = new Map<string, number>();
+  hinges.forEach((h, q) => {
+    const A = mesh.verts[h.a], B = mesh.verts[h.b], ta = left.get(`${h.a},${h.b}`)!, tb = left.get(`${h.b},${h.a}`)!;
+    const flat = Math.round(th[q] / Math.PI);
+    if (flat !== 0 && Math.abs(th[q] - flat * Math.PI) <= 3 * rad1) { flatBetween.set(`${ta},${tb}`, Math.sign(flat)); flatBetween.set(`${tb},${ta}`, Math.sign(flat)); }
+    if (kinds[q] === "crease") {
+      const J = joins.find((K) => K.def >= 0 && onSpan(A, B, K.a, K.b))!;
+      chords.push({ fold: first + J.def, a: A, b: B, angle: th[q] });
+    } else if (kinds[q] === "face") chords.push({ fold: driver, a: A, b: B, angle: th[q], bend: true }); // a seam: the panels apart from here on
+    else if (Math.abs(th[q] - h.rest) > 1e-4) chords.push({ fold: driver, a: A, b: B, angle: th[q] }); // an old crease, moved
+  });
+  const moved = (M: Rigid) => Math.hypot(M.origin.x, M.origin.y, M.origin.z) > 1e-9 * scale || Math.abs(M.x.x - 1) + Math.abs(M.y.y - 1) + Math.abs(M.z.z - 1) > 1e-9;
+  const stillAt = panels.map((_, t) => path.every((x) => !moved(compose(fit(x, mesh.tris[t]), start[t]))));
+  const lift = spaceLayers(panels, end, near, stillAt, (a, b) => flatBetween.get(`${a},${b}`) ?? 0, gap, scale);
+  collapses.push({ step, driver, nodes: [], table: [], lift: lift.map((l, t) => applyVec(invert(Mend[t]), l)), bend: { verts: mesh.verts, tris: mesh.tris, path: path.map((x) => [...x]) } });
+  panels.forEach((w, t) => {
+    if (stillAt[t] && Math.hypot(lift[t].x, lift[t].y, lift[t].z) <= 1e-12) return;
+    w.T = compose(translation(lift[t]), end[t]);
+    w.moves.push(driver); w.nodes.push(t);
+  });
+  return panels;
 }
 
 /** A node turns in its collapse: a crease that turns lies on its way to the held facet. */
@@ -762,8 +866,21 @@ function collapseMotion(nodes: SeqCollapse["nodes"], x: number[]): Rigid[] {
 
 /** A collapse's node motions at progress `s` (0 … 1): the solved angles, then each node's lift. */
 export function collapsePose(c: SeqCollapse, s: number): Rigid[] {
-  const M = collapseMotion(c.nodes, collapseAngles(c.table, s));
+  const M = c.bend ? bendMotion(c.bend, s) : collapseMotion(c.nodes, collapseAngles(c.table, s));
   return M.map((m, k) => { const l = c.lift[k]; return l.x || l.y || l.z ? compose(translation(mul3(applyVec(m, l), s)), m) : m; });
+}
+
+/** A bending step's panel motions at progress `s` (0 … 1): the vertices between their samples, each triangle fitted
+ *  there, relative to its fit at the start. */
+function bendMotion(b: NonNullable<SeqCollapse["bend"]>, s: number): Rigid[] {
+  const rows = b.path.length, k = Math.min(rows - 2, Math.max(0, Math.floor(s * (rows - 1)))), t = Math.min(1, Math.max(0, s * (rows - 1) - k));
+  const A = b.path[k], B = b.path[k + 1], P0 = b.path[0];
+  const pt = (x: (i: number) => number, v: number): V3 => ({ x: x(3 * v), y: x(3 * v + 1), z: x(3 * v + 2) });
+  const now = (i: number) => A[i] + (B[i] - A[i]) * t, zero = (i: number) => P0[i];
+  return b.tris.map((T) => {
+    const flat = T.map((v) => b.verts[v]) as [Pt, Pt, Pt];
+    return compose(fitPanel(flat, T.map((v) => pt(now, v)) as [V3, V3, V3]), invert(fitPanel(flat, T.map((v) => pt(zero, v)) as [V3, V3, V3])));
+  });
 }
 
 /** Solve a small dense system (Gaussian elimination, partial pivoting); undefined if singular. */
@@ -843,7 +960,7 @@ export function sequenceMesh(seq: SheetSequence, angles: number[], frame: Rigid)
     }
     for (let i = 1; i + 1 < f.poly.length; i++) indices.set([base, base + i, base + i + 1], 3 * t++);
   });
-  const segs: [Rigid, Pt, Pt][] = [...seq.outline.map((o) => [T[o.facet], o.a, o.b] as [Rigid, Pt, Pt]), ...seq.creases.filter((c) => creaseMade(c, angles)).map((c) => [T[c.facets[0]], c.a, c.b] as [Rigid, Pt, Pt])];
+  const segs: [Rigid, Pt, Pt][] = [...seq.outline.map((o) => [T[o.facet], o.a, o.b] as [Rigid, Pt, Pt]), ...seq.creases.filter((c) => !c.bend && creaseMade(c, angles)).map((c) => [T[c.facets[0]], c.a, c.b] as [Rigid, Pt, Pt])];
   const edges = new Float32Array(6 * segs.length);
   segs.forEach(([M, a, b], i) => { const p = applyPoint(M, at3(a)), q = applyPoint(M, at3(b)); edges.set([p.x, p.y, p.z, q.x, q.y, q.z], 6 * i); });
   return { positions, normals, indices, uvs, edges };

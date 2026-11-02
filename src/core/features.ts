@@ -740,7 +740,7 @@ function applySheet(doc: CadDocument, scope: Scope, f: SheetFeature, bodies: Bod
         const direction: 1 | -1 = fd.direction === "mountain" ? -1 : fd.direction === "valley" ? 1 : angle != null && angle < 0 ? -1 : 1;
         // folds made in steps are sharp creases; a line may serve two steps (turn about it, then fold along it)
         // (a crease of a collapse without an angle is solved, starting its way by `direction`)
-        if (fd.step != null) return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle: angle ?? (fd.collapse ? direction : undefined), direction, radius: 0, step: fd.step, ...(fd.collapse && angle == null ? { solve: true } : {}), ...(fd.turn ? { turn: true } : {}), ...(fd.flip ? { flip: true } : {}), ...(fd.collapse ? { collapse: true } : {}), ...(fd.with ? { with: fd.with } : {}), ...(fd.through ? { through: fd.through } : {}), ...(fd.depth != null ? { depth: fd.depth } : {}) };
+        if (fd.step != null) return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle: angle ?? (fd.collapse ? direction : undefined), direction, radius: 0, step: fd.step, ...(fd.collapse && angle == null ? { solve: true } : {}), ...(fd.turn ? { turn: true } : {}), ...(fd.flip ? { flip: true } : {}), ...(fd.collapse ? { collapse: true } : {}), ...(fd.with ? { with: fd.with } : {}), ...(fd.through ? { through: fd.through } : {}), ...(fd.depth != null ? { depth: fd.depth } : {}), ...(fd.bend ? { bend: true } : {}) };
         return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle, direction, radius, extend: radius > 0 };
       });
       const origin = f.flip ? { x: wp.origin.x - N.x * t, y: wp.origin.y - N.y * t, z: wp.origin.z - N.z * t } : wp.origin;
