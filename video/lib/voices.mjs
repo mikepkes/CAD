@@ -63,9 +63,12 @@ export function selectVoices({ voices = process.env.VIDEO_VOICES, engine = proce
 
 // ---- pronunciation: how the engines should say the words they get wrong (the captions keep the written words) ----
 // Kokoro takes inline IPA as [word](/phonemes/) in misaki's notation; American and British use different symbols.
+// bistable: misaki already marks the stress (bIstˈAbᵊl) but Kokoro still says the long "bi" louder than a short, quiet
+// "sta"; lengthening the stressed vowel (ː) brings it to the level and pitch of a stressed syllable (as in "sustainable").
+// GitHub: misaki shifts the stress to "hub" before a noun ("GitHub releases").
 const IPA = {
-  a: { VibeCAD: "vˈIb kˈæd", Roubo: "ɹˈubO", mikepkes: "mˈIk pˈi kˈɛz", fillet: "fˈɪlɪt" },
-  b: { VibeCAD: "vˈIb kˈad", Roubo: "ɹˈubQ", mikepkes: "mˈIk pˈiː kˈɛz", fillet: "fˈɪlɪt" },
+  a: { VibeCAD: "vˈIb kˈæd", Roubo: "ɹˈubO", mikepkes: "mˈIk pˈi kˈɛz", fillet: "fˈɪlɪt", bistable: "bIstˈAːbᵊl", Bistable: "bIstˈAːbᵊl", GitHub: "ɡˈɪthʌb" },
+  b: { VibeCAD: "vˈIb kˈad", Roubo: "ɹˈubQ", mikepkes: "mˈIk pˈiː kˈɛz", fillet: "fˈɪlɪt", bistable: "bIstˈAːbᵊl", Bistable: "bIstˈAːbᵊl", GitHub: "ɡˈɪthʌb" },
 };
 const SAY_AS = { mikepkes: "mike p kes", PETG: "P E T G", PLA: "P L A", fillet: "fillit", Roubo: "Roobo" };
 
