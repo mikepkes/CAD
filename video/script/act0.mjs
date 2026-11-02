@@ -1,27 +1,38 @@
-// Act 0 · The demo's opening, after the montage: the title, what VibeCAD is (the finished phone stand, its phone
-// dragged: the whole stand follows), where to get it. Then the demo goes straight to the showcase (Act 3).
+// Act 0 · The demo's opening, after the montage: the title, what VibeCAD is (said over the title, a model turning
+// slowly behind it), where to get it. Then the demo goes straight to the showcase (Act 3). The phone stand is the
+// tutorial's; the demo doesn't show it.
 // Narration: lines.mjs, by beat id.
-
-import { preroll as standPreroll, showStand } from "./act1.mjs";
 
 /** The title that follows the montage. */
 const TITLE = { title: "VibeCAD", subtitle: "Parametric CAD in your browser. Drag it, type it, or just ask.", hero: true };
 
+/** Before recording: the first showcase model behind the title (dimmed by the card), the title up so the montage cuts
+ *  straight to it. */
 export async function preroll(d) {
-  await standPreroll(d, TITLE); // up before the take starts, so the montage cuts straight to it
+  await d.run(async () => {
+    const D = window.__vibecadDemo;
+    D.closeCards();
+    const text = await (await fetch("/examples/gyroscope.json")).text();
+    await D.openText(text, "gyroscope.vibecad.json");
+    if (D.store.getState().showPlanes) D.store.getState().toggleShowPlanes(); // PUPPET: no origin planes in the video
+    D.ui.getState().togglePanel("workbench", false);
+    D.view("iso");
+    await new Promise((r) => setTimeout(r, 700));
+    D.frameAll();
+  });
+  await d.api("cursor", false);
+  await d.api("titleCard", TITLE);
+  await d.settle(600);
 }
 
 export async function act0(d) {
-  await d.beat("title", async () => {
+  await d.beat("what-it-is", async () => {
     await d.api("titleCard", TITLE);
-    await d.wait(2600);
-    await d.api("titleCard", null);
-  });
-
-  await d.beat("what-it-is", () => showStand(d));
+    await d.api("turntable", 10);
+  }, { minMs: 6000 });
 
   await d.beat("get-vibecad", async () => {
-    await d.api("cursor", false);
     await d.api("titleCard", { title: "Get VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)"] });
   });
+  await d.api("turntable", null);
 }

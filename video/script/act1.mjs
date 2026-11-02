@@ -1,5 +1,4 @@
-// Act 1 · The tutorial: blank page to a parametric phone stand, by hand first. (Its cold open, the finished stand
-// turned and its phone dragged, is the demo's opening too: Act 0 uses the preroll and showStand from here.)
+// Act 1 · The tutorial: blank page to a parametric phone stand, by hand first.
 // Each beat: what happens (real input unless marked PUPPET); its narration is in lines.mjs, under the same id.
 
 const W = (x, y, z) => ({ x, y, z });
@@ -121,7 +120,7 @@ async function pickBehind(d, world, want) {
 }
 
 /** The finished stand, turned slowly, then side-on with its phone thickness dragged up and back: the whole stand
- *  follows (the tutorial's cold open, the demo's "what it is"). */
+ *  follows (the cold open). */
 export async function showStand(d) {
   await d.api("cursor", false);
   await d.api("turntable", 12); // degrees a second: a slow, readable turn (pass 1's 3D-mouse drift ran at about 450°/s)

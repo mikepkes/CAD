@@ -17,12 +17,10 @@ export const VIDEOS = {
 export const MONTAGE = "Sections, gears, mechanisms, forces, and parts built just by asking.";
 
 export const LINES = {
-  // Act 0 · The demo's opening: what VibeCAD is, in one drag, and where to get it. Then straight to the showcase.
+  // Act 0 · The demo's opening: what VibeCAD is, said over the title, and where to get it. Then straight to the showcase.
   0: {
-    title:
-      "",
     "what-it-is":
-      "VibeCAD is parametric CAD that runs in your browser. Every model is a recipe of steps and named numbers, so drag one, the phone's thickness here, and the whole design follows.",
+      "VibeCAD is parametric CAD that runs in your browser. Every model is a recipe of steps and named numbers: change one, and the whole design follows.",
     "get-vibecad":
       "It's free and open source, at mikepkes dot github dot io slash CAD, or as a desktop app. Here's what it can do.",
   },
@@ -112,7 +110,7 @@ export const LINES = {
 export const CHAPTERS = {
   0: {
     montage: "Intro",
-    "what-it-is": "Parametric in one drag",
+    "what-it-is": "What VibeCAD is",
     "get-vibecad": "Getting VibeCAD",
   },
   1: {
