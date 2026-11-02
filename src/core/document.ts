@@ -319,6 +319,8 @@ export interface SheetFeature {
   /** Neutral-layer position as a fraction of the thickness from the inside (default 0.5). */
   kFactorExpr?: string;
   reliefWidthExpr?: string;
+  /** base: slits cut into the paper (lines of the sketch, usually construction): a pop-up card's cut lines. */
+  cuts?: string[];
   /** base: the blank's fold lines. */
   folds?: SheetFoldDef[];
   /** contour: how far the profile runs along the sketch normal. */

@@ -18,8 +18,8 @@ export function buildSheet(s: SheetState): SheetBuild {
     const outline = faceEdges(blank).map((e) => outlineItem(e.type, e.pts));
     const { min, max } = flatBounds(outline);
     const t = s.thickness;
-    const line = (f: SheetFold, angle: number, a = f.a, b = f.b): FlatFoldLine => ({ id: f.id, a, b, angle: deg(angle), radius: f.radius, allowance: bendAllowance(angle, f.radius, s) });
-    const pattern = (lines: FlatFoldLine[]): FlatPattern => ({ outline, folds: lines, min, max, thickness: t, kFactor: s.kFactor });
+    const line = (f: SheetFold, angle: number, a = f.a, b = f.b): FlatFoldLine => ({ id: f.id, a, b, angle: deg(angle), radius: f.radius, allowance: bendAllowance(angle, f.radius, s), ...(f.step != null ? { step: f.step } : {}) });
+    const pattern = (lines: FlatFoldLine[]): FlatPattern => ({ outline, folds: lines, ...(s.cuts?.length ? { cuts: s.cuts } : {}), min, max, thickness: t, kFactor: s.kFactor });
 
     if (s.unfolded) {
       const shape = flatSheet(blank, t, s.frame);
@@ -105,7 +105,7 @@ function buildSequenced(s: SheetState): SheetBuild {
     const gap = Math.max(s.thickness, MIN_LAYER_GAP);
     for (const f of s.folds) if (f.angle == null) throw new Error(`fold "${f.id}" needs an angle (folds made in steps aren't solved)`);
     const seq = planSequence(loop, s.folds.map((f) => ({ id: f.id, a: f.a, b: f.b, angle: f.angle!, step: f.step!, turn: f.turn, flip: f.flip, collapse: f.collapse, with: f.with, solve: f.solve, through: f.through, depth: f.depth, bend: f.bend, reverse: f.reverse })), s.fixed, gap);
-    const crease = seq.creases.filter((c) => !c.bend).map((c) => ({ id: seq.folds[c.folds[c.folds.length - 1]].id, a: c.a, b: c.b, angle: deg(c.angle), radius: 0, allowance: 0 }));
+    const crease = seq.creases.filter((c) => !c.bend).map((c) => { const f = seq.folds[c.folds[c.folds.length - 1]]; return { id: f.id, a: c.a, b: c.b, angle: deg(c.angle), radius: 0, allowance: 0, step: seq.folds[c.folds[0]].step }; });
     const pattern: FlatPattern = { outline, folds: crease, min, max, thickness: s.thickness, kFactor: s.kFactor };
     const angles = sequenceAngles(seq, s.unfolded ? 0 : s.progress);
     const T = poseSequence(seq, angles);

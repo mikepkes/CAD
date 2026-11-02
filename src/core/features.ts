@@ -744,7 +744,18 @@ function applySheet(doc: CadDocument, scope: Scope, f: SheetFeature, bodies: Bod
         return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle, direction, radius, extend: radius > 0 };
       });
       const origin = f.flip ? { x: wp.origin.x - N.x * t, y: wp.origin.y - N.y * t, z: wp.origin.z - N.z * t } : wp.origin;
-      state = { frame: { origin, x: wp.u, y: wp.v, z: N }, base: { regions }, ops: [], edges: blankEdges(regions, lines), folds, ...rules, fixed: f.fixed ?? regions[0].interior };
+      // slits: each cut line becomes a slot the sheet's thickness wide (at least 0.1) so the kernel has a face to cut
+      const cuts = (f.cuts ?? []).map((id) => {
+        const l = sk.entities[id];
+        if (!l || l.kind !== "line") throw new Error(`cut "${id}" isn't a line of sketch "${sk.name}"`);
+        return { id, a: pt(l.p1), b: pt(l.p2) };
+      });
+      const slotW = Math.max(0.1, t);
+      const ops = cuts.map((c) => {
+        const e = { x: c.b.x - c.a.x, y: c.b.y - c.a.y }, L = Math.hypot(e.x, e.y) || 1, n = { x: (-e.y / L) * slotW / 2, y: (e.x / L) * slotW / 2 };
+        return { op: "cut" as const, poly: [{ x: c.a.x + n.x, y: c.a.y + n.y }, { x: c.b.x + n.x, y: c.b.y + n.y }, { x: c.b.x - n.x, y: c.b.y - n.y }, { x: c.a.x - n.x, y: c.a.y - n.y }] };
+      });
+      state = { frame: { origin, x: wp.u, y: wp.v, z: N }, base: { regions }, ops, edges: blankEdges(regions, lines), folds, ...rules, fixed: f.fixed ?? regions[0].interior, ...(cuts.length ? { cuts } : {}) };
       if (f.progressExpr != null && f.progressExpr !== "") state.progress = strictExpr(f.progressExpr, "progress", scope);
     }
     const built = buildSheet(state);
