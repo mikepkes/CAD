@@ -11,8 +11,8 @@
 // the driver's to sample (process RSS from outside).
 
 const q = new URLSearchParams(location.search);
-const port = q.get("bench");
-const base = `http://127.0.0.1:${port}`;
+// the driver, behind the dev server's /__bench proxy (vite.config.ts): the page's own origin
+const base = "/__bench";
 const example = q.get("example");
 const store = window.__vibecad;
 const state = () => store.getState();

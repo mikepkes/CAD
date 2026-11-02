@@ -83,14 +83,17 @@ describe("geometry capabilities", () => {
     const web = geometryCapabilities({ Worker: class {}, navigator: { hardwareConcurrency: 8 } });
     expect(web).toMatchObject({ workers: true, cores: 8, threads: false, desktop: false, poolSize: 1 });
     const desktop = geometryCapabilities({ Worker: class {}, navigator: { hardwareConcurrency: 8 }, window: { __TAURI_INTERNALS__: {} } });
-    expect(desktop).toMatchObject({ desktop: true, poolSize: 4 });
+    expect(desktop).toMatchObject({ desktop: true, poolSize: 2 });
     const isolated = geometryCapabilities({ Worker: class {}, crossOriginIsolated: true, SharedArrayBuffer: class {} });
     expect(isolated.threads).toBe(true);
     expect(geometryCapabilities({}).poolSize).toBe(1); // no workers at all
   });
-  it("sizes the pool: an explicit choice, else half the desktop's cores up to the cap, else one", () => {
-    expect(poolSizeFor({ cores: 12, desktop: true }, {})).toBe(MAX_POOL);
+  it("sizes the pool: an explicit choice, else the desktop's two (within half its cores), else one", () => {
+    expect(poolSizeFor({ cores: 12, desktop: true }, {})).toBe(2);
     expect(poolSizeFor({ cores: 4, desktop: true }, {})).toBe(2);
+    expect(poolSizeFor({ cores: 2, desktop: true }, {})).toBe(1);
+    expect(poolSizeFor({ cores: 12, desktop: true }, { location: { search: "?pool=4" } })).toBe(MAX_POOL);
+    expect(poolSizeFor({ cores: 12, desktop: true }, { location: { search: "?pool=9" } })).toBe(MAX_POOL);
     expect(poolSizeFor({ cores: 1, desktop: true }, {})).toBe(1);
     expect(poolSizeFor({ cores: 12, desktop: false }, {})).toBe(1);
     expect(poolSizeFor({ cores: 12, desktop: false }, { location: { search: "?pool=3" } })).toBe(3);

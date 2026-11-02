@@ -29,6 +29,7 @@ const out = opt("--out", null);
 const repeats = opt("--repeats", "7");
 const dragMs = opt("--drag", "6000");
 const port = Number(opt("--port", "4674"));
+const timeoutMin = Number(opt("--timeout", "40"));
 
 const dir = join(root, "public", "examples");
 const queue = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, "")).sort().filter((n) => !only || only.includes(n));
@@ -45,7 +46,8 @@ const server = createServer((req, res) => {
   let body = "";
   req.on("data", (c) => { body += c; });
   req.on("end", () => {
-    if (req.url === "/next") { current = queue.shift() ?? null; res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ example: current })); return; }
+    req.url = req.url.replace(/^\/__bench/, "");
+    if (req.url === "/next") { current = queue.shift() ?? null; console.error(`next: ${current ?? "(none)"}`); res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ example: current })); return; }
     if (req.url === "/result") {
       const r = JSON.parse(body);
       r.peakRssMB = Math.round((peak.get(r.example) ?? 0) / 1024);
@@ -106,7 +108,9 @@ try {
   } else {
     // the desktop app, pointed at the dev server: its own window, WebKit's helper processes beside it
     const launchedAt = Date.now() / 1000 - 1;
-    const config = JSON.stringify({ build: { devUrl: pageUrl(current), beforeDevCommand: "" } });
+    // the dev server is the origin; the page (with its query) is the window's url, resolved against it
+    const page = new URL(pageUrl(current));
+    const config = JSON.stringify({ build: { devUrl: page.origin, beforeDevCommand: "" }, app: { windows: [{ title: "VibeCAD", url: `index.html${page.search}`, width: 1440, height: 920 }] } });
     child = spawn("npx", ["tauri", "dev", "--no-watch", "--config", config], { cwd: root, stdio: ["ignore", "inherit", "inherit"], env: { ...process.env, PATH: `${process.env.HOME}/.local/node/bin:${process.env.HOME}/.cargo/bin:${process.env.PATH}` } });
     const webkit = /WebKit|WebContent|GPU|Networking/;
     sample(() => {
@@ -114,7 +118,7 @@ try {
       return treeRss(child.pid, ps) + ps.filter((p) => webkit.test(p.comm) && p.start > launchedAt && !ps.some((a) => a.pid === p.ppid && a.comm.includes("Safari"))).reduce((a, p) => a + p.rss, 0);
     });
   }
-  await Promise.race([finished, new Promise((_, rej) => setTimeout(() => rej(new Error("timed out")), 40 * 60 * 1000))]);
+  await Promise.race([finished, new Promise((_, rej) => setTimeout(() => rej(new Error("timed out")), timeoutMin * 60 * 1000))]);
 } finally {
   if (sampler) clearInterval(sampler);
   if (browser) await browser.close();

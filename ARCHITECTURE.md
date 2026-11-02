@@ -132,8 +132,8 @@ It runs in a Web Worker in the app and inline in tests and the stdio server.
   built whole on worker 0 — as is every other job (export, collide, topology).
   A split answer with a failed body-making feature is rebuilt whole, since
   "the most recent body" then means something else. `core/geometry/
-  capabilities.ts` reads the host: the desktop app (Tauri) runs up to four
-  workers (half its cores), the web app one unless `?pool=N` or localStorage
+  capabilities.ts` reads the host: the desktop app (Tauri) runs two workers
+  (up to four on request), the web app one unless `?pool=N` or localStorage
   `vibecad.geometryPool` asks for more — a pool needs no special headers, only
   memory (each kernel is a 23 MB wasm instance with its own heap). The threaded
   OCC build (`replicad_multi.wasm`, needs cross-origin isolation) was measured

@@ -20,6 +20,10 @@ export interface GeometryCapabilities {
 
 /** The most kernels a pool runs: each is a 23 MB wasm instance with a heap of its own. */
 export const MAX_POOL = 4;
+/** What the desktop app runs unasked. Measured (scripts/bench/app.mjs): two workers take most of
+ *  the gain on Chromium and all of it on WebKitGTK, where four cost more at the cold open and on
+ *  small models than they give; four is there to ask for (?pool=4). */
+export const DESKTOP_POOL = 2;
 
 interface Host {
   Worker?: unknown;
@@ -42,15 +46,15 @@ export function geometryCapabilities(host: Host = globalThis as unknown as Host)
 
 /**
  * How many geometry workers to run. An explicit choice wins (`?pool=N` in the URL, or
- * localStorage `vibecad.geometryPool`); the desktop app runs up to MAX_POOL, half its
- * cores; the web app one, as before — a pool works there too (plain workers, no special
- * headers), it is memory that is the unknown on a visitor's machine.
+ * localStorage `vibecad.geometryPool`); the desktop app runs DESKTOP_POOL (no more than
+ * half its cores); the web app one, as before — a pool works there too (plain workers, no
+ * special headers), it is memory that is the unknown on a visitor's machine.
  */
 export function poolSizeFor(c: { cores: number; desktop: boolean }, host: Host = globalThis as unknown as Host): number {
   const clamp = (n: number) => Math.max(1, Math.min(MAX_POOL, Math.floor(n)));
   const asked = pickOverride(host);
   if (asked != null) return clamp(asked);
-  return c.desktop ? clamp(c.cores / 2) : 1;
+  return c.desktop ? clamp(Math.min(DESKTOP_POOL, c.cores / 2)) : 1;
 }
 
 function pickOverride(host: Host): number | null {
