@@ -69,13 +69,12 @@ const order = cues.map((c) => c.id);
 const events = (tl.events ?? []).map((e) => ({ ...e, names: named(e) }));
 const matched = [], unmatched = [];
 for (const e of events.filter((x) => x.names.length)) {
-  // its beat's words, and the next beat's (a beat's actions can run on while the next line starts)
-  const k = order.indexOf(e.beat), near = new Set([order[k], order[k + 1], order[k - 1]].filter(Boolean));
-  let best = null;
-  for (const w of words) {
-    if (!near.has(w.cue) || !e.names.some((n) => same(n, w.n))) continue;
-    if (!best || Math.abs(w.t - e.t) < Math.abs(best.t - e.t)) best = w;
-  }
+  // its beat's words first; a neighbouring beat's only when close (a beat's actions can run on as the next line starts,
+  // or a line can name what the last beat did) — a click on "Materials" a beat later isn't the word "materials" here
+  const k = order.indexOf(e.beat), names = (w) => e.names.some((n) => same(n, w.n));
+  const nearest = (ws) => ws.reduce((b, w) => (!b || Math.abs(w.t - e.t) < Math.abs(b.t - e.t) ? w : b), null);
+  let best = nearest(words.filter((w) => w.cue === order[k] && names(w)));
+  if (!best) { const n = nearest(words.filter((w) => (w.cue === order[k - 1] || w.cue === order[k + 1]) && names(w))); if (n && Math.abs(n.t - e.t) <= 3) best = n; }
   if (best) matched.push({ ...e, word: best.w, wordT: best.t, delta: +(e.t - best.t).toFixed(2) });
   else unmatched.push(e);
 }
