@@ -872,6 +872,36 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
   {
+    type: "component.setReference",
+    title: "Reference part",
+    summary: "Mark a component as a reference part: context drawn for the design, not printed or exported.",
+    description:
+      "Marks `component` (and everything under it) as a reference part — something the design is made around but that isn't made itself: the tool a holder grips, the board it hangs on, a motor a mount fits. Its bodies stay out of Save's STL/3MF, the whole-model exports and the overhang check, but still take part in collisions (a stand-in still rests on what it stands on). `show` \"ghost\" (the default) draws it see-through, so a stand-in in front of a mechanism doesn't hide it; \"solid\" draws it as usual. `reference: false` makes it a part again.",
+    paramsSchema: {
+      type: "object",
+      required: ["component"],
+      additionalProperties: false,
+      properties: {
+        component: { type: "string" },
+        reference: { type: "boolean", description: "false: a part to make again. Default true." },
+        show: { type: "string", enum: ["ghost", "solid"], description: "How it is drawn: see-through (default) or as usual." },
+      },
+    },
+    examples: [{ note: "A stand-in for the item a holder grips, drawn see-through", params: { component: "cmp7" } }, { note: "The wall it mounts on, drawn solid", params: { component: "cmp9", show: "solid" } }],
+    apply(draft, p: { component: string; reference?: boolean; show?: "ghost" | "solid" }) {
+      const c = draft.components[p.component];
+      if (!c) throw new Error(`No component "${p.component}"`);
+      if (p.component === draft.rootComponentId) throw new Error("The root component can't be a reference part: mark the component that holds the reference bodies");
+      if (p.reference === false) {
+        if (p.show) throw new Error("`show` goes with a reference part, not `reference: false`");
+        delete c.reference;
+        return { message: `${c.name} is a part again` };
+      }
+      c.reference = p.show ?? "ghost";
+      return { message: `${c.name} is a reference part (${c.reference === "ghost" ? "drawn see-through" : "drawn solid"}), not printed or exported` };
+    },
+  },
+  {
     type: "assembly.pattern",
     title: "Pattern components (jointed)",
     summary: "Duplicate a component subtree N times, placed by joint templates — a parametric, articulating pattern.",

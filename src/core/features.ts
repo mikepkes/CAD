@@ -7,7 +7,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, GearFeature, GearDim, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent,
+  CadDocument, ExtrudeFeature, FeatureDef, GearFeature, GearDim, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent, isReferenceBody,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, extractChains, regionAt, loopPolygon, Region, Profile, Loop } from "./geometry/profile";
@@ -2102,6 +2102,7 @@ export function exportFeatureBlob(doc: CadDocument, scope: Scope, featureId: str
  * Export EVERY body fused into one solid, at the pose the doc's sketches are
  * placed in — the print file for a one-piece part modelled as several moving
  * components (a compliant mechanism: links joined by flexures print as one).
+ * A reference part's bodies (Component.reference) are left out: they are not made.
  */
 export function exportFusedBlob(doc: CadDocument, scope: Scope, format: "stl" | "step"): Blob | null {
   if (!isKernelReady()) return null;
@@ -2110,6 +2111,7 @@ export function exportFusedBlob(doc: CadDocument, scope: Scope, format: "stl" | 
   try {
     let fused: Shape3D | null = null;
     for (const b of bodies) {
+      if (isReferenceBody(doc, b)) continue;
       fused = fused ? fuseShapes(fused, b.shape) : b.shape;
       if (fused !== b.shape) partials.push(fused);
     }
@@ -2126,12 +2128,14 @@ export function exportFusedBlob(doc: CadDocument, scope: Scope, format: "stl" | 
  * The print parts of a multi-material model: every body fused with the others
  * of its material (each body's from its component), meshed. One part for a
  * single-material model; a TPU frame with an embedded PLA skeleton gives two.
+ * A reference part's bodies are left out.
  */
 export function printPartsByMaterial(doc: CadDocument, scope: Scope): { name: string; color?: string; mesh: SolidMesh }[] {
   if (!isKernelReady()) return [];
   const { bodies } = evaluateBodies(doc, scope);
   const groups = new Map<string, { name: string; color?: string; shapes: Shape3D[] }>();
   for (const b of bodies) {
+    if (isReferenceBody(doc, b)) continue; // context, not a part to print
     const m = materialForComponent(doc, doc.sketches[b.sketchId]?.componentId, scope);
     const key = m?.id ?? "";
     if (!groups.has(key)) groups.set(key, { name: m?.name ?? "Part", color: m?.color, shapes: [] });

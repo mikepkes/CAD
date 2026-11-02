@@ -17,6 +17,7 @@ import { LensFrame } from "./LensFrame";
 import { LensHud } from "./LensHud";
 import { HUD_TOP_KEEPOUT, bodyCentres, countInside, frameOf, hasCurvature, hudPlacement, orientUp, strainSummary, supportArea, toLensSpec, useLens, type ShapeChoice } from "./lens";
 import { useMechanism } from "../../../model/concepts/mechanismStore";
+import { isReferenceBody } from "../../../core/document";
 import "./lens.css";
 
 export { useLens } from "./lens";
@@ -68,7 +69,9 @@ export function LensOverlay(p: { rect?: { left: number; top: number; w: number; 
 
   // the area that needs support, read only while the overhang lens shows it
   const wantsSupport = visible && lens.mode === "overhang";
-  const support = useMemo(() => (wantsSupport ? supportArea(Object.values(solids).flatMap((b) => (b.mesh ? [b.mesh] : [])), orientUp(lens.orient)) : undefined), [wantsSupport, solids, lens.orient]);
+  // (a reference part, a stand-in or the board it hangs on, isn't printed: it needs no support)
+  const doc = useStore((s) => s.session.doc);
+  const support = useMemo(() => (wantsSupport ? supportArea(Object.values(solids).flatMap((b) => (b.mesh && !isReferenceBody(doc, b) ? [b.mesh] : [])), orientUp(lens.orient)) : undefined), [wantsSupport, solids, doc, lens.orient]);
   const onShape = (k: ShapeChoice) => {
     if (k === "whole") { lens.setShape("wipe"); lens.moveTo({ x: frame.x, y: frame.y, wipeX: 0 }); return; }
     if (k === "wipe" && lens.shape === "wipe" && frame.wipeX <= 0) lens.moveTo({ x: frame.x, y: frame.y, wipeX: Math.round(bounds.w / 2) });

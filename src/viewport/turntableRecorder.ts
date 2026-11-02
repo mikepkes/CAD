@@ -9,7 +9,7 @@ import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { resolveComponentWorld } from "../core/recompute";
 import { resolveParameters } from "../core/parameters";
 import { hiddenIds, bodyVisible } from "../core/visibility";
-import { materialForComponent, type CadDocument } from "../core/document";
+import { materialForComponent, referenceOf, type CadDocument } from "../core/document";
 import { materialSpec, woodFrameFromBounds } from "./material";
 import { fitDistance, orbitDirection } from "./orbitCamera";
 import type { SceneManager, SolidView } from "./SceneManager";
@@ -51,7 +51,7 @@ export function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEva
     const mat = materialForComponent(doc, componentId);
     const material = mat ? materialSpec(mat) : undefined;
     const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;
-    out.push({ solid: { id: sol.featureId, positions: sol.mesh.positions, normals: sol.mesh.normals, indices: sol.mesh.indices, edges: sol.mesh.edges, ...(sol.mesh.uvs ? { uvs: sol.mesh.uvs } : {}), threadDecals: sol.threadDecals, material, woodFrame }, componentId });
+    out.push({ solid: { id: sol.featureId, positions: sol.mesh.positions, normals: sol.mesh.normals, indices: sol.mesh.indices, edges: sol.mesh.edges, ...(sol.mesh.uvs ? { uvs: sol.mesh.uvs } : {}), threadDecals: sol.threadDecals, material, woodFrame, ...(referenceOf(doc, componentId) === "ghost" ? { reference: true } : {}) }, componentId });
   }
   return out;
 }

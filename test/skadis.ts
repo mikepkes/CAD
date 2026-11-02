@@ -298,8 +298,11 @@ export async function buildSkadis(s: CadSession): Promise<Record<string, string>
   };
   for (const [k, z] of FOOT_PINS.entries()) ids[`footPin${k + 1}`] = await shortPin(`Foot pin ${k + 1}`, foot, 0, z);
 
-  // the stand-in item: a rounded bar, `item` wide and ITEM_D deep, on the foot
+  // the stand-in item: a rounded bar, `item` wide and ITEM_D deep, on the foot. A reference part: not printed or
+  // exported, and drawn see-through, so the rack, pinions and pads stay in view behind it; it still collides (it
+  // stands on the foot, and the pads shut on it)
   const item = await part("Stand-in item (not printed)", itemMat, rack);
+  await dis(s, "component.setReference", { component: item });
   {
     const hx = "(item/2 - 0.05)", k = 8, d0 = D_ITEM, d1 = D_ITEM + ITEM_D;
     const pl: P[] = [[-(d0 + k), neg(hx)], [-(d1 - k), neg(hx)], [-d1, `-${hx} + ${k}`], [-d1, `${hx} - ${k}`], [-(d1 - k), hx], [-(d0 + k), hx], [-d0, `${hx} - ${k}`], [-d0, `-${hx} + ${k}`]];
@@ -370,6 +373,7 @@ export async function buildSkadis(s: CadSession): Promise<Record<string, string>
 
   // ---- context (not printed): a piece of board ----
   const board = await part("SKÅDIS board (not printed)", boardMat);
+  await dis(s, "component.setReference", { component: board, show: "solid" }); // context: not printed or exported, drawn as it is (it's behind)
   await dis(s, "joint.create", { kind: "rigid", moved: board, baseOrigin: { x: COL, y: 0, z: ZS - HOOK.seat }, movedOrigin: { x: 0, y: 0, z: 0 }, name: "On the board" });
   {
     const sk = (await dis(s, "sketch.create", { plane: "XZ", component: board, name: "SKÅDIS board" }))[0];

@@ -127,6 +127,7 @@ export const ICONS = {
   "plane-offset": { label: "Offset plane", d: "M3 10l4-5h14l-4 5zM12 17v-4.5M10 14.5l2-2 2 2", dash: "M3 20l4-5h14l-4 5z" },
   component: { label: "Component", d: `${CUBE_OUTLINE}M8 9.75l4 2.25 4-2.25M12 12v4.5`, dots: [[12, 7.5, 1.4]] },
   "component-add": { label: "New component", base: "component", mod: "add" },
+  "component-reference": { label: "Reference part", dash: `${CUBE_OUTLINE}M8 9.75l4 2.25 4-2.25M12 12v4.5` },
   connector: { label: "Connector", d: `${ellipse(12, 16, 7, 3)}M12 16V4M9 7l3-3 3 3`, dots: [[12, 16, 1.5]] },
   "component-up": { label: "Up to parent component", d: "M15 15h6v6h-6zM15 18H9a3 3 0 0 1-3-3V4M3 7l3-3 3 3" },
   home: { label: "Root component", d: "M3 11l9-7.5 9 7.5M5.5 9v11.5h13V9M10 20.5v-5h4v5" },

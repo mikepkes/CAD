@@ -3,7 +3,7 @@
 exports[`bundled examples > public/examples/skadis.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
-    "body": "ext1097",
+    "body": "ext1098",
     "max": [
       51,
       -10.6,
@@ -18,7 +18,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 10310.7,
   },
   {
-    "body": "ext1155",
+    "body": "ext1156",
     "max": [
       49,
       -3.5,
@@ -33,7 +33,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 219.9,
   },
   {
-    "body": "ext1180",
+    "body": "ext1181",
     "max": [
       49,
       -3.5,
@@ -48,7 +48,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 219.9,
   },
   {
-    "body": "ext1251",
+    "body": "ext1252",
     "max": [
       -13,
       -5.3,
@@ -63,7 +63,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 1237.8,
   },
   {
-    "body": "ext1361",
+    "body": "ext1362",
     "max": [
       -28.3,
       -10.6,
@@ -78,7 +78,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 10310.7,
   },
   {
-    "body": "ext1419",
+    "body": "ext1420",
     "max": [
       -41,
       -3.5,
@@ -93,7 +93,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 219.9,
   },
   {
-    "body": "ext1444",
+    "body": "ext1445",
     "max": [
       -41,
       -3.5,
@@ -108,7 +108,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 219.9,
   },
   {
-    "body": "ext1478",
+    "body": "ext1480",
     "max": [
       66.7,
       5,
@@ -303,7 +303,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 219.9,
   },
   {
-    "body": "ext926",
+    "body": "ext927",
     "max": [
       15,
       -14.6,
@@ -318,7 +318,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 146100,
   },
   {
-    "body": "ext987",
+    "body": "ext988",
     "max": [
       50,
       -5.3,
@@ -333,7 +333,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 1237.8,
   },
   {
-    "body": "gear1196",
+    "body": "gear1197",
     "max": [
       -7.1,
       -5.3,
@@ -363,7 +363,7 @@ exports[`bundled examples > public/examples/skadis.json > replays, builds on bot
     "volume": 2506,
   },
   {
-    "body": "gear932",
+    "body": "gear933",
     "max": [
       50,
       -5.3,

@@ -434,11 +434,11 @@ export class LensPass {
   }
 }
 
-/** The body meshes and edge lines SceneManager drew (skipping ghosts, stencil helpers, caps, combs). */
+/** The body meshes and edge lines SceneManager drew (skipping ghosts, see-through reference parts, stencil helpers, caps, combs). */
 function collect(group: THREE.Group): { meshes: THREE.Mesh[]; edges: THREE.LineSegments[] } {
   const meshes: THREE.Mesh[] = [], edges: THREE.LineSegments[] = [];
   group.traverse((o) => {
-    if (o.userData.ghost) return;
+    if (o.userData.ghost || o.userData.reference) return;
     const m = o as THREE.Mesh;
     if (m.isMesh && m.userData.bodyId != null && (m.material as THREE.Material).colorWrite !== false) meshes.push(m);
     const l = o as THREE.LineSegments;
