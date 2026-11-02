@@ -44,6 +44,9 @@ const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-openca
 //   radius (tapping drill, or the clearance hole through a flange), hd hole depth,
 //   D × P the pilot (register) boss, L a common body length, sd × sl the shaft
 //   (diameter, length from the mounting face).
+//   Pilots: the NEMA (ICS 16) figures for steppers, Ø15 × 1.5 on a NEMA 8, Ø22 × 2 on
+//   11–17, Ø38.1 × 1.6 on 23/24, Ø73 × 1.6 on 34, Ø55.52 × 1.6 on 42; servo motors as
+//   the 40–130 mm ST-series drawings have them, a spigot Ø30/50/70 × 3, Ø95/110 × 5.
 // A hobby servo:
 //   Lc × Wc the case, H (as L) its height, tab the mounting ears' overall length,
 //   tabT their thickness and tabTop how far below the case top they sit, holes
@@ -60,8 +63,8 @@ const M0: Motor = { A: 42.3, c1: 4, capF: 8, A2: 42.3, c2: 5, capR: 9, B: 31, hr
 const S0: Servo = { Lc: 40.7, Wc: 19.7, tab: 54.5, tabT: 2.5, tabTop: 8.5, hx: 24.4, hy: 5, thr: 2.1, bd: 13, bh: 4, ox: 10.05, horn: 18 };
 const stepper = (name: string, m: Motor, L: number, sd: number, sl: number, w: Wiring): Size => ({ name, servo: false, L, sd, sl, rear: Math.round(sl * 0.6), ...S0, ...m, ...w });
 const servo = (name: string, s: Servo, H: number, sd: number, sl: number, w: Wiring): Size => ({ name, servo: true, L: H, sd, sl, rear: 10, ...M0, ...s, ...w });
-const flanged = (name: string, A: number, capF: number, capR: number, pcd: number, hr: number, D: number, L: number, sd: number, sl: number, w: Wiring): Size =>
-  stepper(name, { A, c1: Math.round(A * 0.06), capF, A2: A - 2, c2: Math.round(A * 0.08), capR, B: +(pcd / Math.SQRT2).toFixed(2), hr, hd: capF, D, P: 3 }, L, sd, sl, w);
+const flanged = (name: string, A: number, capF: number, capR: number, pcd: number, hr: number, D: number, P: number, L: number, sd: number, sl: number, w: Wiring): Size =>
+  stepper(name, { A, c1: Math.round(A * 0.06), capF, A2: A - 2, c2: Math.round(A * 0.08), capR, B: +(pcd / Math.SQRT2).toFixed(2), hr, hd: capF, D, P }, L, sd, sl, w);
 
 const isStepper = (z: Size) => !z.servo && z.name.includes("stepper");
 /** A stepper's through-bolt head radius (M2 on a NEMA 8 to M6 on a 42), kept inside the rear cap's chamfered corner. */
@@ -106,23 +109,23 @@ const W_SERVO_L: Wiring = { cw: 8, ch: 4, cd: 4, cab: 3.5 };
 const W_ROUND: Wiring = { cw: 18, ch: 18, cd: 10, cab: 8 };
 
 export const SIZES: Size[] = [
-  stepper("NEMA 8 stepper (20 mm)", { A: 20.3, c1: 1.5, capF: 5, A2: 20.3, c2: 2, capR: 5, B: 16, hr: 0.8, hd: 2.5, D: 16, P: 1.5 }, 30, 4, 12, W_XS),
+  stepper("NEMA 8 stepper (20 mm)", { A: 20.3, c1: 1.5, capF: 5, A2: 20.3, c2: 2, capR: 5, B: 16, hr: 0.8, hd: 2.5, D: 15, P: 1.5 }, 30, 4, 12, W_XS),
   stepper("NEMA 11 stepper (28 mm)", { A: 28.2, c1: 2.5, capF: 6, A2: 28.2, c2: 3.5, capR: 6, B: 23, hr: 1.05, hd: 3, D: 22, P: 2 }, 40, 5, 20, W_XS),
   stepper("NEMA 14 stepper (35 mm)", { A: 35.2, c1: 3, capF: 7, A2: 35.2, c2: 4, capR: 7, B: 26, hr: 1.25, hd: 3.5, D: 22, P: 2 }, 34, 5, 20, W_S),
   stepper("NEMA 17 stepper (42 mm)", { A: 42.3, c1: 3.5, capF: 8, A2: 42.3, c2: 5, capR: 9, B: 31, hr: 1.25, hd: 4.5, D: 22, P: 2 }, 48, 5, 24, W_S),
   stepper("NEMA 23 stepper (57 mm)", { A: 56.4, c1: 4, capF: 7.5, A2: 56.4, c2: 6, capR: 9, B: 47.14, hr: 2.55, hd: 7.5, D: 38.1, P: 1.6 }, 56, 6.35, 20.6, W_M),
   stepper("NEMA 24 stepper (60 mm)", { A: 60, c1: 4.5, capF: 7.5, A2: 60, c2: 6.5, capR: 9, B: 47.14, hr: 2.55, hd: 7.5, D: 38.1, P: 1.6 }, 65, 8, 21, W_M),
   stepper("NEMA 34 stepper (86 mm)", { A: 86, c1: 6, capF: 10, A2: 86, c2: 9, capR: 12, B: 69.6, hr: 2.75, hd: 10, D: 73, P: 1.6 }, 80, 14, 32, W_L),
-  stepper("NEMA 42 stepper (110 mm)", { A: 110, c1: 8, capF: 12, A2: 110, c2: 12, capR: 14, B: 89, hr: 4.25, hd: 12, D: 55.5, P: 1.6 }, 150, 19, 40, W_L),
+  stepper("NEMA 42 stepper (110 mm)", { A: 110, c1: 8, capF: 12, A2: 110, c2: 12, capR: 14, B: 88.9, hr: 4.25, hd: 12, D: 55.52, P: 1.6 }, 150, 19, 40, W_L),
   servo("Micro servo (9 g, SG90)", { Lc: 22.8, Wc: 12.2, tab: 32.2, tabT: 2.5, tabTop: 4.3, hx: 13.9, hy: 0, thr: 1, bd: 11.8, bh: 4, ox: 5.5, horn: 14 }, 22.7, 4.8, 7, W_SERVO),
   servo("Mini servo (HS-82 class)", { Lc: 29.8, Wc: 12, tab: 39.4, tabT: 2.5, tabTop: 5.5, hx: 17.2, hy: 0, thr: 1, bd: 11.6, bh: 4.6, ox: 8.4, horn: 16 }, 25, 4.9, 8, W_SERVO),
   servo("Standard servo (MG996R, S3003)", S0, 37, 5.8, 9, W_SERVO_L),
   servo("Large servo (¼ scale, HS-805)", { Lc: 65.9, Wc: 30.2, tab: 84, tabT: 4, tabTop: 14, hx: 37.5, hy: 10, thr: 2.6, bd: 22, bh: 5.4, ox: 16.95, horn: 32 }, 52, 8, 12, W_SERVO_L),
-  flanged("Servo motor, 40 mm flange", 40, 8, 20, 46, 2.25, 30, 80, 8, 25, { ...W_ROUND, cw: 12, ch: 12 }),
-  flanged("Servo motor, 60 mm flange", 60, 8, 25, 70, 2.75, 50, 110, 14, 30, W_ROUND),
-  flanged("Servo motor, 80 mm flange", 80, 10, 30, 90, 3.3, 70, 130, 19, 35, W_ROUND),
-  flanged("Servo motor, 110 mm flange", 110, 12, 35, 130, 4.5, 95, 170, 19, 40, W_ROUND),
-  flanged("Servo motor, 130 mm flange", 130, 14, 40, 145, 4.5, 110, 180, 22, 57, W_ROUND),
+  flanged("Servo motor, 40 mm flange", 40, 8, 20, 46, 1.75, 30, 3, 80, 8, 28, { ...W_ROUND, cw: 12, ch: 12 }),
+  flanged("Servo motor, 60 mm flange", 60, 7.5, 25, 70, 2.75, 50, 3, 110, 14, 30, W_ROUND),
+  flanged("Servo motor, 80 mm flange", 80, 8, 30, 90, 3, 70, 3, 130, 19, 35, W_ROUND),
+  flanged("Servo motor, 110 mm flange", 110, 12, 35, 130, 4.5, 95, 5, 170, 19, 55, W_ROUND),
+  flanged("Servo motor, 130 mm flange", 130, 14, 40, 145, 4.5, 110, 5, 180, 22, 57, W_ROUND),
 ];
 const DEFAULT_SIZE = 3; // NEMA 17
 const SHAFTS = ["Plain round", "One flat (D-cut)", "Two flats (double D)", "Keyway and key"];
@@ -550,6 +553,21 @@ describe("Motor", () => {
       rows.push(`${z.name}: ${z.servo ? `${z.Lc}×${z.Wc}×${z.L} case, ears ${z.tab}` : `${z.A} flange, holes ${z.B} sq, pilot ${z.D}`}, shaft ${z.sd}×${z.sl}`);
     }
     console.log(rows.join("\n"));
+  });
+
+  it("puts each frame's pilot at its standard size", () => {
+    const pilots: Record<string, [number, number]> = {
+      "NEMA 8 stepper (20 mm)": [15, 1.5], "NEMA 11 stepper (28 mm)": [22, 2], "NEMA 14 stepper (35 mm)": [22, 2],
+      "NEMA 17 stepper (42 mm)": [22, 2], "NEMA 23 stepper (57 mm)": [38.1, 1.6], "NEMA 24 stepper (60 mm)": [38.1, 1.6],
+      "NEMA 34 stepper (86 mm)": [73, 1.6], "NEMA 42 stepper (110 mm)": [55.52, 1.6],
+      "Servo motor, 40 mm flange": [30, 3], "Servo motor, 60 mm flange": [50, 3], "Servo motor, 80 mm flange": [70, 3],
+      "Servo motor, 110 mm flange": [95, 5], "Servo motor, 130 mm flange": [110, 5],
+    };
+    for (const [i, z] of SIZES.entries()) {
+      if (z.servo) continue;
+      const sc = scopeAt(motor, { size: i });
+      expect([sc.D, sc.P], z.name).toEqual(pilots[z.name]);
+    }
   });
 
   it("sizes the key by ISO 6885 for the shaft", () => {
