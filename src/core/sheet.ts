@@ -94,6 +94,9 @@ export interface SheetState {
   pattern?: FlatPattern;
   /** Folded in steps (its folds have a `step`): how far along (0 flat, k = step k done; undefined = all). */
   progress?: number;
+  /** Slits cut into the blank (pop-up cards): lines of the sketch the paper is cut along (a slot the sheet's
+   *  thickness wide, at least 0.1, so the kernel has a face; the flat pattern draws the line). */
+  cuts?: FlatCutLine[];
   /** Derived, folded in steps: the plan (facets, folds, creases) the last build posed. */
   seq?: SheetSequence;
 }
@@ -612,11 +615,18 @@ export interface FlatFoldLine {
   radius: number;
   /** Bend allowance (0 for a crease). */
   allowance: number;
+  /** Folded in steps: the step the fold is made in (numbered on the crease pattern). */
+  step?: number;
 }
+
+/** A slit cut into the paper (a pop-up's cut line): drawn on the crease pattern as a cut. */
+export interface FlatCutLine { id: string; a: Pt; b: Pt }
 
 export interface FlatPattern {
   outline: OutlineItem[];
   folds: FlatFoldLine[];
+  /** Slits cut into the blank (pop-up cards): where to cut. */
+  cuts?: FlatCutLine[];
   min: Pt;
   max: Pt;
   thickness: number;
@@ -667,7 +677,48 @@ export function flatBounds(outline: OutlineItem[]): { min: Pt; max: Pt } {
 
 const fmt = (v: number) => (Math.abs(v) < 5e-7 ? "0" : String(Math.round(v * 1e6) / 1e6));
 
-/** The flat pattern as SVG (mm; y up): cut lines black, valley folds dashed blue, mountain folds dash-dotted red. */
+const xmlEsc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
+
+/** Where each fold's step number goes on the crease pattern: beside the fold, `off` mm off the line — at its midpoint
+ *  if that is clear of the other lines and labels, else the first clear spot along it (either side). One label per
+ *  step within `near` mm (folds of one step that meet, or a crease a slit cuts in two, get one number). */
+export function stepLabels(fp: FlatPattern, off = 3, near = 3): { step: number; at: Pt }[] {
+  const out: { step: number; at: Pt; ideal: Pt }[] = [];
+  const segDist = (p: Pt, a: Pt, b: Pt) => {
+    const d = sub(b, a), l2 = dot(d, d);
+    const t = l2 > 1e-18 ? Math.max(0, Math.min(1, dot(sub(p, a), d) / l2)) : 0;
+    return len(sub(p, add(a, mul(d, t))));
+  };
+  const lines: { a: Pt; b: Pt; fold?: FlatFoldLine }[] = [
+    ...fp.outline.flatMap((o) => { const p = outlinePoints(o); return p.slice(1).map((b, i) => ({ a: p[i], b })); }),
+    ...(fp.cuts ?? []),
+    ...fp.folds.map((f) => ({ a: f.a, b: f.b, fold: f })),
+  ];
+  const clear = off - 0.6; // the label's circle (r ≤ 2.1) is centred `off` from its own line
+  for (const f of fp.folds) {
+    if (f.step === undefined) continue;
+    const d = sub(f.b, f.a), l = len(d), mid = mul(add(f.a, f.b), 0.5);
+    if (l < 1e-9) continue;
+    const nrm = mul({ x: -d.y, y: d.x }, off / l);
+    const ideal = add(mid, nrm);
+    if (out.some((o) => o.step === f.step && len(sub(o.ideal, ideal)) < near)) continue;
+    let at = ideal;
+    search: for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
+      for (const side of [1, -1]) {
+        const p = add(add(f.a, mul(d, t)), mul(nrm, side));
+        if (lines.some((s) => s.fold !== f && segDist(p, s.a, s.b) < clear)) continue;
+        if (out.some((o) => len(sub(o.at, p)) < 2 * off - 1)) continue;
+        at = p;
+        break search;
+      }
+    }
+    out.push({ step: f.step, at, ideal });
+  }
+  return out.map(({ step, at }) => ({ step, at }));
+}
+
+/** The flat pattern as SVG at true size (mm; y up): the blank's outline black, slits (cut lines) heavier black, valley
+ *  folds dashed blue, mountain folds dash-dotted red, step numbers (paper folded in steps) circled beside their folds. */
 export function flatPatternSvg(fp: FlatPattern): string {
   const m = 5, w = fp.max.x - fp.min.x + 2 * m, h = fp.max.y - fp.min.y + 2 * m;
   const X = (x: number) => fmt(x - fp.min.x + m), Y = (y: number) => fmt(fp.max.y - y + m);
@@ -682,20 +733,146 @@ export function flatPatternSvg(fp: FlatPattern): string {
     }
     return `<path d="${path(outlinePoints(o))}"/>`;
   });
+  const slits = (fp.cuts ?? []).map((c) => `<line class="cut-line" x1="${X(c.a.x)}" y1="${Y(c.a.y)}" x2="${X(c.b.x)}" y2="${Y(c.b.y)}"><title>${xmlEsc(c.id)}: cut</title></line>`);
   const folds = fp.folds.map((f) => {
     const valley = f.angle > 0;
-    return `<line class="${valley ? "valley" : "mountain"}" x1="${X(f.a.x)}" y1="${Y(f.a.y)}" x2="${X(f.b.x)}" y2="${Y(f.b.y)}"><title>${f.id}: ${valley ? "up" : "down"} ${Math.abs(f.angle).toFixed(1)}°${f.radius > 0 ? ` R${fmt(f.radius)}` : ""}</title></line>`;
+    return `<line class="${valley ? "valley" : "mountain"}" x1="${X(f.a.x)}" y1="${Y(f.a.y)}" x2="${X(f.b.x)}" y2="${Y(f.b.y)}"><title>${xmlEsc(f.id)}: ${valley ? "up" : "down"} ${Math.abs(f.angle).toFixed(1)}°${f.radius > 0 ? ` R${fmt(f.radius)}` : ""}${f.step !== undefined ? ` (step ${f.step})` : ""}</title></line>`;
   });
+  const steps = stepLabels(fp).map(({ step, at }) =>
+    `<g class="step"><circle cx="${X(at.x)}" cy="${Y(at.y)}" r="${step > 9 ? 2.1 : 1.7}"/><text x="${X(at.x)}" y="${Y(at.y)}">${step}</text></g>`);
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(w)}mm" height="${fmt(h)}mm" viewBox="0 0 ${fmt(w)} ${fmt(h)}">`,
-    `<style>.cut{fill:none;stroke:#000;stroke-width:0.2}.valley{stroke:#1f5fd6;stroke-width:0.2;stroke-dasharray:3 1.5}.mountain{stroke:#d62f1f;stroke-width:0.2;stroke-dasharray:4 1 0.6 1}</style>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" class="flat-pattern" width="${fmt(w)}mm" height="${fmt(h)}mm" viewBox="0 0 ${fmt(w)} ${fmt(h)}">`,
+    // scoped under .flat-pattern: the app also shows this SVG inline, where its <style> would reach the whole page
+    `<style>.flat-pattern .cut{fill:none;stroke:#000;stroke-width:0.2}.flat-pattern .cut-line{stroke:#000;stroke-width:0.45}` +
+      `.flat-pattern .valley{stroke:#1f5fd6;stroke-width:0.2;stroke-dasharray:3 1.5}.flat-pattern .mountain{stroke:#d62f1f;stroke-width:0.2;stroke-dasharray:4 1 0.6 1}` +
+      `.flat-pattern .step circle{fill:#fff;stroke:#000;stroke-width:0.15}.flat-pattern .step text{font:2.2px Helvetica,Arial,sans-serif;fill:#000;text-anchor:middle;dominant-baseline:central}</style>`,
     `<g class="cut">${cut.join("")}</g>`,
+    `<g>${slits.join("")}</g>`,
     `<g>${folds.join("")}</g>`,
+    `<g>${steps.join("")}</g>`,
     `</svg>`,
   ].join("\n");
 }
 
-/** The flat pattern as DXF (R12, mm): layer CUT for the outline, BEND_UP / BEND_DOWN for fold lines. */
+// ---- crease pattern as a vector PDF (true size) ---------------------------------------
+
+/** Helvetica advance widths (1/1000 em) for ASCII 32..126 (the standard AFM). */
+const HELV = [
+  278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556,
+  278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667,
+  611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833,
+  556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
+];
+/** The few non-ASCII characters a title or legend uses, as WinAnsi codes with their widths. */
+const WIN_ANSI: Record<string, [number, number]> = { "×": [0xd7, 584], "°": [0xb0, 400], "–": [0x96, 556], "—": [0x97, 1000], "·": [0xb7, 278] };
+const helvWidth = (s: string, size: number) =>
+  ([...s].reduce((w, ch) => { const c = ch.charCodeAt(0); return w + (c >= 32 && c <= 126 ? HELV[c - 32] : WIN_ANSI[ch]?.[1] ?? 556); }, 0) * size) / 1000;
+/** A PDF string literal (WinAnsi): parentheses and backslashes escaped, the few non-ASCII characters as octal, others "?". */
+const pdfStr = (s: string) =>
+  `(${[...s].map((ch) => { const c = ch.charCodeAt(0); if (ch === "(" || ch === ")" || ch === "\\") return `\\${ch}`; if (c >= 32 && c <= 126) return ch; const w = WIN_ANSI[ch]; return w ? `\\${w[0].toString(8)}` : "?"; }).join("")})`;
+
+/** The crease pattern as a one-page vector PDF at true size (1 mm on paper = 1 mm of the blank): the page is the
+ *  pattern plus a 10 mm margin; outline and slits solid black (slits heavier), valleys dashed blue, mountains
+ *  dash-dotted red, circled step numbers, and a title + legend line in the bottom margin. Drawn in mm (one `cm`
+ *  scales to points); PDF space is y up like the model's, so no flip. */
+export function flatPatternPdf(fp: FlatPattern, title: string): Uint8Array {
+  const M = 10, PT = 72 / 25.4;
+  const wMm = fp.max.x - fp.min.x + 2 * M, hMm = fp.max.y - fp.min.y + 2 * M;
+  const n = (v: number) => (Math.abs(v) < 5e-5 ? "0" : String(Math.round(v * 1e4) / 1e4));
+  const X = (x: number) => n(x - fp.min.x + M), Y = (y: number) => n(y - fp.min.y + M);
+  const P = (p: Pt) => `${X(p.x)} ${Y(p.y)}`;
+  const ops: string[] = [`${n(PT)} 0 0 ${n(PT)} 0 0 cm`, "1 j"];
+  /** A circular arc CCW from a0 to a1 (radians) as Béziers (≤ 90° each), continuing the current path. */
+  const arc = (c: Pt, r: number, a0: number, a1: number) => {
+    const k = Math.max(1, Math.ceil((a1 - a0) / (Math.PI / 2) - 1e-9)), da = (a1 - a0) / k, t = (4 / 3) * Math.tan(da / 4);
+    for (let i = 0; i < k; i++) {
+      const s = a0 + i * da, e = s + da;
+      const p1 = { x: c.x + r * (Math.cos(s) - t * Math.sin(s)), y: c.y + r * (Math.sin(s) + t * Math.cos(s)) };
+      const p2 = { x: c.x + r * (Math.cos(e) + t * Math.sin(e)), y: c.y + r * (Math.sin(e) - t * Math.cos(e)) };
+      ops.push(`${P(p1)} ${P(p2)} ${P({ x: c.x + r * Math.cos(e), y: c.y + r * Math.sin(e) })} c`);
+    }
+  };
+  const seg = (a: Pt, b: Pt) => ops.push(`${P(a)} m ${P(b)} l S`);
+  // the outline
+  ops.push("0 0 0 RG 0.2 w [] 0 d");
+  for (const o of fp.outline) {
+    if (o.kind === "line") seg(o.a, o.b);
+    else if (o.kind === "poly") { if (o.pts.length > 1) ops.push(`${o.pts.map((p, i) => `${P(p)} ${i ? "l" : "m"}`).join(" ")} S`); }
+    else {
+      const a0 = o.kind === "arc" ? o.a0 : 0;
+      let a1 = o.kind === "arc" ? o.a1 : 2 * Math.PI;
+      while (a1 <= a0) a1 += 2 * Math.PI;
+      ops.push(`${P({ x: o.c.x + o.r * Math.cos(a0), y: o.c.y + o.r * Math.sin(a0) })} m`);
+      arc(o.c, o.r, a0, a1);
+      ops.push(o.kind === "circle" ? "s" : "S");
+    }
+  }
+  // slits
+  if (fp.cuts?.length) { ops.push("0.45 w"); for (const c of fp.cuts) seg(c.a, c.b); }
+  // folds
+  const valleys = fp.folds.filter((f) => f.angle > 0), mountains = fp.folds.filter((f) => !(f.angle > 0));
+  if (valleys.length) { ops.push("0.122 0.373 0.839 RG 0.2 w [3 1.5] 0 d"); for (const f of valleys) seg(f.a, f.b); }
+  if (mountains.length) { ops.push("0.839 0.184 0.122 RG 0.2 w [4 1 0.6 1] 0 d"); for (const f of mountains) seg(f.a, f.b); }
+  // step numbers: a white disc with a black ring, the numeral centred (Helvetica digits are 0.556 em; cap height 0.718)
+  const labels = stepLabels(fp);
+  if (labels.length) {
+    ops.push("[] 0 d 0 0 0 RG 1 1 1 rg 0.15 w");
+    const size = 2.2;
+    for (const { step, at } of labels) {
+      const r = step > 9 ? 2.1 : 1.7;
+      ops.push(`${P({ x: at.x + r, y: at.y })} m`);
+      arc(at, r, 0, 2 * Math.PI);
+      ops.push("b");
+      const s = String(step), tw = helvWidth(s, size);
+      ops.push(`0 0 0 rg BT /F1 ${size} Tf ${X(at.x - tw / 2)} ${Y(at.y - (0.718 * size) / 2)} Td ${pdfStr(s)} Tj ET 1 1 1 rg`);
+    }
+  }
+  // title + legend in the bottom margin, shrunk to fit a narrow page
+  {
+    const head = `${title} · ${(wMm - 2 * M).toFixed(1)} × ${(hMm - 2 * M).toFixed(1)} mm (print at 100%)`;
+    const items: [string, string][] = [["valley", "0.122 0.373 0.839 RG 0.2 w [3 1.5] 0 d"], ["mountain", "0.839 0.184 0.122 RG 0.2 w [4 1 0.6 1] 0 d"], ["cut", "0 0 0 RG 0.45 w [] 0 d"]];
+    if (!fp.cuts?.length) items.pop();
+    const sample = 8, gap = 1.5, sep = 5;
+    const widthAt = (size: number) => helvWidth(head, size) + items.reduce((w, [l]) => w + sep + sample + gap + helvWidth(l, size), 0);
+    const avail = wMm - 2 * M;
+    const size = Math.max(1.2, Math.min(2.8, (2.8 * avail) / widthAt(2.8)));
+    const base = M / 2 - size * 0.35;
+    let x = M;
+    ops.push(`0 0 0 rg BT /F1 ${n(size)} Tf ${n(x)} ${n(base)} Td ${pdfStr(head)} Tj ET`);
+    x += helvWidth(head, size);
+    const mid = base + size * 0.35;
+    for (const [label, style] of items) {
+      x += sep;
+      ops.push(`${style} ${n(x)} ${n(mid)} m ${n(x + sample)} ${n(mid)} l S`);
+      x += sample + gap;
+      ops.push(`BT /F1 ${n(size)} Tf ${n(x)} ${n(base)} Td ${pdfStr(label)} Tj ET`);
+      x += helvWidth(label, size);
+    }
+  }
+  const content = ops.join("\n");
+  // the file: catalog, pages, page, content, font, info, then the cross-reference table
+  const W = (wMm * PT).toFixed(2), H = (hMm * PT).toFixed(2);
+  const objs = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>`,
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    `<< /Title ${pdfStr(title)} /Producer (VibeCAD) >>`,
+  ];
+  let file = "%PDF-1.4\n%\xe2\xe3\xcf\xd3\n";
+  const offsets: number[] = [];
+  objs.forEach((body, i) => { offsets.push(file.length); file += `${i + 1} 0 obj\n${body}\nendobj\n`; });
+  const xref = file.length;
+  file += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}`;
+  file += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  // every character is one byte (the content is ASCII; the header's binary marker is Latin-1)
+  const out = new Uint8Array(file.length);
+  for (let i = 0; i < file.length; i++) out[i] = file.charCodeAt(i) & 0xff;
+  return out;
+}
+
+/** The flat pattern as DXF (R12, mm): layer CUT for the outline and slits, BEND_UP / BEND_DOWN for fold lines. */
 export function flatPatternDxf(fp: FlatPattern): string {
   const out: string[] = [];
   const g = (code: number, v: string | number) => out.push(String(code), typeof v === "number" ? fmt(v) : v);
@@ -711,6 +888,7 @@ export function flatPatternDxf(fp: FlatPattern): string {
     else if (o.kind === "arc") { g(0, "ARC"); g(8, "CUT"); g(10, o.c.x); g(20, o.c.y); g(30, 0); g(40, o.r); g(50, (o.a0 * 180) / Math.PI); g(51, (o.a1 * 180) / Math.PI); }
     else for (let i = 0; i + 1 < o.pts.length; i++) line("CUT", o.pts[i], o.pts[i + 1]);
   }
+  for (const c of fp.cuts ?? []) line("CUT", c.a, c.b);
   for (const f of fp.folds) line(f.angle > 0 ? "BEND_UP" : "BEND_DOWN", f.a, f.b);
   g(0, "ENDSEC"); g(0, "EOF");
   return out.join("\n") + "\n";

@@ -2,7 +2,7 @@ import { activeSketch, useStore } from "../model/store";
 import { EyeToggle } from "./EyeToggle";
 import { sketchStatus } from "./sketchStatus";
 import { groupCutList, cutListCsv } from "../core/weldment";
-import { flatPatternSvg, flatPatternDxf } from "../core/sheet";
+import { flatPatternSvg, flatPatternDxf, flatPatternPdf, type FlatPattern } from "../core/sheet";
 import { saveOutput, sanitizeOutputName } from "../model/saveOutput";
 import { Constraint, DimensionConstraint, isDimension } from "../sketch/types";
 
@@ -42,13 +42,16 @@ function CutList() {
   );
 }
 
-/** Each sheet-metal / paper body's flat size and folds, with SVG / DXF exports of the flat pattern. */
+/** Each sheet-metal / paper body's flat size and folds, a small preview of its crease pattern, and SVG / DXF / PDF
+ *  exports (the PDF a vector page at true size, to print and fold). */
 function FlatPatterns() {
   const solids = useStore((s) => s.solids);
   const sheets = Object.values(solids).filter((b) => b.sheet);
   if (!sheets.length) return null;
-  const save = (name: string, flat: NonNullable<(typeof sheets)[number]["sheet"]>["flat"], ext: "svg" | "dxf") =>
-    void saveOutput(sanitizeOutputName(`${name} flat`, ext, "flat pattern"), new TextEncoder().encode(ext === "svg" ? flatPatternSvg(flat) : flatPatternDxf(flat)), ext === "svg" ? "image/svg+xml" : "application/dxf");
+  const save = (name: string, flat: FlatPattern, ext: "svg" | "dxf" | "pdf") => {
+    const bytes = ext === "pdf" ? flatPatternPdf(flat, `${name} crease pattern`) : new TextEncoder().encode(ext === "svg" ? flatPatternSvg(flat) : flatPatternDxf(flat));
+    void saveOutput(sanitizeOutputName(`${name} flat`, ext, "flat pattern"), bytes, ext === "svg" ? "image/svg+xml" : ext === "pdf" ? "application/pdf" : "application/dxf");
+  };
   return (
     <div className="inspector-section">
       <div className="section-title">Flat patterns ({sheets.length})</div>
@@ -56,12 +59,17 @@ function FlatPatterns() {
         const sh = b.sheet!, f = sh.flat;
         const ups = f.folds.filter((x) => x.angle > 0).length, downs = f.folds.length - ups;
         return (
-          <div className="dim-row" key={b.featureId} style={{ gridTemplateColumns: "1fr 1fr 28px 28px" }}
-            title={f.folds.map((x) => `${x.id}: ${x.angle.toFixed(1)}°${x.radius > 0 ? ` R${x.radius} BA ${x.allowance.toFixed(3)}` : " crease"}`).join("\n") + (sh.stale ? "\n(stale: changed while folded)" : "")}>
-            <span className="dim-type">{b.name}{sh.stale ? " ⚠" : ""}</span>
-            <span className="muted-inline">{(f.max.x - f.min.x).toFixed(1)} × {(f.max.y - f.min.y).toFixed(1)} · {ups}↑ {downs}↓</span>
-            <button className="icon-btn" title="Save flat pattern as SVG" onClick={() => save(b.name, f, "svg")}>⇩</button>
-            <button className="icon-btn" title="Save flat pattern as DXF" onClick={() => save(b.name, f, "dxf")}>⌗</button>
+          <div key={b.featureId}>
+            <div className="dim-row" style={{ gridTemplateColumns: "1fr 1fr 28px 28px 28px" }}
+              title={f.folds.map((x) => `${x.id}: ${x.angle.toFixed(1)}°${x.radius > 0 ? ` R${x.radius} BA ${x.allowance.toFixed(3)}` : " crease"}${x.step !== undefined ? ` (step ${x.step})` : ""}`).join("\n") + (sh.stale ? "\n(stale: changed while folded)" : "")}>
+              <span className="dim-type">{b.name}{sh.stale ? " ⚠" : ""}</span>
+              <span className="muted-inline">{(f.max.x - f.min.x).toFixed(1)} × {(f.max.y - f.min.y).toFixed(1)} · {ups}↑ {downs}↓{f.cuts?.length ? ` · ${f.cuts.length}✂` : ""}</span>
+              <button className="icon-btn" title="Save flat pattern as SVG" onClick={() => save(b.name, f, "svg")}>⇩</button>
+              <button className="icon-btn" title="Save flat pattern as DXF" onClick={() => save(b.name, f, "dxf")}>⌗</button>
+              <button className="icon-btn" title="Save the crease pattern as a PDF to print at true size (100%)" onClick={() => save(b.name, f, "pdf")}>▤</button>
+            </div>
+            {/* the pattern, scaled to fit (flatPatternSvg escapes every id) */}
+            {(f.folds.length > 0 || (f.cuts?.length ?? 0) > 0) && <div className="flat-preview" dangerouslySetInnerHTML={{ __html: flatPatternSvg(f) }} />}
           </div>
         );
       })}

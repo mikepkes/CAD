@@ -1928,6 +1928,23 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .drawing-parts td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .drawing-loading { flex: 1; display: flex; align-items: center; justify-content: center; }
 
+/* ---------- Crease pattern (CreasePatternView.tsx, the inspector's Flat patterns) ---------- */
+.crease-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.crease-sheet { flex: 1; padding: 12px; }
+.crease-legend { margin: 0; font-size: 12.5px; line-height: 1.6; }
+.crease-key { display: inline-block; width: 26px; height: 0; vertical-align: middle; margin: 0 4px 0 10px; border-top: 1.5px solid currentColor; }
+.crease-key:first-child { margin-left: 0; }
+.crease-key.valley { border-top: 1.5px dashed #1f5fd6; }
+.crease-key.mountain { border-top: 0; height: 1.5px; background: repeating-linear-gradient(90deg, #d62f1f 0 8px, transparent 8px 10px, #d62f1f 10px 11.5px, transparent 11.5px 13.5px); }
+.crease-key.cut { border-top: 3px solid var(--text); }
+.crease-pick { font-size: 12.5px; max-width: 180px; }
+@media (max-width: 720px) {
+  .crease-body { overflow-y: auto; padding: 10px; }
+  .crease-sheet { flex: none; aspect-ratio: auto; height: 60dvh; }
+}
+.flat-preview { margin: 2px 8px 8px; max-width: 220px; background: var(--paper); box-shadow: 0 0 0 1px var(--paper-edge); border-radius: 4px; padding: 4px; line-height: 0; }
+.flat-preview svg { width: 100%; height: auto; max-height: 220px; }
+
 /* ---------- Export menu (Toolbar.tsx) ---------- */
 .export-menu { position: relative; display: inline-block; }
 .export-scrim { position: fixed; inset: 0; z-index: 90; }
