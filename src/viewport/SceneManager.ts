@@ -203,10 +203,12 @@ export class SceneManager {
   private datumMeshes = new Map<string, THREE.Mesh>();
   private datumGroup = new THREE.Group();
   private ghostGroup = new THREE.Group();
-  /** The motion study's ghosts (setMotionGhosts): the moving parts at the poses being checked, see-through. */
+  /** The motion study's ghosts (setMotionGhosts): the moving parts sweeping round, see-through. */
   private motionGroup = new THREE.Group();
   /** Their geometry, one per body, shared by every pose and kept while a study runs. */
   private motionGeo = new Map<string, { src: Float32Array; geo: THREE.BufferGeometry; edges: THREE.BufferGeometry }>();
+  /** Their meshes, by trail slot and body, kept and moved frame to frame (redrawn every frame while a study runs). */
+  private motionPool = new Map<string, { mesh: THREE.Mesh; lines: THREE.LineSegments }>();
   private regionGroup = new THREE.Group();
   private previewSolidGroup = new THREE.Group();
   private planeGroup = new THREE.Group();
@@ -1806,14 +1808,14 @@ export class SceneManager {
 
   /** Draw the motion study's poses as see-through ghosts of the parts they move (the reference-part look: each
    *  body's own colour, translucent, not writing depth, its outline a deeper shade), over the live model, which
-   *  stays as built. `poses` place components (only those a pose moves); `strength` fades older poses. Each body's
-   *  geometry is made once and shared by every pose, so a new pose costs a few meshes. Empty `poses` clears them. */
+   *  stays as built. `poses` place components (only those a pose moves); `strength` fades the wake. It is called
+   *  every frame while a study runs: each body's geometry is made once and shared by every pose, and each (trail
+   *  slot, body)'s meshes are kept and only moved and faded, those not in this frame hidden. clearMotionGhosts
+   *  frees them. */
   setMotionGhosts(bodies: { solid: SolidView; componentId: string }[], buildWorld: Map<string, Rigid>, poses: { world: Map<string, Rigid>; strength: number }[]) {
-    this.clearGroup(this.motionGroup); // materials go; the shared geometry (userData.cached) stays
-    if (!poses.length) { this.clearMotionGhosts(); return; }
     const clip = this.clipPlane ? [this.clipPlane] : null; // cut where the model is cut
-    const used = new Set<string>();
-    for (const pose of poses) {
+    const shown = new Set<string>();
+    poses.forEach((pose, slot) => {
       bodies.forEach(({ solid, componentId }, i) => {
         const W = pose.world.get(componentId);
         if (!W) return;
@@ -1826,20 +1828,31 @@ export class SceneManager {
           g = { src: solid.positions, geo, edges };
           this.motionGeo.set(key, g);
         }
-        used.add(key);
+        const at = `${slot}|${key}`;
+        let p = this.motionPool.get(at);
+        if (!p) {
+          p = { mesh: new THREE.Mesh(g.geo, referenceMaterial(solid, false, clip)), lines: new THREE.LineSegments(g.edges, referenceEdgeMaterial(solid, false, clip)) };
+          for (const o of [p.mesh, p.lines]) {
+            o.matrixAutoUpdate = false;
+            o.userData.ghost = true; o.userData.motionGhost = true; // drawn, never picked; the lens passes it by
+            o.renderOrder = 1; // over the solid parts, as the see-through parts are
+            this.motionGroup.add(o);
+          }
+          this.motionPool.set(at, p);
+        }
         const B = buildWorld.get(componentId);
         const delta = rigidMat(W).multiply((B ? rigidMat(B) : new THREE.Matrix4()).invert()); // posed = W · inv(Wbuild) · built
-        const mesh = new THREE.Mesh(g.geo, referenceMaterial(solid, false, clip, 0.3 * pose.strength));
-        const lines = new THREE.LineSegments(g.edges, referenceEdgeMaterial(solid, false, clip, 0.8 * pose.strength));
-        for (const o of [mesh, lines]) {
-          o.matrixAutoUpdate = false; o.matrix.copy(delta);
-          o.userData.ghost = true; o.userData.motionGhost = true; // drawn, never picked; the lens passes it by
-          o.renderOrder = 1; // over the solid parts, as the see-through parts are
-          this.motionGroup.add(o);
+        p.mesh.geometry = g.geo; p.lines.geometry = g.edges;
+        (p.mesh.material as THREE.MeshStandardMaterial).opacity = 0.3 * pose.strength;
+        (p.lines.material as THREE.LineBasicMaterial).opacity = 0.8 * pose.strength;
+        for (const o of [p.mesh, p.lines]) {
+          (o.material as THREE.Material).clippingPlanes = clip;
+          o.matrix.copy(delta); o.matrixWorldNeedsUpdate = true; o.visible = true;
         }
+        shown.add(at);
       });
-    }
-    for (const [k, g] of this.motionGeo) if (!used.has(k)) { g.geo.dispose(); g.edges.dispose(); this.motionGeo.delete(k); }
+    });
+    for (const [at, p] of this.motionPool) if (!shown.has(at)) { p.mesh.visible = false; p.lines.visible = false; }
     this.invalidate();
   }
 
@@ -1847,13 +1860,14 @@ export class SceneManager {
   clearMotionGhosts() {
     if (!this.motionGroup.children.length && !this.motionGeo.size) return;
     this.clearGroup(this.motionGroup);
+    this.motionPool.clear();
     for (const g of this.motionGeo.values()) { g.geo.dispose(); g.edges.dispose(); }
     this.motionGeo.clear();
     this.invalidate();
   }
 
   /** How many ghost meshes the motion study is showing (for tests and the demo). */
-  get motionGhostCount(): number { return this.motionGroup.children.filter((o) => (o as THREE.Mesh).isMesh).length; }
+  get motionGhostCount(): number { return this.motionGroup.children.filter((o) => (o as THREE.Mesh).isMesh && o.visible).length; }
 
   /** End animation and restore the normal solids view. */
   endAnimation() {

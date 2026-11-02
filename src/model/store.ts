@@ -31,7 +31,7 @@ import type { SolidEval, BuildStep } from "../core/features";
 import { GeometryBackend, InlineGeometryBackend, TopologyOpts, ExportFormat, EvaluateResult } from "../core/geometry/backend";
 import { hasFlexures } from "../sim/flexure";
 import { WorkerGeometryBackend } from "./worker-backend";
-import { runMotionStudy, driveParams, motionKey, MotionStatus, MotionResult } from "./motionStudy";
+import { runMotionStudy, driveParams, motionKey, poseCount, MotionStatus, MotionResult } from "./motionStudy";
 import { meshesToStlBinary } from "../core/export/stl";
 import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
@@ -66,9 +66,8 @@ let motionToken = 0; // bumped to cancel/supersede an in-flight study
 const motionCache = new Map<string, MotionResult>();
 /** How long the last full study of each design took (ms): the first estimate of the next. */
 const motionLastMs = new Map<string, number>();
-/** How many of the latest poses the motion ghosts show (an onion skin: the pose being checked and a fading trail). */
-export const MOTION_TRAIL = 4;
-const NO_POSES: Record<string, string>[] = [];
+/** Poses a study checks round each drive's turn (every 45°). */
+const MOTION_STEPS = 8;
 const MOTION_GHOST_KEY = "vibecad.motionGhost.v1";
 let rebuildInFlight: Promise<void> | null = null; // the running preview evaluate (its whole coalesced loop)
 let rebuildDirty = false;    // a newer rebuild was requested while one ran
@@ -212,10 +211,10 @@ export interface AppState {
   /** While running: about how many seconds are left (null until there's something to go on). */
   motionEta: number | null;
   hasMotionStudy: boolean; // the model has driven joints to sweep
-  /** While running: the poses most recently checked, newest first (parameter overrides; MOTION_TRAIL of them at
-   *  most), which the viewport draws as see-through ghosts of the moving parts. Empty when no study runs. */
-  motionPoses: Record<string, string>[];
-  /** Draw the motion in the viewport while a study runs (ghosts of the moving parts at the poses being checked). */
+  /** While running: when the study started (performance.now()), how many poses it checks, and how long the design's
+   *  last study took (ms; null for its first): what the viewport paces its sweep of the motion by. Null otherwise. */
+  motionRun: { started: number; poses: number; lastMs: number | null } | null;
+  /** Draw the motion in the viewport while a study runs (ghosts of the moving parts sweeping round). */
   motionGhost: boolean;
   setMotionGhost: (on: boolean) => void;
   runMotionStudy: () => Promise<void>;
@@ -767,7 +766,7 @@ export const useStore = create<AppState>((set, get) => {
     motionCoarse: null,
     motionEta: null,
     hasMotionStudy: false,
-    motionPoses: NO_POSES,
+    motionRun: null,
     motionGhost: readLS(MOTION_GHOST_KEY, "1") !== "0",
     docName: null,
     kernelLoading: false,
@@ -1302,14 +1301,15 @@ export const useStore = create<AppState>((set, get) => {
       // a set of values checked before answers at once
       const key = motionKey(doc);
       const known = motionCache.get(key);
-      if (known) { set({ hasMotionStudy: true, motionStatus: known.status, motionResult: known, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionPoses: NO_POSES }); return; }
+      if (known) { set({ hasMotionStudy: true, motionStatus: known.status, motionResult: known, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionRun: null }); return; }
       const lastMs = motionLastMs.get(doc.id);
-      set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null, motionCoarse: null, motionEta: lastMs != null ? Math.round(lastMs / 1000) : null, motionPoses: NO_POSES });
       const started = performance.now();
+      const motionRun = { started, poses: poseCount(driveParams(doc).length, MOTION_STEPS), lastMs: lastMs ?? null };
+      set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null, motionCoarse: null, motionEta: lastMs != null ? Math.round(lastMs / 1000) : null, motionRun });
       try {
         if (!studyReady) { await studyGeometry.init({ wasmUrl: occWasmUrl }); studyReady = studyGeometry.ready(); }
         const res = await runMotionStudy(studyGeometry, doc, {
-          steps: 8,
+          steps: MOTION_STEPS,
           coarse: 4,
           onProgress: (f) => {
             if (token !== motionToken) return;
@@ -1318,23 +1318,21 @@ export const useStore = create<AppState>((set, get) => {
           },
           onCoarseClear: (checked, total) => { if (token === motionToken) set({ motionCoarse: { checked, total } }); },
           cancelled: () => token !== motionToken,
-          // only while someone is looking: with the ghosts off the study keeps no trail
-          onPose: (o) => { if (token === motionToken && get().motionGhost) set({ motionPoses: [o, ...get().motionPoses].slice(0, MOTION_TRAIL) }); },
         });
         if (token !== motionToken) return;            // superseded by a newer run
-        if (!res) { set({ motionStatus: "idle", motionPoses: NO_POSES }); return; } // cancelled
+        if (!res) { set({ motionStatus: "idle", motionRun: null }); return; } // cancelled
         motionCache.set(key, res);
         motionLastMs.set(doc.id, performance.now() - started);
-        set({ motionStatus: res.status, motionResult: res, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionPoses: NO_POSES });
+        set({ motionStatus: res.status, motionResult: res, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionRun: null });
       } catch (e) {
-        if (token === motionToken) set({ motionStatus: "fail", motionResult: { status: "fail", reason: (e as Error).message, worstOverlap: 0 }, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionPoses: NO_POSES });
+        if (token === motionToken) set({ motionStatus: "fail", motionResult: { status: "fail", reason: (e as Error).message, worstOverlap: 0 }, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionRun: null });
       }
     },
     // an edit: the verdict so far becomes "before your change" until the new one is in
-    cancelMotionStudy: () => { motionToken++; set((s) => ({ motionStatus: "idle", motionProgress: 0, motionCoarse: null, motionEta: null, motionPoses: NO_POSES, motionPrevious: s.motionResult ?? s.motionPrevious, motionResult: null })); },
+    cancelMotionStudy: () => { motionToken++; set((s) => ({ motionStatus: "idle", motionProgress: 0, motionCoarse: null, motionEta: null, motionRun: null, motionPrevious: s.motionResult ?? s.motionPrevious, motionResult: null })); },
     setMotionGhost: (on) => {
       try { localStorage.setItem(MOTION_GHOST_KEY, on ? "1" : "0"); } catch { /* ignore */ }
-      set(on ? { motionGhost: true } : { motionGhost: false, motionPoses: NO_POSES });
+      set({ motionGhost: on });
     },
     extrudeSketch: async (sketchId, distanceExpr, opts) => {
       if (distanceExpr != null && !opts?.toFace && !opts?.throughAll) {
