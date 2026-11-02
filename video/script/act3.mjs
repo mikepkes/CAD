@@ -85,7 +85,8 @@ export async function act3(d) {
     await d.wait(400); d.pick("gyroscope bearing"); await d.wait(2400);
     await d.api("aim", { dir: [0.55, 1, 0.6], ms: 1800, margin: 1.0 });
     await d.fast("motion study", async () => {
-      await d.run(async () => { await window.__vibecadDemo.store.getState().runMotionStudy(); });
+      // with Show motion on, the rings it turns sweep round as see-through ghosts while each pose is checked
+      await d.run(async () => { const st = window.__vibecadDemo.store.getState(); st.setMotionGhost(true); await st.runMotionStudy(); });
       await d.page.waitForFunction(() => !["running", "pending"].includes(window.__vibecadDemo.store.getState().motionStatus), null, { timeout: 180000 });
     });
     await d.wait(1200);

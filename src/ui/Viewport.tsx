@@ -15,6 +15,8 @@ import { ghostSolidViews, useGhost } from "../model/concepts/ghostVariant";
 import { ContextMenu } from "./ContextMenu";
 import { sketchIsEmpty } from "./sketchStatus";
 import { onViewportTheme, viewportColors } from "../viewport/palette";
+import { buildBodies } from "../viewport/buildBodies";
+import { motionGhostPoses } from "../viewport/motionGhosts";
 
 function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
   let inside = false;
@@ -206,9 +208,22 @@ function ViewportInner({ overlays, label }: { overlays?: ReactNode; label?: stri
     const unsubGhost = useGhost.subscribe(() => controller.setBase(buildView(useStore.getState())));
     // The scene repaints itself on a theme switch; the extrude handle takes its colour from here.
     const unsubTheme = onViewportTheme(() => updateExtrudeHandle(scene, useStore.getState()));
+    // The motion study's ghosts: redrawn when a new pose is checked, gone when the study ends or they're switched off.
+    let ghostKey: unknown[] = [];
+    const syncMotionGhosts = (s: AppState) => {
+      const on = s.motionGhost && s.motionStatus === "running" && s.motionPoses.length > 0;
+      const key = on ? [s.motionPoses, s.solids, s.session.doc] : [];
+      if (key.length === ghostKey.length && key.every((k, i) => k === ghostKey[i])) return;
+      ghostKey = key;
+      if (!on) { scene.clearMotionGhosts(); return; }
+      const doc = s.session.doc;
+      const { build, poses } = motionGhostPoses(doc, s.motionPoses);
+      scene.setMotionGhosts(buildBodies(doc, s.solids as never), build, poses);
+    };
     const unsub = useStore.subscribe((s) => {
       controller.setBase(buildView(s));
       updateExtrudeHandle(scene, s);
+      syncMotionGhosts(s);
       if (s.mode !== prevMode) {
         controller.configureControls(scene.controls, s.mode);
         if (s.mode === "model") scene.exitSketchView();

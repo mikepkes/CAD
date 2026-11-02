@@ -66,6 +66,10 @@ let motionToken = 0; // bumped to cancel/supersede an in-flight study
 const motionCache = new Map<string, MotionResult>();
 /** How long the last full study of each design took (ms): the first estimate of the next. */
 const motionLastMs = new Map<string, number>();
+/** How many of the latest poses the motion ghosts show (an onion skin: the pose being checked and a fading trail). */
+export const MOTION_TRAIL = 4;
+const NO_POSES: Record<string, string>[] = [];
+const MOTION_GHOST_KEY = "vibecad.motionGhost.v1";
 let rebuildInFlight: Promise<void> | null = null; // the running preview evaluate (its whole coalesced loop)
 let rebuildDirty = false;    // a newer rebuild was requested while one ran
 let buildToken = 0;          // the latest build started: measurements of an older one are stale
@@ -208,6 +212,12 @@ export interface AppState {
   /** While running: about how many seconds are left (null until there's something to go on). */
   motionEta: number | null;
   hasMotionStudy: boolean; // the model has driven joints to sweep
+  /** While running: the poses most recently checked, newest first (parameter overrides; MOTION_TRAIL of them at
+   *  most), which the viewport draws as see-through ghosts of the moving parts. Empty when no study runs. */
+  motionPoses: Record<string, string>[];
+  /** Draw the motion in the viewport while a study runs (ghosts of the moving parts at the poses being checked). */
+  motionGhost: boolean;
+  setMotionGhost: (on: boolean) => void;
   runMotionStudy: () => Promise<void>;
   cancelMotionStudy: () => void;
 
@@ -757,6 +767,8 @@ export const useStore = create<AppState>((set, get) => {
     motionCoarse: null,
     motionEta: null,
     hasMotionStudy: false,
+    motionPoses: NO_POSES,
+    motionGhost: readLS(MOTION_GHOST_KEY, "1") !== "0",
     docName: null,
     kernelLoading: false,
     toast: null,
@@ -1290,9 +1302,9 @@ export const useStore = create<AppState>((set, get) => {
       // a set of values checked before answers at once
       const key = motionKey(doc);
       const known = motionCache.get(key);
-      if (known) { set({ hasMotionStudy: true, motionStatus: known.status, motionResult: known, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null }); return; }
+      if (known) { set({ hasMotionStudy: true, motionStatus: known.status, motionResult: known, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionPoses: NO_POSES }); return; }
       const lastMs = motionLastMs.get(doc.id);
-      set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null, motionCoarse: null, motionEta: lastMs != null ? Math.round(lastMs / 1000) : null });
+      set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null, motionCoarse: null, motionEta: lastMs != null ? Math.round(lastMs / 1000) : null, motionPoses: NO_POSES });
       const started = performance.now();
       try {
         if (!studyReady) { await studyGeometry.init({ wasmUrl: occWasmUrl }); studyReady = studyGeometry.ready(); }
@@ -1306,18 +1318,24 @@ export const useStore = create<AppState>((set, get) => {
           },
           onCoarseClear: (checked, total) => { if (token === motionToken) set({ motionCoarse: { checked, total } }); },
           cancelled: () => token !== motionToken,
+          // only while someone is looking: with the ghosts off the study keeps no trail
+          onPose: (o) => { if (token === motionToken && get().motionGhost) set({ motionPoses: [o, ...get().motionPoses].slice(0, MOTION_TRAIL) }); },
         });
         if (token !== motionToken) return;            // superseded by a newer run
-        if (!res) { set({ motionStatus: "idle" }); return; } // cancelled
+        if (!res) { set({ motionStatus: "idle", motionPoses: NO_POSES }); return; } // cancelled
         motionCache.set(key, res);
         motionLastMs.set(doc.id, performance.now() - started);
-        set({ motionStatus: res.status, motionResult: res, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null });
+        set({ motionStatus: res.status, motionResult: res, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionPoses: NO_POSES });
       } catch (e) {
-        if (token === motionToken) set({ motionStatus: "fail", motionResult: { status: "fail", reason: (e as Error).message, worstOverlap: 0 }, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null });
+        if (token === motionToken) set({ motionStatus: "fail", motionResult: { status: "fail", reason: (e as Error).message, worstOverlap: 0 }, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionPoses: NO_POSES });
       }
     },
     // an edit: the verdict so far becomes "before your change" until the new one is in
-    cancelMotionStudy: () => { motionToken++; set((s) => ({ motionStatus: "idle", motionProgress: 0, motionCoarse: null, motionEta: null, motionPrevious: s.motionResult ?? s.motionPrevious, motionResult: null })); },
+    cancelMotionStudy: () => { motionToken++; set((s) => ({ motionStatus: "idle", motionProgress: 0, motionCoarse: null, motionEta: null, motionPoses: NO_POSES, motionPrevious: s.motionResult ?? s.motionPrevious, motionResult: null })); },
+    setMotionGhost: (on) => {
+      try { localStorage.setItem(MOTION_GHOST_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+      set(on ? { motionGhost: true } : { motionGhost: false, motionPoses: NO_POSES });
+    },
     extrudeSketch: async (sketchId, distanceExpr, opts) => {
       if (distanceExpr != null && !opts?.toFace && !opts?.throughAll) {
         const problem = expressionProblem(distanceExpr, get().session.doc.parameters.map((p) => p.name));

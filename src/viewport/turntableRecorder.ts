@@ -8,18 +8,12 @@ import * as THREE from "three";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { resolveComponentWorld } from "../core/recompute";
 import { resolveParameters } from "../core/parameters";
-import { hiddenIds, bodyVisible } from "../core/visibility";
-import { materialForComponent, referenceOf, type CadDocument } from "../core/document";
-import { materialSpec, woodFrameFromBounds } from "./material";
+import type { CadDocument } from "../core/document";
+import { buildBodies, type SolidEvalLike } from "./buildBodies";
 import { fitDistance, orbitDirection } from "./orbitCamera";
-import type { SceneManager, SolidView } from "./SceneManager";
+import type { SceneManager } from "./SceneManager";
 
-interface SolidEvalLike {
-  featureId: string; sketchId: string;
-  mesh?: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; edges: Float32Array; uvs?: Float32Array };
-  bounds?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
-  threadDecals?: SolidView["threadDecals"];
-}
+export { buildBodies } from "./buildBodies";
 
 export interface TurntableOpts {
   width?: number; height?: number; fps?: number; seconds?: number;
@@ -36,24 +30,6 @@ export interface TurntableOpts {
   param?: string;
   openClose?: { start: number; end: number; from: number; to: number };
   onProgress?: (p: number) => void;
-}
-
-/** Resolve the store's raw solids into renderable bodies (material + wood frame +
- *  owning component), the same way the live viewport does. */
-export function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEvalLike>): { solid: SolidView; componentId: string }[] {
-  const out: { solid: SolidView; componentId: string }[] = [];
-  const hidden = hiddenIds(doc);
-  for (const sol of Object.values(solidsMap)) {
-    if (!sol.mesh || !bodyVisible(doc, sol, hidden)) continue; // a hidden body stays out of the video
-    // Sketch-less bodies (primitives, …) have no sketch to name a component; they
-    // live in the root component, so they'd otherwise drop out of the recording.
-    const componentId = (sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
-    const mat = materialForComponent(doc, componentId);
-    const material = mat ? materialSpec(mat) : undefined;
-    const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;
-    out.push({ solid: { id: sol.featureId, positions: sol.mesh.positions, normals: sol.mesh.normals, indices: sol.mesh.indices, edges: sol.mesh.edges, ...(sol.mesh.uvs ? { uvs: sol.mesh.uvs } : {}), threadDecals: sol.threadDecals, material, woodFrame, ...(referenceOf(doc, componentId) === "ghost" ? { reference: true } : {}) }, componentId });
-  }
-  return out;
 }
 
 /** Triangle-wave open→close value over a window; `from` outside the window. */
