@@ -50,7 +50,7 @@ const server = createServer((req, res) => {
       const r = JSON.parse(body);
       r.peakRssMB = Math.round((peak.get(r.example) ?? 0) / 1024);
       rows.push(r);
-      console.error(`${r.example}: first model ${r.firstModelMs} (kernel ${r.kernelReadyMs}) edit ${r.geom?.medianMs ?? "-"}/${r.geom?.p90Ms ?? "-"} (${r.geom?.name ?? ""}) pose ${r.pose?.medianMs ?? "-"}/${r.pose?.p90Ms ?? "-"} (${r.pose?.name ?? ""}) drag ${r.geomDrag?.perSecond ?? "-"}/s (lag ${r.geomDrag?.lagMs ?? "-"}) pose drag ${r.poseDrag?.perSecond ?? "-"}/s peak ${r.peakRssMB} MB`);
+      console.error(`${r.example}: first model ${r.firstModelMs} (kernel ${r.kernelReadyMs}) edit ${r.geom?.medianMs ?? "-"}/${r.geom?.p90Ms ?? "-"} (${r.geom?.name ?? ""}) pose ${r.pose?.medianMs ?? "-"}/${r.pose?.p90Ms ?? "-"} (${r.pose?.name ?? ""}) drag ${r.geomDrag?.perSecond ?? "-"}/s (lag ${r.geomDrag?.lagMs ?? "-"}) pose drag ${r.poseDrag?.perSecond ?? "-"}/s update ${r.updateMs ?? "-"} peak ${r.peakRssMB} MB`);
       res.end("ok"); return;
     }
     if (req.url === "/error") { console.error(`error: ${body}`); current = null; res.end("ok"); return; }
@@ -118,12 +118,18 @@ try {
 } finally {
   if (sampler) clearInterval(sampler);
   if (browser) await browser.close();
-  if (child) { child.kill("SIGTERM"); try { execFileSync("pkill", ["-TERM", "-f", "src-tauri/target/debug/vibecad"]); } catch { /* none */ } }
+  if (child) {
+    // the app binary is a grandchild (npx → cargo → app): end every process under the launcher, nothing else
+    const ps = processes();
+    const under = (pid) => ps.filter((p) => p.ppid === pid).flatMap((p) => [p.pid, ...under(p.pid)]);
+    for (const pid of under(child.pid).reverse()) { try { process.kill(pid, "SIGTERM"); } catch { /* gone */ } }
+    child.kill("SIGTERM");
+  }
   server.close();
 }
 
-const cols = ["example", "pool", "firstModelMs", "kernelReadyMs", "geomMedianMs", "geomP90Ms", "slider", "poseMedianMs", "poseP90Ms", "poseSlider", "geomDragPerS", "geomDragLagMs", "poseDragPerS", "peakRssMB", "bodies"];
-const flat = rows.map((r) => ({ example: r.example, pool: r.pool, firstModelMs: r.firstModelMs, kernelReadyMs: r.kernelReadyMs, geomMedianMs: r.geom?.medianMs, geomP90Ms: r.geom?.p90Ms, slider: r.geom?.name, poseMedianMs: r.pose?.medianMs, poseP90Ms: r.pose?.p90Ms, poseSlider: r.pose?.name, geomDragPerS: r.geomDrag?.perSecond, geomDragLagMs: r.geomDrag?.lagMs, poseDragPerS: r.poseDrag?.perSecond, peakRssMB: r.peakRssMB, bodies: r.bodies, target, cores: r.cores, ua: r.ua }));
+const cols = ["example", "pool", "firstModelMs", "kernelReadyMs", "geomMedianMs", "geomP90Ms", "slider", "poseMedianMs", "poseP90Ms", "poseSlider", "geomDragPerS", "geomDragLagMs", "poseDragPerS", "updateMs", "peakRssMB", "bodies"];
+const flat = rows.map((r) => ({ example: r.example, pool: r.pool, firstModelMs: r.firstModelMs, kernelReadyMs: r.kernelReadyMs, geomMedianMs: r.geom?.medianMs, geomP90Ms: r.geom?.p90Ms, slider: r.geom?.name, poseMedianMs: r.pose?.medianMs, poseP90Ms: r.pose?.p90Ms, poseSlider: r.pose?.name, geomDragPerS: r.geomDrag?.perSecond, geomDragLagMs: r.geomDrag?.lagMs, poseDragPerS: r.poseDrag?.perSecond, updateMs: r.updateMs, peakRssMB: r.peakRssMB, bodies: r.bodies, target, cores: r.cores, ua: r.ua }));
 console.log(`| ${cols.join(" | ")} |`);
 console.log(`|${cols.map(() => "---").join("|")}|`);
 for (const r of flat) console.log(`| ${cols.map((c) => r[c] ?? "").join(" | ")} |`);

@@ -110,7 +110,11 @@ async function main() {
   const geomDrag = sl.geom ? await drag(sl.geom, dragMs) : null;
   const poseDrag = sl.pose ? await drag(sl.pose, dragMs) : null;
   const bodies = Object.values(state().solids).filter((b) => b.mesh).length;
-  await post("/result", { example, pool: q.get("pool") ?? "default", cores: navigator.hardwareConcurrency, ua: navigator.userAgent, kernelReadyMs: r1(kernelReadyMs), firstModelMs: r1(firstModelMs), geom, pose, geomDrag, poseDrag, bodies });
+  // a store update that changes nothing: what the viewport costs to take new solids (its part of every change above)
+  const updates = [];
+  for (let i = 0; i < 5; i++) { const t = performance.now(); store.setState({ rev: state().rev + 1 }); updates.push(performance.now() - t); await sleep(50); }
+  const updateMs = r1(median(updates));
+  await post("/result", { updateMs, example, pool: q.get("pool") ?? "default", cores: navigator.hardwareConcurrency, ua: navigator.userAgent, kernelReadyMs: r1(kernelReadyMs), firstModelMs: r1(firstModelMs), geom, pose, geomDrag, poseDrag, bodies });
   const r = await (await fetch(`${base}/next`)).json();
   if (r.example) go(r.example); else await post("/done", {});
 }
