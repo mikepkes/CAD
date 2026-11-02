@@ -23,6 +23,7 @@ const COMMANDS: Record<string, IconName> = {
   // assembly
   "component.create": "component-add",
   "component.connector": "connector",
+  "component.setReference": "component-reference",
   "joint.create": "joint-rigid",
   "joint.template": "joint-revolute",
   "assembly.pattern": "assembly-pattern",

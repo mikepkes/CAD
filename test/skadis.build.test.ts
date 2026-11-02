@@ -7,6 +7,7 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { expectCommittedExample } from "./helpers";
 import type { CadSession } from "../src/core/command/session";
+import { referenceOf } from "../src/core/document";
 import { writeFileSync } from "node:fs";
 import { serializeDocument } from "../src/core/persistence";
 import { exportFeatureBytes, GeometryCache } from "../src/core/features";
@@ -27,6 +28,11 @@ describe("SKÅDIS gravity holder: build", () => {
     for (const b of Object.values(out)) expect(b.error, b.name).toBeUndefined();
     expect(Object.keys(by).sort()).toEqual([...PRINTED, "SKÅDIS board (not printed)", "Stand-in item (not printed)"].sort());
     for (const [name, p] of Object.entries(by)) expect(p.meshes.length, name).toBe(1);
+    // the stand-in and the board are reference parts: never printed or exported, the stand-in drawn see-through
+    const ref = Object.fromEntries(Object.values(s.doc.components).map((c) => [c.name, referenceOf(s.doc, c.id)]));
+    expect(ref["Stand-in item (not printed)"]).toBe("ghost");
+    expect(ref["SKÅDIS board (not printed)"]).toBe("solid");
+    for (const k of PRINTED) expect(ref[k], k).toBeUndefined();
     // mirror pairs and repeated parts are alike
     for (const [a, b] of [["Lower arm, left", "Lower arm, right"], ["Upper arm, left", "Upper arm, right"], ["Pad, left", "Pad, right"], ["Pivot pin 1", "Pivot pin 4"], ["Guide pin 1", "Guide pin 2"], ["Foot pin 1", "Pad pin, right upper"]])
       expect(by[a].volume, `${a} ~ ${b}`).toBeCloseTo(by[b].volume, 1);

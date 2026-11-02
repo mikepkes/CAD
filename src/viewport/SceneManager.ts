@@ -85,6 +85,10 @@ export interface SolidView {
   ghost?: boolean;
   /** A ghost that is another design (a compared Design Space pin): the kit's ghost accent, dashed edges. Implies `ghost`. */
   variant?: boolean;
+  /** A reference part's body drawn see-through (Component.reference "ghost"): a stand-in for what the design holds,
+   *  in its own colour but translucent and not writing depth, so the parts behind it stay in view. Picked only where
+   *  no real part lies behind it; the lens passes it by. */
+  reference?: boolean;
   /** Principal curvatures (k1, k2) per vertex, for the curvature map. */
   curvature?: Float32Array;
   /** Curvature-comb line segments along the body's curved edges (flat xyz pairs). */
@@ -844,7 +848,8 @@ export class SceneManager {
         [...this.planeMeshes.values(), ...this.datumMeshes.values()],
         false
       );
-      const fh = faceHits[0], ph = planeHits[0];
+      // a see-through reference part (a stand-in in front of the mechanism) yields to a real part behind it
+      const fh = faceHits.find((h) => !h.object.userData.reference) ?? faceHits[0], ph = planeHits[0];
       if (fh && fh.face && (!ph || fh.distance <= ph.distance)) {
         const n = fh.face.normal.clone().transformDirection(fh.object.matrixWorld).normalize();
         return { type: "face", id: fh.object.userData.bodyId as string | undefined, world: fh.point, normal: { x: n.x, y: n.y, z: n.z }, tri: fh.faceIndex != null ? fh.faceIndex * 3 : undefined };
@@ -1447,10 +1452,12 @@ export class SceneManager {
     const color = clip ? bodyColor(index) : 0x7b86e0;
     let mat: THREE.Material;
     const analysis = this.lastData?.analysis;
-    const analysisMat = !s.variant && !faded && !clip && analysis && analysis.mode !== "none" ? this.analysisMaterial(analysis, s, geo) : null; // a variant ghost never carries analysis
+    const analysisMat = !s.variant && !s.reference && !faded && !clip && analysis && analysis.mode !== "none" ? this.analysisMaterial(analysis, s, geo) : null; // a variant ghost or a reference part never carries analysis
     if (s.variant) {
       // A compared design variant: translucent in the kit's ghost accent, drawn without writing depth so the real part stays legible through it.
       mat = new THREE.MeshStandardMaterial({ color: COLORS().variant, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.28, depthWrite: false, clippingPlanes: clip ?? undefined });
+    } else if (s.reference) {
+      mat = referenceMaterial(s, faded, clip);
     } else if (analysisMat) {
       mat = analysisMat;
     } else if (s.material && !clip) {
@@ -1467,6 +1474,7 @@ export class SceneManager {
     }
     const mesh = new THREE.Mesh(geo, mat);
     if (s.ghost || s.variant) mesh.userData.ghost = true; // drawn, but never picked
+    if (s.reference) mesh.userData.reference = true; // see-through: a pick goes past it to a part behind
     if (s.id) mesh.userData.bodyId = s.id; // so a face pick names its body
     this.solidsGroup.add(mesh);
     if (analysis?.combs && s.combs?.length && !faded) {
@@ -1478,7 +1486,7 @@ export class SceneManager {
     // Section cap for THIS body: a stencil pass marks where the clip plane cuts
     // its material (back faces increment, front decrement), then a coloured quad
     // fills those pixels and resets the stencil so the next body starts clean.
-    if (clip && !s.variant) { // a variant ghost gets no section cap: it is see-through by design
+    if (clip && !s.variant && !s.reference) { // a variant ghost or reference part gets no section cap: it is see-through by design
       const base = 10 + index * 3;
       for (const [side, op] of [[THREE.BackSide, THREE.IncrementWrapStencilOp], [THREE.FrontSide, THREE.DecrementWrapStencilOp]] as const) {
         const sm = new THREE.MeshBasicMaterial({ depthWrite: false, depthTest: false, colorWrite: false, clippingPlanes: clip });
@@ -1499,12 +1507,14 @@ export class SceneManager {
         egeo,
         s.variant
           ? new THREE.LineDashedMaterial({ color: COLORS().variant, dashSize: 1.5, gapSize: 1, transparent: true, opacity: 0.85, clippingPlanes: clip ?? undefined }) // variant ghost: dashed accent edges
+          : s.reference ? referenceEdgeMaterial(s, faded, clip)
           : s.material?.kind === "paper" && !clip
             ? paperEdgeMaterial(faded)
             : clip ? new THREE.LineBasicMaterial({ color: 0x20242e, transparent: faded, opacity: faded ? 0.3 : 1, clippingPlanes: clip })
             : this.edgeMaterial(faded)
       );
       if (s.variant) { eseg.computeLineDistances(); eseg.userData.ghost = true; } // dashes need distances; the lens skips ghosts
+      if (s.reference) eseg.userData.reference = true; // the lens skips a reference part too
       eseg.userData.edges = true; // the body's B-rep edges (the lens redraws these)
       this.solidsGroup.add(eseg);
     }
@@ -1613,11 +1623,12 @@ export class SceneManager {
       }
       const geo = solidGeometry(solid);
       addWrapCoords(geo, solid.positions, solid.normals, solid.material);
-      const mat = solid.material ? this.materialFor(solid) : new THREE.MeshStandardMaterial({ color: 0x7b86e0, metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide });
+      const mat = solid.reference ? referenceMaterial(solid, false, null)
+        : solid.material ? this.materialFor(solid) : new THREE.MeshStandardMaterial({ color: 0x7b86e0, metalness: 0.15, roughness: 0.5, side: THREE.DoubleSide });
       const mesh = new THREE.Mesh(geo, mat);
       g.add(mesh);
       const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(solid.edges, 3));
-      const lines = new THREE.LineSegments(eg, solid.material?.kind === "paper" ? paperEdgeMaterial(false) : new THREE.LineBasicMaterial({ color: 0x20242e }));
+      const lines = new THREE.LineSegments(eg, solid.reference ? referenceEdgeMaterial(solid, false, null) : solid.material?.kind === "paper" ? paperEdgeMaterial(false) : new THREE.LineBasicMaterial({ color: 0x20242e }));
       g.add(lines);
       if (solid.id) this.animMeshes.set(solid.id, { mesh, lines });
       if (solid.material?.kind === "wood" && solid.woodFrame) {
@@ -2483,6 +2494,20 @@ function solidGeometry(s: { positions: Float32Array; normals: Float32Array; indi
   }
   return geo;
 }
+
+/** A see-through reference part (SolidView.reference): its own colour, translucent, not writing depth, so the
+ *  parts behind it stay legible while it still reads as the thing being held. */
+function referenceMaterial(s: SolidView, faded: boolean, clip: THREE.Plane[] | null): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: referenceColor(s), metalness: 0.05, roughness: 0.6, side: THREE.DoubleSide,
+    transparent: true, opacity: faded ? 0.12 : 0.22, depthWrite: false, clippingPlanes: clip ?? undefined,
+  });
+}
+/** Its outline, in a deeper shade of its colour: what keeps a translucent part's shape readable. */
+function referenceEdgeMaterial(s: SolidView, faded: boolean, clip: THREE.Plane[] | null): THREE.LineBasicMaterial {
+  return new THREE.LineBasicMaterial({ color: referenceColor(s).multiplyScalar(0.6), transparent: true, opacity: faded ? 0.3 : 0.7, depthWrite: false, clippingPlanes: clip ?? undefined });
+}
+const referenceColor = (s: SolidView) => new THREE.Color(s.material?.color ?? COLORS().ghost);
 
 /** Paper's edges and creases: a soft grey line, a crease rather than a drawn outline. */
 function paperEdgeMaterial(faded: boolean): THREE.LineBasicMaterial {

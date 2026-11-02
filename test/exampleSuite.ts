@@ -39,7 +39,7 @@ import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
 import { flexureState, hasFlexures } from "../src/sim/flexure";
 import type { SolidEval, CollisionResult } from "../src/core/features";
-import type { CadDocument } from "../src/core/document";
+import { isReferenceBody, type CadDocument } from "../src/core/document";
 
 const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
 
@@ -213,7 +213,8 @@ export function defineExampleSuite(which: (name: string) => boolean): void {
         it("prints all of itself: the download holds every body", async () => {
           const s = await load(ex.url);
           if (!hasFlexures(s.doc)) return;
-          const bodies = Object.values((await backend.evaluate(s.doc)).solids).filter((b) => b.mesh);
+          // every body but a reference part's (a stand-in, a board): those aren't made, so aren't in the file
+          const bodies = Object.values((await backend.evaluate(s.doc)).solids).filter((b) => b.mesh && !isReferenceBody(s.doc, b));
           const modelled = bodies.reduce((v, b) => v + meshVolume(b.mesh!.positions, b.mesh!.indices), 0);
           const stl = (await backend.exportBytes(s.doc, null, "stl"))!;
           const dv = new DataView(stl.buffer, stl.byteOffset, stl.byteLength), n = dv.getUint32(80, true);

@@ -5,7 +5,7 @@ import rhino3dmWasmUrl from "rhino3dm/rhino3dm.wasm?url";
 
 import { CadSession, DispatchResult, SessionCheckpoint } from "../core/command/session";
 import { createDefaultRegistry } from "../core/command/builtins";
-import { createDocument, materialForComponent } from "../core/document";
+import { createDocument, materialForComponent, isReferenceBody } from "../core/document";
 import { PlaneGCSSolver } from "../core/solver/planegcs";
 import { Evaluations } from "../core/recompute";
 import { resolveParameters } from "../core/parameters";
@@ -82,10 +82,11 @@ export const whenRebuilt = async (): Promise<void> => {
   }
 };
 
-/** What Save writes: a 3MF with a part per material when the model has more than one print material, else one STL. */
+/** What Save writes: a 3MF with a part per material when the model has more than one print material, else one STL.
+ *  A reference part (a stand-in, the board) isn't printed, so its material doesn't count. */
 export function printFormat(doc: CadDocument, solids: Record<string, SolidEval>): "stl" | "3mf" {
   const scope = resolveParameters(doc.parameters).scope;
-  const materials = new Set(Object.values(solids).filter((sol) => sol.mesh)
+  const materials = new Set(Object.values(solids).filter((sol) => sol.mesh && !isReferenceBody(doc, sol))
     .map((sol) => materialForComponent(doc, sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined, scope)?.id ?? ""));
   return materials.size > 1 ? "3mf" : "stl";
 }
@@ -1601,13 +1602,14 @@ export const useStore = create<AppState>((set, get) => {
         // the file must match the screen: commit an edit still waiting, then let the rebuild it starts finish
         await opts?.flush?.();
         await whenRebuilt();
+        // a reference part (a stand-in for what it holds, the board it hangs on) is context, not a part to print
+        const doc = get().session.doc;
         const meshes = Object.values(get().solids)
-          .filter((s) => s.mesh)
+          .filter((s) => s.mesh && !isReferenceBody(doc, s))
           .map((s) => ({ positions: s.mesh!.positions, indices: s.mesh!.indices }));
         if (!meshes.length) { set({ toast: { kind: "info", text: "Nothing to export yet." } }); return; }
         // A compliant mechanism prints unbent and in one piece, whatever pose the
         // sliders show; anything else exports as it stands.
-        const doc = get().session.doc;
         // two print materials (an embedded skeleton): a 3MF, one part each
         const format = printFormat(doc, get().solids);
         const multi = format === "3mf";

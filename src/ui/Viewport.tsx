@@ -9,7 +9,7 @@ import { extractRegions, loopPolygon, Region } from "../core/geometry/profile";
 import { resolveParameters } from "../core/parameters";
 import { hiddenIds, bodyVisible, sketchVisible } from "../core/visibility";
 import { compileExpr } from "../math/expr";
-import { materialForComponent } from "../core/document";
+import { materialForComponent, referenceOf } from "../core/document";
 import { materialSpec, woodFrameFromBounds } from "../viewport/material";
 import { ghostSolidViews, useGhost } from "../model/concepts/ghostVariant";
 import { ContextMenu } from "./ContextMenu";
@@ -97,6 +97,8 @@ function buildView(s: AppState): ViewData {
         material,
         woodFrame,
         ...(bodyVisible(doc, sol, hidden) ? {} : { ghost: true }),
+        // a reference part (a stand-in for what the design holds) drawn see-through, so the mechanism shows behind it
+        ...(referenceOf(doc, comp ?? doc.rootComponentId) === "ghost" ? { reference: true } : {}),
         // analysis data only applies to the mesh it was computed on
         ...(() => { const a = s.analysisData[sol.featureId]; return a && a.vertices * 3 === sol.mesh!.positions.length ? { curvature: a.curvature, combs: a.combs } : {}; })(),
       };

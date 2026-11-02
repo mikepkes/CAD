@@ -72,6 +72,12 @@ export interface Component {
   /** Instead of one material: the one a parameter picks, materials[value of `by`]
    *  (e.g. a named-choice "material" parameter). */
   materialChoice?: { by: string; materials: string[] };
+  /** A reference part: context for the design, not a part to make (the thing a holder grips, the board it
+   *  hangs on). Its bodies are kept out of print files and exports and out of the print checks, but they still
+   *  collide (a stand-in still rests on what it stands on). "ghost" draws them see-through, so a stand-in in
+   *  front of a mechanism doesn't hide it; "solid" draws them as usual (a wall behind). The components under
+   *  it are reference parts too. */
+  reference?: "ghost" | "solid";
 }
 
 /** How a feature combines with the running bodies (Fusion-style). */
@@ -985,6 +991,22 @@ export function materialForComponent(doc: CadDocument, componentId: string | und
   }
   return undefined;
 }
+
+/** Whether a component is a reference part (see Component.reference), and how it is drawn: its own flag,
+ *  else the nearest ancestor's. */
+export function referenceOf(doc: CadDocument, componentId: string | undefined): "ghost" | "solid" | undefined {
+  const seen = new Set<string>();
+  for (let id = componentId; id && !seen.has(id); id = doc.components[id]?.parentId ?? undefined) {
+    seen.add(id);
+    const r = doc.components[id]?.reference;
+    if (r) return r;
+  }
+  return undefined;
+}
+
+/** Whether a body (by its sketch's component; a sketch-less body is the root's) is a reference part's: not printed or exported. */
+export const isReferenceBody = (doc: CadDocument, body: { sketchId?: string }): boolean =>
+  !!referenceOf(doc, (body.sketchId && doc.sketches[body.sketchId]?.componentId) || doc.rootComponentId);
 
 /** A fresh, empty root component map (used when rebuilding derived state). */
 export function freshComponents(rootId: string): Record<string, Component> {
