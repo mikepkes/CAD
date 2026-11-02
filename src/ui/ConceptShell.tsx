@@ -97,6 +97,7 @@ export function ViewChips() {
   const motion = useStore((s) => s.motionStatus);
   const progress = useStore((s) => s.motionProgress);
   const result = useStore((s) => s.motionResult);
+  const ghost = useStore((s) => s.motionGhost);
   const doc = useStore((s) => s.session.doc);
   // the verdict belongs to the document it was checked on: an edit retires it
   const checkedOn = useRef<unknown>(null);
@@ -118,6 +119,8 @@ export function ViewChips() {
         <span className="view-chip" data-testid="motion-chip">
           <span>Motion study {Math.round(progress * 100)}%</span>
           <span className="view-chip-bar" aria-hidden="true"><span style={{ width: `${Math.round(progress * 100)}%` }} /></span>
+          <Button size="sm" on={ghost} title="Show the motion in the view as it is checked: see-through copies of the moving parts at the latest positions"
+            onClick={() => useStore.getState().setMotionGhost(!ghost)}>Show motion</Button>
           <Button size="sm" onClick={() => useStore.getState().cancelMotionStudy()}>Stop</Button>
         </span>
       )}

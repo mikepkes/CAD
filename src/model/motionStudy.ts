@@ -56,6 +56,9 @@ export interface MotionStudyOptions {
   /** The coarse pass came through clear (`checked` poses of `total`); the poses between follow. */
   onCoarseClear?: (checked: number, total: number) => void;
   cancelled?: () => boolean;
+  /** A pose is about to be checked: the parameter overrides that pose it (the swept joint at its angle, the
+   *  other drives at 0), so a viewer can draw the motion as it is checked (the viewport's motion ghosts). */
+  onPose?: (overrides: Record<string, string>) => void;
 }
 
 /** The order the poses are checked in: indices into an even `steps`-pose turn, a
@@ -112,6 +115,7 @@ export async function runMotionStudy(
     const angle = (360 * k) / steps;
     const overrides: Record<string, string> = { [j]: String(angle) };
     for (const other of joints) if (other !== j) overrides[other] = "0";
+    opts.onPose?.(overrides);
     let res;
     try {
       res = await backend.collide(doc, overrides);

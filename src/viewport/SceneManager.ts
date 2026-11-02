@@ -203,6 +203,10 @@ export class SceneManager {
   private datumMeshes = new Map<string, THREE.Mesh>();
   private datumGroup = new THREE.Group();
   private ghostGroup = new THREE.Group();
+  /** The motion study's ghosts (setMotionGhosts): the moving parts at the poses being checked, see-through. */
+  private motionGroup = new THREE.Group();
+  /** Their geometry, one per body, shared by every pose and kept while a study runs. */
+  private motionGeo = new Map<string, { src: Float32Array; geo: THREE.BufferGeometry; edges: THREE.BufferGeometry }>();
   private regionGroup = new THREE.Group();
   private previewSolidGroup = new THREE.Group();
   private planeGroup = new THREE.Group();
@@ -296,6 +300,7 @@ export class SceneManager {
     this.buildAxes();
     this.buildPlanes();
     this.scene.add(this.ghostGroup);
+    this.scene.add(this.motionGroup);
     this.scene.add(this.regionGroup);
     this.scene.add(this.previewSolidGroup);
     this.scene.add(this.planeGroup);
@@ -769,6 +774,7 @@ export class SceneManager {
 
   dispose() {
     this.disposed = true;
+    this.clearMotionGhosts();
     this.offTheme();
     for (const t of this.threadTexCache.values()) t.dispose();
     this.threadTexCache.clear();
@@ -1781,6 +1787,57 @@ export class SceneManager {
   /** The canvas the recorder reads VideoFrames from. */
   get recordCanvas(): HTMLCanvasElement { return this.renderer.domElement; }
 
+  /** Draw the motion study's poses as see-through ghosts of the parts they move (the reference-part look: each
+   *  body's own colour, translucent, not writing depth, its outline a deeper shade), over the live model, which
+   *  stays as built. `poses` place components (only those a pose moves); `strength` fades older poses. Each body's
+   *  geometry is made once and shared by every pose, so a new pose costs a few meshes. Empty `poses` clears them. */
+  setMotionGhosts(bodies: { solid: SolidView; componentId: string }[], buildWorld: Map<string, Rigid>, poses: { world: Map<string, Rigid>; strength: number }[]) {
+    this.clearGroup(this.motionGroup); // materials go; the shared geometry (userData.cached) stays
+    if (!poses.length) { this.clearMotionGhosts(); return; }
+    const clip = this.clipPlane ? [this.clipPlane] : null; // cut where the model is cut
+    const used = new Set<string>();
+    for (const pose of poses) {
+      bodies.forEach(({ solid, componentId }, i) => {
+        const W = pose.world.get(componentId);
+        if (!W) return;
+        const key = solid.id ?? `#${i}`;
+        let g = this.motionGeo.get(key);
+        if (!g || g.src !== solid.positions) {
+          if (g) { g.geo.dispose(); g.edges.dispose(); }
+          const geo = solidGeometry(solid); geo.userData.cached = true;
+          const edges = new THREE.BufferGeometry(); edges.setAttribute("position", new THREE.BufferAttribute(solid.edges, 3)); edges.userData.cached = true;
+          g = { src: solid.positions, geo, edges };
+          this.motionGeo.set(key, g);
+        }
+        used.add(key);
+        const B = buildWorld.get(componentId);
+        const delta = rigidMat(W).multiply((B ? rigidMat(B) : new THREE.Matrix4()).invert()); // posed = W · inv(Wbuild) · built
+        const mesh = new THREE.Mesh(g.geo, referenceMaterial(solid, false, clip, 0.3 * pose.strength));
+        const lines = new THREE.LineSegments(g.edges, referenceEdgeMaterial(solid, false, clip, 0.8 * pose.strength));
+        for (const o of [mesh, lines]) {
+          o.matrixAutoUpdate = false; o.matrix.copy(delta);
+          o.userData.ghost = true; o.userData.motionGhost = true; // drawn, never picked; the lens passes it by
+          o.renderOrder = 1; // over the solid parts, as the see-through parts are
+          this.motionGroup.add(o);
+        }
+      });
+    }
+    for (const [k, g] of this.motionGeo) if (!used.has(k)) { g.geo.dispose(); g.edges.dispose(); this.motionGeo.delete(k); }
+    this.invalidate();
+  }
+
+  /** Take the motion ghosts away (the study ended, was stopped, or the ghosts were switched off). */
+  clearMotionGhosts() {
+    if (!this.motionGroup.children.length && !this.motionGeo.size) return;
+    this.clearGroup(this.motionGroup);
+    for (const g of this.motionGeo.values()) { g.geo.dispose(); g.edges.dispose(); }
+    this.motionGeo.clear();
+    this.invalidate();
+  }
+
+  /** How many ghost meshes the motion study is showing (for tests and the demo). */
+  get motionGhostCount(): number { return this.motionGroup.children.filter((o) => (o as THREE.Mesh).isMesh).length; }
+
   /** End animation and restore the normal solids view. */
   endAnimation() {
     if (!this.animating) return;
@@ -2565,15 +2622,15 @@ function solidGeometry(s: { positions: Float32Array; normals: Float32Array; indi
 
 /** A see-through reference part (SolidView.reference): its own colour, translucent, not writing depth, so the
  *  parts behind it stay legible while it still reads as the thing being held. */
-function referenceMaterial(s: SolidView, faded: boolean, clip: THREE.Plane[] | null): THREE.MeshStandardMaterial {
+function referenceMaterial(s: SolidView, faded: boolean, clip: THREE.Plane[] | null, opacity = faded ? 0.12 : 0.22): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color: referenceColor(s), metalness: 0.05, roughness: 0.6, side: THREE.DoubleSide,
-    transparent: true, opacity: faded ? 0.12 : 0.22, depthWrite: false, clippingPlanes: clip ?? undefined,
+    transparent: true, opacity, depthWrite: false, clippingPlanes: clip ?? undefined,
   });
 }
 /** Its outline, in a deeper shade of its colour: what keeps a translucent part's shape readable. */
-function referenceEdgeMaterial(s: SolidView, faded: boolean, clip: THREE.Plane[] | null): THREE.LineBasicMaterial {
-  return new THREE.LineBasicMaterial({ color: referenceColor(s).multiplyScalar(0.6), transparent: true, opacity: faded ? 0.3 : 0.7, depthWrite: false, clippingPlanes: clip ?? undefined });
+function referenceEdgeMaterial(s: SolidView, faded: boolean, clip: THREE.Plane[] | null, opacity = faded ? 0.3 : 0.7): THREE.LineBasicMaterial {
+  return new THREE.LineBasicMaterial({ color: referenceColor(s).multiplyScalar(0.6), transparent: true, opacity, depthWrite: false, clippingPlanes: clip ?? undefined });
 }
 const referenceColor = (s: SolidView) => new THREE.Color(s.material?.color ?? COLORS().ghost);
 
