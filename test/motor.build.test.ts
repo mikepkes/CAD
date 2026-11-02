@@ -451,8 +451,8 @@ async function buildMotor(s: CadSession): Promise<void> {
   await circle(sk, "bx", 0, "cab/2");
   await solid(sk, "Cable, back", { from: "-Lb - cd - conn*pd - lead", dist: "lead", when: "1 - side" });
 
-  // the sketches only lay out the solids: hide them, so the motor shows clean
-  const hid = await s.setVisibility(Object.keys(s.doc.sketches), false);
+  // the sketches (and the tie-rods' datum planes) only lay out the solids: hide them, so the motor shows clean
+  const hid = await s.setVisibility([...Object.keys(s.doc.sketches), ...rows.values()], false);
   if (!hid.ok) throw new Error(hid.error);
 
   // the shaft turns about Z on its axis
@@ -593,6 +593,7 @@ describe("Motor", () => {
         const names = solids.map((b) => b.name);
         const servo = SIZES[i].servo;
         expect(names, at).toContain(servo ? "Case" : "Flange");
+        expect(Object.keys(motor.doc.planes).every((id) => motor.doc.hidden?.includes(id)), "datum planes hidden").toBe(true);
         expect(names, at).toContain("Shaft");
         expect(names.includes("Rear shaft"), at).toBe(!servo && !!set.ends);
         const stepper = isStepper(SIZES[i]);
