@@ -45,6 +45,8 @@ main { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 .spacer { flex: 1; }
 .rate { font: 500 13px var(--mono); }
 .timeline { position: relative; height: 40px; touch-action: none; cursor: pointer; }
+/* the player's controls are for pressing and dragging, not selecting: on iPad/iPhone a drag would select instead */
+.stage, .timeline, .transport, .chapters, .cuts { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .timeline .track { position: absolute; left: 0; right: 0; top: 17px; height: 6px; border-radius: 3px; background: var(--line); }
 .timeline .fill { position: absolute; left: 0; top: 17px; height: 6px; border-radius: 3px; background: var(--dim); }
 .timeline .tick { position: absolute; top: 12px; width: 1px; height: 16px; background: #5a5f72; }
@@ -232,7 +234,10 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
   const tl = $("timeline");
   const tAt = (e) => { const r = tl.getBoundingClientRect(); return ((e.clientX - r.left) / r.width) * (video.duration || 0); };
   let scrubbing = false;
-  tl.addEventListener("pointerdown", (e) => { if (state.drawing) return; scrubbing = true; tl.setPointerCapture(e.pointerId); video.pause(); seek(tAt(e)); });
+  tl.addEventListener("pointerdown", (e) => { if (state.drawing) return; e.preventDefault(); scrubbing = true; tl.setPointerCapture(e.pointerId); video.pause(); seek(tAt(e)); });
+  // Safari on iPad still starts a selection or a scroll from a touch unless the touch itself is claimed
+  tl.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+  tl.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
   tl.addEventListener("pointermove", (e) => { if (scrubbing) seek(tAt(e)); });
   tl.addEventListener("pointerup", () => (scrubbing = false)); tl.addEventListener("pointercancel", () => (scrubbing = false));
   tl.addEventListener("keydown", (e) => { if (e.key === "ArrowLeft") { seek(video.currentTime - 5); e.preventDefault(); } if (e.key === "ArrowRight") { seek(video.currentTime + 5); e.preventDefault(); } });
