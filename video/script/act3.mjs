@@ -95,20 +95,41 @@ export async function act3(d) {
   });
   if (hasExample("clockwork")) {
     await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm, and a Geneva drive", async () => {
-      // no turntable: the camera holds still and only the gears move (posed from the turn parameter, not rebuilt)
-      await d.api("aim", { dir: [0.2, -0.5, 1], ms: 1200, margin: 0.8 });
-      await d.api("poseSweep", "turn", 0, 360, 5200, { ease: false });
+      // no turntable: the camera holds still between shots and only the gears move (posed from the turn parameter,
+      // not rebuilt). Each shot lands on the word that names its mechanism, from the default voice's word timings
+      // (video/vo/af_heart/act3-clockwork.words.json, made by the sync check) when cached, else these.
+      const fallback = { so: 6.66, planets: 9.74, worm: 12.38, geneva: 16.36, steps: 18.64, flicks: 21.44, end: 25.88 };
+      let words = [];
+      try { words = JSON.parse(readFileSync(new URL("../vo/af_heart/act3-clockwork.words.json", import.meta.url), "utf8")).words ?? []; } catch {}
+      const said = (w) => (w === "end" ? words.at(-1)?.e : words.find((x) => x.w.toLowerCase().replace(/[^a-z]/g, "") === w)?.s) ?? fallback[w];
+      const t0 = d.timing.events.findLast((e) => e.kind === "beat")?.t ?? d.now(); // the line starts with the beat
+      let at = 0, lag = 0; // a sweep overruns its time a little: the next one starts that much sooner
+      const turn = async (to, s) => {
+        await d.api("poseSweep", "turn", at, to, Math.max(150, Math.round((t0 + s - d.now() - lag) * 1000)), { ease: false });
+        at = to; lag = Math.max(0, lag + d.now() - (t0 + s));
+      };
+      const fly = (opts) => { d.api("aim", opts).catch(() => {}); }; // the camera moves while the gears keep turning
+      const GENEVA = ["Geneva crank", "Geneva star"];
+      // the Geneva crank turns at -5/8 of the knob, so the star steps once per 576 deg of turn, mid-step at 288 (mod 576):
+      // one step on "steady motion into steps", the next on "flicks the star", the third on "until the next"
+      const tA = said("steps") - 0.45, tB = said("flicks") + 0.45, v = 576 / (tB - tA);
+      const tP = said("planets") - 1.2, tW = said("worm") - 0.7, tG = said("geneva") - 1.1, tEnd = said("end") + 0.4;
+      // the whole model, pushed in to fill the frame side to side (by the frame and gears: the rack slides as they turn)
+      fly({ dir: [0.2, -0.5, 1], frame: [0.07, 0.04, 0.9, 1.03], except: ["Rack"], ms: 1200 });
+      await turn(360, said("so"));
       d.pick("clockwork");
-      await d.api("poseSweep", "turn", 360, 540, 1800, { ease: false });
-      await d.api("aim", { dir: [0.15, -0.35, 1], box: await d.api("componentBox", ["Ring", "Planet 1", "Planet 2", "Planet 3", "Carrier"]), ms: 1400, margin: 0.85 });
-      await d.api("poseSweep", "turn", 540, 900, 4000, { ease: false });
-      await d.api("aim", { dir: [0.5, -0.6, 0.75], box: await d.api("componentBox", ["Cross shaft", "Wheel"]), ms: 1600, margin: 0.9 });
-      await d.api("poseSweep", "turn", 900, 1620, 2500, { ease: false });
-      await d.api("poseSweep", "turn", 1620, 2340, 2500, { ease: false });
-      // the crank turns at −5/8 of the knob: three steps of the star in 1728° of turn
-      await d.api("aim", { dir: [0.1, -0.55, 1], box: await d.api("componentBox", ["Geneva crank", "Geneva star"]), ms: 1500, margin: 1.05 });
-      await d.api("poseSweep", "turn", 2340, 3204, 3000, { ease: false });
-      await d.api("poseSweep", "turn", 3204, 4068, 3000, { ease: false });
+      await turn(540, tP);
+      // the planets in the ring, with the Geneva drive beside them nearer the middle
+      fly({ dir: [0.15, -0.35, 1], frame: [0.46, 0.28, 0.65, 0.7], parts: GENEVA, ms: 1100 });
+      await turn(540 + 100 * (tW - tP), tW);
+      // the worm and its wheel, the knob fast so the wheel visibly creeps
+      fly({ dir: [0.5, -0.6, 0.75], box: await d.api("componentBox", ["Cross shaft", "Wheel"]), ms: 1000, margin: 0.9 });
+      let k = 0;
+      while (288 + 576 * k - v * (tA - tG) < at + 1100) k++;
+      await turn(288 + 576 * k - v * (tA - tG), tG);
+      // the Geneva drive, turning steadily, through the whole of its sentence
+      fly({ dir: [0.1, -0.55, 1], frame: [0.25, 0.12, 0.75, 0.8], parts: GENEVA, ms: 1000 });
+      await turn(at + v * (tEnd - tG), tEnd);
     });
   } else d.note("no clockwork example yet: gears clip skipped");
   /**

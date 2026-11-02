@@ -189,20 +189,39 @@ const api = {
   frameAll() { window.dispatchEvent(new CustomEvent("vibecad:frame")); },
   /** The world box of the bodies in the named components (and their sub-components), at the built pose. */
   componentBox(names: string[]) {
-    const { session, solids } = useStore.getState(), doc = session.doc;
-    const ids = new Set<string>();
-    const add = (id: string) => { if (ids.has(id)) return; ids.add(id); for (const c of doc.components[id]?.children ?? []) add(c); };
-    for (const c of Object.values(doc.components)) if (names.includes(c.name)) add(c.id);
+    const solids = useStore.getState().solids;
     const lo = { x: Infinity, y: Infinity, z: Infinity }, hi = { x: -Infinity, y: -Infinity, z: -Infinity };
+    const ids = new Set(api.componentBodies(names));
     for (const b of Object.values(solids)) {
-      const cid = (b.sketchId ? doc.sketches[b.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
-      if (!b.mesh || !b.bounds || !ids.has(cid)) continue;
+      if (!b.bounds || !ids.has(b.featureId)) continue;
       for (const k of ["x", "y", "z"] as const) { lo[k] = Math.min(lo[k], b.bounds.min[k]); hi[k] = Math.max(hi[k], b.bounds.max[k]); }
     }
     return lo.x <= hi.x ? { min: lo, max: hi } : null;
   },
-  /** Fly the camera (over `ms`) to look along -`dir` at a box (or every body), filling the view with `margin` to spare. */
-  aim(opts: { dir: [number, number, number]; box?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | null; ms?: number; margin?: number }) {
+  /** The ids of the bodies in the named components (and their sub-components). */
+  componentBodies(names: string[]) {
+    const { session, solids } = useStore.getState(), doc = session.doc;
+    const ids = new Set<string>();
+    const add = (id: string) => { if (ids.has(id)) return; ids.add(id); for (const c of doc.components[id]?.children ?? []) add(c); };
+    for (const c of Object.values(doc.components)) if (names.includes(c.name)) add(c.id);
+    return Object.values(solids).flatMap((b) => {
+      const cid = (b.sketchId ? doc.sketches[b.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
+      return b.mesh && b.bounds && ids.has(cid) ? [b.featureId] : [];
+    });
+  },
+  /** Fly the camera (over `ms`) to look along -`dir` at a box (or every body), filling the view with `margin` to spare.
+   *  With `frame` ([left, top, right, bottom], fractions of the window), the drawn parts (or just the `parts`
+   *  components, or all but the `except` ones) are fitted into that rect by their silhouette instead, their tighter
+   *  side filling it. */
+  aim(opts: { dir: [number, number, number]; box?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | null; ms?: number; margin?: number; frame?: [number, number, number, number]; parts?: string[]; except?: string[] }) {
+    if (opts.frame) {
+      const [x, y, z] = opts.dir;
+      const out = new Set(opts.except ? api.componentBodies(opts.except) : []);
+      const ids = opts.parts ? new Set(api.componentBodies(opts.parts))
+        : opts.except ? new Set(Object.values(useStore.getState().solids).map((b) => b.featureId).filter((id) => !out.has(id))) : null;
+      getActiveScene()?.aimFit({ x, y, z }, opts.frame, (opts.ms ?? 1500) / 1000, ids);
+      return new Promise<void>((done) => setTimeout(done, (opts.ms ?? 1500) + 50));
+    }
     const all = api.bounds() as { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }[];
     const box = opts.box ?? all.reduce((a, b) => ({
       min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y), z: Math.min(a.min.z, b.min.z) },
