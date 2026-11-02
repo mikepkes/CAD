@@ -15,7 +15,7 @@ export async function preroll(d, title = TITLE) {
     await st.dispatch("parameter.setBounds", { name: "phone", min: 6, max: 16 });
     await D.standStep("box");
     const back = await D.standStep("sideSketch");
-    await D.standStep("backProfile", back);
+    await D.standStep("backProfile", back, D.STAND, "phone");
     await D.standStep("across", back);
     const lip = await D.standStep("sideSketch");
     await D.standStep("lipProfile", lip, D.STAND, "phone");
@@ -190,7 +190,7 @@ export async function act1(d) {
     await d.key("Escape");
   }, { lower: null });
 
-  let lipSketch = null;
+  let lipSketch = null, backSketch = null;
   const side = W(S.width / 2, -S.depth / 2 + 8, S.base / 2); // the base's +X side, clear of the plate and the lip
   await d.beat("raise-the-back", async () => {
     await d.api("closeCards");
@@ -198,6 +198,7 @@ export async function act1(d) {
     await d.shot("side");
     await d.ring("Sketch");
     await d.settle(300);
+    backSketch = await d.run(() => window.__vibecadDemo.store.getState().activeSketchId);
     await d.key("f"); await d.wait(900);
     const back = await d.run(() => window.__vibecadDemo.backOutline());
     // Look at frames the face, and the tall outline then reaches up under the panel switches at the top of the
@@ -248,14 +249,14 @@ export async function act1(d) {
       await d.key("Enter");
       await d.settle(300);
     }
-    // PUPPET: the phone parameter and the lip's dimensions go in by command (the inline dimension tool on a face sketch is not scripted yet).
+    // PUPPET: the phone parameter and the plate's and lip's dimensions go in by command (the inline dimension tool on a face sketch is not scripted yet).
     const lipBox = await d.run(() => window.__vibecadDemo.lipOutline());
     await d.moveTo(await d.rect(".panel-head", "Parameters"), 500);
     await d.run(async () => { const st = window.__vibecadDemo.store.getState(); await st.dispatch("parameter.add", { name: "phone", expression: "9" }); await st.dispatch("parameter.setBounds", { name: "phone", min: 6, max: 16 }); });
     await d.settle();
     const s = await d.world(W(S.width / 2, lipBox[1].y, lipBox[2].z)); await d.move(s.x, s.y, 600);
-    await d.lower("lip = phone + 2", "a dimension written as a formula");
-    await d.run(async (sid) => { await window.__vibecadDemo.lipDims(sid, "phone"); }, lipSketch);
+    await d.lower("slot = phone + 2", "the plate and the lip half of it either side; the lip phone + 1 tall");
+    await d.run(async ([b, l]) => { await window.__vibecadDemo.backDims(b, "phone"); await window.__vibecadDemo.lipDims(l, "phone"); }, [backSketch, lipSketch]);
     await d.settle();
     await d.key("Escape");
   });
