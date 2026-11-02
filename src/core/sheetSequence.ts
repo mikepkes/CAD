@@ -29,7 +29,7 @@
 import type { Pt } from "./geometry/profile";
 import { Rigid, IDENTITY, compose, invert, rotationAbout, applyPoint, applyVec, translation } from "../math/transform";
 import { meshFacets, meshHinges, dihedral, bendPath, hingeStiffness, fitPanel, type BendHinge } from "./sheetBend";
-import { polyArea, clipConvexPoly, inset, layerOrderOf, layerRanks, validateLayers, type LayerOrder, type LayerCrease } from "./sheetLayers";
+import { polyArea, clipConvexPoly, inset, layerOrderOf, layerRanks, validateLayers, panelPieces, type LayerOrder, type LayerCrease } from "./sheetLayers";
 export { polyArea } from "./sheetLayers";
 
 type V3 = { x: number; y: number; z: number };
@@ -1338,6 +1338,22 @@ export function sequenceClashes(seq: SheetSequence, angles: number[], margin: nu
   for (let i = 0; i < polys.length; i++) for (let j = i + 1; j < polys.length; j++) {
     if (polys[i].length < 3 || polys[j].length < 3) continue;
     if (facetsMeet(polys[i], T[i].z, polys[j], T[j].z, 1e-6)) out.push([i, j]);
+  }
+  return out;
+}
+
+/** Where panels folded all at once (a pop-up card at some opening) pass through each other, ignoring a band
+ *  `margin` wide along every edge: pairs of panel indices. */
+export function panelClashes(panels: { T: Rigid; segs: [Pt, Pt][] }[], margin: number): [number, number][] {
+  const { polys, panel } = panelPieces(panels);
+  const posed = polys.map((poly, k) => inset(poly, margin).map((p) => applyPoint(panels[panel[k]].T, at3(p))));
+  const out: [number, number][] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < posed.length; i++) for (let j = i + 1; j < posed.length; j++) {
+    if (panel[i] === panel[j] || posed[i].length < 3 || posed[j].length < 3) continue;
+    const key = `${panel[i]},${panel[j]}`;
+    if (seen.has(key)) continue;
+    if (facetsMeet(posed[i], panels[panel[i]].T.z, posed[j], panels[panel[j]].T.z, 1e-6)) { seen.add(key); out.push([panel[i], panel[j]]); }
   }
   return out;
 }

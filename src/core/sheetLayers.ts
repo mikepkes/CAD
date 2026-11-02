@@ -200,7 +200,8 @@ export function validateLayers(polys: Pt[][], T: Rigid[], order: LayerOrder, cre
     // the creases of this family: tacos (folded flat, the facets on each other) and tortillas (unfolded: coplanar)
     const segOf = (c: LayerCrease) => [c.a, c.b].map((q) => { const w = applyPoint(T[c.facets[0]], at3(q)); return { x: dot3(w, fam.u), y: dot3(w, fam.v) }; }) as [Pt, Pt];
     const tacos = creases.filter((c) => inFam.has(c.facets[0]) && inFam.has(c.facets[1]) && c.made && stacked(c.facets[0], c.facets[1]) != null).map((c) => ({ c, seg: segOf(c) }));
-    const tortillas = creases.filter((c) => { const [A, B] = c.facets; if (!inFam.has(A) || !inFam.has(B)) return false; const q = mul2(add2(...segOf(c)), 0.5); return Math.abs(hAt(A, q) - hAt(B, q)) < 0.25 * gap; }).map((c) => ({ c, seg: segOf(c) }));
+    // (a tortilla's two facets face the same way in one plane; a fold's meet at the crease but face apart)
+    const tortillas = creases.filter((c) => { const [A, B] = c.facets; if (!inFam.has(A) || !inFam.has(B) || dot3(T[A].z, T[B].z) < Math.cos(rad1)) return false; const q = mul2(add2(...segOf(c)), 0.5); return Math.abs(hAt(A, q) - hAt(B, q)) < 0.25 * gap; }).map((c) => ({ c, seg: segOf(c) }));
     /** x's plane between a's and b's, over the point q. */
     const between = (x: number, a: number, b: number, q: Pt) => (hAt(x, q) - hAt(a, q)) * (hAt(x, q) - hAt(b, q)) < 0;
     /** The crease segment's middle lies inside the facet's outline (in the family plane). */
@@ -259,6 +260,107 @@ export function sideMap(order: LayerOrder, T: Rigid[]): Map<string, number> {
     side.set(`${b},${a}`, dot3(T[b].z, n) > 0 ? -1 : 1);
   }
   return side;
+}
+
+/** The convex hull of points (Andrew's monotone chain), CCW. */
+export function convexHull(pts: Pt[]): Pt[] {
+  const P = [...pts].sort((a, b) => a.x - b.x || a.y - b.y).filter((p, i, all) => !i || Math.abs(p.x - all[i - 1].x) > 1e-12 || Math.abs(p.y - all[i - 1].y) > 1e-12);
+  if (P.length < 3) return P;
+  const cross = (o: Pt, a: Pt, b: Pt) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: Pt[] = [], upper: Pt[] = [];
+  for (const p of P) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); }
+  for (const p of [...P].reverse()) { while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+/** A panel's outline from its unordered segments: the loop enclosing the most area (a slit's slot is a notch in
+ *  it; a hole's loop is dropped), CCW. */
+export function panelOutline(segs: [Pt, Pt][]): Pt[] {
+  const pts = segs.flat(), scale = Math.max(1, ...pts.map((p) => Math.max(Math.abs(p.x), Math.abs(p.y)))), tol = 1e-6 * scale;
+  const verts: Pt[] = [];
+  const id = (p: Pt) => { let k = verts.findIndex((v) => Math.abs(v.x - p.x) <= tol && Math.abs(v.y - p.y) <= tol); if (k < 0) { k = verts.length; verts.push(p); } return k; };
+  const edges = segs.map(([a, b]) => [id(a), id(b)]).filter(([a, b]) => a !== b);
+  const nbr = new Map<number, number[]>();
+  for (const [a, b] of edges) { nbr.set(a, [...(nbr.get(a) ?? []), b]); nbr.set(b, [...(nbr.get(b) ?? []), a]); }
+  const used = new Set<string>(), loops: Pt[][] = [];
+  const key = (a: number, b: number) => (a < b ? `${a},${b}` : `${b},${a}`);
+  for (const [a0, b0] of edges) {
+    if (used.has(key(a0, b0))) continue;
+    const ring = [a0];
+    let prev = a0, cur = b0;
+    used.add(key(a0, b0));
+    for (let guard = 0; guard < edges.length && cur !== a0; guard++) {
+      ring.push(cur);
+      const next = (nbr.get(cur) ?? []).find((n) => n !== prev && !used.has(key(cur, n)));
+      if (next == null) break;
+      used.add(key(cur, next));
+      prev = cur; cur = next;
+    }
+    if (ring.length >= 3) loops.push(ring.map((k) => verts[k]));
+  }
+  if (!loops.length) return convexHull(pts);
+  const best = loops.reduce((a, b) => (Math.abs(polyArea(b)) > Math.abs(polyArea(a)) ? b : a));
+  const clean = best.filter((p, i, all) => { const q = all[(i + all.length - 1) % all.length], r = all[(i + 1) % all.length]; const e1 = sub2(p, q), e2 = sub2(r, p); return Math.abs(e1.x * e2.y - e1.y * e2.x) > tol * (len2(e1) + len2(e2)); });
+  return polyArea(clean) < 0 ? clean.reverse() : clean;
+}
+
+/** A simple polygon (CCW, maybe concave) cut into triangles (ear clipping). */
+export function earClip(poly: Pt[]): Pt[][] {
+  const out: Pt[][] = [];
+  const ring = [...poly];
+  const cross = (o: Pt, a: Pt, b: Pt) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  let guard = 0;
+  while (ring.length > 3 && guard++ < 10000) {
+    let cut = false;
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[(i + ring.length - 1) % ring.length], b = ring[i], c = ring[(i + 1) % ring.length];
+      if (cross(a, b, c) <= 1e-12) continue; // reflex (or flat)
+      const tri = [a, b, c];
+      const inside = ring.some((p) => p !== a && p !== b && p !== c && inConvex(p, tri, -1e-9));
+      if (inside) continue;
+      out.push(tri); ring.splice(i, 1); cut = true;
+      break;
+    }
+    if (!cut) break;
+  }
+  if (ring.length === 3) out.push([...ring]);
+  return out;
+}
+
+/** Panels of a sheet folded all at once (rigid origami, a pop-up card) as convex pieces: each panel's outline cut
+ *  into triangles, with the panel each piece belongs to. */
+export function panelPieces(panels: { segs: [Pt, Pt][] }[]): { polys: Pt[][]; panel: number[] } {
+  const polys: Pt[][] = [], panel: number[] = [];
+  panels.forEach((p, k) => { for (const t of earClip(panelOutline(p.segs))) { polys.push(t); panel.push(k); } });
+  return { polys, panel };
+}
+
+/** Check the layer order of panels folded flat (a pop-up card closed): where they lie on each other, which is on
+ *  which, and whether that stack is one paper can make (Flat-Folder's conditions). Creases are the stretches two
+ *  panels' outlines share; a crease is folded where its panels lie on each other. Returns the violations. */
+export function checkPanelLayers(panels: { T: Rigid; segs: [Pt, Pt][] }[], gap: number, foldName = "closed"): string[] {
+  const { polys, panel } = panelPieces(panels), T = panel.map((k) => panels[k].T);
+  const scale = Math.max(1, ...polys.flat().map((p) => Math.max(Math.abs(p.x), Math.abs(p.y))));
+  const order = layerOrderOf(polys, T, gap, scale, 0);
+  const stacked = new Set(order.above.map(([a, b]) => `${Math.min(panel[a], panel[b])},${Math.max(panel[a], panel[b])}`));
+  const creases: LayerCrease[] = [];
+  const tol = 1e-5 * scale;
+  const outlines = panels.map((p) => panelOutline(p.segs));
+  for (let i = 0; i < polys.length; i++) for (let j = i + 1; j < polys.length; j++) {
+    const pi = panel[i], pj = panel[j];
+    const A = polys[i], B = polys[j];
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+      const a0 = A[a], a1 = A[(a + 1) % 3], b0 = B[b], b1 = B[(b + 1) % 3];
+      const e = sub2(a1, a0), L = len2(e);
+      if (L < tol) continue;
+      const u = mul2(e, 1 / L), nn = { x: -u.y, y: u.x };
+      if (Math.abs(dot2(sub2(b0, a0), nn)) > tol || Math.abs(dot2(sub2(b1, a0), nn)) > tol) continue;
+      const s0 = dot2(sub2(b0, a0), u), s1 = dot2(sub2(b1, a0), u), lo = Math.max(0, Math.min(s0, s1)), hi = Math.min(L, Math.max(s0, s1));
+      if (hi - lo <= tol) continue;
+      creases.push({ facets: [i, j], a: add2(a0, mul2(u, lo)), b: add2(a0, mul2(u, hi)), fold: pi === pj ? "(within a panel)" : `between the panels at ${fmtPt(centroid(outlines[pi]))} and ${fmtPt(centroid(outlines[pj]))}`, made: pi !== pj && stacked.has(`${Math.min(pi, pj)},${Math.max(pi, pj)}`) });
+    }
+  }
+  return validateLayers(polys, T, order, creases, gap, scale, foldName);
 }
 
 /** Inside (or on, within tol) a convex polygon (either orientation). */

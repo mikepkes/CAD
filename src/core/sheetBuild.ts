@@ -26,8 +26,10 @@ export function buildSheet(s: SheetState): SheetBuild {
       return { shape, state: { ...s, edited: false }, pattern: pattern(s.folds.map((f) => line(f, f.angle ?? s.angles?.[f.id] ?? 0))), warnings: [] };
     }
 
-    // folds that turn: bends (a zone of the blank) or creases (a hinge line)
-    const active = s.folds.filter((f) => f.angle == null || Math.abs(f.angle) > 1e-9);
+    // folds that turn: bends (a zone of the blank) or creases (a hinge line); with every driven fold at 0 (a pop-up
+    // card open flat) the solved creases lie flat too, so nothing folds
+    const driven = s.folds.some((f) => f.angle != null && Math.abs(f.angle) > 1e-9);
+    const active = driven ? s.folds.filter((f) => f.angle == null || Math.abs(f.angle) > 1e-9) : [];
     const strips: Strip[] = [], stripFold: number[] = [], creases: { a: typeof s.fixed; b: typeof s.fixed }[] = [];
     active.forEach((f, i) => {
       if (f.radius > 0 && f.angle != null) {

@@ -27,6 +27,7 @@ export const EXAMPLES: ExampleInfo[] = [
   { name: "origami", title: "Paper airplane", blurb: "A dart folded from a sheet, step by step" },
   { name: "masu", title: "Masu box", blurb: "The origami box, folded from one square, its corners tucking in" },
   { name: "crane", title: "Paper crane", blurb: "The traditional crane: a square base, petal folds, neck and tail" },
+  { name: "popup-box", title: "Pop-up card: box fold", blurb: "A card with a box fold cut into it, stepping up as it opens" },
   { name: "scissor", title: "Scissor lift", blurb: "A scissor linkage driven by its stage count" },
   { name: "scissor-jointed", title: "Jointed scissor", blurb: "The scissor as a pattern of jointed stages" },
 ];

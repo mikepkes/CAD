@@ -1859,6 +1859,7 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
         if (body.sheet?.pattern) {
           const sh = body.sheet;
           row.sheet = { thickness: sh.thickness, kFactor: sh.kFactor, unfolded: !!sh.unfolded, ...(sh.edited && !sh.unfolded ? { stale: true } : {}), angles: Object.fromEntries(Object.entries(sh.angles ?? {}).map(([k, v]) => [k, Math.round(v * 180 / Math.PI * 1e6) / 1e6])), edges: sh.edges.map((e) => e.name), flat: sh.pattern! };
+          if (sh.panels && !sh.seq && !(sh.edited && !sh.unfolded)) { row.sheet.panels = sh.panels; row.sheet.frame = sh.frame; }
           if (sh.seq && !(sh.edited && !sh.unfolded)) {
             const progress = sh.unfolded ? 0 : sh.progress;
             row.sheet.sequence = { plan: sh.seq, ...(progress != null ? { progress } : {}), frame: sh.frame };
