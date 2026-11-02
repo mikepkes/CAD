@@ -53,67 +53,22 @@ exports[`bundled examples > public/examples/gyroscope.json > replays, builds on 
 exports[`bundled examples > public/examples/motor.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
-    "body": "ext210",
+    "body": "ext1655",
     "max": [
-      21.2,
-      21.2,
-      2,
+      7.3,
+      7.3,
+      -45.3,
     ],
     "min": [
-      -21.1,
-      -21.1,
-      -8,
+      -7.3,
+      -7.3,
+      -47.6,
     ],
-    "name": "Flange",
-    "volume": 14244.2,
+    "name": "Rear bearing",
+    "volume": 319,
   },
   {
-    "body": "ext260",
-    "max": [
-      21.2,
-      21.2,
-      0,
-    ],
-    "min": [
-      -21.1,
-      -21.1,
-      -0.4,
-    ],
-    "name": "Machined face",
-    "volume": 546,
-  },
-  {
-    "body": "ext370",
-    "max": [
-      21.2,
-      21.2,
-      -8,
-    ],
-    "min": [
-      -21.1,
-      -21.1,
-      -39,
-    ],
-    "name": "Stator",
-    "volume": 53918,
-  },
-  {
-    "body": "ext408",
-    "max": [
-      21.2,
-      21.2,
-      -39,
-    ],
-    "min": [
-      -21.1,
-      -21.1,
-      -48,
-    ],
-    "name": "Rear cap",
-    "volume": 15883.1,
-  },
-  {
-    "body": "ext524",
+    "body": "ext1807",
     "max": [
       2.5,
       2.5,
@@ -128,7 +83,22 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 415.1,
   },
   {
-    "body": "ext735",
+    "body": "ext1918",
+    "max": [
+      2.5,
+      2.5,
+      -42.6,
+    ],
+    "min": [
+      -2.5,
+      -2.5,
+      -47.8,
+    ],
+    "name": "Shaft end",
+    "volume": 102.1,
+  },
+  {
+    "body": "ext2030",
     "max": [
       -21.1,
       6.5,
@@ -143,7 +113,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 321.7,
   },
   {
-    "body": "ext747",
+    "body": "ext2042",
     "max": [
       -25.6,
       2,
@@ -156,6 +126,81 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     ],
     "name": "Cable, side",
     "volume": 351.9,
+  },
+  {
+    "body": "ext252",
+    "max": [
+      21.2,
+      21.2,
+      2,
+    ],
+    "min": [
+      -21.1,
+      -21.1,
+      -8,
+    ],
+    "name": "Flange",
+    "volume": 14244.2,
+  },
+  {
+    "body": "ext302",
+    "max": [
+      21.2,
+      21.2,
+      0,
+    ],
+    "min": [
+      -21.1,
+      -21.1,
+      -0.4,
+    ],
+    "name": "Machined face",
+    "volume": 542.6,
+  },
+  {
+    "body": "ext505",
+    "max": [
+      21.2,
+      21.2,
+      -8,
+    ],
+    "min": [
+      -21.1,
+      -21.1,
+      -39,
+    ],
+    "name": "Stator",
+    "volume": 53918,
+  },
+  {
+    "body": "ext543",
+    "max": [
+      21.2,
+      21.2,
+      -39,
+    ],
+    "min": [
+      -21.1,
+      -21.1,
+      -48,
+    ],
+    "name": "Rear cap",
+    "volume": 15091.8,
+  },
+  {
+    "body": "rev605",
+    "max": [
+      18.3,
+      18.3,
+      -46,
+    ],
+    "min": [
+      -18.3,
+      -18.3,
+      -47.6,
+    ],
+    "name": "Screw head, back",
+    "volume": 104.3,
   },
 ]
 `;
