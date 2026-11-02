@@ -221,8 +221,9 @@ writeFileSync(join(out, "subtitles.srt"), captions.map((c, i) => `${i + 1}\n${tc
 const voCol = (c) => (c.clips.length ? `${(Math.max(...c.clips.map((k) => k.ms)) / 1000).toFixed(1)} s` : "–");
 writeFileSync(join(out, "cue-sheet.md"), `# Voiceover cue sheet: ${video.title} (${run})\n\nRecord each line to picture (ADR), or use the synthesised voiceover (video/vo.mjs), whose clips start at "In". Times are in the cut; the picture holds about half a second of settled tail after each line. "VO" is the longest synthesised clip of the line.\n\n| # | Act | Beat | In | Length | VO | Line |\n|---|---|---|---|---|---|---|\n${cues.map((c, i) => `| ${i + 1} | ${c.act} | ${c.id} | ${tc(c.from, ".").slice(3, 9)} | ${((c.to - c.from) / FPS).toFixed(1)} s | ${voCol(c)} | ${c.text} |`).join("\n")}\n\nTotal: ${tc(outFrame, ".").slice(3, 9)}\n`);
 const audio = mixes.length ? { file: `${outUrl}/vo/${mixes[0].voice.id}.wav`, title: mixes[0].voice.title, bitrate: preview ? 48000 : 128000 } : null;
-// the preview's video bitrate: what keeps the file under PREVIEW_MB (a phone's attachment limit) at this length
-const PREVIEW_MB = 28;
+// the preview's video bitrate: what keeps the file under PREVIEW_MB at this length — a phone's attachment limit, and
+// the review page's (video/review/review.html) 20 MiB upload limit
+const PREVIEW_MB = 19;
 const previewBitrate = Math.min(550000, Math.floor((PREVIEW_MB * 8e6) / (outFrame / FPS) - (audio?.bitrate ?? 0) - 8000));
 writeFileSync(join(out, "plan.json"), JSON.stringify({ fps: FPS, width: 2560, height: 1440, takes: takeFiles, frames, chyrons, captions, audio }));
 console.log(`plan: ${outFrame} frames (${tc(outFrame, ".")}), ${captions.length} captions, ${chyrons.length} chyrons`);
