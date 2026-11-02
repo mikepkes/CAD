@@ -3,8 +3,8 @@
 Everything that makes the two VibeCAD videos lives here, so a take can be
 re-shot after any change to the app by re-running two commands:
 
-- **The demo** (`vibecad-demo.mp4`): what VibeCAD can do. The montage, Act 0 (the title, the phone stand
-  dragged in one move, where to get it) and Act 3 (the showcase: the bundled examples, then Claude). It ends by
+- **The demo** (`vibecad-demo.mp4`): what VibeCAD can do. The montage, Act 0 (what VibeCAD is, said over
+  the title, and where to get it) and Act 3 (the showcase: the bundled examples, then Claude). It ends by
   pointing to the tutorial.
 - **The tutorial** (`vibecad-tutorial.mp4`): how to model one thing, a parametric phone stand, from a blank
   page. Act 1 (shape it by hand, make it parametric) and Act 2 (round it, rules, materials, checks, export). It
@@ -43,7 +43,7 @@ minute of takes).
 | The running project | `src/demo/stand.ts` | The phone stand as data and steps; `test/tutorialStand.test.ts` builds it in Node so a change that breaks the video's model fails a test first. |
 | Mock agent | `src/demo/agentReplay.ts`, `video/mock/agent-*.json` | Replays a cached Claude response through the real agent loop: the text streams into the panel and the cached tool calls run as real commands. `test/videoMocks.test.ts` checks every cached call still builds. `recordAgent(prompt)` on the demo API records a real run (with an API key) to refresh a cache. |
 | Director | `video/lib/director.mjs` | Opens Chromium (Playwright) at 1440×810 points × 16/9 = 2560×1440 pixels, drives the app with real mouse and keyboard input, captures every painted frame over CDP (about 57 fps), pads each beat until its line has been said (the longest of its voiceover clips + 0.5 s, or the read time at 150 words a minute without clips), and logs spans to speed up (`fast`) or remove (`cut`). |
-| Playback script | `video/script/act0.mjs` … `act3.mjs` | The beats: what happens. Steps marked `PUPPET` go through a command instead of the UI. Act 0 (the demo's opening) reuses Act 1's finished stand and cold open. |
+| Playback script | `video/script/act0.mjs` … `act3.mjs` | The beats: what happens. Steps marked `PUPPET` go through a command instead of the UI. |
 | Narration | `video/script/lines.mjs` | Every beat's spoken line by act and beat id (and the montage's), each video's acts and chapters, read by the director, the voiceover and the edit. |
 | Voiceover | `video/vo.mjs`, `video/lib/voices.mjs`, `video/tts/synth.py` | One clip per line per voice in `video/vo/<voice>/`, cached by a hash of the line and the voice. See NOTES.md, "Voiceover". |
 | Recorder | `video/record.mjs` | One take per act, a still per beat in `beats/` for review, `VIDEO_DEBUG=1` for more stills, `--dry` to run without capturing. |

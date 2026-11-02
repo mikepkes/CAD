@@ -85,9 +85,9 @@ The one video splits in two, because a showcase and a focused tutorial serve dif
 whether VibeCAD is worth trying wants breadth fast; someone learning wants one model, start to finish, without
 detours.
 
-- **Demo** (Acts 0 and 3, with the montage): a new Act 0 after the montage. The VibeCAD title, then "what it is":
-  the finished phone stand turned and its phone thickness dragged (Act 1's cold open, shared), then where to get it,
-  then straight into the showcase. The outro now points to the tutorial.
+- **Demo** (Acts 0 and 3, with the montage): a new Act 0 after the montage. "What it is" said over the VibeCAD
+  title (the gyroscope turning, dimmed, behind it), then where to get it, then straight into the showcase. The
+  phone stand stays out of the demo: it's the tutorial's. The outro now points to the tutorial.
 - **Tutorial** (Acts 1 and 2): titled "Model a phone stand". No montage; the cold open says what you'll build and the
   route (by hand, parametric, then rounded, checked, exported). Act 2 gains a `wrap-up` beat: the finished stand
   turning, then an end card pointing to the demo.
