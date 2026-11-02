@@ -1,7 +1,7 @@
 // Folding validation videos: short silent clips of paper models folding in the app, step by step, with a
 // caption per step, for checking that a model folds the way it should. No narration (unlike record.mjs).
 //
-//   node video/folding.mjs [--scenes crane,masu,popup-box] [--url http://127.0.0.1:5199] [--run NAME]
+//   node video/folding.mjs [--scenes crane,masu,popup-box,popup-card,reverse-fold][--url http://127.0.0.1:5199] [--run NAME]
 //                          [--gl egl|swiftshader] [--headed] [--no-encode] [--encode-only]
 //
 // Needs the dev server (`npx vite --port 5199 --host 127.0.0.1`). Each scene opens the example in customize mode
@@ -42,7 +42,7 @@ export const SCENES = {
   crane: {
     example: "crane", title: "Paper crane", intro: "Folded from a square, step by step", param: "fold", mode: "pose",
     moves: stepMoves(["Square base", "Petal fold", "Turn over", "Petal fold behind", "Narrow the legs", "Turn over",
-      "Narrow behind", "Inside reverse fold: neck and tail", "The head", "Wings down", "Stand up"], 3000),
+      "Narrow behind", "Inside reverse folds: neck and tail", "The head", "Wings down", "Stand up"], 3000),
     stills: [-1, 0, 1, 3, 4, 7, 8],
   },
   masu: {
@@ -55,12 +55,37 @@ export const SCENES = {
     example: "popup-box", title: "Pop-up box card", intro: "One open slider, 0° to 180°", param: "open", mode: "rebuild",
     stepDeg: 1, follow: false, margin: 1.1, dir: [1.1, -1.5, 1.1], panel: true,
     moves: [
-      { title: "Opening", from: 0, to: 45, ms: 3000 }, { title: "Opening", from: 45, to: 90, ms: 3000 },
+      // closed is 1°, not 0°: at 0° the two halves coincide and z-fight
+      { title: "Opening", from: 1, to: 45, ms: 3000 }, { title: "Opening", from: 45, to: 90, ms: 3000 },
       { title: "Opening", from: 90, to: 135, ms: 3000 }, { title: "Opening", from: 135, to: 180, ms: 3000 },
-      { title: "Closing", from: 180, to: 90, ms: 6000 }, { title: "Closing", from: 90, to: 0, ms: 6000 },
-      { title: "Half open", sub: "90°", from: 0, to: 90, ms: 6000 },
+      { title: "Closing", from: 180, to: 90, ms: 6000 }, { title: "Closing", from: 90, to: 1, ms: 6000 },
+      { title: "Half open", sub: "90°", from: 1, to: 90, ms: 6000 },
     ],
     stills: [-1, 0, 1, 2, 3, 4, 5],
+  },
+  "popup-card": {
+    example: "popup-card", title: "Pop-up greeting card", intro: "One open slider, 0° to 180°", param: "open", mode: "rebuild",
+    // a still camera on the inside of the card (it rebuilds at ~6/s, so the take runs ~90 s: a turntable would
+    // carry the camera round behind the card)
+    stepDeg: 1, follow: false, margin: 1.1, dir: [-1.4, -0.9, 1.0], panel: true, spin: 0,
+    moves: [
+      ...[[1, 45], [45, 90], [90, 135], [135, 180]].map(([from, to]) => ({ title: "Opening", sub: "A figure rises on its box, a step within a step, a box at the foot", from, to, ms: 3500 })),
+      ...[[180, 90], [90, 1]].map(([from, to]) => ({ title: "Closing", sub: "It all folds flat inside", from, to, ms: 6000 })),
+      { title: "Half open", sub: "90°", from: 1, to: 90, ms: 6000 },
+    ],
+    stills: [-1, 0, 1, 3, 4, 5],
+  },
+  // a close-up of the crane's step 8 (and 9): the camera frames what moves (`focus`: the box of the sheet's
+  // vertices that travel more than `mm` from `from` to `to`, by the fold plan; here the point that becomes the neck,
+  // nearer the camera, which the head then folds on) and stays close at the end
+  "reverse-fold": {
+    example: "crane", title: "Inside reverse fold", intro: "The crane's neck and tail, close up", param: "fold", mode: "pose",
+    focus: { from: 7, to: 8, mm: 10, side: ["y", -1] }, margin: 0.65, dir: [-0.6, -1.5, 0.8], holdMs: 2000, close: true, spin: 0, endSpin: 8,
+    moves: [
+      { title: "Inside reverse fold", sub: "The point folds back on itself through every layer and tucks between the body's layers", from: 7, to: 8, ms: 8000, stillsAt: [0.35, 0.6] },
+      { title: "The head", sub: "The same fold, smaller", from: 8, to: 9, ms: 5000, stillsAt: [0.5] },
+    ],
+    stills: [-1, 0, 1],
   },
 };
 
@@ -95,6 +120,34 @@ const setParam = (page, name, value) => page.evaluate(async ([n, v]) => {
   await d.store.getState().setParameterExpr(n, String(v));
   await d.settle(0, 60000, false);
 }, [name, value]);
+/** The box of a folded sheet's vertices that travel more than `mm` while `name` goes `from` → `to` (the poses the
+ *  demo layer's poseSweep draws, from each sheet's fold plan), or null if none does; with `side` ([axis, ±1]),
+ *  only those that end up on that side of the axis's zero (one of two points that swing apart). */
+const movingBox = (page, { param: name, from, to, mm = 10, side = null }) => page.evaluate(async ([name, from, to, mm, side]) => {
+  const [{ sequenceAngles, sequenceMesh }, { resolveParameters }, { compileExpr }] = await Promise.all([
+    import("/src/core/sheetSequence.ts"), import("/src/core/parameters.ts"), import("/src/math/expr.ts")]);
+  const st = window.__vibecadDemo.store.getState(), doc = st.session.doc;
+  const values = Array.from({ length: 13 }, (_, i) => from + ((to - from) * i) / 12);
+  const meshes = values.map((v) => {
+    const scope = resolveParameters(doc.parameters.map((q) => (q.name === name ? { ...q, expr: String(v) } : q))).scope;
+    return Object.values(st.solids).flatMap((sol) => {
+      const f = doc.features[sol.featureId], seq = sol.sheet?.sequence;
+      if (f?.kind !== "sheet" || !f.progressExpr || !seq) return [];
+      return [sequenceMesh(seq.plan, sequenceAngles(seq.plan, compileExpr(f.progressExpr).eval(scope)), seq.frame).positions];
+    });
+  });
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let b = 0; b < meshes[0].length; b++) {
+    const ps = meshes.map((m) => m[b]);
+    if (ps.some((p) => p.length !== ps[0].length)) return null;
+    for (let i = 0; i < ps[0].length; i += 3) {
+      const far = Math.max(...ps.map((p) => Math.hypot(p[i] - ps[0][i], p[i + 1] - ps[0][i + 1], p[i + 2] - ps[0][i + 2])));
+      if (far < mm || (side && ps.at(-1)[i + "xyz".indexOf(side[0])] * side[1] < 2)) continue;
+      for (const p of ps) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], p[i + a]); hi[a] = Math.max(hi[a], p[i + a]); }
+    }
+  }
+  return lo[0] <= hi[0] ? { min: { x: lo[0], y: lo[1], z: lo[2] }, max: { x: hi[0], y: hi[1], z: hi[2] } } : null;
+}, [name, from, to, mm, side]);
 const union = (boxes) => boxes.flat().reduce((a, b) => ({
   min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y), z: Math.min(a.min.z, b.min.z) },
   max: { x: Math.max(a.max.x, b.max.x), y: Math.max(a.max.y, b.max.y), z: Math.max(a.max.z, b.max.z) },
@@ -122,12 +175,16 @@ async function shoot(browser, key) {
   const boxAt = {};
   for (const v of values) { await setParam(page, sc.param, v); boxAt[v] = union(await demo(page, "bounds")); }
   const all = union(Object.values(boxAt));
-  const boxOf = (m) => (sc.follow === false ? all : union([boxAt[m.from], boxAt[m.to]]));
   const first = sc.moves[0].from;
+  let focus = null;
   if (sc.mode === "pose") {
     await setParam(page, sc.param, built); // the built model is the finished one; the sweeps pose it
+    if (sc.focus) focus = await movingBox(page, { param: sc.param, ...sc.focus });
+    if (sc.focus && !focus) timing.notes.push("focus: nothing moves; framing the model");
+    if (focus) timing.focus = focus;
     await demo(page, "poseSweep", sc.param, first, first, 1);
   } else await setParam(page, sc.param, first);
+  const boxOf = (m) => focus ?? (sc.follow === false ? all : union([boxAt[m.from], boxAt[m.to]]));
   const dir = sc.dir ?? [1, -1.4, 1.1];
   const margin = sc.margin ?? 1.05; // the box's bounding sphere: less crops a long part seen close up in perspective
   await demo(page, "aim", { dir, box: boxOf(sc.moves[0]), ms: 400, margin });
@@ -173,8 +230,12 @@ async function shoot(browser, key) {
       else if (!prev || prev.title !== m.title) await sleep(500);
       const start = now();
       let rate = null;
-      if (sc.mode === "pose") await demo(page, "poseSweep", sc.param, m.from, m.to, m.ms);
-      else {
+      if (sc.mode === "pose") {
+        // stills on the way (`stillsAt`: fractions of the move's time) while the sweep runs in the page
+        const sweep = demo(page, "poseSweep", sc.param, m.from, m.to, m.ms);
+        for (const f of m.stillsAt ?? []) { await sleep(Math.max(0, start + (f * m.ms) / 1000 - now()) * 1000); await still(`${m.title}-${Math.round(f * 100)}pc`); }
+        await sweep;
+      } else {
         // a rebuild per step, paced to take `ms` at the least; the in-page loop saves a round trip per step
         rate = await page.evaluate(async ([name, from, to, stepDeg, ms]) => {
           const d = window.__vibecadDemo, n = Math.max(1, Math.round(Math.abs(to - from) / stepDeg)), each = ms / n, times = [];
@@ -194,12 +255,18 @@ async function shoot(browser, key) {
       console.log(`  ${m.title}${m.sub ? ` (${m.sub})` : ""}: ${m.from} → ${m.to} in ${took.toFixed(1)} s${rate ? `, ${rate.steps} rebuilds, ${(rate.steps / took).toFixed(1)}/s (mean ${rate.meanRebuildMs} ms)` : ""}`);
       await hold(sc.holdMs ?? 700, sc.stills.includes(i) ? `${m.title}-${m.to}` : null);
     }
-    // the finished model: the built one (a pose scene's last pose is its built shape), framed by its silhouette
-    await caption(sc.finished ?? sc.title, sc.finishedSub ?? "Finished");
-    if (sc.mode === "pose") await demo(page, "poseEnd");
-    await demo(page, "aim", { dir: await camDir(), frame: [0.12, 0.1, sc.panel ? 0.7 : 0.88, 0.82], ms: 1500 });
-    await demo(page, "turntable", 24);
-    await hold(5000, "finished");
+    if (sc.close) {
+      // a close-up stays close: the last pose and its caption, a slow turn
+      await demo(page, "turntable", sc.endSpin ?? 8);
+      await hold(6000, "end");
+    } else {
+      // the finished model: the built one (a pose scene's last pose is its built shape), framed by its silhouette
+      await caption(sc.finished ?? sc.title, sc.finishedSub ?? "Finished");
+      if (sc.mode === "pose") await demo(page, "poseEnd");
+      await demo(page, "aim", { dir: await camDir(), frame: [0.12, 0.1, sc.panel ? 0.7 : 0.88, 0.82], ms: 1500 });
+      await demo(page, "turntable", sc.endSpin ?? 24);
+      await hold(5000, "finished");
+    }
     await demo(page, "turntable", null);
     await sleep(1200);
   } catch (e) {
