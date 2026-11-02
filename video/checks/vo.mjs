@@ -39,15 +39,16 @@ for (const line of spoken(acts)) {
   for (const v of voices) ok(have.has(v.id), `${v.id}: no current clip for ${line.key}`);
   ok(inCut.has(line.key), `${line.key} is narrated but has no beat in the cut`);
 }
-// 2. each clip fits its beat; 3. no overlaps, per voice
-for (const v of voices) {
-  const cs = tl.cues.filter((c) => c.clips[v.id]).sort((a, b) => a.startMs - b.startMs);
+// 2. each default-voice clip fits its beat (the beats are timed to it; other voices slip behind); 3. no overlaps, per voice
+for (const [vi, v] of voices.entries()) {
+  const start = (c) => c.clips[v.id].startMs ?? c.startMs;
+  const cs = tl.cues.filter((c) => c.clips[v.id]).sort((a, b) => start(a) - start(b));
   for (const [i, c] of cs.entries()) {
     const ms = c.clips[v.id].ms;
-    ok(ms <= c.slotMs, `${v.id}: ${c.id} is ${ms} ms, longer than its ${c.slotMs} ms beat`);
+    if (vi === 0) ok(ms <= c.slotMs, `${v.id}: ${c.id} is ${ms} ms, longer than its ${c.slotMs} ms beat`);
     const next = cs[i + 1];
-    if (next) ok(c.startMs + ms <= next.startMs, `${v.id}: ${c.id} (${c.startMs}+${ms} ms) runs into ${next.id} at ${next.startMs} ms`);
-    ok(c.startMs + ms <= tl.durationMs, `${v.id}: ${c.id} runs past the end of the cut`);
+    if (next) ok(start(c) + ms <= start(next), `${v.id}: ${c.id} (${start(c)}+${ms} ms) runs into ${next.id} at ${start(next)} ms`);
+    ok(start(c) + ms <= tl.durationMs, `${v.id}: ${c.id} runs past the end of the cut`);
   }
 }
 // 4. the MP4's tracks

@@ -30,7 +30,7 @@ node video/youtube.mjs upload --run pass2 --video demo   # upload a cut, private
 Don't change files in the repo while a take records: the dev server reloads the page (it ignores `video/takes`,
 `video/out` and `.claude/`, but not your source). `record.mjs` warms the app up first and flags any reload.
 
-Output, per video: `video/out/<run>/<demo|tutorial>/vibecad-<demo|tutorial>.mp4` (2560×1440, 60 fps, H.264),
+Voices: the default voice (Heart) only; `VIDEO_VOICES=all` adds the other 19 as extra tracks, slipping behind it (the beats are timed to Heart). Output, per video: `video/out/<run>/<demo|tutorial>/vibecad-<demo|tutorial>.mp4` (2560×1440, 60 fps, H.264),
 `subtitles.srt`, `cue-sheet.md` (the ADR sheet for recording the voiceover to
 picture) and `plan.json`, plus `vo/<voice>.wav` (the mix per voice) and `vo-timeline.json`. The MP4 carries
 every voice as its own audio track (the first, the default, is Heart); the preview carries just the default. Takes (every captured frame, as JPEG) are in
@@ -53,6 +53,8 @@ minute of takes).
 
 ## Re-shooting
 
+- One beat: `VIDEO_ONLY=walker node video/record.mjs --acts 3 --run walker-test` shoots just that beat (comma-separate several); look at its frames in `video/takes/walker-test/act3/frames/` or its still in `beats/`.
+- Sync: `node video/checks/sync.mjs --run pass2` times every word of the default voice (faster-whisper on the GPU box) and flags anything the picture shows more than a second away from the word that names it (`sync.md`, `sync-NN.png`).
 - One act: `node video/record.mjs --acts 2 --run pass2`, then `node video/edit.mjs --run pass2 --video tutorial`. The demo's montage is cut from Act 3's take, so re-shooting Act 3 changes the demo only.
 - A dry run to check a script change: add `--dry` (nothing is captured; the beat stills still appear).
 - Narration lives in `video/script/lines.mjs`, by beat id. After editing a line, run `node video/vo.mjs` (only that line's clips are made again), then re-shoot the act so its beat is re-timed to them.

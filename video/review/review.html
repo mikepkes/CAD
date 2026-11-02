@@ -48,7 +48,9 @@ main { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 .timeline .pin { position: absolute; top: 2px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); border: 1px solid var(--accent-ink); }
 .timeline .pin.done { background: var(--done); }
 .timeline .head { position: absolute; top: 9px; width: 4px; height: 22px; margin-left: -2px; border-radius: 2px; background: var(--fg); }
-.chapter { font-size: 13px; color: var(--dim); min-height: 1.4em; }
+.chapters { display: flex; align-items: center; gap: 8px; }
+.chapter { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; color: var(--fg); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chapter small { display: block; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
 .composer { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: 12px; }
 .composer .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .swatch { width: 36px; height: 36px; min-width: 36px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; }
@@ -101,7 +103,11 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
         <button class="btn rate" id="rate" aria-label="Playback speed">1×</button>
         <button class="btn primary" id="addNote">Note here</button>
       </div>
-      <div class="chapter" id="chapter"></div>
+      <div class="chapters">
+        <button class="btn" id="prevCh" aria-label="Previous chapter">‹ Chapter</button>
+        <div class="chapter" id="chapter" aria-live="polite"></div>
+        <button class="btn" id="nextCh" aria-label="Next chapter">Chapter ›</button>
+      </div>
       <form class="composer" id="composer" hidden>
         <div class="row">
           <strong id="composerAt" class="tc"></strong>
@@ -195,6 +201,9 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
   $("fwd5").onclick = () => seek(video.currentTime + 5);
   $("stepBack").onclick = () => { video.pause(); seek(video.currentTime - 1 / FPS); };
   $("stepFwd").onclick = () => { video.pause(); seek(video.currentTime + 1 / FPS); };
+  // chapters: back goes to the start of this one, or the one before when just past its start (as a player's ⏮ does)
+  $("prevCh").onclick = () => { const chs = state.current?.chapters || [], t = video.currentTime; const k = chs.filter((c) => c.t <= t + 0.01).length - 1; const to = k > 0 && t - chs[k].t < 1.5 ? chs[k - 1] : chs[Math.max(0, k)]; if (to) seek(to.t); };
+  $("nextCh").onclick = () => { const chs = state.current?.chapters || [], t = video.currentTime; const to = chs.find((c) => c.t > t + 0.05); if (to) seek(to.t); };
   const RATES = [1, 1.5, 2, 0.5];
   $("rate").onclick = () => { state.rate = RATES[(RATES.indexOf(state.rate) + 1) % RATES.length]; video.playbackRate = state.rate; $("rate").textContent = `${state.rate}×`; };
   function tick() {
@@ -203,8 +212,13 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
     const pct = d ? (t / d) * 100 : 0;
     $("fill").style.width = pct + "%"; $("head").style.left = pct + "%";
     const tl = $("timeline"); tl.setAttribute("aria-valuemax", String(Math.round(d))); tl.setAttribute("aria-valuenow", String(Math.round(t)));
-    const ch = (state.current?.chapters || []).filter((c) => c.t <= t + 0.01).pop();
-    $("chapter").textContent = ch ? ch.title : "";
+    const chs = state.current?.chapters || [], k = chs.filter((c) => c.t <= t + 0.01).length - 1, ch = chs[k];
+    const label = $("chapter"), text = ch ? ch.title : "";
+    if (label.dataset.text !== text) {
+      label.dataset.text = text; label.textContent = "";
+      if (ch) { const n = document.createElement("small"); n.textContent = `Chapter ${k + 1} of ${chs.length}`; label.append(n, document.createTextNode(ch.title)); }
+    }
+    $("prevCh").disabled = !chs.length; $("nextCh").disabled = !chs.length || k >= chs.length - 1;
     paint();
   }
   video.addEventListener("timeupdate", tick); video.addEventListener("seeked", tick); video.addEventListener("loadedmetadata", () => { tick(); renderMarks(); });
@@ -324,6 +338,8 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
     else if (e.key === "ArrowLeft") { e.preventDefault(); e.shiftKey ? seek(video.currentTime - 1) : $("stepBack").click(); }
     else if (e.key === "ArrowRight") { e.preventDefault(); e.shiftKey ? seek(video.currentTime + 1) : $("stepFwd").click(); }
     else if (e.key === "n") { e.preventDefault(); startDraw(); }
+    else if (e.key === "[") $("prevCh").click();
+    else if (e.key === "]") $("nextCh").click();
     else if (e.key === "Escape") endDraw();
   });
 
