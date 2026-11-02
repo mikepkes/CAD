@@ -400,7 +400,59 @@ export class SceneManager {
       line.userData = { planeOutline: true };
       this.orientToPlane(line, p, size / 2);
       this.planeGroup.add(line);
+      for (const label of this.planeLabel(p.name, p.color, size)) {
+        this.orientToPlane(label, p, size / 2);
+        this.placeLabel(label, size);
+        this.planeGroup.add(label);
+      }
     }
+  }
+
+  // A plane's name, printed faintly in its far corner (top right, away from the axes it shares): lying in the plane at a size
+  // set by the plane's, behind any solid in front of it, and never picked. Two one-sided
+  // copies back to back, so it reads the right way round from either side.
+  private labelTextures = new Map<string, { tex: THREE.CanvasTexture; aspect: number }>();
+  private planeLabel(text: string, color: THREE.ColorRepresentation, planeSize: number): THREE.Mesh[] {
+    const css = `#${new THREE.Color(color).getHexString()}`, key = `${text}\u0000${css}`;
+    let t = this.labelTextures.get(key);
+    if (!t) {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return []; // no 2D canvas (tests): no label
+      const font = `500 64px -apple-system, system-ui, sans-serif`;
+      ctx.font = font;
+      canvas.width = Math.ceil(ctx.measureText(text).width) + 8;
+      canvas.height = 84;
+      ctx.font = font;
+      ctx.fillStyle = css;
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, 4, canvas.height / 2);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      t = { tex, aspect: canvas.width / canvas.height };
+      this.labelTextures.set(key, t);
+    }
+    const h = planeSize * 0.045;
+    return [0, Math.PI].map((turn) => {
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(h * t!.aspect, h),
+        new THREE.MeshBasicMaterial({ map: t!.tex, transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false }),
+      );
+      mesh.userData = { planeLabel: true, turn, width: h * t!.aspect, height: h };
+      mesh.renderOrder = 1; // over the plane's fill
+      mesh.raycast = () => {};
+      return mesh;
+    });
+  }
+
+  /** Move a label (already oriented like its plane, at the plane's centre) into the top-right corner. */
+  private placeLabel(label: THREE.Object3D, planeSize: number) {
+    const { turn, width, height } = label.userData as { turn: number; width: number; height: number };
+    const pad = planeSize * 0.03;
+    label.translateX(planeSize / 2 - pad - width / 2);
+    label.translateY(planeSize / 2 - pad - height / 2);
+    if (turn) label.rotateY(turn); // the back copy faces the other way
   }
 
   private orientToPlane(obj: THREE.Object3D, p: WorkPlane, half: number) {
@@ -444,6 +496,11 @@ export class SceneManager {
       );
       this.orientDatum(line, p, size / 2);
       this.datumGroup.add(line);
+      for (const label of this.planeLabel(d.name, color, size)) {
+        this.orientDatum(label, p, size / 2);
+        this.placeLabel(label, size);
+        this.datumGroup.add(label);
+      }
     }
   }
 
