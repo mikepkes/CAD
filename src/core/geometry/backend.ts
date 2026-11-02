@@ -100,17 +100,17 @@ function geometryDoc(doc: CadDocument, scope: Scope): CadDocument {
 /** Build the solids to render. For a patterned doc, evaluate the SOURCE bodies
  *  once (cacheable — they don't depend on the joint-drive params) and instance
  *  them by transforming the mesh; otherwise the plain feature evaluation. */
-function evaluateForRender(doc: CadDocument, scope: Scope, cache?: GeometryCache): Record<string, SolidEval> {
-  const staged = evaluateForRenderStaged(doc, scope, cache);
+function evaluateForRender(doc: CadDocument, scope: Scope, cache?: GeometryCache, only?: ReadonlySet<string>): Record<string, SolidEval> {
+  const staged = evaluateForRenderStaged(doc, scope, cache, only);
   while (staged.measureNext()) { /* every body, exactly */ }
   return staged.render();
 }
 
 /** evaluateForRender in stages (see StagedEvaluation): `render()` gives the rows to show —
  *  with their meshes — as they stand, before or after the measuring. */
-function evaluateForRenderStaged(doc: CadDocument, scope: Scope, cache?: GeometryCache): StagedEvaluation & { render(): Record<string, SolidEval> } {
+function evaluateForRenderStaged(doc: CadDocument, scope: Scope, cache?: GeometryCache, only?: ReadonlySet<string>): StagedEvaluation & { render(): Record<string, SolidEval> } {
   if (!hasAssemblyPatterns(doc)) {
-    const staged = evaluateFeaturesStaged(doc, scope, cache);
+    const staged = evaluateFeaturesStaged(doc, scope, cache, only);
     return { ...staged, get pending() { return staged.pending; }, render: () => staged.solids };
   }
   placeComponentSketches(doc, scope); // place the source sketches in their component frames
@@ -193,8 +193,9 @@ function analyzeOf(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }
 // ---- shared job protocol (used by both worker adapters) --------------------
 
 export type GeometryRequest =
-  /** `staged`: answer with the meshes first (an "evaluate" response), then the measurements (a "measured" one). */
-  | { id: number; kind: "evaluate"; doc: CadDocument; staged?: boolean }
+  /** `staged`: answer with the meshes first (an "evaluate" response), then the measurements (a "measured" one).
+   *  `only`: build just these features — one chain of a split evaluation (geometry/chains.ts). */
+  | { id: number; kind: "evaluate"; doc: CadDocument; staged?: boolean; only?: string[] }
   | { id: number; kind: "edges"; doc: CadDocument; featureId: string }
   | { id: number; kind: "export"; doc: CadDocument; featureId: string | null; format: ExportFormat }
   | { id: number; kind: "collide"; doc: CadDocument; overrides?: Record<string, string> }
@@ -204,7 +205,8 @@ export type GeometryRequest =
   | { id: number; kind: "drawing"; doc: CadDocument; opts?: SheetOptions };
 
 export type GeometryResponse =
-  | { id: number; kind: "evaluate"; solids: Record<string, SolidEval>; facePlanes: Record<string, WorkPlane> }
+  /** `applied`: the rows the feature steps wrote before the bodies' rows (their order in `solids`; for merging chains). */
+  | { id: number; kind: "evaluate"; solids: Record<string, SolidEval>; facePlanes: Record<string, WorkPlane>; applied?: string[] }
   /** A staged evaluation's second answer: every row measured (without its mesh), or — `complete` false —
    *  as far as it got before a newer evaluation superseded it. */
   | { id: number; kind: "measured"; solids: Record<string, SolidEval>; complete: boolean }
@@ -267,15 +269,18 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
   try {
     const scope = scopeOf(req.doc);
     if (req.kind === "evaluate") {
+      const only = req.only ? new Set(req.only) : undefined;
       if (!req.staged || !channel.emit) {
-        const solids = withBuildProgress(onProgress, () => evaluateForRender(req.doc, scope, cache));
-        return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(req.doc) }, transfer: meshTransferables(solids) };
+        const staged = withBuildProgress(onProgress, () => evaluateForRenderStaged(req.doc, scope, cache, only));
+        while (staged.measureNext()) { /* every body, exactly */ }
+        const solids = staged.render();
+        return { res: { id: req.id, kind: "evaluate", solids, facePlanes: collectFacePlanes(req.doc), applied: staged.applied }, transfer: meshTransferables(solids) };
       }
       // staged: the meshes go out as soon as they exist; the measuring follows, breathing between
       // slices so a newer evaluation can be heard — and supersede it
-      const staged = withBuildProgress(onProgress, () => evaluateForRenderStaged(req.doc, scope, cache));
+      const staged = withBuildProgress(onProgress, () => evaluateForRenderStaged(req.doc, scope, cache, only));
       const shown = staged.render();
-      channel.emit({ id: req.id, kind: "evaluate", solids: shown, facePlanes: collectFacePlanes(req.doc) }, meshTransferables(shown));
+      channel.emit({ id: req.id, kind: "evaluate", solids: shown, facePlanes: collectFacePlanes(req.doc), applied: staged.applied }, meshTransferables(shown));
       let complete = true;
       if (staged.pending) await breathe(MEASURE_SETTLE_MS);
       while (staged.pending) {

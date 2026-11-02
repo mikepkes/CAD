@@ -1840,11 +1840,11 @@ export function withBuildProgress<T>(sink: BuildProgressSink | undefined, fn: ()
 // building the features is nearly all the work (the star box: 2.8 s of 3); meshing them the rest
 const FEATURE_SHARE = 0.9;
 
-export function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): { bodies: Body[]; out: Record<string, SolidEval> } {
+export function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache, only?: ReadonlySet<string>): { bodies: Body[]; out: Record<string, SolidEval> } {
   const out: Record<string, SolidEval> = {};
   const bodies: Body[] = [];
   let worlds: Map<string, Rigid> | undefined; // component frames, resolved only when a feature needs one
-  const active = activeFeatures(doc, scope);
+  const active = activeFeatures(doc, scope, only);
   let done = 0;
   for (const f of active) {
     buildProgress?.((FEATURE_SHARE * done) / active.length, { phase: "features", done, total: active.length });
@@ -1875,8 +1875,9 @@ export function featureActive(f: FeatureDef, scope: Scope): boolean {
   try { return compileExpr(f.when).eval(scope) !== 0; } catch { return true; }
 }
 
-/** The features that build, in order: those switched off by `when` are skipped. */
-const activeFeatures = (doc: CadDocument, scope: Scope): FeatureDef[] => Object.values(doc.features).filter((f) => featureActive(f, scope));
+/** The features that build, in order: those switched off by `when` are skipped — and, with `only`,
+ *  those not in it (one chain of an evaluation split across workers; see geometry/chains.ts). */
+const activeFeatures = (doc: CadDocument, scope: Scope, only?: ReadonlySet<string>): FeatureDef[] => Object.values(doc.features).filter((f) => featureActive(f, scope) && (!only || only.has(f.id)));
 
 /** Evaluate every feature into body meshes (+ bounds and exact mass
  *  properties). With a cache, only the steps whose inputs changed touch the
@@ -1900,6 +1901,9 @@ export function evaluateFeatures(doc: CadDocument, scope: Scope, cache?: Geometr
  */
 export interface StagedEvaluation {
   solids: Record<string, SolidEval>;
+  /** The rows the feature steps wrote (a modifier's row; an error), before the bodies' rows were
+   *  added: they come first in `solids`, so a merge of several chains' rows can keep that order. */
+  applied: string[];
   /** Bodies still to be measured. */
   readonly pending: number;
   /** Measure one more body, writing the result onto its row (and into the cache); false when none is left. */
@@ -1912,9 +1916,9 @@ export interface StagedEvaluation {
  *  `store` says the full evaluation goes into the cache once measured; `gear` shares its mass per spec. */
 interface Pending { body: Body; row: SolidEval; mesh: SolidMesh; surface: boolean; mass?: MassProps; store: boolean; gear?: { key: string; T: Rigid } }
 
-export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: GeometryCache): StagedEvaluation {
-  const features: FeatureDef[] = activeFeatures(doc, scope);
-  const done: StagedEvaluation = { solids: {}, pending: 0, measureNext: () => false, dispose: () => {} };
+export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: GeometryCache, only?: ReadonlySet<string>): StagedEvaluation {
+  const features: FeatureDef[] = activeFeatures(doc, scope, only);
+  const done: StagedEvaluation = { solids: {}, applied: [], pending: 0, measureNext: () => false, dispose: () => {} };
   if (!isKernelReady()) {
     for (const f of features) {
       done.solids[f.id] = f.kind === "extrude"
@@ -1926,7 +1930,8 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
   const pending: Pending[] = [];
   cache?.begin();
   try {
-    const { bodies, out } = evaluateBodies(doc, scope, cache);
+    const { bodies, out } = evaluateBodies(doc, scope, cache, only);
+    done.applied = Object.keys(out);
     let meshed = 0;
     for (const body of bodies) {
       buildProgress?.(FEATURE_SHARE + ((1 - FEATURE_SHARE) * meshed) / bodies.length, { phase: "meshing", done: meshed, total: bodies.length });
@@ -2019,6 +2024,7 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
   };
   return {
     solids: done.solids,
+    applied: done.applied,
     get pending() { return pending.length; },
     measureNext() { const p = pending.shift(); if (!p) return false; measure(p); return true; },
     dispose() { for (const p of pending.splice(0)) p.body.shape.delete(); },

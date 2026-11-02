@@ -31,6 +31,7 @@ import type { SolidEval, BuildStep } from "../core/features";
 import { GeometryBackend, InlineGeometryBackend, TopologyOpts, ExportFormat, EvaluateResult } from "../core/geometry/backend";
 import { hasFlexures } from "../sim/flexure";
 import { WorkerGeometryBackend } from "./worker-backend";
+import { geometryCapabilities } from "../core/geometry/capabilities";
 import { runMotionStudy, driveParams, motionKey, poseCount, MotionStatus, MotionResult } from "./motionStudy";
 import { meshesToStlBinary } from "../core/export/stl";
 import { projectEdges } from "../core/geometry/project";
@@ -46,15 +47,16 @@ import { renameViaEdit } from "./assist";
 import { sketchIsEmpty } from "../ui/sketchStatus";
 import { FeatureTool, FeatureToolKind, defaultRevolveAxis, hasClosedRegion, profileChoices, toggled, toolCommand, toolExpressions } from "./featureTools";
 
-/** The geometry backend: a Web Worker when available (keeps the OCC kernel off
- *  the main thread), else inline on this thread. */
-function createGeometryBackend(): GeometryBackend {
+/** The geometry backend: Web Workers when available (keeps the OCC kernel off the main
+ *  thread; a pool of them where the host can afford it — see geometryCapabilities), else
+ *  inline on this thread. */
+function createGeometryBackend(size = 1): GeometryBackend {
   try {
-    if (typeof Worker !== "undefined") return new WorkerGeometryBackend();
+    if (typeof Worker !== "undefined") return new WorkerGeometryBackend({ size });
   } catch { /* fall through to inline */ }
   return new InlineGeometryBackend();
 }
-let geometry = createGeometryBackend();
+let geometry = createGeometryBackend(geometryCapabilities().poolSize);
 /** Tests only: put a stand-in geometry backend behind the store. */
 export function __setGeometryBackend(g: GeometryBackend, study?: GeometryBackend): void { geometry = g; if (study) { studyGeometry = study; studyReady = false; } }
 // A second backend dedicated to the motion study, so its 360° sweep runs in
