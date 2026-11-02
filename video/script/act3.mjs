@@ -133,15 +133,22 @@ export async function act3(d) {
     await d.api("poseEnd");
   });
   await clip("handlebar", "handlebar", "Bike handlebar", "a 3D sweep with a tapering section, a wrapped hex grip", async () => {
+    // timed to the line's words (seconds into the beat, Heart's clip): the whole bar while "one sweep along a 3D curve",
+    // the stem by "stem clamp" (7.5 s), then in close on a grip just before "rubber grips" (9.3 s), held through "wings" (12 s)
+    const t0 = d.timing.events.findLast((e) => e.kind === "beat")?.t ?? d.now();
+    const at = (s) => d.wait(Math.max(0, (t0 + s - d.now()) * 1000));
+    const stem = await d.api("componentBox", ["Stem", "Faceplate", "Faceplate bolts", "Top cap"]);
+    const grip = await d.api("componentBox", ["Grip R", "Collar R", "End plug R"]);
     await d.api("aim", { dir: [0.3, -1, 0.55], ms: 1000, margin: 0.8 });
     await d.api("turntable", 10);
-    await d.wait(2600);
+    await at(5.0);
     await d.api("turntable", null);
-    await d.api("aim", { dir: [0.6, -0.8, 0.5], box: await d.api("componentBox", ["Grip R", "Collar R", "End plug R"]), ms: 1800, margin: 1.1 });
-    await d.wait(500); d.pick("handlebar grip");
-    await d.wait(1600);
-    await d.api("aim", { dir: [0.2, -0.7, 0.9], box: await d.api("componentBox", ["Stem", "Faceplate", "Faceplate bolts", "Top cap"]), ms: 1600, margin: 1.2 });
-    await d.wait(1200);
+    await at(5.7);
+    await d.api("aim", { dir: [0.2, -0.7, 0.9], box: stem, ms: 1400, margin: 1.2 });
+    await at(8.0);
+    await d.api("aim", { dir: [0.6, -0.8, 0.5], box: grip, ms: 1200, margin: 0.8 });
+    d.pick("handlebar grip");
+    await at(12.1);
   });
   await clip("origami", "origami", "Paper airplane", "a flat sheet to a finished dart, fold by fold", async () => {
     await d.api("poseSweep", "fold", 6, 0, 1); // start flat
