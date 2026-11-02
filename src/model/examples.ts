@@ -23,6 +23,7 @@ export const EXAMPLES: ExampleInfo[] = [
   { name: "skadis", title: "SKÅDIS holder", blurb: "A pegboard holder that grips by its load's weight" },
   { name: "handlebar", title: "Bike handlebar", blurb: "A riser bar and winged grips from organic surfaces" },
   { name: "walker", title: "Wind walker", blurb: "Twelve Jansen legs walking off one crank" },
+  { name: "motor", title: "Motor", blurb: "NEMA steppers and servos at catalogue size, to design a mount round" },
   { name: "origami", title: "Paper airplane", blurb: "A dart folded from a sheet, step by step" },
   { name: "scissor", title: "Scissor lift", blurb: "A scissor linkage driven by its stage count" },
   { name: "scissor-jointed", title: "Jointed scissor", blurb: "The scissor as a pattern of jointed stages" },

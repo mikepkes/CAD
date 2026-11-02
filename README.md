@@ -492,6 +492,7 @@ straight from a URL:
 ?mode=customize&example=origami        # a paper airplane folded step by step from a flat sheet on one `fold` slider (0 flat … 6 done); width + length size the paper
 ?mode=customize&example=handlebar      # a riser-bar cockpit from organic surfaces: a bar swept on a 3D spline with a tapering section, winged grips with a wrapped hex pattern; width, rise, sweep, grip and stem sliders
 ?mode=customize&example=walker         # a Jansen wind-walker: one crank, a six-throw crankshaft, twelve eleven-bar legs 60° apart; `t` turns the crank, `s` scales it
+?mode=customize&example=motor          # a motor to design a mount round: NEMA 8–42 steppers, micro to ¼-scale hobby servos, 40–130 mm servo motors; length, shaft (D-cut, double-D, keyed, double-ended) and wiring (connector or cable, side or back)
 ?mode=customize&model=<url-to.json>    # any VibeCAD model file
 ```
 
