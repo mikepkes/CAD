@@ -5,8 +5,8 @@
 // typical length); the length and the shaft are sliders over that. The shaft is
 // a component of its own on a revolute joint: plain, with one flat (D-cut), two
 // flats or a keyway and its key, out the front or out both ends. The wiring is
-// modelled for clearance: a connector (its socket, the mating plug and the
-// cable off it) or a cable through a strain relief, off the back or the side.
+// modelled for clearance: a bare connector socket (open for its plug) or a
+// cable through a strain relief, off the back or the side.
 // The mounting holes are tapped into a full front cap (NEMA 8–17), or clear
 // through a flange plate with the body relieved behind it for the bolts' nuts
 // (NEMA 23 up, servo motors); each frame comes with its usual kind, either can
@@ -49,11 +49,10 @@ const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-openca
 //   tabT their thickness and tabTop how far below the case top they sit, holes
 //   at ±hx (and ±hy across when there are two per ear), boss bd × bh round the
 //   output at ox from the centre, sd × sl the output spline, horn its arm.
-// The wiring: cw × ch the socket (or strain relief), cd its depth, pd the plug's,
-//   cab the cable's diameter.
+// The wiring: cw × ch the socket (or strain relief), cd its depth, cab the cable's diameter.
 type Motor = { A: number; c1: number; capF: number; A2: number; c2: number; capR: number; B: number; hr: number; hd: number; D: number; P: number };
 type Servo = { Lc: number; Wc: number; tab: number; tabT: number; tabTop: number; hx: number; hy: number; thr: number; bd: number; bh: number; ox: number; horn: number };
-type Wiring = { cw: number; ch: number; cd: number; pd: number; cab: number };
+type Wiring = { cw: number; ch: number; cd: number; cab: number };
 type Size = { name: string; servo: boolean; L: number; sd: number; sl: number; rear: number } & Motor & Servo & Wiring;
 
 // what the other kind's dimensions read as (unused, but kept sane so every sketch still solves)
@@ -98,13 +97,13 @@ const counterbore = (z: Size) => {
 const HOLES = ["Tapped (threaded)", "Through a flange plate"];
 
 // sockets: JST-PH (small steppers), 4-pin housings (NEMA 23 up), round M17-style (servo motors), a servo's lead
-const W_XS: Wiring = { cw: 8, ch: 4.5, cd: 3, pd: 6, cab: 3 };
-const W_S: Wiring = { cw: 13, ch: 5.5, cd: 4.5, pd: 7, cab: 4 };
-const W_M: Wiring = { cw: 15, ch: 7, cd: 6, pd: 10, cab: 6 };
-const W_L: Wiring = { cw: 20, ch: 10, cd: 8, pd: 14, cab: 8 };
-const W_SERVO: Wiring = { cw: 6, ch: 3, cd: 3, pd: 14, cab: 2.5 };
-const W_SERVO_L: Wiring = { cw: 8, ch: 4, cd: 4, pd: 14, cab: 3.5 };
-const W_ROUND: Wiring = { cw: 18, ch: 18, cd: 10, pd: 22, cab: 8 };
+const W_XS: Wiring = { cw: 8, ch: 4.5, cd: 3, cab: 3 };
+const W_S: Wiring = { cw: 13, ch: 5.5, cd: 4.5, cab: 4 };
+const W_M: Wiring = { cw: 15, ch: 7, cd: 6, cab: 6 };
+const W_L: Wiring = { cw: 20, ch: 10, cd: 8, cab: 8 };
+const W_SERVO: Wiring = { cw: 6, ch: 3, cd: 3, cab: 2.5 };
+const W_SERVO_L: Wiring = { cw: 8, ch: 4, cd: 4, cab: 3.5 };
+const W_ROUND: Wiring = { cw: 18, ch: 18, cd: 10, cab: 8 };
 
 export const SIZES: Size[] = [
   stepper("NEMA 8 stepper (20 mm)", { A: 20.3, c1: 1.5, capF: 5, A2: 20.3, c2: 2, capR: 5, B: 16, hr: 0.8, hd: 2.5, D: 16, P: 1.5 }, 30, 4, 12, W_XS),
@@ -157,7 +156,7 @@ async function buildMotor(s: CadSession): Promise<void> {
   const hidden = (name: string, expression: string) => dis(s, "parameter.add", { name, expression, hidden: true });
   await hidden("fh", pick((z) => (z.servo ? 1 : 0))); // a hobby servo
   await hidden("fm", "1 - fh");                        // a motor (stepper or flanged servo motor)
-  for (const k of ["A", "c1", "capF", "A2", "c2", "capR", "B", "hr", "D", "P", "Lc", "Wc", "tab", "tabT", "tabTop", "hx", "hy", "thr", "bd", "bh", "ox", "horn_len", "cw", "ch", "cd", "pd", "cab"] as const) {
+  for (const k of ["A", "c1", "capF", "A2", "c2", "capR", "B", "hr", "D", "P", "Lc", "Wc", "tab", "tabT", "tabTop", "hx", "hy", "thr", "bd", "bh", "ox", "horn_len", "cw", "ch", "cd", "cab"] as const) {
     await hidden(k, pick((z) => z[(k === "horn_len" ? "horn" : k) as keyof Size] as number));
   }
   await hidden("two", "min(1, hy)"); // two holes per ear
@@ -427,29 +426,29 @@ async function buildMotor(s: CadSession): Promise<void> {
   // side: YZ sketches are drawn in y, z and extrude along +X, so each part starts at its outer end
   sk = await sketch(connC, "YZ", "Socket, side");
   await rect(sk, "-cw/2", "cz - ch/2", "cw/2", "cz + ch/2");
-  await solid(sk, "Socket, side", { from: "-half - cd", dist: "cd", when: "side*conn" });
-  sk = await sketch(connC, "YZ", "Plug, side");
-  await rect(sk, "-cw/2 - 0.5", "cz - ch/2 - 0.5", "cw/2 + 0.5", "cz + ch/2 + 0.5");
-  await solid(sk, "Plug, side", { from: "-half - cd - pd", dist: "pd", when: "side*conn" });
+  const sideSocket = await solid(sk, "Socket, side", { from: "-half - cd", dist: "cd", when: "side*conn" });
+  sk = await sketch(connC, "YZ", "Socket opening, side"); // where the plug goes in
+  await rect(sk, "0.6 - cw/2", "cz - ch/2 + 0.6", "cw/2 - 0.6", "cz + ch/2 - 0.6");
+  await solid(sk, "Socket opening, side", { from: "-half - cd - 1", dist: "1 + 0.7*cd", op: "cut", body: sideSocket, when: "side*conn" });
   sk = await sketch(reliefC, "YZ", "Strain relief, side");
   await rect(sk, "-cw/2", "cz - ch/2", "cw/2", "cz + ch/2");
   await solid(sk, "Strain relief, side", { from: "-half - cd", dist: "cd", when: "side*(1 - conn)" });
   sk = await sketch(cable, "YZ", "Cable, side");
   await circle(sk, 0, "cz", "cab/2");
-  await solid(sk, "Cable, side", { from: "-half - cd - conn*pd - lead", dist: "lead", when: "side" });
+  await solid(sk, "Cable, side", { from: "-half - cd - lead", dist: "lead", when: "side*(1 - conn)" });
   // back: XY sketches extrude along +Z
   sk = await sketch(connC, "XY", "Socket, back");
   await rect(sk, "bx - ch/2", "-cw/2", "bx + ch/2", "cw/2");
-  await solid(sk, "Socket, back", { from: "-Lb - cd", dist: "cd", when: "(1 - side)*conn" });
-  sk = await sketch(connC, "XY", "Plug, back");
-  await rect(sk, "bx - ch/2 - 0.5", "-cw/2 - 0.5", "bx + ch/2 + 0.5", "cw/2 + 0.5");
-  await solid(sk, "Plug, back", { from: "-Lb - cd - pd", dist: "pd", when: "(1 - side)*conn" });
+  const backSocket = await solid(sk, "Socket, back", { from: "-Lb - cd", dist: "cd", when: "(1 - side)*conn" });
+  sk = await sketch(connC, "XY", "Socket opening, back");
+  await rect(sk, "bx - ch/2 + 0.6", "0.6 - cw/2", "bx + ch/2 - 0.6", "cw/2 - 0.6");
+  await solid(sk, "Socket opening, back", { from: "-Lb - cd - 1", dist: "1 + 0.7*cd", op: "cut", body: backSocket, when: "(1 - side)*conn" });
   sk = await sketch(reliefC, "XY", "Strain relief, back");
   await rect(sk, "bx - ch/2", "-cw/2", "bx + ch/2", "cw/2");
   await solid(sk, "Strain relief, back", { from: "-Lb - cd", dist: "cd", when: "(1 - side)*(1 - conn)" });
   sk = await sketch(cable, "XY", "Cable, back");
   await circle(sk, "bx", 0, "cab/2");
-  await solid(sk, "Cable, back", { from: "-Lb - cd - conn*pd - lead", dist: "lead", when: "1 - side" });
+  await solid(sk, "Cable, back", { from: "-Lb - cd - lead", dist: "lead", when: "(1 - side)*(1 - conn)" });
 
   // the sketches (and the tie-rods' datum planes) only lay out the solids: hide them, so the motor shows clean
   const hid = await s.setVisibility([...Object.keys(s.doc.sketches), ...rows.values()], false);
@@ -467,7 +466,7 @@ async function buildMotor(s: CadSession): Promise<void> {
     shaft_len: { label: "Shaft length", unit: "mm", description: "From the mounting face to the tip" },
     ends: { label: "Shaft ends", description: "A double-shaft motor carries a second shaft out of the back, for an encoder or a handwheel" },
     rear_len: { label: "Rear shaft length", unit: "mm" },
-    wiring: { label: "Wiring", description: "A connector (socket, plug and the cable off it) or a cable through a strain relief, modelled for clearance" },
+    wiring: { label: "Wiring", description: "A bare connector socket, open for its plug, or a cable through a strain relief, modelled for clearance" },
     horn: { label: "Servo horn", description: "A single-arm horn on a hobby servo's spline" },
     angle: { label: "Shaft angle", unit: "°" },
   });
@@ -540,7 +539,7 @@ describe("Motor", () => {
         // the socket fits the rear cap's side, and on its back beside a rear shaft
         expect(z.ch, z.name).toBeLessThan(z.capR);
         expect(z.cw, z.name).toBeLessThan(z.A2 - 2 * z.c1);
-        expect(-(z.A2 / 2) + 1.5 + z.ch + 0.5 + 0.5, `${z.name}: back plug clears the rear shaft`).toBeLessThan(-z.sd / 2);
+        expect(-(z.A2 / 2) + 1.5 + z.ch + 0.5, `${z.name}: back socket clears the rear shaft`).toBeLessThan(-z.sd / 2);
       } else {
         // ear holes beyond the case and inside the ear; the boss on the case top; the horn clear of the boss
         expect(z.hx - z.thr, z.name).toBeGreaterThan(z.Lc / 2);
@@ -605,8 +604,10 @@ describe("Motor", () => {
         expect(names.includes("Key"), at).toBe(!servo && set.shaft === 3);
         expect(names.includes("Horn hub"), at).toBe(servo);
         const side = set.wiring === 0 || set.wiring === 2, conn = set.wiring < 2;
-        expect(names.includes(side ? "Cable, side" : "Cable, back"), at).toBe(true);
-        expect(names.includes(side ? (conn ? "Plug, side" : "Strain relief, side") : (conn ? "Plug, back" : "Strain relief, back")), at).toBe(true);
+        expect(names.includes(side ? "Cable, side" : "Cable, back"), at).toBe(!conn);
+        expect(names.includes(side ? (conn ? "Socket, side" : "Strain relief, side") : (conn ? "Socket, back" : "Strain relief, back")), at).toBe(true);
+        // a connector is the bare socket: no plug in it, no cable off it
+        expect(names.filter((n) => n.startsWith("Plug") || (conn && n.startsWith("Cable"))), at).toEqual([]);
       }
     }, 120000);
   }

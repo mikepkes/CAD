@@ -53,7 +53,7 @@ exports[`bundled examples > public/examples/gyroscope.json > replays, builds on 
 exports[`bundled examples > public/examples/motor.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
-    "body": "ext1655",
+    "body": "ext1653",
     "max": [
       7.3,
       7.3,
@@ -68,7 +68,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 319,
   },
   {
-    "body": "ext1807",
+    "body": "ext1805",
     "max": [
       2.5,
       2.5,
@@ -83,7 +83,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 415.1,
   },
   {
-    "body": "ext1918",
+    "body": "ext1916",
     "max": [
       2.5,
       2.5,
@@ -98,7 +98,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 102.1,
   },
   {
-    "body": "ext2030",
+    "body": "ext2028",
     "max": [
       -21.1,
       6.5,
@@ -113,7 +113,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 321.7,
   },
   {
-    "body": "ext2042",
+    "body": "ext2040",
     "max": [
       -25.6,
       2,
@@ -128,7 +128,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 351.9,
   },
   {
-    "body": "ext252",
+    "body": "ext250",
     "max": [
       21.2,
       21.2,
@@ -143,7 +143,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 14244.2,
   },
   {
-    "body": "ext302",
+    "body": "ext300",
     "max": [
       21.2,
       21.2,
@@ -158,7 +158,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 542.6,
   },
   {
-    "body": "ext505",
+    "body": "ext503",
     "max": [
       21.2,
       21.2,
@@ -173,7 +173,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 53918,
   },
   {
-    "body": "ext543",
+    "body": "ext541",
     "max": [
       21.2,
       21.2,
@@ -188,7 +188,7 @@ exports[`bundled examples > public/examples/motor.json > replays, builds on both
     "volume": 15091.8,
   },
   {
-    "body": "rev605",
+    "body": "rev603",
     "max": [
       18.3,
       18.3,
