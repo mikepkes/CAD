@@ -1312,6 +1312,74 @@ export class SceneManager {
     });
   }
 
+  /** Like `aim`, but frames the drawn geometry itself (the parts as posed now; only bodies in `bodyIds` when given):
+   *  its silhouette, projected vertex by vertex, fills `rect` (fractions of the window: left, top, right, bottom,
+   *  y down) on its tighter side and is centred in it. Returns false when there is nothing to frame. */
+  aimFit(dir: { x: number; y: number; z: number }, rect: [number, number, number, number], seconds = 0.5, bodyIds?: Set<string> | null): boolean {
+    if (this.lastData?.mode === "sketch") return false;
+    const d = new THREE.Vector3(dir.x, dir.y, dir.z);
+    if (d.lengthSq() < 1e-12) return false;
+    d.normalize();
+    // the bodies' world-space vertices (a few tens of thousands are plenty for a silhouette)
+    const animIds = new Map<THREE.Object3D, string>();
+    for (const [id, { mesh }] of this.animMeshes) animIds.set(mesh, id);
+    this.solidsGroup.updateMatrixWorld(true);
+    const meshes: THREE.Mesh[] = [];
+    this.solidsGroup.traverseVisible((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || m.userData.ghost) return;
+      const id = (m.userData.bodyId as string | undefined) ?? animIds.get(m);
+      if (bodyIds && (!id || !bodyIds.has(id))) return;
+      meshes.push(m);
+    });
+    const total = meshes.reduce((n, m) => n + ((m.geometry.getAttribute("position") as THREE.BufferAttribute | undefined)?.count ?? 0), 0);
+    if (!total) return false;
+    const stride = Math.max(1, Math.ceil(total / 60000));
+    const pts: THREE.Vector3[] = [];
+    const box = new THREE.Box3();
+    for (const m of meshes) {
+      const pos = m.geometry.getAttribute("position") as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i += stride) { const p = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld); pts.push(p); box.expandByPoint(p); }
+    }
+    // the target rect in the canvas's NDC
+    const cr = this.renderer.domElement.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+    const nx = (f: number) => ((f * W - cr.left) / cr.width) * 2 - 1, ny = (f: number) => -(((f * H - cr.top) / cr.height) * 2 - 1);
+    const X0 = nx(rect[0]), X1 = nx(rect[2]), Y0 = ny(rect[3]), Y1 = ny(rect[1]);
+    const CX = (X0 + X1) / 2, CY = (Y0 + Y1) / 2;
+    // solve for the target and distance: zoom so the tighter side fits, then slide so the centre lands
+    const cam = this.perspCam.clone();
+    cam.aspect = cr.width / cr.height; cam.updateProjectionMatrix();
+    const up = Math.abs(d.z) > 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+    const tanV = Math.tan(((cam.fov * Math.PI) / 180) / 2);
+    const target = box.getCenter(new THREE.Vector3());
+    let dist = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1) / tanV;
+    const q = new THREE.Vector3(), right = new THREE.Vector3(), camUp = new THREE.Vector3();
+    for (let it = 0; it < 24; it++) {
+      cam.up.copy(up); cam.position.copy(target).addScaledVector(d, dist); cam.lookAt(target); cam.updateMatrixWorld(true);
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const p of pts) {
+        q.copy(p).project(cam);
+        if (q.z > 1 || q.z < -1) continue; // behind the camera or past the far plane
+        x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+      }
+      if (!(x0 < x1)) { dist *= 1.5; continue; }
+      const s = Math.max((x1 - x0) / (X1 - X0), (y1 - y0) / (Y1 - Y0));
+      // zooming scales the picture about the screen centre: put the centre at C·s now so it lands on C after
+      right.setFromMatrixColumn(cam.matrixWorld, 0); camUp.setFromMatrixColumn(cam.matrixWorld, 1);
+      const halfH = dist * tanV, halfW = halfH * cam.aspect;
+      target.addScaledVector(right, ((x0 + x1) / 2 - CX * s) * halfW).addScaledVector(camUp, ((y0 + y1) / 2 - CY * s) * halfH);
+      dist *= s;
+      if (Math.abs(s - 1) < 1e-4 && Math.abs((x0 + x1) / 2 - CX) < 1e-4 && Math.abs((y0 + y1) / 2 - CY) < 1e-4) break;
+    }
+    const pc = this.perspCam;
+    this.beginTween({
+      from: { off: this.camOff(), target: this.controls.target.clone(), up: this.camera.up.clone(), zoom: pc.zoom },
+      to: { off: d.clone().multiplyScalar(dist), target, up, zoom: pc.zoom },
+      dur: seconds,
+    });
+    return true;
+  }
+
   // ---- rendering the sketch ----
 
   update(data: ViewData) {
