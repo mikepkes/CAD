@@ -120,6 +120,7 @@ export class CadSession {
   ): Promise<DispatchResult> {
     const def = this.registry.get(type);
     if (!def) return this.fail(`Unknown command "${type}"`);
+    if (def.stampNew) params = def.stampNew(params);
     const errors = validate(def.paramsSchema, params);
     if (errors.length) return this.fail(`Invalid params for "${type}": ${errors.join("; ")}`);
 

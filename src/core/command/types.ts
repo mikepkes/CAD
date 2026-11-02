@@ -58,6 +58,9 @@ export interface CommandDef<P = Record<string, unknown>> {
   constrains?: boolean;
   /** Removes or overwrites existing model content (undoable, but flagged to MCP clients as destructive). */
   destructive?: boolean;
+  /** A NEW operation's params as recorded (dispatch only, never replay or edit): fills in a default
+   *  that should hold for new work without changing what an old file, recorded without it, rebuilds. */
+  stampNew?(params: P): P;
   /** Mutate the draft document. Must be deterministic given (doc, params). */
   apply(draft: CadDocument, params: P, ctx: CommandContext): CommandApplyInfo | void;
 }

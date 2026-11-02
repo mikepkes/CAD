@@ -256,12 +256,14 @@ export async function buildSkadis(s: CadSession): Promise<Record<string, string>
   await dis(s, "joint.create", { kind: "revolute", base: holder, moved: frame, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 1, z: 0 }, value: "90", name: "Linkage frame" });
   const at = (x: number, z: number) => { const [u, v] = fr(x, z); return { x: u, y: 0, z: v }; };
 
-  // the rack: two racks back to back, a bar through them with the guide slot
+  // the rack: two racks back to back, a bar through them with the guide slot. Its gears (and the
+  // pinions, fused into the arms) keep sharp edges: a broken edge would notch every seam where a bar
+  // is fused on, and booleans on their broken edges take the collision sweep past the kernel's memory.
   const rack = await part("Rack", tanFlat, frame);
   await dis(s, "joint.create", { kind: "slider", base: frame, moved: rack, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, value: "drop", name: "Rack" });
   const rim = WR - 1.25 * MOD + 0.5; // each rack's body reaches 0.5 past the middle, so the two join
-  const rackR = (await dis(s, "feature.gear", { type: "rack", plane: "XZ", component: rack, module: MOD, teeth: RACK_TEETH, faceWidth: TM, offset: D_M0, x: RACK_MID, y: WR, rim, backlash: 0.1, name: "Rack, right" }))[0];
-  await dis(s, "feature.gear", { type: "rack", plane: "XZ", component: rack, module: MOD, teeth: RACK_TEETH, faceWidth: TM, offset: D_M0, x: RACK_MID, y: -WR, rim, rotation: 180, backlash: 0.1, operation: "join", body: rackR, name: "Rack, left" });
+  const rackR = (await dis(s, "feature.gear", { type: "rack", plane: "XZ", component: rack, module: MOD, teeth: RACK_TEETH, faceWidth: TM, offset: D_M0, x: RACK_MID, y: WR, rim, backlash: 0.1, chamfer: false, name: "Rack, right" }))[0];
+  await dis(s, "feature.gear", { type: "rack", plane: "XZ", component: rack, module: MOD, teeth: RACK_TEETH, faceWidth: TM, offset: D_M0, x: RACK_MID, y: -WR, rim, rotation: 180, backlash: 0.1, chamfer: false, operation: "join", body: rackR, name: "Rack, left" });
   const RB = WR - 1.25 * MOD; // the bar: as wide as the roots
   const [ut, vt] = fr(0, 22), [ub] = fr(0, FOOT_PINS[1] - 3.5);
   await solid(s, { plane: "XZ", offset: D_M0, component: rack }, "Rack bar", { outlines: [rect(ut, -RB, ub, RB)] }, TM, { operation: "join", body: rackR });
@@ -318,10 +320,10 @@ export async function buildSkadis(s: CadSession): Promise<Record<string, string>
       let body: string;
       if (lower) {
         // the pinion, meshed with the rack (the left one the mirror image of the right)
-        if (sg > 0) body = (await dis(s, "feature.gear", { type: "spur", plane: "XZ", component: c, teeth: ZP, faceWidth: TM, bore: 8 + 2 * C, backlash: 0.1, mesh: { gear: rackR, along: -RACK_MID }, name: `Pinion, ${side}` }))[0];
+        if (sg > 0) body = (await dis(s, "feature.gear", { type: "spur", plane: "XZ", component: c, teeth: ZP, faceWidth: TM, bore: 8 + 2 * C, backlash: 0.1, chamfer: false, mesh: { gear: rackR, along: -RACK_MID }, name: `Pinion, ${side}` }))[0];
         else {
           const right = Object.values(s.doc.features).find((f) => f.kind === "gear" && f.name === "Pinion, right") as { dims: Record<string, string> };
-          body = (await dis(s, "feature.gear", { type: "spur", plane: "XZ", component: c, module: MOD, teeth: ZP, faceWidth: TM, offset: D_M0, bore: 8 + 2 * C, backlash: 0.1, x: right.dims.x, y: `-(${right.dims.y})`, rotation: `-(${right.dims.rotation})`, name: `Pinion, ${side}` }))[0];
+          body = (await dis(s, "feature.gear", { type: "spur", plane: "XZ", component: c, module: MOD, teeth: ZP, faceWidth: TM, offset: D_M0, bore: 8 + 2 * C, backlash: 0.1, chamfer: false, x: right.dims.x, y: `-(${right.dims.y})`, rotation: `-(${right.dims.rotation})`, name: `Pinion, ${side}` }))[0];
         }
       } else {
         const [hu, hv] = fr(sg * XL, z0);

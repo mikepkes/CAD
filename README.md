@@ -326,7 +326,10 @@ on.
   herringbone), rack (straight, helical or chevron), straight bevel (Tredgold
   tooth form, tapering to the pitch-cone apex) and worm** gears, with a
   printable bore (round, D-flat or keyway), hub and spokes and a printing
-  backlash by default; every number is an expression. `mesh: {gear, angle}`
+  backlash by default, and its edges broken by a small chamfer (0.15 × module)
+  round the teeth at each end face, a round bore, a ring's rim and a hub's end
+  so they catch the light (`chamfer: false` for sharp; a gear saved before it
+  existed stays sharp); every number is an expression. `mesh: {gear, angle}`
   places a gear in mesh with another — centre distance, phase, module and
   helix hand as expressions of the mate's, so the pair stays meshed when
   either changes. A gear on a revolute joint is built once and placed, so a
