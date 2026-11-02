@@ -59,6 +59,7 @@ export interface SheetFold {
   solve?: boolean;
   through?: "up" | "down" | "both";
   depth?: number;
+  bend?: boolean;
 }
 
 /** Material added to (a flange) or cut from (a relief) the blank, in order. */
