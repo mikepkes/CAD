@@ -225,6 +225,26 @@ exports[`bundled examples > public/examples/gripper.json > replays, builds on bo
 ]
 `;
 
+exports[`bundled examples > public/examples/masu.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet179",
+    "max": [
+      26.5,
+      26.8,
+      26.5,
+    ],
+    "min": [
+      -26.5,
+      -26.8,
+      -0,
+    ],
+    "name": "Masu box",
+    "volume": 0,
+  },
+]
+`;
+
 exports[`bundled examples > public/examples/origami.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {

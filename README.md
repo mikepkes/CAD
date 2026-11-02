@@ -78,6 +78,19 @@ crease the flaps inside them too), the layers kept a paper's thickness apart so
 they never pass through each other. The paper material is matte and fibrous,
 white on one side and red on the other, so folding turns the colour out.
 `width` and `length` size the sheet.
+Two more fold from one square: a **masu box**
+(**https://mikepkes.github.io/CAD/?mode=customize&example=masu** — corners in,
+sides up, then the ends rise as each corner folds in on its diagonal and
+presses flat inside) and a **paper crane**
+(**https://mikepkes.github.io/CAD/?mode=customize&example=crane** — a square
+base, two petal folds, the legs narrowed and swung up into the neck and tail,
+the head, the wings down). Their hard steps are **collapses**: every crease of
+the step moves at once, some driven and the rest solved each moment so the
+paper stays joined across every crease, a crease can be carried through a whole
+stack of layers, and layers that land on each other are spaced in the order
+they come in. Two simplifications remain in the crane: its neck and tail turn
+over outside the body (an inside reverse fold needs paper that bends), and as
+the wings come down their hidden inner layers part from them inside the body.
 And **https://mikepkes.github.io/CAD/?mode=customize&example=handlebar** — a
 **mountain-bike cockpit** built from organic surfaces. The riser bar is one
 sweep along a 3D B-spline spine (straight through the clamp, a rise bend, a
@@ -490,6 +503,8 @@ straight from a URL:
 ?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm) and a Geneva drive, driven by `turn`
 ?mode=customize&example=skadis         # SKÅDIS gravity holder: the item's weight drives a rack and two pinion parallelograms that clamp it; drop, item width, hook spacing, arm and slide-on sliders
 ?mode=customize&example=origami        # a paper airplane folded step by step from a flat sheet on one `fold` slider (0 flat … 6 done); width + length size the paper
+?mode=customize&example=masu           # a masu box from one square (0 flat … 5 done): its ends rise as the corners fold in; paper size slider
+?mode=customize&example=crane          # a paper crane from one square (0 flat … 11 done): square base, petal folds, neck, tail, head, wings; paper size slider
 ?mode=customize&example=handlebar      # a riser-bar cockpit from organic surfaces: a bar swept on a 3D spline with a tapering section, winged grips with a wrapped hex pattern; width, rise, sweep, grip and stem sliders
 ?mode=customize&example=walker         # a Jansen wind-walker: one crank, a six-throw crankshaft, twelve eleven-bar legs 60° apart; `t` turns the crank, `s` scales it
 ?mode=customize&example=motor          # a motor to design a mount round: NEMA 8–42 steppers, micro to ¼-scale hobby servos, 40–130 mm servo motors; length, shaft (D-cut, double-D, keyed, double-ended) and wiring (connector or cable, side or back)
