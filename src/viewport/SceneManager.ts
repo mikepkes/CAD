@@ -220,6 +220,7 @@ export class SceneManager {
   private animGroups = new Map<string, THREE.Group>();         // componentId -> group of its bodies
   private animBuildInv = new Map<string, THREE.Matrix4>();     // inverse of each component's build-pose world
   private animWood: { mat: THREE.Material; axis: THREE.Vector3; pith: THREE.Vector3; cid: string }[] = [];
+  private animDeltas = new Map<string, THREE.Matrix4>();       // componentId -> current pose delta (Wpose · inv(Wbuild))
   private raycaster = new THREE.Raycaster();
   private rayHelper = new THREE.Raycaster();
   readonly handles = new HandleManager(this);
@@ -1331,8 +1332,9 @@ export class SceneManager {
     this.clearGroup(this.regionGroup);
     this.clearGroup(this.previewSolidGroup);
 
-    // Other sketches stay visible on their planes, dimmed (Fusion-style).
+    // Other sketches stay visible on their planes, dimmed (Fusion-style); posed with their components while animating.
     for (const g of data.ghostSketches ?? []) this.renderGhostSketch(g.sketch, g.plane);
+    if (this.animating) this.poseGhostSketches();
 
     // Extrude session: pickable, highlightable region fills.
     if (data.extrudeRegions) this.renderExtrudeRegions(data.extrudeRegions);
@@ -1583,14 +1585,16 @@ export class SceneManager {
   }
 
   private clearGroup(g: THREE.Group) {
+    const keep = (x: THREE.Material) => !!x.userData?.cached; // cached materials are reused across frames
     for (const child of [...g.children]) {
       g.remove(child);
-      const geo = (child as any).geometry as THREE.BufferGeometry | undefined;
-      if (geo && !geo.userData?.cached) geo.dispose?.(); // cached geometries are reused across frames (see solidGeometry)
-      const m = (child as any).material;
-      const keep = (x: THREE.Material) => !!x.userData?.cached; // cached materials are reused across frames
-      if (Array.isArray(m)) m.forEach((x) => { if (!keep(x)) x.dispose(); });
-      else if (m && !keep(m)) m.dispose?.();
+      child.traverse((o) => { // nested groups too (a ghost sketch's group, an animated component's)
+        const geo = (o as any).geometry as THREE.BufferGeometry | undefined;
+        if (geo && !geo.userData?.cached) geo.dispose?.(); // cached geometries are reused across frames (see solidGeometry)
+        const m = (o as any).material;
+        if (Array.isArray(m)) m.forEach((x) => { if (!keep(x)) x.dispose(); });
+        else if (m && !keep(m)) m.dispose?.();
+      });
     }
   }
 
@@ -1611,8 +1615,10 @@ export class SceneManager {
     this.recording = !live; // live: the normal loop keeps rendering (and the camera keeps moving) while poses change
     this.invalidate();
     this.clearGroup(this.solidsGroup);
-    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = []; this.animMeshes.clear();
+    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = []; this.animMeshes.clear(); this.animDeltas.clear();
     this.solidsGroup.visible = true;
+    // every component's build-pose world, bodies or not: a component's sketches move with it too
+    for (const [cid, W] of buildWorld) this.animBuildInv.set(cid, rigidMat(W).invert());
     for (const { solid, componentId } of bodies) {
       let g = this.animGroups.get(componentId);
       if (!g) {
@@ -1641,18 +1647,29 @@ export class SceneManager {
    *  build pose), carrying the wood grain frame along so grain doesn't swim. */
   setAnimationPose(world: Map<string, Rigid>) {
     this.invalidate();
-    const deltas = new Map<string, THREE.Matrix4>();
-    for (const [cid, g] of this.animGroups) {
+    const deltas = this.animDeltas;
+    deltas.clear();
+    for (const [cid, inv] of this.animBuildInv) {
       const Wr = world.get(cid);
       const W = Wr ? rigidMat(Wr) : new THREE.Matrix4();
-      const G = W.multiply(this.animBuildInv.get(cid)!); // delta = Wp · inv(Wbuild)
-      g.matrix.copy(G); g.updateMatrixWorld(true);
-      deltas.set(cid, G);
+      deltas.set(cid, W.multiply(inv)); // delta = Wp · inv(Wbuild)
     }
+    for (const [cid, g] of this.animGroups) { g.matrix.copy(deltas.get(cid)!); g.updateMatrixWorld(true); }
+    this.poseGhostSketches();
     for (const w of this.animWood) {
       const G = deltas.get(w.cid); if (!G) continue;
       const u = w.mat.userData.woodUniforms as { uAxis: { value: THREE.Vector3 }; uPith: { value: THREE.Vector3 } } | undefined;
       if (u) { u.uPith.value.copy(w.pith).applyMatrix4(G); u.uAxis.value.copy(w.axis).transformDirection(G); }
+    }
+  }
+
+  /** Carry each component's dimmed sketches along with its posed bodies (they're drawn at the build pose). */
+  private poseGhostSketches() {
+    for (const g of this.ghostGroup.children) {
+      const cid = g.userData.componentId as string | null | undefined;
+      const G = cid != null ? this.animDeltas.get(cid) : undefined;
+      if (G) g.matrix.copy(G); else g.matrix.identity();
+      g.updateMatrixWorld(true);
     }
   }
 
@@ -1719,7 +1736,7 @@ export class SceneManager {
     this.animating = false;
     this.recording = false;
     this.clearGroup(this.solidsGroup);
-    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = []; this.animMeshes.clear();
+    this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = []; this.animMeshes.clear(); this.animDeltas.clear();
     if (this.lastData) this.update(this.lastData);
     this.invalidate();
   }
@@ -1757,6 +1774,11 @@ export class SceneManager {
   private renderGhostSketch(sk: Sketch, plane: WorkPlane) {
     const getPt = (id: string) => sk.entities[id] as SketchPoint | undefined;
     const color = COLORS().ghost;
+    // one group per sketch, tagged with its component, so an animation moves it with that component's bodies
+    const group = new THREE.Group();
+    group.matrixAutoUpdate = false;
+    group.userData.componentId = sk.componentId ?? null;
+    this.ghostGroup.add(group);
     // Every plain curve of the sketch goes into one LineSegments (one draw call per
     // sketch, not one per curve); construction curves keep a dashed line each, since
     // a dash pattern runs along a polyline, not from segment to segment.
@@ -1765,7 +1787,7 @@ export class SceneManager {
     const dashedLine = (pts: THREE.Vector3[]) => {
       const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color, dashSize: 2, gapSize: 1.6, transparent: true, opacity: 0.65 }));
       line.computeLineDistances();
-      this.ghostGroup.add(line);
+      group.add(line);
     };
     const curve = (pts: THREE.Vector3[], construction?: boolean) => { if (construction) dashedLine(pts); else strip(pts); };
     for (const e of Object.values(sk.entities)) {
@@ -1798,7 +1820,7 @@ export class SceneManager {
         curve(sampleSpline(through, 10).map((p) => this.worldPt(plane, p.x, p.y)), e.construction);
       }
     }
-    if (plain.length) this.ghostGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(plain), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.65 })));
+    if (plain.length) group.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(plain), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.65 })));
   }
 
   /** Translucent extruded-prism preview of a pending extrude (built in JS, no kernel). */
