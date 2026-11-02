@@ -10,7 +10,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
-import { sessionFromDoc } from "../../test/helpers";
+import { CadSession } from "../../src/core/command/session";
+import { createDefaultRegistry } from "../../src/core/command/builtins";
+import { PlaneGCSSolver } from "../../src/core/solver/planegcs";
 import { deserializeDocument } from "../../src/core/persistence";
 import { InlineGeometryBackend } from "../../src/core/geometry/backend";
 import type { SolidEval } from "../../src/core/features";
@@ -74,7 +76,8 @@ async function main() {
   await backend.init({ wasmBinary: wasm });
   const kernelMs = performance.now() - t;
 
-  const s = sessionFromDoc(deserializeDocument(text));
+  // (not test/helpers: it imports vitest, which refuses to load outside a vitest run)
+  const s = new CadSession(deserializeDocument(text), createDefaultRegistry(), new PlaneGCSSolver());
   t = performance.now();
   await s.recompute();
   const recomputeMs = performance.now() - t;

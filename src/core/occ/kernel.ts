@@ -40,6 +40,9 @@ export interface KernelInitOptions {
   wasmUrl?: string;
   /** Node: the wasm bytes. */
   wasmBinary?: ArrayBuffer | Uint8Array;
+  /** A loaded OCC module to use instead of loading the single-threaded build (a benchmark
+   *  trying another build of the same bindings, e.g. the pthreads one). */
+  module?: unknown;
 }
 
 /** Text for anything a kernel call threw. OCC failures surface as a bare
@@ -62,7 +65,7 @@ export function initKernel(opts: KernelInitOptions): Promise<void> {
       const moduleOpts: Record<string, unknown> = { print: () => {}, printErr: () => {} };
       if (opts.wasmBinary) moduleOpts.wasmBinary = opts.wasmBinary;
       else if (opts.wasmUrl) moduleOpts.locateFile = () => opts.wasmUrl;
-      const oc = await (opencascade as unknown as (o: unknown) => Promise<unknown>)(moduleOpts);
+      const oc = opts.module ?? await (opencascade as unknown as (o: unknown) => Promise<unknown>)(moduleOpts);
       setOC(oc as never);
       ready = true;
     })();
