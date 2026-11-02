@@ -105,7 +105,7 @@ export const LINES = {
     roubo:
       "A full-size woodworking bench, resized from one number. Its leg vise opens on a slider joint, and the shop drawing and cut list come straight from the model.",
     agent:
-      "Or just describe it. Claude builds it with the same commands you use: a twisted vase, every section sized from a parameter. Then refine it in plain words. Turn it into a lamp shade, and Claude cuts the windows and sets the material. The result is an ordinary parametric model you can keep editing.",
+      "Or just describe it. Claude builds it with the same commands you use: a twisted vase, every section sized from a parameter. Then refine it in plain words. Turn it into a lamp shade, and Claude cuts the windows and sets the material. Some windows overlap? Say so, and it thins them out. The result is an ordinary parametric model you can keep editing.",
     outro:
       "That's VibeCAD. Free, open source, in your browser or on your desktop. To build your first model, watch the phone stand tutorial. Thanks for watching.",
   },

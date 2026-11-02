@@ -311,20 +311,28 @@ export async function act3(d) {
       await d.key("Enter");
       await d.fast(label, async () => {
         await d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 });
-        await d.settle(400);
+        // re-cutting the windows rebuilds the shell's three cuts, which can take longer than settle's usual 20 s
+        if (!(await d.api("settle", 400, 60000, true))) d.note("settle timed out");
       });
     };
     await ask(agentCache.prompt, "Claude building");
     await d.api("aim", { dir: [1, -1, 0.45], ms: 1200, margin: 0.9 });
     await d.wait(1600);
-    // the refinement: a second prompt in the same conversation
-    for (const f of agentCache.followUps ?? []) await ask(f, "Claude refining");
+    // the refinements, more prompts in the same conversation: the lamp shade, then windows that don't overlap
+    const [shade, ...more] = agentCache.followUps ?? [];
+    if (shade) {
+      await ask(shade, "Claude refining");
+      // hold on the shade long enough to see its windows run into each other near the corners
+      await d.api("aim", { dir: [1, -1, 0.3], ms: 1200, margin: 0.85 });
+      await d.wait(2000);
+    }
+    for (const f of more) await ask(f, "Claude fixing");
     await d.api("aim", { dir: [1, -1, 0.3], ms: 1200, margin: 0.85 });
     await d.api("turntable", 8);
     await d.wait(1200); d.pick("lamp shade");
     await d.wait(2400);
     await d.api("turntable", null);
-  }, { minMs: 14000 });
+  }, { minMs: 20000 });
 
   await d.beat("outro", async () => {
     await d.lower(null);
