@@ -35,9 +35,12 @@ the print layers. It opens on the single half you print (print it twice); tick
 And **https://mikepkes.github.io/CAD/?mode=customize&example=clockwork** — a
 **clockwork of every kind of gear**, all on one slider. Drag `turn` (the knob)
 and a planetary stage (sun, three planets, a fixed ring gear) steps it down
-4:1; the carrier's spur gear drives a **rack** along the front and a **spur**,
-a **helical** and a **herringbone** pair, each stepping it back up ×2; a
-**straight bevel** pair turns the drive through 90° onto a cross shaft, whose
+4:1; the carrier's spur gear drives a **spur**, a **helical** and a
+**herringbone** pair, each stepping it back up ×2, and a crank whose pin rides
+in a slot under the **rack** (a Scotch yoke: its slider is `sin` of the crank's
+turn), so however far you turn the knob the rack runs back and forth along the
+front, rocking a pinion to and fro; a **straight bevel** pair turns the drive
+through 90° onto a cross shaft, whose
 **worm** turns a wheel with a hand at 1/8 of the knob. Off the carrier, spur G
 turns a **Geneva drive**: its crank pin steps a four-slot star a quarter turn per
 revolution, and a locking disc holds the star still in between (the star's joint
@@ -509,7 +512,7 @@ straight from a URL:
 ?mode=customize&example=gripper        # compliant gripper: 10 hinges, 3 loops, amplified jaws; jaw length slider, grip springs, PLA skeleton
 ?mode=customize&example=xystage        # XY flexure stage: two inputs, blades as beams, drift settled at minimum energy; blade sliders
 ?mode=customize&example=gimbal         # two-axis flexure gimbal: eight cross-blade flexures, alpha/beta steer the mirror; blade, platform and range sliders
-?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm) and a Geneva drive, driven by `turn`
+?mode=customize&example=clockwork      # every gear type in one train (planetary, rack, spur, helical, herringbone, bevel, worm), a Scotch yoke that runs the rack back and forth, and a Geneva drive, driven by `turn`
 ?mode=customize&example=skadis         # SKÅDIS gravity holder: the item's weight drives a rack and two pinion parallelograms that clamp it; drop, item width, hook spacing, arm and slide-on sliders
 ?mode=customize&example=origami        # a paper airplane folded step by step from a flat sheet on one `fold` slider (0 flat … 6 done); width + length size the paper
 ?mode=customize&example=masu           # a masu box from one square (0 flat … 5 done): its ends rise as the corners fold in; paper size slider
