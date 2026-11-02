@@ -1490,7 +1490,7 @@ export class SceneManager {
         stencilMesh.renderOrder = base;
         this.solidsGroup.add(stencilMesh);
       }
-      this.addSectionCap(this.clipPlane!, s, tint(color), base + 1);
+      this.addSectionCap(this.clipPlane!, s, tint(color), base + 1, index);
     }
 
     if (s.edges.length) {
@@ -1542,9 +1542,11 @@ export class SceneManager {
   }
 
   /** A filled quad over one body's cut, visible only where that body's stencil
-   *  is non-zero. Sized to the body and coloured to match it; drawing it resets
-   *  the stencil to 0 so the next body's cap is independent. */
-  private addSectionCap(plane: THREE.Plane, s: SolidView, color: number, renderOrder: number) {
+   *  is non-zero. Sized to the body and coloured to match it, and cross-hatched as
+   *  a drawing's section is (so the cut reads as solid material, not a surface):
+   *  45° lines, the next body's at another angle (HATCH_ANGLES) so parts that touch read apart.
+   *  Drawing it resets the stencil to 0 so the next body's cap is independent. */
+  private addSectionCap(plane: THREE.Plane, s: SolidView, color: number, renderOrder: number, index: number) {
     const lo = new THREE.Vector3(Infinity, Infinity, Infinity), hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
     const p = s.positions;
     for (let i = 0; i < p.length; i += 3) {
@@ -1554,6 +1556,7 @@ export class SceneManager {
     const ctr = lo.clone().add(hi).multiplyScalar(0.5);
     const size = lo.distanceTo(hi) * 1.2 || 200;
     const capMat = new THREE.MeshStandardMaterial({ color, metalness: 0.1, roughness: 0.75, side: THREE.DoubleSide });
+    hatch(capMat, Math.min(5, Math.max(0.5, lo.distanceTo(hi) / 45)), HATCH_ANGLES[index % HATCH_ANGLES.length]);
     capMat.stencilWrite = true;
     capMat.stencilRef = 0;
     capMat.stencilFunc = THREE.NotEqualStencilFunc;
@@ -2485,3 +2488,29 @@ function solidGeometry(s: { positions: Float32Array; normals: Float32Array; indi
 function paperEdgeMaterial(faded: boolean): THREE.LineBasicMaterial {
   return new THREE.LineBasicMaterial({ color: 0x55534f, transparent: true, opacity: faded ? 0.2 : 0.5 });
 }
+
+/** Section hatch angles (degrees), body by body: the drafting 45° and 135° first, then 60°/120° and 30°/150°. */
+const HATCH_ANGLES = [45, 135, 60, 120, 30, 150];
+
+/** Section hatching on a cap material: lines `spacing` mm apart across the cap's own plane (they stay put on the
+ *  cut as the view turns), at `angleDeg`, darkening the fill; antialiased over a pixel. */
+function hatch(mat: THREE.MeshStandardMaterial, spacing: number, angleDeg: number) {
+  const a = (angleDeg * Math.PI) / 180;
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uHatch = { value: new THREE.Vector3(spacing, -Math.sin(a), Math.cos(a)) }; // spacing, then across the lines
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec2 vHatchPos;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvHatchPos = position.xy;");
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec2 vHatchPos;\nuniform vec3 uHatch;")
+      .replace("#include <map_fragment>", `#include <map_fragment>
+      {
+        float t = dot(vHatchPos, uHatch.yz) / uHatch.x;      // in spacings, across the lines
+        float d = abs(fract(t + 0.5) - 0.5) * uHatch.x;    // mm to the nearest line
+        float px = fwidth(t) * uHatch.x;                   // a pixel, in mm
+        float hw = max(0.09 * uHatch.x, 0.5 * px);         // the line's half width: at least a pixel wide
+        float line = 1.0 - smoothstep(hw - 0.5 * px, hw + 0.5 * px, d);
+        diffuseColor.rgb *= 1.0 - 0.55 * line;
+      }`);
+  };
+  mat.customProgramCacheKey = () => "section-hatch";
+}
+
