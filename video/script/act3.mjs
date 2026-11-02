@@ -200,13 +200,50 @@ export async function act3(d) {
 
   await clip("gimbal", "gimbal", "Flexure gimbal", "steers a mirror on eight blades", async () => { await sweep(d, "alpha", there(-8, 8, 6), 2400); d.pick("gimbal"); await sweep(d, "beta", there(-8, 8, 6), 2400); });
   await clip("roubo", "roubo", "Roubo workbench", "the leg vise, and the shop drawing to build it from", async () => {
+    const t0 = d.now(), fast0 = d.timing.fast.length;
+    // seconds of the clip seen so far: a sped-up span (over 3 s) plays at 1/ceil(len/3) of its length
+    const onScreen = () => d.timing.fast.slice(fast0).reduce((t, f) => {
+      const len = f.end - f.start;
+      return t - (f.cut ? len : len <= 3 ? 0 : len - len / Math.ceil(len / 3));
+    }, d.now() - t0);
+    // the vise opens on "Its leg vise opens" (the default voice's word timings, seconds into the clip)
+    let opensAt = 4.3;
+    try {
+      const w = JSON.parse(readFileSync(new URL("../vo/af_heart/act3-roubo.words.json", import.meta.url), "utf8")).words;
+      const i = w.findIndex((x, k) => /^its$/i.test(x.w) && /^leg/i.test(w[k + 1]?.w ?? ""));
+      if (i >= 0) opensAt = w[i].s;
+    } catch { /* no cached timings: the fallback */ }
     await d.api("aim", { dir: [0.45, -1, 0.5], ms: 1000, margin: 0.7 });
     await sweep(d, "L", there(1700, 2100, 4), 2400);
-    // in on the leg vise while it opens and closes (posed, not rebuilt)
-    await d.api("aim", { dir: [-0.45, -1, 0.4], box: await d.api("componentBox", ["Vise chop", "Leg FL"]), ms: 1600, margin: 1.2 });
-    await d.api("poseSweep", "viseGap", 60, 170, 2200);
+    // in on the leg vise, square-on to its travel (the slider's axis, from the model) so the chop's motion lies in
+    // the picture, seen from the end of the bench it sits at, a little from above; then it opens and closes (posed)
+    const vise = await d.api("componentBox", ["Vise chop", "Leg FL"]), gap = [60, 170];
+    const view = await d.run(([box, travel]) => {
+      const D = window.__vibecadDemo, doc = D.store.getState().session.doc;
+      const j = Object.values(doc.joints).find((q) => q.kind === "slider" && q.valueExpr.trim() === "viseGap");
+      const a = j?.axis ?? { x: 0, y: -1, z: 0 }; // in the base's frame: the vise slides on the bench (ground)
+      const n = Math.hypot(a.x, a.y, a.z) || 1, ax = [a.x / n, a.y / n, a.z / n];
+      // across the travel, level: axis × up, turned toward the vise's side of the bench
+      let p = [ax[1], -ax[0], 0];
+      if (Math.hypot(p[0], p[1]) < 1e-6) p = [1, 0, 0];
+      const all = D.bounds().reduce((u, b) => ({ x0: Math.min(u.x0, b.min.x), x1: Math.max(u.x1, b.max.x), y0: Math.min(u.y0, b.min.y), y1: Math.max(u.y1, b.max.y) }), { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity });
+      const off = [(box.min.x + box.max.x) / 2 - (all.x0 + all.x1) / 2, (box.min.y + box.max.y) / 2 - (all.y0 + all.y1) / 2];
+      if (p[0] * off[0] + p[1] * off[1] < 0) p = [-p[0], -p[1], 0];
+      // a little from above, kept square to the travel
+      const v = [p[0], p[1], 0.3], k = v[0] * ax[0] + v[1] * ax[1] + v[2] * ax[2];
+      // the box framed: the leg and chop, stretched over the chop's travel so the opening stays centred
+      const t = { x: ax[0] * travel, y: ax[1] * travel, z: ax[2] * travel }, frame = { min: { ...box.min }, max: { ...box.max } };
+      for (const c of ["x", "y", "z"]) { frame.min[c] += Math.min(0, t[c]); frame.max[c] += Math.max(0, t[c]); }
+      return { dir: [v[0] - k * ax[0], v[1] - k * ax[1], v[2] - k * ax[2]], frame };
+    }, [vise, gap[1] - gap[0]]);
+    // the move lands as "Its" is said (shortened, down to 0.8 s, when the resize ran long)
+    const aimMs = Math.round(1000 * Math.min(1.3, Math.max(0.8, opensAt - onScreen())));
+    const lead = opensAt - aimMs / 1000 - onScreen();
+    if (lead > 0) await d.wait(lead * 1000);
+    await d.api("aim", { dir: view.dir, box: view.frame, ms: aimMs, margin: 1.15 });
+    await d.api("poseSweep", "viseGap", gap[0], gap[1], 2200);
     d.pick("leg vise");
-    await d.api("poseSweep", "viseGap", 170, 60, 1800);
+    await d.api("poseSweep", "viseGap", gap[1], gap[0], 1800);
     await d.api("poseEnd");
     await d.api("aim", { dir: [0.45, -1, 0.5], ms: 1000, margin: 0.7 });
     await d.api("cursor", true);
