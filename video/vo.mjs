@@ -1,4 +1,4 @@
-// The voiceover: `node video/vo.mjs [--acts 1,2,3] [--voices af_heart,bm_george] [--say] [--force] [--host mike@hexgame]`
+// The voiceover: `node video/vo.mjs [--acts 0,1,2,3] [--voices af_heart,bm_george] [--say] [--force] [--host mike@hexgame]`
 // Synthesises every narrated line (video/script/lines.mjs, plus the montage's) in every voice, one clip per line per
 // voice: video/vo/<voice>/<act>-<beat>.wav, 48 kHz 16-bit mono, silence trimmed, levelled to -20 dBFS speech.
 // Only lines whose text (or voice settings) changed since the last run are synthesised again.
@@ -20,7 +20,7 @@ import { levels, readWav, trimAndLevel, writeWav } from "./lib/wav.mjs";
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const has = (k) => process.argv.includes(k);
-const acts = arg("--acts", "1,2,3").split(",").map(Number);
+const acts = arg("--acts", "0,1,2,3").split(",").map(Number);
 const HOST = arg("--host", process.env.VIDEO_TTS_HOST ?? "mike@hexgame");
 const REMOTE = "vibecad-tts"; // under the remote home
 const SR = 48000;

@@ -79,6 +79,21 @@ node video/checks/vo.mjs --run NAME    # after the edit: every line has its clip
   public video); Dia-1.6B (Apache-2.0) needs several GB of GPU memory, against the ~1 GB free. Kokoro fits, its
   licence is clean, and it is a strong narrator.
 
+## Pass 6 (not recorded yet): two videos
+
+The one video splits in two, because a showcase and a focused tutorial serve different viewers: someone deciding
+whether VibeCAD is worth trying wants breadth fast; someone learning wants one model, start to finish, without
+detours.
+
+- **Demo** (Acts 0 and 3, with the montage): a new Act 0 after the montage. The VibeCAD title, then "what it is":
+  the finished phone stand turned and its phone thickness dragged (Act 1's cold open, shared), then where to get it,
+  then straight into the showcase. The outro now points to the tutorial.
+- **Tutorial** (Acts 1 and 2): titled "Model a phone stand". No montage; the cold open says what you'll build and the
+  route (by hand, parametric, then rounded, checked, exported). Act 2 gains a `wrap-up` beat: the finished stand
+  turning, then an end card pointing to the demo.
+- Each video has its own chapters, cue sheet, subtitles and voice tracks, in `video/out/<run>/<demo|tutorial>/`.
+  The montage line is now `act0-montage` (its clips were made again under that key).
+
 ## Pass 5 (not recorded yet): your pass 4 review
 
 ### Your review of pass 4, and what changed

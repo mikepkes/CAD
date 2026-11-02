@@ -1,4 +1,5 @@
-// Record takes: `node video/record.mjs [--acts 1,2,3] [--run NAME] [--dry]`.
+// Record takes: `node video/record.mjs [--video demo|tutorial] [--acts 0,1,2,3] [--run NAME] [--dry]`.
+// The demo is Acts 0 and 3, the tutorial Acts 1 and 2 (VIDEOS in script/lines.mjs); without either flag, every act.
 // Needs the dev server (`npm run dev`, or `npm run tauri:dev`) on :5173, or another with --url / VIDEO_URL
 // (e.g. VIDEO_URL="http://localhost:5187/?demo"). Beats are timed to the voiceover clips in video/vo (video/vo.mjs)
 // when they exist, for the voices VIDEO_VOICES / VIDEO_TTS select; otherwise to each line's read time.
@@ -8,9 +9,10 @@
 import { mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { Director } from "./lib/director.mjs";
+import { VIDEOS } from "./script/lines.mjs";
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
-const acts = arg("--acts", "1,2,3").split(",").map(Number);
+const acts = arg("--acts") ? arg("--acts").split(",").map(Number) : arg("--video") ? VIDEOS[arg("--video")].acts : [0, 1, 2, 3];
 const run = arg("--run", new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19));
 const dry = process.argv.includes("--dry");
 const url = arg("--url", process.env.VIDEO_URL ?? "http://localhost:5173/?demo");

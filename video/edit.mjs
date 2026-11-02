@@ -1,6 +1,7 @@
-// The edit pass: `node video/edit.mjs --run NAME [--acts 1,2,3]`.
-// Turns recorded takes (video/takes/NAME/actN) into video/out/NAME/:
-//   vibecad-tutorial.mp4  1440p60 H.264, sped-up spans with their speed chyron, cut spans removed,
+// The edit pass: `node video/edit.mjs --run NAME [--video demo|tutorial] [--acts 1,2]`.
+// Cuts one of the two videos (VIDEOS in script/lines.mjs; without --video, each in turn) from the recorded takes
+// (video/takes/NAME/actN) into video/out/NAME/<video>/:
+//   vibecad-demo.mp4 / vibecad-tutorial.mp4  1440p60 H.264, sped-up spans with their speed chyron, cut spans removed,
 //                        subtitles burned in (from the script text, never speech recognition)
 //   subtitles.srt        the same subtitles as a sidecar file (for YouTube)
 //   cue-sheet.md         the ADR sheet: every line with its timecode and length, for recording the voiceover to picture
@@ -18,14 +19,22 @@ import { readFileSync, writeFileSync, mkdirSync, openSync, writeSync, closeSync,
 import { join, extname } from "node:path";
 import { chromium } from "playwright";
 import { fastened } from "./lib/director.mjs";
-import { MONTAGE, CHAPTERS } from "./script/lines.mjs";
+import { MONTAGE, CHAPTERS, VIDEOS } from "./script/lines.mjs";
 import { loadClips, VO_TAIL_MS } from "./lib/voices.mjs";
 import { readWav, writeWav } from "./lib/wav.mjs";
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const run = arg("--run");
 if (!run) { console.error("usage: node video/edit.mjs --run NAME"); process.exit(1); }
-const acts = arg("--acts", "1,2,3").split(",").map(Number);
+const videoId = arg("--video");
+if (!videoId) {
+  // both videos, one after the other (each a run of this script)
+  for (const v of Object.keys(VIDEOS)) execFileSync(process.execPath, [new URL(import.meta.url).pathname, ...process.argv.slice(2), "--video", v], { stdio: "inherit" });
+  process.exit(0);
+}
+const video = VIDEOS[videoId];
+if (!video) { console.error(`--video: one of ${Object.keys(VIDEOS).join(", ")}`); process.exit(1); }
+const acts = arg("--acts") ? arg("--acts").split(",").map(Number) : video.acts;
 // --preview: a small 720p copy for review on a phone (under the 30 MB file limit), beside the full render
 const preview = process.argv.includes("--preview");
 const vo = process.argv.includes("--no-vo") ? null : loadClips();
@@ -34,7 +43,8 @@ const SR = 48000;
 const FPS = 60;
 const ROOT = new URL("..", import.meta.url).pathname;
 const takes = join(ROOT, "video", "takes", run);
-const out = join(ROOT, "video", "out", run);
+const out = join(ROOT, "video", "out", run, videoId);
+const outUrl = `/video/out/${run}/${videoId}`;
 mkdirSync(out, { recursive: true });
 
 // ---- the edit decision list ----
@@ -71,11 +81,11 @@ function chunks(text) {
   return out;
 }
 
-// ---- the intro montage: a third of a second from each moment Act 3 marked (`d.pick`; longer, and sped up, where
-// the pick says so), before Act 1's cold open ----
+// ---- the demo's intro montage: a third of a second from each moment Act 3 marked (`d.pick`; longer, and sped up,
+// where the pick says so), before Act 0's title ----
 const PICK = Math.round(FPS / 3);
 let montageExtra = 0, beatsExtra = 0; // seconds the voices beyond the default add to the cut
-if (acts[0] === 1 && existsSync(join(takes, "act3", "timing.json"))) {
+if (video.montage && existsSync(join(takes, "act3", "timing.json"))) {
   const timing = JSON.parse(readFileSync(join(takes, "act3", "timing.json"), "utf8"));
   const list = JSON.parse(readFileSync(join(takes, "act3", "frames.json"), "utf8")).filter((f) => f.t >= 0);
   const picks = timing.picks ?? [];
@@ -83,7 +93,7 @@ if (acts[0] === 1 && existsSync(join(takes, "act3", "timing.json"))) {
     const ti = takeFiles.push({ dir: `video/takes/${run}/act3/frames`, files: list.map((f) => f.file) }) - 1;
     const from = outFrame;
     // with a voiceover, the last shot plays on until the longest voice has said the line (the cuts before it stay quick)
-    const clips = vo?.clips("act1-montage", MONTAGE) ?? [];
+    const clips = vo?.clips("act0-montage", MONTAGE) ?? [];
     const need = clips.length ? Math.ceil(((Math.max(...clips.map((c) => c.ms)) + VO_TAIL_MS) / 1000) * FPS) : 0;
     const needDefault = clips.length ? Math.ceil((((clips.find((c) => c.voice === vo.voices[0]) ?? clips[0]).ms + VO_TAIL_MS) / 1000) * FPS) : 0;
     const lenOf = (p) => (p.len ? Math.round(p.len * FPS) : PICK);
@@ -98,8 +108,8 @@ if (acts[0] === 1 && existsSync(join(takes, "act3", "timing.json"))) {
         frames.push([ti, fi]); outFrame++;
       }
     }
-    cues.push({ act: 1, id: "montage", from, to: outFrame, text: MONTAGE });
-    if (CHAPTERS[1]?.montage) chapters.push({ from, title: CHAPTERS[1].montage });
+    cues.push({ act: 0, id: "montage", from, to: outFrame, text: MONTAGE });
+    if (CHAPTERS[0]?.montage) chapters.push({ from, title: CHAPTERS[0].montage });
     captions.push({ from, to: outFrame, text: MONTAGE });
     console.log(`montage: ${picks.length} picks (${picks.map((p) => p.label).join(", ")}), ${((outFrame - from) / FPS).toFixed(1)} s`);
   }
@@ -209,8 +219,8 @@ writeFileSync(join(out, "chapters.txt"), yt.map((c) => `${mmss(c.start)} ${c.tit
 if (chapters.length) console.log(`chapters: ${chapterMs.length} in the MP4, ${yt.length} in chapters.txt (YouTube's 10 s minimum)`);
 writeFileSync(join(out, "subtitles.srt"), captions.map((c, i) => `${i + 1}\n${tc(c.from)} --> ${tc(c.to)}\n${c.text}\n`).join("\n"));
 const voCol = (c) => (c.clips.length ? `${(Math.max(...c.clips.map((k) => k.ms)) / 1000).toFixed(1)} s` : "–");
-writeFileSync(join(out, "cue-sheet.md"), `# Voiceover cue sheet (${run})\n\nRecord each line to picture (ADR), or use the synthesised voiceover (video/vo.mjs), whose clips start at "In". Times are in the cut; the picture holds about half a second of settled tail after each line. "VO" is the longest synthesised clip of the line.\n\n| # | Act | Beat | In | Length | VO | Line |\n|---|---|---|---|---|---|---|\n${cues.map((c, i) => `| ${i + 1} | ${c.act} | ${c.id} | ${tc(c.from, ".").slice(3, 9)} | ${((c.to - c.from) / FPS).toFixed(1)} s | ${voCol(c)} | ${c.text} |`).join("\n")}\n\nTotal: ${tc(outFrame, ".").slice(3, 9)}\n`);
-const audio = mixes.length ? { file: `/video/out/${run}/vo/${mixes[0].voice.id}.wav`, title: mixes[0].voice.title, bitrate: preview ? 48000 : 128000 } : null;
+writeFileSync(join(out, "cue-sheet.md"), `# Voiceover cue sheet: ${video.title} (${run})\n\nRecord each line to picture (ADR), or use the synthesised voiceover (video/vo.mjs), whose clips start at "In". Times are in the cut; the picture holds about half a second of settled tail after each line. "VO" is the longest synthesised clip of the line.\n\n| # | Act | Beat | In | Length | VO | Line |\n|---|---|---|---|---|---|---|\n${cues.map((c, i) => `| ${i + 1} | ${c.act} | ${c.id} | ${tc(c.from, ".").slice(3, 9)} | ${((c.to - c.from) / FPS).toFixed(1)} s | ${voCol(c)} | ${c.text} |`).join("\n")}\n\nTotal: ${tc(outFrame, ".").slice(3, 9)}\n`);
+const audio = mixes.length ? { file: `${outUrl}/vo/${mixes[0].voice.id}.wav`, title: mixes[0].voice.title, bitrate: preview ? 48000 : 128000 } : null;
 // the preview's video bitrate: what keeps the file under PREVIEW_MB (a phone's attachment limit) at this length
 const PREVIEW_MB = 28;
 const previewBitrate = Math.min(550000, Math.floor((PREVIEW_MB * 8e6) / (outFrame / FPS) - (audio?.bitrate ?? 0) - 8000));
@@ -218,7 +228,7 @@ writeFileSync(join(out, "plan.json"), JSON.stringify({ fps: FPS, width: 2560, he
 console.log(`plan: ${outFrame} frames (${tc(outFrame, ".")}), ${captions.length} captions, ${chyrons.length} chyrons`);
 
 // ---- render ----
-const mp4 = join(out, preview ? "vibecad-tutorial-preview.mp4" : "vibecad-tutorial.mp4");
+const mp4 = join(out, `${video.file}${preview ? "-preview" : ""}.mp4`);
 const fd = openSync(mp4, "w");
 const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".jpg": "image/jpeg" };
 const server = createServer((req, res) => {
@@ -241,7 +251,7 @@ const browser = await chromium.launch({ headless: false, args: ["--window-size=4
 const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
 page.on("console", (m) => console.log(`  [compositor] ${m.text()}`));
 page.on("pageerror", (e) => console.error(`  [compositor error] ${e.message}`));
-await page.goto(`http://localhost:${port}/video/compositor/index.html?plan=/video/out/${run}/plan.json${preview ? `&w=1280&h=720&bitrate=${previewBitrate}` : ""}`);
+await page.goto(`http://localhost:${port}/video/compositor/index.html?plan=${outUrl}/plan.json${preview ? `&w=1280&h=720&bitrate=${previewBitrate}` : ""}`);
 const result = await page.evaluate(() => window.render());
 console.log(`\nrendered ${result.frames} frames, ${(result.bytes / 1e6).toFixed(1)} MB, ${result.codec}`);
 await browser.close();
@@ -263,14 +273,14 @@ function muxVoices() {
     m.m4a = m.wav.replace(/\.wav$/, ".m4a");
     execFileSync("afconvert", ["-f", "m4af", "-d", "aac", "-b", "128000", "-q", "127", m.wav, m.m4a]);
   }
-  const dir = `vibecad-tts/mux/${run}`;
+  const dir = `vibecad-tts/mux/${run}-${videoId}`;
   execFileSync("ssh", [...SSH, HOST, `mkdir -p ~/${dir}`]);
   const ffmeta = join(out, "chapters.ffmeta"), withChapters = chapters.length > 0;
   execFileSync("rsync", ["-a", "-e", rsh, mp4, ...mixes.map((m) => m.m4a), ...(withChapters ? [ffmeta] : []), `${HOST}:${dir}/`]);
-  const inputs = ["-i", "vibecad-tutorial.mp4", ...mixes.flatMap((m) => ["-i", `${m.voice.id}.m4a`]), ...(withChapters ? ["-i", "chapters.ffmeta"] : [])];
+  const inputs = ["-i", `${video.file}.mp4`, ...mixes.flatMap((m) => ["-i", `${m.voice.id}.m4a`]), ...(withChapters ? ["-i", "chapters.ffmeta"] : [])];
   const maps = ["-map", "0:v:0", ...mixes.flatMap((_, i) => ["-map", `${i + 1}:a:0`]), ...(withChapters ? ["-map_chapters", String(mixes.length + 1)] : [])];
   // the MP4 muxer keeps a track's name as its handler name (it drops `title`), which is what players list
-  const meta = ["-metadata:s:v:0", "handler_name=VibeCAD tutorial", ...mixes.flatMap((m, i) => [
+  const meta = ["-metadata:s:v:0", `handler_name=${video.title}`, ...mixes.flatMap((m, i) => [
     `-metadata:s:a:${i}`, `title=${m.voice.title}`, `-metadata:s:a:${i}`, `handler_name=${m.voice.title}`, `-metadata:s:a:${i}`, "language=eng", `-disposition:a:${i}`, i === 0 ? "default" : "0"])];
   const ff = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", ...inputs, ...maps, "-c", "copy", ...meta, "-movflags", "+faststart", "tracks.mp4"];
   const probe = "ffprobe -v error -show_chapters -show_entries format=duration:stream=index,codec_type,codec_name,duration:stream_tags=title,handler_name,language:stream_disposition=default -of json tracks.mp4";

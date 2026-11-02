@@ -1,4 +1,4 @@
-// Act 2 · Grow: the stand becomes a product. Starts from the parametric stand Act 1 ends with
+// Act 2 · The tutorial, continued: the stand becomes a product, and the tutorial ends on it. Starts from the parametric stand Act 1 ends with
 // (rebuilt by command in the preroll: width, depth and phone are bounded parameters).
 // Narration: lines.mjs, by beat id.
 
@@ -157,4 +157,15 @@ export async function act2(d) {
     await d.fast("exporting", () => d.settle(500));
     await d.wait(800);
   }, { lower: { title: "Export", sub: "STL · 3MF · STEP" } });
+
+  // the finished stand, turning, then the end card pointing to the demo
+  await d.beat("wrap-up", async () => {
+    await d.lower(null);
+    await d.api("cursor", false);
+    await d.api("aim", { dir: [1, -1, 0.5], ms: 1200, margin: 0.9 });
+    await d.api("turntable", 10);
+    await d.wait(3200);
+    await d.api("turntable", null);
+    await d.api("titleCard", { title: "Your phone stand", subtitle: "Next: the VibeCAD demo   ·   mikepkes.github.io/CAD", chips: ["Free", "Open source (MIT)", "Browser or desktop"] });
+  }, { minMs: 7000 });
 }

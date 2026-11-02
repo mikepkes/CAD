@@ -1,4 +1,5 @@
-// Act 3 · Rapid fire: about seven seconds per idea, mostly the bundled examples, then the mock agent.
+// Act 3 · The demo's showcase, rapid fire: about seven seconds per idea, mostly the bundled examples, then the mock
+// agent, and the outro pointing to the tutorial.
 // Loading each model is cut from the edit; slow processing is sped up with its speed shown.
 // Narration: lines.mjs, by beat id.
 
