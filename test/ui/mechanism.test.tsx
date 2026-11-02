@@ -78,6 +78,23 @@ describe("MechanismPanel", () => {
     const xs = [...within(chart).getAllByTestId("rest-marker"), within(chart).getByTestId("unstable-marker")].map((c) => Number(c.getAttribute("cx")));
     expect(xs[0]).toBeLessThan(xs[2]);
     expect(xs[2]).toBeLessThan(xs[1]);
+    // each labelled with its travel; no pull-back on this curve
+    expect(within(chart).getAllByTestId("rest-label").map((t) => t.textContent)).toEqual(["0 mm", "6.8 mm"]);
+    expect(within(chart).getByTestId("unstable-label").textContent).toBe("4.9 mm");
+    expect(within(chart).queryByTestId("pullback-marker")).toBeNull();
+  });
+
+  it("marks the pull-back, and keeps a rest the drive stands on drawn over its marker", () => {
+    setDoc(compliantDoc(0));
+    useMechanism.setState({ curves: { travel: { key: "k", curve: { ...CURVE, pullBack: { x: 6, y: -4.6 } } } }, pose: POSE });
+    render(<MechanismPanel />);
+    const chart = screen.getByRole("img", { name: "Force against travel" });
+    expect(within(chart).getByTestId("pullback-marker").textContent).toBe("back -4.6 N");
+    expect(screen.getByTestId("rest-sentence").textContent).toBe("Bistable: rests at 0 mm and 6.8 mm; tips over at 4.9 mm; snaps over at 11.8 N and back at -4.6 N.");
+    // standing at the first rest: the rest's marker comes after (over) the drive's
+    const order = [...chart.querySelectorAll("[data-testid]")].map((e) => e.getAttribute("data-testid"));
+    expect(order.indexOf("current-marker")).toBeLessThan(order.indexOf("rest-marker"));
+    expect(screen.getByText("pull-back")).toBeTruthy();
   });
 
   it("moves the marker as the drive changes", () => {

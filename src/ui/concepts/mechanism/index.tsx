@@ -1,6 +1,6 @@
 // The Mechanism tab (right side panel, while useUi.panels.mechanism is on): a
 // compliant mechanism's force–travel curve along its drive, with its rest
-// positions, the tipping point and the snap force; a marker at the drive's
+// positions, the tipping point, the snap force and the pull-back; a marker at the drive's
 // current value; a Sweep that runs the drive across its range; and how hard each
 // flexure is working. A template over mechanism.ts; the numbers come from
 // mechanismStore (which runs the solver off the render path).
@@ -63,6 +63,7 @@ export function MechanismPanel() {
             <span><i className="mech-key-stable" />rest</span>
             <span><i className="mech-key-unstable" />tipping point</span>
             <span><i className="mech-key-snap" />snap</span>
+            {curve?.pullBack && <span><i className="mech-key-pullback" />pull-back</span>}
             <span><i className="mech-key-now" />now</span>
           </div>
           {curve && <p className="mech-sentence" data-testid="rest-sentence">{restSentence(curve)}</p>}

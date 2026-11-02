@@ -1,6 +1,6 @@
 // The Mechanism panel's logic: which parameters drive a compliant mechanism,
 // the force–travel curve along one of them (with its rest positions, the
-// unstable tipping point between them and the snap force), the chart's
+// unstable tipping point between them, the snap force and the pull-back), the chart's
 // geometry, the per-flexure strain bars and the values a Sweep steps through.
 // Pure functions over the solver's output (src/sim/flexure.ts); no React, no
 // store. mechanismStore.ts runs the solver and keeps the results.
@@ -24,7 +24,7 @@ export function drivesOf(doc: Pick<CadDocument, "joints" | "parameters">): Param
   return out;
 }
 
-export interface CurvePoint { x: number; y: number }
+export interface CurvePoint { x: number; y: number; /** A rest held by the end of the drive's range, not by the flexures. */ limit?: boolean }
 
 /** A force–travel (or torque–angle) curve along one drive. */
 export interface MechanismCurve {
@@ -39,7 +39,7 @@ export interface MechanismCurve {
   max: number;
   /** Drive value → effort (dU/d(drive)), in drive order; poses that failed are left out. */
   points: CurvePoint[];
-  /** Rest positions: effort zero and rising through it (an energy minimum). */
+  /** Rest positions: effort zero and rising through it (an energy minimum), or an end of the range the energy falls into. */
   stable: CurvePoint[];
   /** Tipping points: effort zero and falling through it (an energy maximum). */
   unstable: CurvePoint[];
@@ -47,17 +47,20 @@ export interface MechanismCurve {
   multistable: boolean;
   /** The largest effort between the first two rests: what it takes to snap it over. */
   snap?: CurvePoint;
+  /** The most negative effort between the first two rests (the curve's dip): the pull that snaps it back. */
+  pullBack?: CurvePoint;
 }
 
 /** The curve a study of `param` over [min, max] draws (efforts in N, or N·mm for an angle). */
 export function buildCurve(study: EquilibriumStudy, param: string, angular: boolean, min: number, max: number): MechanismCurve {
   const points = study.poses.filter((p) => !p.error && Number.isFinite(p.effort) && Number.isFinite(p.value)).map((p) => ({ x: p.value, y: p.effort }));
-  const stable = study.states.filter((s) => s.stable).map((s) => ({ x: s.value, y: 0 }));
+  const stable = study.states.filter((s) => s.stable).map((s) => ({ x: s.value, y: 0, ...(s.limit ? { limit: true } : {}) }));
   const unstable = study.states.filter((s) => !s.stable).map((s) => ({ x: s.value, y: 0 }));
   return {
     param, angular, unit: angular ? "°" : "mm", effortUnit: angular ? "N·mm" : "N", min, max,
     points, stable, unstable, multistable: study.multistable,
     ...(study.snap ? { snap: { x: study.snap.value, y: study.snap.effort } } : {}),
+    ...(study.pullBack ? { pullBack: { x: study.pullBack.value, y: study.pullBack.effort } } : {}),
   };
 }
 
@@ -103,8 +106,11 @@ export interface ChartGeometry {
   yHi: number;
 }
 
+/** Pixels kept under a labelled point at the bottom of the plot (the pull-back's dip, the rests on the zero line). */
+export const LABEL_ROOM = 18;
+
 /** Scales, ticks and the path for a curve in a box (padding in the box). */
-export function chartGeometry(curve: Pick<MechanismCurve, "points" | "min" | "max"> & Partial<Pick<MechanismCurve, "stable" | "multistable">>, box: ChartBox): ChartGeometry {
+export function chartGeometry(curve: Pick<MechanismCurve, "points" | "min" | "max"> & Partial<Pick<MechanismCurve, "stable" | "multistable" | "pullBack">>, box: ChartBox): ChartGeometry {
   // A multistable curve is scaled to the stretch between its rests (and a little
   // either side): past the last rest the effort climbs steeply and would flatten
   // the snap. The curve runs off the plot there (the chart clips it).
@@ -116,9 +122,14 @@ export function chartGeometry(curve: Pick<MechanismCurve, "points" | "min" | "ma
   if (!(hi > lo)) { lo = -1; hi = 1; }
   const pad = (hi - lo) * 0.1;
   lo -= pad; hi += pad;
+  const x0 = box.left, x1 = box.w - box.right, y0 = box.top, y1 = box.h - box.bottom;
+  // room under the pull-back's dip for its label (and under the zero line for the rests')
+  const k = LABEL_ROOM / Math.max(1, y1 - y0);
+  for (const y of [curve.pullBack?.y, curve.stable?.length ? 0 : undefined]) {
+    if (y != null && Number.isFinite(y) && (y - lo) < k * (hi - lo)) lo = (y - k * hi) / (1 - k);
+  }
   const yTicks = niceTicks(lo, hi, 4);
   const xTicks = niceTicks(curve.min, curve.max, 5);
-  const x0 = box.left, x1 = box.w - box.right, y0 = box.top, y1 = box.h - box.bottom;
   const span = curve.max - curve.min || 1;
   const sx = (x: number) => x0 + ((x - curve.min) / span) * (x1 - x0);
   const sy = (y: number) => y1 - ((y - lo) / (hi - lo)) * (y1 - y0);
@@ -148,12 +159,40 @@ export function fmtDrive(v: number, angular: boolean): string {
 
 /** The curve in a sentence: where it rests, where it tips over, what it takes to snap. */
 export function restSentence(curve: MechanismCurve): string {
-  const at = (pts: CurvePoint[]) => pts.map((q) => fmtDrive(q.x, curve.angular)).join(" and ");
+  const at = (pts: CurvePoint[]) => pts.map((q) => fmtDrive(q.x, curve.angular) + (q.limit ? " (end of range)" : "")).join(" and ");
   if (!curve.stable.length) return `No rest position between ${fmtDrive(curve.min, curve.angular)} and ${fmtDrive(curve.max, curve.angular)}: it springs back out of this range.`;
   const parts = [curve.multistable ? `Bistable: rests at ${at(curve.stable)}` : `Rests at ${at(curve.stable)}`];
   if (curve.unstable.length) parts.push(`tips over at ${at(curve.unstable)}`);
-  if (curve.snap) parts.push(`snaps over at ${fmtEffort(curve.snap.y, curve.angular)}`);
+  if (curve.snap) parts.push(`snaps over at ${fmtEffort(curve.snap.y, curve.angular)}` + (curve.pullBack ? ` and back at ${fmtEffort(curve.pullBack.y, curve.angular)}` : ""));
   return parts.join("; ") + ".";
+}
+
+export interface ZeroLabel { x: number; y: number; anchor: "start" | "end" }
+
+/** Where the labels of the points on the zero line go (rests and tipping
+ *  points, each at px along it, with its label's width): beside each on a side
+ *  the curve leaves clear. Rising through zero (a rest), the curve is below
+ *  the line to the left and above it to the right, so below-right is clear,
+ *  or above-left; falling through (a tipping point), below-left, or
+ *  above-right. Each takes the first of its two that stays inside the plot
+ *  and clear of the labels before it; null when neither does (its marker's
+ *  tooltip still says it). */
+export function zeroLabels(marks: { px: number; stable: boolean; width: number }[], zeroY: number, x0: number, x1: number): (ZeroLabel | null)[] {
+  const placed: { a: number; b: number; y: number }[] = [];
+  const span = (l: ZeroLabel, w: number) => (l.anchor === "start" ? { a: l.x, b: l.x + w } : { a: l.x - w, b: l.x });
+  return marks.map(({ px, stable, width }) => {
+    const below = zeroY + 15, above = zeroY - 9;
+    const right = (y: number): ZeroLabel => ({ x: px + 4, y, anchor: "start" }), left = (y: number): ZeroLabel => ({ x: px - 4, y, anchor: "end" });
+    const options = stable ? [right(below), left(above)] : [left(below), right(above)];
+    for (const l of options) {
+      const { a, b } = span(l, width);
+      if (a < x0 - 2 || b > x1 + 2) continue;
+      if (placed.some((q) => q.y === l.y && a < q.b + 3 && b > q.a - 3)) continue;
+      placed.push({ a, b, y: l.y });
+      return l;
+    }
+    return null;
+  });
 }
 
 /** Which side of a point a label goes, so it stays inside the plot. */
