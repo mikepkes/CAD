@@ -1,4 +1,5 @@
-// Act 1 · Start: blank page to a parametric phone stand, by hand first.
+// Act 1 · The tutorial: blank page to a parametric phone stand, by hand first. (Its cold open, the finished stand
+// turned and its phone dragged, is the demo's opening too: Act 0 uses the preroll and showStand from here.)
 // Each beat: what happens (real input unless marked PUPPET); its narration is in lines.mjs, under the same id.
 
 const W = (x, y, z) => ({ x, y, z });
@@ -6,8 +7,8 @@ const W = (x, y, z) => ({ x, y, z });
 /** Organizational assist's answers for this act (the mock agent replies with these; others get its heuristic name). */
 const NAMES = { "Sketch 1": "Back plate profile", "Sketch 2": "Lip profile", "Extrude": ["Back plate", "Lip"] };
 
-/** Before recording: the finished stand for the cold open (built by the same steps the tests build). */
-export async function preroll(d) {
+/** Before recording: the finished stand for the cold open (built by the same steps the tests build), under `title`. */
+export async function preroll(d, title = TITLE) {
   await d.run((names) => window.__vibecadDemo.mockAgent({ prompt: "", model: "claude-haiku-5-5", source: "video act 1 names", turns: [], names }), NAMES);
   await d.run(async () => {
     const D = window.__vibecadDemo, st = D.store.getState();
@@ -25,12 +26,12 @@ export async function preroll(d) {
     D.view("iso");
   });
   await d.api("cursor", false);
-  await d.api("titleCard", TITLE); // up before the take starts, so the montage cuts straight to it
+  await d.api("titleCard", title); // up before the take starts, so the first frame is the title
   await d.settle(600);
 }
 
-/** The title that follows the montage. */
-const TITLE = { title: "VibeCAD", subtitle: "Parametric CAD in your browser. Drag it, type it, or just ask.", hero: true };
+/** The tutorial's title. */
+const TITLE = { title: "Model a phone stand", subtitle: "A VibeCAD tutorial: a parametric part, from a blank page", hero: true };
 
 /** Side-on to the stand's profile, a little from the front and above: the lip and the phone gap face the camera. */
 const STAND_VIEW = [1, -0.45, 0.4];
@@ -119,6 +120,26 @@ async function pickBehind(d, world, want) {
   await d.shot("picked");
 }
 
+/** The finished stand, turned slowly, then side-on with its phone thickness dragged up and back: the whole stand
+ *  follows (the tutorial's cold open, the demo's "what it is"). */
+export async function showStand(d) {
+  await d.api("cursor", false);
+  await d.api("turntable", 12); // degrees a second: a slow, readable turn (pass 1's 3D-mouse drift ran at about 450°/s)
+  await d.wait(2200);
+  await d.api("turntable", null);
+  // stop side-on to the profile, where the lip and the phone gap face the camera, and widen the numbers to drag
+  await d.api("aim", { dir: STAND_VIEW, ms: 1300, margin: 0.95 });
+  await d.api("sideWidth", "left", WIDE, 500);
+  await d.api("cursor", true);
+  const r = await d.rect(".param-slider input[type=range]");
+  await d.move(thumbX(r, 6, 16, 9), r.cy, 700);
+  await d.drag({ x: thumbX(r, 6, 16, 9), y: r.cy }, { x: thumbX(r, 6, 16, 15), y: r.cy }, 1800);
+  await d.wait(600);
+  await d.drag({ x: thumbX(r, 6, 16, 15), y: r.cy }, { x: thumbX(r, 6, 16, 9), y: r.cy }, 1500);
+  await d.api("cursor", false);
+  await d.api("sideWidth", "left", 272, 500);
+}
+
 export async function act1(d) {
   const S = await d.run(() => window.__vibecadDemo.STAND);
 
@@ -128,23 +149,7 @@ export async function act1(d) {
     await d.api("titleCard", null);
   });
 
-  await d.beat("cold-open", async () => {
-    await d.api("cursor", false);
-    await d.api("turntable", 12); // degrees a second: a slow, readable turn (pass 1's 3D-mouse drift ran at about 450°/s)
-    await d.wait(2200);
-    await d.api("turntable", null);
-    // stop side-on to the profile, where the lip and the phone gap face the camera, and widen the numbers to drag
-    await d.api("aim", { dir: STAND_VIEW, ms: 1300, margin: 0.95 });
-    await d.api("sideWidth", "left", WIDE, 500);
-    await d.api("cursor", true);
-    const r = await d.rect(".param-slider input[type=range]");
-    await d.move(thumbX(r, 6, 16, 9), r.cy, 700);
-    await d.drag({ x: thumbX(r, 6, 16, 9), y: r.cy }, { x: thumbX(r, 6, 16, 15), y: r.cy }, 1800);
-    await d.wait(600);
-    await d.drag({ x: thumbX(r, 6, 16, 15), y: r.cy }, { x: thumbX(r, 6, 16, 9), y: r.cy }, 1500);
-    await d.api("cursor", false);
-    await d.api("sideWidth", "left", 272, 500);
-  });
+  await d.beat("cold-open", () => showStand(d));
 
   await d.beat("get-vibecad", async () => {
     await d.api("cursor", false);

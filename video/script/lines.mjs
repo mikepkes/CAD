@@ -1,19 +1,38 @@
 // The narration: every beat's spoken line, by act and beat id, in the order the beats play.
+// There are two videos (VIDEOS): the demo, a showcase of what VibeCAD does (the montage, Act 0's opening, Act 3), and
+// the tutorial, one focused walkthrough that models a phone stand (Acts 1 and 2). They're cut from separate takes and
+// say different things: the demo shows breadth and points to the tutorial; the tutorial teaches and points to the demo.
 // The director reads a beat's line from here (`d.beat(id, fn)`), video/vo.mjs synthesises each line to a clip per
 // voice, and video/edit.mjs captions them. Lines are written for the ear: addresses are spelled out ("mikepkes dot
 // github dot io slash CAD"; the captions turn them back into written form) and "Command K" is said in words.
 // "" is a silent beat (no voice, no caption). Change a line here and only its clips are re-synthesised.
 
-/** The intro montage's line (the edit cuts the montage from Act 3's picks, before Act 1). */
+/** The two videos: which acts each is cut from, in order, and the file it renders to (video/out/<run>/<video>/). */
+export const VIDEOS = {
+  demo: { title: "VibeCAD demo", file: "vibecad-demo", acts: [0, 3], montage: true },
+  tutorial: { title: "VibeCAD tutorial: model a phone stand", file: "vibecad-tutorial", acts: [1, 2] },
+};
+
+/** The demo's intro montage line (the edit cuts the montage from Act 3's picks, before Act 0). */
 export const MONTAGE = "Sections, gears, mechanisms, forces, and parts built just by asking.";
 
 export const LINES = {
-  // Act 1 · Start: blank page to a parametric phone stand, by hand first.
+  // Act 0 · The demo's opening: what VibeCAD is, in one drag, and where to get it. Then straight to the showcase.
+  0: {
+    title:
+      "",
+    "what-it-is":
+      "VibeCAD is parametric CAD that runs in your browser. Every model is a recipe of steps and named numbers, so drag one, the phone's thickness here, and the whole design follows.",
+    "get-vibecad":
+      "It's free and open source, at mikepkes dot github dot io slash CAD, or as a desktop app. Here's what it can do.",
+  },
+
+  // Act 1 · The tutorial: blank page to a parametric phone stand, by hand first.
   1: {
     title:
       "",
     "cold-open":
-      "This is a phone stand made in VibeCAD. Drag one number, the phone's thickness, and the whole stand adapts. In the next four minutes you'll build it from a blank page.",
+      "In this tutorial you'll model this phone stand from a blank page. It's parametric: drag one number, the phone's thickness, and the whole stand adapts. You'll shape it by hand, make it parametric, then round it, check it and export it to print.",
     "get-vibecad":
       "VibeCAD runs in your browser at mikepkes dot github dot io slash CAD, or as a desktop app from the project's GitHub releases. It's free, and it's open source under the MIT licence.",
     "the-room":
@@ -34,7 +53,7 @@ export const LINES = {
       "Save it to a file whenever you like. VibeCAD also keeps your work as you go, so you can experiment freely.",
   },
 
-  // Act 2 · Grow: the stand becomes a product.
+  // Act 2 · The tutorial, continued: the stand becomes a product.
   2: {
     soften:
       "Sharp corners chip and catch. Click the top of the base and choose Round corners: its four corners get a fillet, and the radius is just another number you can drag, type or name. Make it generous: fifteen millimetres.",
@@ -50,9 +69,11 @@ export const LINES = {
       "Every action has a key, and the ones you use most can live on the action ring. Each context has its own ring, and you decide what's on it. Put Round edges on the face ring, and it's one flick away: here it softens every edge around the top of the base.",
     "ship-it":
       "When it's right, export it: STL for any printer, 3MF to keep parts and materials together, or STEP for other CAD tools.",
+    "wrap-up":
+      "That's the whole stand: a box, two sketches and a few named numbers, kept right by a rule. To see what else VibeCAD can do, from gears to folded paper, watch the demo.",
   },
 
-  // Act 3 · Rapid fire: the bundled examples, then the agent.
+  // Act 3 · The demo's showcase, rapid fire: the bundled examples, then the agent.
   3: {
     gyroscope:
       "A gyroscope that prints in one piece, already assembled. Cut it open and turn square to the cut: each ring hangs on cone pins that come to a point inside a socket, with just enough clearance to spin. Then the motion study turns every joint through a full circle and checks that nothing collides.",
@@ -81,17 +102,21 @@ export const LINES = {
     agent:
       "Or just describe it. Claude builds it with the same commands you use: a twisted vase, every section sized from a parameter. Then refine it in plain words. Turn it into a lamp shade, and Claude cuts the windows and sets the material. The result is an ordinary parametric model you can keep editing.",
     outro:
-      "That's VibeCAD. Free, open source, in your browser or on your desktop. Thanks for watching.",
+      "That's VibeCAD. Free, open source, in your browser or on your desktop. To build your first model, watch the phone stand tutorial. Thanks for watching.",
   },
 };
 
-/** The video's chapters: a title per beat that starts one, by act and beat id ("montage" is the intro, before Act 1).
+/** Each video's chapters: a title per beat that starts one, by act and beat id ("montage" is the demo's intro, before Act 0).
  *  A beat with no title here (the title card) stays in the chapter before it. The edit embeds them in the MP4 and
  *  writes them as a YouTube description list (chapters.txt). */
 export const CHAPTERS = {
-  1: {
+  0: {
     montage: "Intro",
-    "cold-open": "A parametric phone stand",
+    "what-it-is": "Parametric in one drag",
+    "get-vibecad": "Getting VibeCAD",
+  },
+  1: {
+    "cold-open": "What you'll build",
     "get-vibecad": "Getting VibeCAD",
     "the-room": "The workspace",
     block: "Start with a block",
@@ -110,6 +135,7 @@ export const CHAPTERS = {
     "will-it-print": "Will it print?",
     "make-it-yours": "Your own action ring",
     "ship-it": "Export",
+    "wrap-up": "Wrap-up",
   },
   3: {
     gyroscope: "Print-in-place gyroscope",
@@ -129,10 +155,10 @@ export const CHAPTERS = {
   },
 };
 
-/** Every spoken line, in playing order: { act, id, key, text }. The montage plays before Act 1 as "act1-montage". */
-export function spoken(acts = [1, 2, 3]) {
+/** Every spoken line, in playing order: { act, id, key, text }. The montage plays before Act 0 as "act0-montage". */
+export function spoken(acts = [0, 1, 2, 3]) {
   const out = [];
-  if (acts.includes(1)) out.push({ act: 1, id: "montage", key: "act1-montage", text: MONTAGE });
+  if (acts.includes(0)) out.push({ act: 0, id: "montage", key: "act0-montage", text: MONTAGE });
   for (const act of acts) for (const [id, text] of Object.entries(LINES[act] ?? {})) if (text.trim()) out.push({ act, id, key: `act${act}-${id}`, text });
   return out;
 }

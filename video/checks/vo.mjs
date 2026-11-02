@@ -1,4 +1,5 @@
-// Checks the voiceover of a cut: `node video/checks/vo.mjs --run NAME` (after video/edit.mjs --run NAME).
+// Checks the voiceover of a cut: `node video/checks/vo.mjs --run NAME [--video demo|tutorial]` (after video/edit.mjs;
+// without --video, each video in turn).
 //   1. every narrated line of the acts in the cut has a current clip in every voice (video/vo/<voice>/);
 //   2. every clip fits its beat in the cut (no longer than the beat's slot);
 //   3. no two clips of a voice overlap;
@@ -6,14 +7,22 @@
 // Exits 1 on any failure.
 
 import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { spoken } from "../script/lines.mjs";
+import { spoken, VIDEOS } from "../script/lines.mjs";
 import { loadClips, selectVoices } from "../lib/voices.mjs";
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const run = arg("--run");
 if (!run) { console.error("usage: node video/checks/vo.mjs --run NAME"); process.exit(1); }
-const out = new URL(`../out/${run}/`, import.meta.url).pathname;
+if (!arg("--video")) {
+  let failed = false;
+  for (const v of Object.keys(VIDEOS)) {
+    try { execFileSync(process.execPath, [new URL(import.meta.url).pathname, ...process.argv.slice(2), "--video", v], { stdio: "inherit" }); } catch { failed = true; }
+  }
+  process.exit(failed ? 1 : 0);
+}
+const out = new URL(`../out/${run}/${arg("--video")}/`, import.meta.url).pathname;
 const tl = JSON.parse(readFileSync(join(out, "vo-timeline.json"), "utf8"));
 const voices = selectVoices({ voices: tl.voices.map((v) => v.id).join(",") });
 const fails = [];
