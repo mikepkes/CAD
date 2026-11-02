@@ -15,6 +15,10 @@
 .mech-chart .mech-stable { fill: var(--k-ok); stroke: var(--bg); stroke-width: 2; }
 .mech-chart .mech-unstable { fill: var(--bg); stroke: var(--k-bad); stroke-width: 2; }
 .mech-chart .mech-snap { fill: var(--k-accent); stroke: var(--bg); stroke-width: 1.5; }
+.mech-chart .mech-pullback { fill: var(--bg); stroke: var(--k-accent); stroke-width: 2; }
+.mech-chart .mech-mark-label { font-size: 9.5px; font-weight: 600; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.mech-chart .mech-mark-label.rest { fill: var(--k-ok); }
+.mech-chart .mech-mark-label.tip { fill: var(--k-bad); }
 .mech-chart .mech-now-line { stroke: var(--k-accent); stroke-width: 1.5; stroke-dasharray: 3 3; }
 .mech-chart .mech-now { fill: var(--k-accent); stroke: var(--k-accent-ink); stroke-width: 1.5; }
 .mech-chart .mech-hover-line { stroke: var(--text-dim); stroke-width: 1; }
@@ -27,6 +31,7 @@
 .mech-key .mech-key-stable { background: var(--k-ok); }
 .mech-key .mech-key-unstable { border: 2px solid var(--k-bad); width: 5px; height: 5px; }
 .mech-key .mech-key-snap { background: var(--k-accent); border-radius: 1px; transform: rotate(45deg); width: 8px; height: 8px; }
+.mech-key .mech-key-pullback { border: 2px solid var(--k-accent); border-radius: 1px; transform: rotate(45deg); width: 5px; height: 5px; }
 .mech-key .mech-key-now { background: var(--k-accent); width: 2px; height: 11px; border-radius: 0; }
 
 .mech-sentence { margin: 0; font-size: 12.5px; line-height: 1.45; }

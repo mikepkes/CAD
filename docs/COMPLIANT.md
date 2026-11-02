@@ -264,8 +264,13 @@ snap; μ per material):
     curved-beam bistable for slender arches (`test/beam-element.test.ts`).
 - **Rest positions.** `flexureEquilibria(doc, param, min, max)` sweeps a drive
   and finds where the effort is zero. A rest position is stable where the
-  effort rises through zero and unstable where it falls. The study also gives
-  the push needed to snap between two stable states, and the energy barrier.
+  effort rises through zero (an energy minimum) and unstable where it falls
+  (a maximum); each crossing is refined by regula falsi. An end of the range
+  the energy still falls into is a stable rest too, against the end of travel
+  (`limit`). The study also gives the push needed to snap between two stable
+  states (the effort's peak between them), the pull-back (its dip: the pull
+  that snaps it back) and the energy barrier; the peak and the dip are refined
+  by parabolic interpolation and drawn with the samples.
   - **In customize mode:** the readout shows "bistable: rests at … · snaps over
     at …", or "springs back to …" when there's one rest position, once the
     sliders have been still for a moment. It also reports an input force for a
@@ -282,11 +287,11 @@ snap; μ per material):
     | | Q = rise/thickness 15 | Q 3.75 | Paper |
     |---|---|---|---|
     | Second rest position | 1.99 h | 1.89 h | just short of 2h |
-    | Snap force | 723 EIh/L³ per beam | 617 | ≈ 740 |
+    | Snap force | 730 EIh/L³ per beam | 623 | ≈ 740 |
     | Pull-back | −358 | −257 | ≈ −370 |
 
     A stocky arch stretches more on its way over and tips into its lower
-    (mode-3) shape sooner. The switch (Q 4, frame held rigid) snaps at 623 and
+    (mode-3) shape sooner. The switch (Q 4, frame held rigid) snaps at 642 and
     pulls back at −269.
   - **Sized by material:** the snap strain goes as about 35·t·h/L², and the snap
     force as E·t³·h/L³. So for the chosen span and arch, each material gets the

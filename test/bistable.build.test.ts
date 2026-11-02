@@ -322,8 +322,8 @@ describe("bistable switch", () => {
     expect(stable[1] / (2 * h)).toBeGreaterThan(0.85); // just short of the mirror shape (2·rise)
     expect(stable[1] / (2 * h)).toBeLessThan(1);
     // the paper's figures are for slender arches; at rise/thickness 4 it tips
-    // into its lower shape sooner, as test/beam-element.test.ts shows (617 and
-    // −257 there at 3.75, 723 and −358 at 15)
+    // into its lower shape sooner, as test/beam-element.test.ts shows (623 and
+    // −257 there at 3.75, 730 and −358 at 15)
     expect(top / 740).toBeGreaterThan(0.78);
     expect(top / 740).toBeLessThan(0.92);
     expect(-bottom / 370).toBeGreaterThan(0.6);

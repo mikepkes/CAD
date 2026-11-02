@@ -6,8 +6,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { sessionFromDoc } from "./helpers";
 import { deserializeDocument } from "../src/core/persistence";
-import { flexureEquilibria, flexureState, strainField, isAngularDrive, type FlexureState } from "../src/sim/flexure";
-import { barFill, buildCurve, chartGeometry, drivesOf, effortAt, fmt, fmtDrive, fmtEffort, labelSide, niceTicks, restSentence, strainBars, sweepPlan, worstFlexure, type MechanismCurve } from "../src/model/concepts/mechanism";
+import { flexureEquilibria, flexureState, flexureSweep, strainField, isAngularDrive, type FlexureState } from "../src/sim/flexure";
+import { barFill, buildCurve, chartGeometry, drivesOf, effortAt, fmt, fmtDrive, fmtEffort, labelSide, niceTicks, restSentence, strainBars, sweepPlan, worstFlexure, zeroLabels, type MechanismCurve } from "../src/model/concepts/mechanism";
 import type { CadDocument } from "../src/core/document";
 
 async function example(name: string): Promise<CadDocument> {
@@ -72,11 +72,37 @@ describe("mechanism logic", () => {
       .toBe("Bistable: rests at 0 mm and 6.8 mm; tips over at 4.9 mm; snaps over at 11.8 N.");
     expect(restSentence({ ...base, stable: [{ x: 0, y: 0 }], unstable: [], multistable: false })).toBe("Rests at 0 mm.");
     expect(restSentence({ ...base, stable: [], unstable: [], multistable: false })).toMatch(/^No rest position/);
+    expect(restSentence({ ...base, stable: [{ x: 0, y: 0 }, { x: 6.8, y: 0 }], unstable: [{ x: 4.9, y: 0 }], multistable: true, snap: { x: 1.6, y: 11.9 }, pullBack: { x: 6.2, y: -4.6 } }))
+      .toBe("Bistable: rests at 0 mm and 6.8 mm; tips over at 4.9 mm; snaps over at 11.9 N and back at -4.6 N.");
+    expect(restSentence({ ...base, stable: [{ x: 0, y: 0 }, { x: 6.5, y: 0, limit: true }], unstable: [{ x: 4.9, y: 0 }], multistable: true }))
+      .toBe("Bistable: rests at 0 mm and 6.5 mm (end of range); tips over at 4.9 mm.");
     expect(barFill(50)).toEqual({ width: "50%", background: "var(--k-an-strain)", backgroundSize: "200% 100%" });
     expect(barFill(130).background).toBe("var(--k-an-strain-over)");
     expect(barFill(NaN).width).toBe("0%");
     expect(labelSide(150, 0, 200)).toBe("end");
     expect(labelSide(50, 0, 200)).toBe("start");
+  });
+
+  it("labels the points on the zero line where the curve leaves room, clear of each other and inside the plot", () => {
+    // a rest below-right, a tipping point below-left (the curve is above the line there)
+    const [rest, tip] = zeroLabels([{ px: 40, stable: true, width: 20 }, { px: 140, stable: false, width: 30 }], 100, 40, 246);
+    expect(rest).toEqual({ x: 44, y: 115, anchor: "start" });
+    expect(tip).toEqual({ x: 136, y: 115, anchor: "end" });
+    // a rest at the right edge goes above-left; one crowding the label before it, likewise
+    expect(zeroLabels([{ px: 240, stable: true, width: 30 }], 100, 40, 246)[0]).toEqual({ x: 236, y: 91, anchor: "end" });
+    const crowd = zeroLabels([{ px: 60, stable: true, width: 40 }, { px: 110, stable: false, width: 30 }], 100, 40, 246);
+    expect(crowd[1]).toEqual({ x: 114, y: 91, anchor: "start" });
+    // nowhere to go: left unlabelled (its tooltip says it)
+    expect(zeroLabels([{ px: 100, stable: true, width: 400 }], 100, 40, 246)[0]).toBeNull();
+  });
+
+  it("leaves room under the pull-back's dip and the zero line for their labels", () => {
+    const box = { w: 200, h: 100, left: 20, right: 10, top: 10, bottom: 20 };
+    const points = [{ x: 0, y: 0 }, { x: 2, y: 12 }, { x: 5, y: 0 }, { x: 6, y: -4 }, { x: 7, y: 0 }, { x: 10, y: 20 }];
+    const g = chartGeometry({ points, min: 0, max: 10, stable: [{ x: 0, y: 0 }, { x: 7, y: 0 }], multistable: true, pullBack: { x: 6, y: -4 } }, box);
+    expect(box.h - box.bottom - g.sy(-4)).toBeGreaterThanOrEqual(18 - 1e-9);
+    const up = chartGeometry({ points: [{ x: 0, y: 0 }, { x: 10, y: 30 }], min: 0, max: 10, stable: [{ x: 0, y: 0 }] }, box);
+    expect(box.h - box.bottom - up.zeroY).toBeGreaterThanOrEqual(18 - 1e-9);
   });
 
   it("bars each flexure against its limit and picks the worst", () => {
@@ -122,6 +148,51 @@ describe("bistable switch", () => {
     expect(effortAt(curve, between[0].x + 0.5)).toBeLessThan(0);
   });
 
+  // the example's numbers (TPU 68D, span 60, arch 4): the rests at 0 and just
+  // short of the mirror shape, the tipping point between, 11.9 N to snap over
+  // and 4.6 N to pull it back
+  it("finds both rests and the tipping point at the right travels, each an extremum of the energy", () => {
+    const at = (kind: boolean) => study.states.filter((s) => s.stable === kind).map((s) => s.value);
+    expect(at(true).length).toBe(2);
+    expect(at(true)[0]).toBeCloseTo(0, 6);
+    expect(at(true)[1]).toBeCloseTo(6.8, 1);
+    expect(at(false).length).toBe(1);
+    expect(at(false)[0]).toBeCloseTo(4.89, 1);
+    expect(study.states.some((s) => s.limit)).toBe(false); // the flexures hold both, not the ends of the range
+    // a rest is a minimum of the stored energy, the tipping point its maximum
+    const U = (v: number) => flexureSweep(doc, "travel", [v])[0].energy;
+    for (const s of study.states) {
+      const lo = Math.max(0, s.value - 0.1), hi = s.value + 0.1;
+      if (s.stable) { expect(U(hi)).toBeGreaterThan(s.energy); if (s.value > 0.1) expect(U(lo)).toBeGreaterThan(s.energy); }
+      else { expect(U(hi)).toBeLessThan(s.energy); expect(U(lo)).toBeLessThan(s.energy); }
+    }
+    expect(study.snap!.effort).toBeCloseTo(11.9, 1);
+    expect(study.snap!.value).toBeGreaterThan(1.25);
+    expect(study.snap!.value).toBeLessThan(1.75);
+    expect(study.pullBack!.effort).toBeCloseTo(-4.6, 1);
+    expect(study.pullBack!.value).toBeGreaterThan(at(false)[0]);
+    expect(study.pullBack!.value).toBeLessThan(at(true)[1]);
+    // the refinements beat the samples, and are drawn with them
+    const sampled = study.poses.filter((p) => Math.abs(p.value * 4 - Math.round(p.value * 4)) < 1e-9);
+    expect(study.snap!.effort).toBeGreaterThanOrEqual(Math.max(...sampled.map((p) => p.effort).filter((e, i) => sampled[i].value < at(true)[1])));
+    expect(study.pullBack!.effort).toBeLessThanOrEqual(Math.min(...sampled.filter((p) => p.value < at(true)[1]).map((p) => p.effort)));
+    expect(curve.pullBack).toEqual({ x: study.pullBack!.value, y: study.pullBack!.effort });
+    expect(curve.points.some((p) => p.x === study.pullBack!.value && p.y === study.pullBack!.effort)).toBe(true);
+    flexureState(doc); // leave it as it stands
+  });
+
+  it("rests against an end of the range the energy still falls into", () => {
+    // cut short of its second rest, it sits against the end of travel
+    const short = flexureEquilibria(doc, "travel", 0, 6.5, 13);
+    expect(short.states.filter((s) => s.stable).map((s) => [+s.value.toFixed(6), !!s.limit])).toEqual([[0, false], [6.5, true]]);
+    expect(short.multistable).toBe(true);
+    expect(short.pullBack).toBeDefined();
+    // started part-way in, the start of the range is pressed on the same way
+    const late = flexureEquilibria(doc, "travel", 1, 10, 18);
+    expect(late.states.filter((s) => s.stable).map((s) => [+s.value.toFixed(1), !!s.limit])).toEqual([[1, true], [6.8, false]]);
+    flexureState(doc);
+  }, 120_000);
+
   it("labels the snap force flexureEquilibria found, the peak of the curve between the rests", () => {
     expect(curve.snap).toBeDefined();
     expect(curve.snap!.y).toBe(study.snap!.effort);
@@ -153,6 +224,19 @@ describe("bistable switch", () => {
 });
 
 describe("four-bar", () => {
+  it("is monostable: one rest, as made, no tipping point, nothing to snap", async () => {
+    const doc = await example("fourbar");
+    const study = flexureEquilibria(doc, "theta", -20, 20, 40);
+    expect(study.states).toEqual([{ value: 0, stable: true, energy: 0 }]);
+    expect(study.multistable).toBe(false);
+    expect(study.snap).toBeUndefined();
+    expect(study.pullBack).toBeUndefined();
+    const curve = buildCurve(study, "theta", true, -20, 20);
+    expect(curve.stable).toEqual([{ x: 0, y: 0 }]);
+    expect(curve.unstable).toEqual([]);
+    expect(restSentence(curve)).toBe("Rests at 0°.");
+  }, 60_000);
+
   it("places each hinge's disc at its pivot, with its strain", async () => {
     const doc = await example("fourbar");
     const st = flexureState(doc, { theta: "15" });

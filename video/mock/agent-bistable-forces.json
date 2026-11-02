@@ -1,7 +1,7 @@
 {
   "prompt": "Where does this switch rest, and how hard do I have to push to flip it?",
   "model": "claude-opus-5-5",
-  "source": "Written by hand (Claude Opus 5.5) as a typical response, for the video's forces clip. The numbers are the bistable example's own (Mechanism tab: rests 0 and 6.8 mm, tips at 4.89 mm, snap 11.8 N at 1.5 mm). Replace with a recorded run when an API key is available.",
+  "source": "Written by hand (Claude Opus 5.5) as a typical response, for the video's forces clip. The numbers are the bistable example's own (Mechanism tab: rests 0 and 6.8 mm, tips at 4.89 mm, snap 11.9 N at 1.6 mm, pull-back 4.6 N at 6.2 mm). Replace with a recorded run when an API key is available.",
   "turns": [
     {
       "delayMs": 1800,
@@ -25,7 +25,7 @@
       "delayMs": 1300,
       "stop_reason": "end_turn",
       "content": [
-        { "type": "text", "text": "It rests at 0 mm and again at 6.8 mm of travel. The hardest push is right at the start: about 11.8 N at 1.5 mm. Past 4.9 mm it tips over and snaps the rest of the way on its own. The lens shows the beams bending most near their ends." }
+        { "type": "text", "text": "It rests at 0 mm and again at 6.8 mm of travel. The hardest push is right at the start: about 11.9 N at 1.6 mm. Past 4.9 mm it tips over and snaps the rest of the way on its own; to flip it back, pull with about 4.6 N. The lens shows the beams bending most near their ends." }
       ]
     }
   ]

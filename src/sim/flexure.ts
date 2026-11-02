@@ -442,31 +442,43 @@ export function flexureSweep(doc: CadDocument, param: string, values: number[]):
 
 /** A rest position along a drive: where the effort is zero. Stable when the
  *  effort rises through zero (an energy minimum: pushed either way, it springs
- *  back), unstable when it falls (an energy maximum: the tipping point). */
+ *  back), unstable when it falls (an energy maximum: the tipping point). A
+ *  stable rest can also be at an end of the drive's range, where the energy
+ *  is still falling into the end (`limit`): it settles there against the end
+ *  of travel. */
 export interface Equilibrium {
   value: number;
   stable: boolean;
   /** Stored energy there (N·mm = mJ). */
   energy: number;
+  /** At an end of the range with the effort still pressing into it: held there by the end of travel, not by the flexures. */
+  limit?: boolean;
 }
 
 export interface EquilibriumStudy {
   /** Every rest position in the range, in drive order. */
   states: Equilibrium[];
-  /** The sampled poses, in drive order. */
+  /** The sampled poses (and those the refinements solved), in drive order. */
   poses: FlexurePose[];
   /** Two stable states or more: it stays put where you leave it in each. */
   multistable: boolean;
   /** Bistable: the largest effort between the first two stable states (the
    *  push needed to snap it over), and the energy barrier between them. */
   snap?: { value: number; effort: number; barrier: number };
+  /** Bistable: the most negative effort between the first two stable states,
+   *  the pull it takes to snap it back from the second (the curve's dip). */
+  pullBack?: { value: number; effort: number };
 }
 
-/** Find where a mechanism rests along a drive: the zeros of the effort
- *  dU/d(drive) over [min, max]. Sampled with `n` steps outward from the current
- *  value (so each loop solve is seeded by its neighbour and stays on its
- *  assembly branch), each crossing then refined by bisection. Leaves the
- *  document posed at the current value. */
+/** Find where a mechanism rests along a drive: the energy's minima (stable)
+ *  and maxima (unstable) over [min, max], from its gradient, the effort
+ *  dU/d(drive). Sampled with `n` steps outward from the current value (so each
+ *  loop solve is seeded by its neighbour and stays on its assembly branch);
+ *  each zero crossing is then refined by regula falsi, and an end of the range
+ *  the energy falls into is a rest against that end. Between the first two
+ *  stable rests, the snap (the effort's peak) and the pull-back (its dip) are
+ *  refined by parabolic interpolation. Leaves the document posed at the current
+ *  value. */
 export function flexureEquilibria(doc: CadDocument, param: string, min: number, max: number, n = 48): EquilibriumStudy {
   const p = doc.parameters.find((q) => q.name === param);
   const current = Math.min(max, Math.max(min, p?.value ?? min));
@@ -480,21 +492,24 @@ export function flexureEquilibria(doc: CadDocument, param: string, min: number, 
   flexureState(doc, { [param]: String(current) }); // re-seed at the start before going the other way
   const descending = flexureSweep(doc, param, down);
   const poses = [...descending.reverse(), ...ascending];
+  const sampled = poses.slice();
   const effortAt = (v: number) => flexureSweep(doc, param, [v])[0];
+  const extra: FlexurePose[] = []; // the refinements' solves, drawn with the samples
   const states: Equilibrium[] = [];
+  const scale = Math.max(1e-12, ...sampled.map((q) => Math.abs(q.effort)).filter(Number.isFinite));
   // a sample can sit exactly on a rest position (the as-made pose has no effort)
-  const tiny = 1e-9 * Math.max(1e-12, ...poses.map((q) => Math.abs(q.effort)).filter(Number.isFinite));
-  const zero = poses.map((q) => !q.error && Math.abs(q.effort) <= tiny);
-  for (let i = 0; i < poses.length; i++) {
+  const tiny = 1e-9 * scale;
+  const zero = sampled.map((q) => !q.error && Math.abs(q.effort) <= tiny);
+  for (let i = 0; i < sampled.length; i++) {
     if (!zero[i]) continue;
-    const before = poses[i - 1]?.effort ?? -poses[i + 1]?.effort, after = poses[i + 1]?.effort ?? -poses[i - 1]?.effort;
-    states.push({ value: poses[i].value, stable: after > before, energy: poses[i].energy });
+    const before = sampled[i - 1]?.effort ?? -sampled[i + 1]?.effort, after = sampled[i + 1]?.effort ?? -sampled[i - 1]?.effort;
+    states.push({ value: sampled[i].value, stable: after > before, energy: sampled[i].energy });
   }
-  for (let i = 1; i < poses.length; i++) {
-    const a = poses[i - 1], b = poses[i];
+  for (let i = 1; i < sampled.length; i++) {
+    const a = sampled[i - 1], b = sampled[i];
     if (a.error || b.error || zero[i - 1] || zero[i] || Math.sign(a.effort) === Math.sign(b.effort)) continue;
     // refine the crossing by regula falsi (Illinois): a few solves, not dozens
-    let lo = a.value, hi = b.value, flo = a.effort, fhi = b.effort, mid = (lo + hi) / 2, pose = b, side = 0;
+    let lo = a.value, hi = b.value, flo = a.effort, fhi = b.effort, mid = (lo + hi) / 2, pose: FlexurePose | undefined, side = 0;
     for (let k = 0; k < 24 && hi - lo > 1e-6 * (max - min); k++) {
       mid = (lo * fhi - hi * flo) / (fhi - flo);
       if (!(mid > lo && mid < hi)) mid = (lo + hi) / 2;
@@ -503,20 +518,62 @@ export function flexureEquilibria(doc: CadDocument, param: string, min: number, 
       if (Math.sign(pose.effort) === Math.sign(flo)) { lo = mid; flo = pose.effort; if (side === -1) fhi /= 2; side = -1; }
       else { hi = mid; fhi = pose.effort; if (side === 1) flo /= 2; side = 1; }
     }
-    states.push({ value: mid, stable: b.effort > a.effort, energy: pose.energy });
+    if (pose && !pose.error) extra.push(pose);
+    states.push({ value: pose?.value ?? mid, stable: b.effort > a.effort, energy: (pose ?? b).energy });
   }
-  flexureState(doc, { [param]: String(current) }); // leave it where it was
+  // An end of the range the energy still falls into (the effort pushing out
+  // through it) is a minimum of the energy over the range: it comes to rest
+  // there, against the end of its travel. (A zero there is a rest already;
+  // an effort there that is all but zero, a free rest at the end.)
+  const ends = [sampled[0], sampled[sampled.length - 1]];
+  ends.forEach((q, k) => {
+    if (!q || q.error || !Number.isFinite(q.effort) || zero[k ? sampled.length - 1 : 0] || sampled.length < 2) return;
+    if (k === 0 ? q.effort > 0 : q.effort < 0) states.push({ value: q.value, stable: true, energy: q.energy, ...(Math.abs(q.effort) > 1e-6 * scale ? { limit: true } : {}) });
+  });
   states.sort((x, y) => x.value - y.value);
   const stable = states.filter((s) => s.stable);
-  let snap: EquilibriumStudy["snap"];
+  let snap: EquilibriumStudy["snap"], pullBack: EquilibriumStudy["pullBack"];
   if (stable.length >= 2) {
     const [s0, s1] = stable;
-    const between = poses.filter((q) => q.value > s0.value && q.value < s1.value && !q.error);
-    const peak = between.reduce((m, q) => (Math.abs(q.effort) > Math.abs(m.effort) ? q : m), between[0]);
+    const between = poses.filter((q) => q.value > s0.value && q.value < s1.value && !q.error && Number.isFinite(q.effort));
+    // the peak and the dip of the effort between the rests, each refined
+    // between its neighbouring samples
+    const refine = (sign: 1 | -1) => {
+      const i = between.reduce((m, q, k) => (sign * q.effort > sign * between[m].effort ? k : m), 0);
+      const best = between[i];
+      if (!best || !(sign * best.effort > 0)) return undefined;
+      // successive parabolic interpolation through the best sample and its
+      // neighbours (a solve here is costly, and the peak may be a kink: a few)
+      const at = poses.indexOf(best), pts = [poses[at - 1], best, poses[at + 1]].filter((q): q is FlexurePose => !!q && !q.error && Number.isFinite(q.effort));
+      let top = best;
+      for (let k = 0; k < 3 && pts.length === 3; k++) {
+        const [l, m, r] = pts, fl = sign * l.effort, fm = sign * m.effort, fr = sign * r.effort;
+        const den = (m.value - l.value) * (fm - fr) - (m.value - r.value) * (fm - fl);
+        if (!(Math.abs(den) > 0)) break;
+        const v = m.value - ((m.value - l.value) ** 2 * (fm - fr) - (m.value - r.value) ** 2 * (fm - fl)) / (2 * den);
+        if (!(v > l.value && v < r.value) || Math.abs(v - m.value) < 1e-4 * (max - min)) break;
+        const q = effortAt(v);
+        if (q.error || !Number.isFinite(q.effort)) break;
+        const gain = sign * (q.effort - top.effort);
+        if (!(gain > 0)) break; // no better than the best so far: done
+        top = q;
+        if (gain < 1e-3 * Math.abs(top.effort)) break; // as good as it gets
+        // the next parabola through the new best and its neighbours
+        const all = [l, m, r, q].sort((x, y) => x.value - y.value), j = all.indexOf(q);
+        pts.splice(0, 3, all[j - 1], all[j], all[j + 1]);
+      }
+      if (top !== best) extra.push(top);
+      return top;
+    };
+    const peak = refine(1), dip = refine(-1);
     const top = states.find((s) => !s.stable && s.value > s0.value && s.value < s1.value);
     if (peak) snap = { value: peak.value, effort: peak.effort, barrier: (top?.energy ?? Math.max(...between.map((q) => q.energy))) - s0.energy };
+    if (dip) pullBack = { value: dip.value, effort: dip.effort };
   }
-  return { states, poses, multistable: stable.length >= 2, ...(snap ? { snap } : {}) };
+  flexureState(doc, { [param]: String(current) }); // leave it where it was
+  for (const q of extra) if (!poses.some((r) => Math.abs(r.value - q.value) < 1e-9 * (max - min))) poses.push(q);
+  poses.sort((x, y) => x.value - y.value);
+  return { states, poses, multistable: stable.length >= 2, ...(snap ? { snap } : {}), ...(pullBack ? { pullBack } : {}) };
 }
 
 // ---- the strain field: where each flexure is, in world space, and how hard it works
