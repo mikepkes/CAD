@@ -48,7 +48,7 @@ const norm = (w) => w.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").re
 const words = []; // { t (cut seconds), w, n (normalised), cue }
 for (const c of cues) {
   const at = (c.clips[voice].startMs ?? c.startMs) / 1000;
-  for (const x of JSON.parse(readFileSync(cacheOf(c), "utf8")).words) words.push({ t: +(at + x.s).toFixed(3), end: +(at + x.e).toFixed(3), w: x.w, n: norm(x.w), cue: c.id, act: c.act });
+  for (const x of JSON.parse(readFileSync(cacheOf(c), "utf8")).words) words.push({ t: +(at + x.s).toFixed(3), end: +(at + x.e).toFixed(3), w: x.w, n: norm(x.w), cue: c.id, beat: c.beat ?? c.id, act: c.act });
 }
 
 // ---- what the picture does, and the word that names it ----
@@ -65,7 +65,7 @@ function named(e) {
   return text.split(/[\s/=,()▾:]+/).map(norm).filter((w) => w.length >= 3 && !STOP.has(w));
 }
 const same = (a, b) => a === b || (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a))) || a.replace(/(ing|ed|es|s)$/, "") === b.replace(/(ing|ed|es|s)$/, "");
-const order = cues.map((c) => c.id);
+const order = [...new Set(cues.map((c) => c.beat ?? c.id))]; // the beats, in order (a beat's sentence groups are separate cues)
 const events = (tl.events ?? []).map((e) => ({ ...e, names: named(e) }));
 const matched = [], unmatched = [];
 for (const e of events.filter((x) => x.names.length)) {
@@ -73,8 +73,8 @@ for (const e of events.filter((x) => x.names.length)) {
   // or a line can name what the last beat did) — a click on "Materials" a beat later isn't the word "materials" here
   const k = order.indexOf(e.beat), names = (w) => e.names.some((n) => same(n, w.n));
   const nearest = (ws) => ws.reduce((b, w) => (!b || Math.abs(w.t - e.t) < Math.abs(b.t - e.t) ? w : b), null);
-  let best = nearest(words.filter((w) => w.cue === order[k] && names(w)));
-  if (!best) { const n = nearest(words.filter((w) => (w.cue === order[k - 1] || w.cue === order[k + 1]) && names(w))); if (n && Math.abs(n.t - e.t) <= 3) best = n; }
+  let best = nearest(words.filter((w) => w.beat === order[k] && names(w)));
+  if (!best) { const n = nearest(words.filter((w) => (w.beat === order[k - 1] || w.beat === order[k + 1]) && names(w))); if (n && Math.abs(n.t - e.t) <= 3) best = n; }
   if (best) matched.push({ ...e, word: best.w, wordT: best.t, delta: +(e.t - best.t).toFixed(2) });
   else unmatched.push(e);
 }
@@ -96,7 +96,7 @@ else {
 }
 lines.push("## The words, beat by beat", "");
 for (const c of cues) {
-  const ws = words.filter((w) => w.cue === c.id), evs = events.filter((e) => e.beat === c.id && !["beat", "view"].includes(e.kind));
+  const ws = words.filter((w) => w.cue === c.id), evs = events.filter((e) => e.beat === (c.beat ?? c.id) && !["beat", "view"].includes(e.kind) && e.t >= c.startMs / 1000 - 0.05 && e.t < (c.startMs + c.slotMs) / 1000);
   lines.push(`**${c.id}** (${mmss(c.startMs / 1000)}–${mmss((c.startMs + c.slotMs) / 1000)}): ${ws.map((w) => `${w.w} \`${mmss(w.t)}\``).join(" ")}`);
   if (evs.length) lines.push("", `> shown: ${evs.map((e) => `${e.kind} "${e.label}" \`${mmss(e.t)}\``).join(" · ")}`);
   lines.push("");

@@ -82,7 +82,7 @@ async function drawOutline(d, pts) {
 }
 /** Extrude the open sketch across the base up to its far side: Extent "To face", then press and hold over that hidden
  *  face to open the selection picker, point at the entries (each lights its face on the model) and choose the far one. */
-async function extrudeToFarSide(d, S, far = W(-S.width / 2, -S.depth / 2 + 8, S.base / 2)) {
+async function extrudeToFarSide(d, S, far = W(-S.width / 2, -S.depth / 2 + 8, S.base / 2), { cueHidden = false } = {}) {
   await d.key("e");
   await d.wait(400);
   const selects = d.page.locator(".extrude-panel select"); // Profile, Extent, Operation
@@ -90,6 +90,7 @@ async function extrudeToFarSide(d, S, far = W(-S.width / 2, -S.depth / 2 + 8, S.
   await d.move(eb.x + eb.width / 2, eb.y + eb.height / 2);
   await ext.selectOption("toFace");
   await d.wait(400);
+  if (cueHidden) await d.cue(); // "That side is hidden, so press and hold…"
   await pickBehind(d, far, (it) => it.kind === "face" && it.normal.x < -0.99);
   await d.settle(300);
   const op = selects.last(), ob = await op.boundingBox();
@@ -164,11 +165,11 @@ export async function act1(d) {
     await d.run(() => { const st = window.__vibecadDemo.store.getState(); if (st.showPlanes) st.toggleShowPlanes(); }); // PUPPET: New brings the origin planes back
     await d.api("view", "iso"); await d.settle(300);
     await d.run((names) => window.__vibecadDemo.mockAgent({ prompt: "", model: "claude-haiku-5-5", source: "video act 1 names", turns: [], names }), NAMES); // fresh names for the new document
-    await d.move(820, 380, 700); await d.wait(700);
-    await d.moveTo(await d.rect(".wb-strip"), 600); await d.wait(800);
-    await d.moveTo(await d.rect(".panel-head", "Parameters"), 600); await d.wait(800);
-    await d.moveTo(await d.rect(".k-panel-toggle button", "⌘K"), 600); await d.wait(500);
-    await d.move(820, 420, 500);
+    await d.cue(); await d.move(820, 380, 700); await d.wait(700); // the model
+    await d.cue(); await d.moveTo(await d.rect(".wb-strip"), 600); await d.wait(800); // its history
+    await d.cue(); await d.moveTo(await d.rect(".panel-head", "Parameters"), 600); await d.wait(800); // its numbers
+    await d.cue(); await d.moveTo(await d.rect(".k-panel-toggle button", "⌘K"), 600); await d.wait(500); // Command K
+    await d.cue(); await d.move(820, 420, 500); // and Space
     await d.key(" ");
     await d.wait(1800);
     await d.key("Escape");
@@ -179,10 +180,14 @@ export async function act1(d) {
     await d.ring("Add a box");
     await d.settle(400);
     await d.key("Escape");
+    await d.cue(); // click a face and drag its number
     await clickFace(d, "+x"); await scrubFace(d, 250);
     await clickFace(d, "-y"); await scrubFace(d, 150);
+    await d.cue(); // pull the top down
     await clickFace(d, "+z"); await scrubFace(d, -140);
+    await d.cue(); // turn the model
     await d.api("view", "left"); await d.wait(900);
+    await d.cue(); // type a size
     await clickFace(d, "-x"); await typeFace(d, S.width);
     await d.api("view", "back"); await d.wait(900);
     await clickFace(d, "+y"); await scrubFace(d, 150);
@@ -194,6 +199,7 @@ export async function act1(d) {
   const side = W(S.width / 2, -S.depth / 2 + 8, S.base / 2); // the base's +X side, clear of the plate and the lip
   await d.beat("raise-the-back", async () => {
     await d.api("closeCards");
+    await d.cue(); // click the side face and pick Sketch
     await d.clickWorld(side); await d.settle();
     await d.shot("side");
     await d.ring("Sketch");
@@ -208,11 +214,15 @@ export async function act1(d) {
     for (let i = 0; i < 6; i++) { await d.page.mouse.wheel(0, 40); await d.wait(40); }
     await d.page.keyboard.up("Control");
     await d.wait(600);
+    await d.cue(); // draw the outline
     await drawOutline(d, back.map((p) => W(S.width / 2, p.y, p.z)));
+    await d.cue(); // finish the sketch
     await d.page.keyboard.press("Meta+Enter"); await d.settle(300);
     await d.api("view", "iso"); await d.wait(700);
-    await extrudeToFarSide(d, S);
+    await d.cue(); // extrude it to the far side
+    await extrudeToFarSide(d, S, undefined, { cueHidden: true });
     await d.api("closeCards");
+    await d.cue(); // the lip, the same way
     await d.clickWorld(side); await d.settle();
     await d.shot("side");
     await d.key("s");
@@ -230,15 +240,18 @@ export async function act1(d) {
 
   await d.beat("what-it-kept", async () => {
     const r = await d.rect(".wb-strip input[type=range]");
+    await d.cue(); // drag back through it
     await d.drag({ x: r.x + r.w - 6, y: r.cy }, { x: r.x + r.w * 0.2, y: r.cy }, 2200);
     await d.wait(500);
     await d.drag({ x: r.x + r.w * 0.2, y: r.cy }, { x: r.x + r.w - 2, y: r.cy }, 2000);
     await d.settle();
+    await d.cue(); // nothing has to be redone
   }, { lower: { title: "Parametric history", sub: "direct edits are recorded as features" } });
 
   await d.beat("make-it-parametric", async () => {
     await d.lower("Design intent", "named numbers, and the rules between them");
     await d.api("closeCards");
+    await d.cue(); // open the base and name its numbers
     await d.clickWorld(topOfBase(S)); await d.settle();
     await d.key("Enter"); await d.settle(300);
     for (const [label, name] of [["Y", "depth"], ["X", "width"]]) {
@@ -251,10 +264,12 @@ export async function act1(d) {
     }
     // PUPPET: the phone parameter and the plate's and lip's dimensions go in by command (the inline dimension tool on a face sketch is not scripted yet).
     const lipBox = await d.run(() => window.__vibecadDemo.lipOutline());
+    await d.cue(); // add a phone parameter
     await d.moveTo(await d.rect(".panel-head", "Parameters"), 500);
     await d.run(async () => { const st = window.__vibecadDemo.store.getState(); await st.dispatch("parameter.add", { name: "phone", expression: "9" }); await st.dispatch("parameter.setBounds", { name: "phone", min: 6, max: 16 }); });
     await d.settle();
     const s = await d.world(W(S.width / 2, lipBox[1].y, lipBox[2].z)); await d.move(s.x, s.y, 600);
+    await d.cue(); // size the slot from it
     await d.lower("slot = phone + 2", "the plate and the lip half of it either side; the lip phone + 1 tall");
     await d.run(async ([b, l]) => { await window.__vibecadDemo.backDims(b, "phone"); await window.__vibecadDemo.lipDims(l, "phone"); }, [backSketch, lipSketch]);
     await d.settle();
@@ -266,21 +281,24 @@ export async function act1(d) {
     await d.api("aim", { dir: STAND_VIEW, ms: 1000, margin: 0.95 });
     await d.api("sideWidth", "left", WIDE, 500);
     const r = await d.rect(".param-slider input[type=range]");
+    await d.cue(); // a thicker phone
     await d.drag({ x: thumbX(r, 6, 16, 9), y: r.cy }, { x: thumbX(r, 6, 16, 14), y: r.cy }, 1800);
     await d.settle(400); await d.wait(800);
+    await d.cue(); // that's all parametric means
+    await d.cue(); // and Command Z puts it back
     await d.page.keyboard.press("Meta+Z"); await d.settle(400);
     await d.api("sideWidth", "left", 272, 500);
   });
 
   await d.beat("just-type-it", async () => {
     await d.lower("Intent line", "⌘K: type what you want");
-    await d.intent("right", "View right");
+    await d.cue(); await d.intent("right", "View right");
     await d.wait(500);
-    await d.intent("phone 14", "phone = 14");
+    await d.cue(); await d.intent("phone 14", "phone = 14");
     await d.wait(1200);
-    await d.intent("back to 2", "Back to 2");
+    await d.cue(); await d.intent("back to 2", "Back to 2");
     await d.wait(1200);
-    await d.intent("roll end", "Roll to the end");
+    await d.cue(); await d.intent("roll end", "Roll to the end");
     await d.wait(600);
     await d.api("aim", { dir: STAND_VIEW, ms: 900 });
     await d.lower(null);

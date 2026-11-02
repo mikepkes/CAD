@@ -18,8 +18,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync, openSync, writeSync, closeSync, existsSync, createReadStream, statSync, renameSync, rmSync } from "node:fs";
 import { join, extname } from "node:path";
 import { chromium } from "playwright";
-import { fastened } from "./lib/director.mjs";
-import { MONTAGE, CHAPTERS, VIDEOS } from "./script/lines.mjs";
+import { fastened, PART_GAP_MS } from "./lib/director.mjs";
+import { MONTAGE, CHAPTERS, VIDEOS, partId } from "./script/lines.mjs";
 import { loadClips, VO_TAIL_MS } from "./lib/voices.mjs";
 import { readWav, writeWav } from "./lib/wav.mjs";
 
@@ -156,13 +156,25 @@ for (const n of acts) {
     if (b.wantMs != null) beatsExtra += (Math.max(b.actionsMs, b.wantMs) - Math.max(b.actionsMs, b.defaultWantMs)) / 1000;
     if (CHAPTERS[n]?.[b.id]) chapters.push({ from: toOut(b.start), title: CHAPTERS[n][b.id] });
     if (!b.narration.trim()) continue; // a silent beat (the title): no line to read or caption
-    const from = toOut(b.start), to = Math.max(from + FPS, toOut(b.end));
-    cues.push({ act: n, id: b.id, from, to, text: b.narration });
-    const parts = chunks(b.narration).map(written);
-    const words = parts.map((p) => p.split(/\s+/).length), total = words.reduce((a, c) => a + c, 0);
-    const span = Math.max(FPS, to - from - Math.round(FPS * 0.3));
-    let at = from;
-    parts.forEach((p, i) => { const len = Math.round((span * words[i]) / total); captions.push({ from: at, to: at + len, text: p }); at += len; });
+    // the line's sentence groups: the first at the beat's start, a cued one where the script cued it, the rest a breath
+    // after the one before (in the default voice: its clip's length)
+    const texts = b.partText ?? [b.narration], end = toOut(b.end), starts = [];
+    texts.forEach((text, k) => {
+      if (k === 0) { starts.push(toOut(b.start)); return; }
+      if (b.parts?.[k] != null) { starts.push(toOut(b.parts[k])); return; }
+      const prev = texts[k - 1], clip = vo?.clips(`act${n}-${partId(b.id, k - 1)}`, prev).find((c) => c.voice === vo.voices[0]);
+      const ms = clip?.ms ?? b.partMs?.[k - 1] ?? 0;
+      starts.push(starts[k - 1] + Math.round(((ms + PART_GAP_MS) / 1000) * FPS));
+    });
+    texts.forEach((text, k) => {
+      const from = starts[k], to = Math.max(from + FPS, k + 1 < texts.length ? starts[k + 1] : end);
+      cues.push({ act: n, id: partId(b.id, k), beat: b.id, from, to, text });
+      const parts = chunks(text).map(written);
+      const words = parts.map((p) => p.split(/\s+/).length), total = words.reduce((a, c) => a + c, 0);
+      const span = Math.max(FPS, to - from - Math.round(FPS * 0.3));
+      let at = from;
+      parts.forEach((p, i) => { const len = Math.round((span * words[i]) / total); captions.push({ from: at, to: at + len, text: p }); at += len; });
+    });
   }
   console.log(`act ${n}: ${list.length} frames in, ${srcToOut.length} out (${(srcToOut.length / FPS).toFixed(1)} s), ${spans.length} spans`);
   if (vo && timing.vo && timing.vo.voices.join() !== vo.voices.map((v) => v.id).join()) console.warn(`  act ${n} was timed for voices ${timing.vo.voices.join(", ")}; mixing ${vo.voices.map((v) => v.id).join(", ")}`);

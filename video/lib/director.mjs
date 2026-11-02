@@ -17,13 +17,14 @@ import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { LINES } from "../script/lines.mjs";
+import { LINES, partsOf, partId } from "../script/lines.mjs";
 import { loadClips, VO_TAIL_MS } from "./voices.mjs";
 
 export const VIEW = { width: 1440, height: 810, scale: 2560 / 1440 }; // 1440p capture of a 1440×810-point window
 export const WPM = 150; // a competent reading pace
 export const HANDLE_MS = 500; // the settled tail after each line
 export const MAX_FAST_MS = 3000; // a sped-up span lasts at most this long on screen
+export const PART_GAP_MS = 150; // the breath between one sentence group and the next
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -131,8 +132,40 @@ export class Director {
     return { ms: def.ms + VO_TAIL_MS, defaultMs: def.ms + VO_TAIL_MS, longestMs: longest.ms + VO_TAIL_MS, clips: clips.length, longest: longest.voice.id };
   }
 
+  /** How long a part of a line takes in the default voice (its clip), or to read when it has none. */
+  partMs(beat, k, text) {
+    const clips = this.act != null && text.trim() ? this.vo.clips(`act${this.act}-${partId(beat, k)}`, text) : [];
+    const def = clips.find((c) => c.voice === this.vo.voices[0]) ?? clips[0];
+    return def ? def.ms : readMs(text) - HANDLE_MS;
+  }
+  /** Milliseconds on screen since take time `t0`: sped-up spans count at their sped length, cut spans not at all. */
+  screenSince(t0) {
+    const now = this.now();
+    let saved = 0;
+    for (const f of this.timing.fast) {
+      const a = Math.max(f.start, t0), b = Math.min(f.end, now);
+      if (b <= a) continue;
+      const len = (f.end - f.start) * 1000;
+      saved += (b - a) * 1000 * (f.cut ? 1 : 1 - fastened(len).ms / len);
+    }
+    return (now - t0) * 1000 - saved;
+  }
+  /** Start the next sentence group of this beat's line here (" | " in lines.mjs): the picture holds until the one
+   *  before has been said, so the words and what they name stay together. */
+  async cue() {
+    const sp = this.speech;
+    if (!sp) return;
+    const k = sp.at.length;
+    if (k >= sp.ms.length) { this.note(`beat ${sp.id}: cue ${k + 1} but its line has ${sp.ms.length} part(s)`); return; }
+    const need = sp.ms[k - 1] + PART_GAP_MS, since = this.screenSince(sp.at[k - 1]);
+    if (since < need) await sleep(need - since);
+    sp.at.push(this.now());
+    this.event("cue", partId(sp.id, k));
+  }
+
   /** One beat: run `fn`, then hold until its line has been said (sped-up spans count at their sped length).
-   *  The line is LINES[act][id] in video/script/lines.mjs; `d.beat(id, "a line", fn)` still works for a one-off. */
+   *  The line is LINES[act][id] in video/script/lines.mjs; `d.beat(id, "a line", fn)` still works for a one-off.
+   *  A line in sentence groups is said group by group as `fn` calls `d.cue()`; groups it doesn't cue follow on. */
   async beat(id, ...rest) {
     let [narration, fn, opts = {}] = typeof rest[0] === "string" ? rest : [undefined, ...rest];
     if (narration == null) {
@@ -143,20 +176,26 @@ export class Director {
     // re-shot alone); the rest are skipped, their setup between beats still running
     if (process.env.VIDEO_ONLY && !process.env.VIDEO_ONLY.split(",").includes(id)) { console.log(`  beat ${id} (skipped)`); return; }
     const start = this.now();
-    const fastBefore = this.timing.fast.length;
     console.log(`  beat ${id}`);
     this.event("beat", id);
+    const parts = partsOf(narration);
+    this.speech = { id, at: [start], ms: parts.map((p, k) => this.partMs(id, k, p)) };
     try { await fn(); }
     catch (e) { this.note(`beat ${id} failed: ${e.message}`); console.error(`  ✗ ${id}: ${e.message}`); }
-    const fast = this.timing.fast.slice(fastBefore);
-    const saved = fast.reduce((s, f) => s + (f.end - f.start) * 1000 - (f.cut ? 0 : fastened((f.end - f.start) * 1000).ms), 0);
-    const onScreen = (this.now() - start) * 1000 - saved;
-    const line = this.lineMs(id, narration);
-    const want = Math.max(line.ms, opts.minMs ?? 0);
-    if (onScreen < want) await sleep(want - onScreen);
-    // what set the beat's length: its actions (actionsMs), or its line in the default voice (wantMs); the longest voice
-    // (longestMs) slips past it in the edit
-    this.timing.beats.push({ id, start, end: this.now(), narration, lower: opts.lower ?? null, actionsMs: Math.round(onScreen), wantMs: want, defaultWantMs: want, longestMs: line.longestMs ?? want, voClips: line.clips, longest: line.longest });
+    const sp = this.speech;
+    this.speech = null;
+    // hold until the line is said: from the last cued group, it and every group after it, a breath between each
+    const last = sp.at.length - 1;
+    let owed = parts.length ? sp.ms[last] : 0;
+    for (let j = last + 1; j < parts.length; j++) owed += PART_GAP_MS + sp.ms[j];
+    if (parts.length) owed += VO_TAIL_MS;
+    const onScreen = this.screenSince(start), since = this.screenSince(sp.at[last]);
+    const wait = Math.max(0, owed - since, (opts.minMs ?? 0) - onScreen);
+    if (wait > 0) await sleep(wait);
+    const line = this.lineMs(id, parts.join(" "));
+    // what set the beat's length: its actions (actionsMs), or its line in the default voice (wantMs); `parts` are the
+    // take times each cued sentence group started (the rest follow on in the edit), `partMs` their lengths
+    this.timing.beats.push({ id, start, end: this.now(), narration: parts.join(" "), ...(parts.length > 1 ? { parts: sp.at, partMs: sp.ms, partText: parts } : {}), lower: opts.lower ?? null, actionsMs: Math.round(onScreen), wantMs: Math.round(onScreen + wait), defaultWantMs: Math.round(onScreen + wait), longestMs: line.longestMs ?? Math.round(onScreen + wait), voClips: line.clips, longest: line.longest });
   }
   /** Mark everything `fn` does as a span the edit speeds up, with `label` on the speed chyron. */
   async fast(label, fn) {

@@ -6,6 +6,8 @@
 // voice, and video/edit.mjs captions them. Lines are written for the ear: addresses are spelled out ("mikepkes dot
 // github dot io slash CAD"; the captions turn them back into written form) and "Command K" is said in words.
 // "" is a silent beat (no voice, no caption). Change a line here and only its clips are re-synthesised.
+// " | " splits a line into sentence groups the script cues one by one (`d.cue()`), so each is said as its action
+// happens rather than the whole line at the beat's start (partsOf, below).
 
 /** The two videos: which acts each is cut from, in order, and the file it renders to (video/out/<run>/<video>/). */
 export const VIDEOS = {
@@ -41,19 +43,19 @@ export const LINES = {
     "get-vibecad":
       "VibeCAD runs in your browser at mikepkes dot github dot io slash CAD, or as a desktop app from the project's GitHub releases. It's free, and it's open source under the MIT licence.",
     "the-room":
-      "Start a new document. Four places matter: the model in the middle, its history along the bottom, its numbers on the left, and two shortcuts. Command K runs anything you can type, and Space opens the action ring.",
+      "Start a new document. | Four places matter: the model in the middle, | its history along the bottom, | its numbers on the left, | and two shortcuts. Command K runs anything you can type, | and Space opens the action ring.",
     block:
-      "Start with a block. Hold Space for the action ring, point at Box and let go. Then click a face and drag its number to push it out. Turn the model to reach the far sides. Type a size when you know it, and pull the top down to make a thin base.",
+      "Start with a block. Hold Space for the action ring, point at Box and let go. | Then click a face and drag its number to push it out. | Pull the top down to make a thin base. | Turn the model to reach the far sides, | and type a size when you know it.",
     "raise-the-back":
-      "Pushing sets sizes, but it can't tilt. For the slanted back, click the side face and pick Sketch from its action ring: the ring changes with what you've selected. Draw the outline corner by corner, finish the sketch, and extrude it up to the far side of the base, so it always spans the base, whatever its width. That side is hidden, so press and hold: VibeCAD lists everything under the cursor and lights each one as you point at it. The lip in front of the phone is a rectangle, made the same way.",
+      "Pushing sets sizes, but it can't tilt. | For the slanted back, click the side face and pick Sketch from its action ring: the ring changes with what you've selected. | Draw the outline corner by corner, | finish the sketch, | and extrude it up to the far side of the base, so it always spans the base, whatever its width. | That side is hidden, so press and hold: VibeCAD lists everything under the cursor and lights each one as you point at it. | The lip in front of the phone is a rectangle, made the same way.",
     "what-it-kept":
-      "Here's the quiet part: VibeCAD kept a recipe of everything you did by hand. Every push and every sketch is a step in the history. Drag back through it, and forward again. Nothing has to be redone, and every step can still change.",
+      "Here's the quiet part: VibeCAD kept a recipe of everything you did by hand. Every push and every sketch is a step in the history. | Drag back through it, and forward again. | Nothing has to be redone, and every step can still change.",
     "make-it-parametric":
-      "Now make it parametric. Open the base and name the numbers that matter: its depth and its width. Add a phone parameter and size the slot from it: phone plus two millimetres wide, the back plate and the lip each half of that from its middle, so the phone's weight stays over the base. And the lip stands phone plus one tall.",
+      "Now make it parametric. | Open the base and name the numbers that matter: its depth and its width. | Add a phone parameter | and size the slot from it: phone plus two millimetres wide, the back plate and the lip each half of that from its middle, so the phone's weight stays over the base. And the lip stands phone plus one tall.",
     "turn-the-dials":
-      "Now turn the dial. A thicker phone, and the back plate leans further back, the lip steps forward, and it grows to hold the phone. That's all parametric means: change one number, and everything that depends on it follows. And Command Z puts it back.",
+      "Now turn the dial. | A thicker phone, and the back plate leans further back, the lip steps forward, and it grows to hold the phone. | That's all parametric means: change one number, and everything that depends on it follows. | And Command Z puts it back.",
     "just-type-it":
-      "Or skip the mouse. Command K, and type what you want. Right, for a side view. Phone fourteen, and the slot opens to fit it. Back to step two, and the history rolls back with it; roll to the end, and it's all there again.",
+      "Or skip the mouse. Command K, and type what you want. | Right, for a side view. | Phone fourteen, and the slot opens to fit it. | Back to step two, and the history rolls back with it; | roll to the end, and it's all there again.",
     "keep-it":
       "Save it to a file whenever you like. VibeCAD also keeps your work as you go, so you can experiment freely.",
   },
@@ -61,17 +63,17 @@ export const LINES = {
   // Act 2 · The tutorial, continued: the stand becomes a product.
   2: {
     soften:
-      "Sharp corners chip and catch. Click the top of the base and choose Round corners: its four corners get a fillet, and the radius is just another number you can drag, type or name. Make it generous: fifteen millimetres.",
+      "Sharp corners chip and catch. | Click the top of the base and choose Round corners: its four corners get a fillet, | and the radius is just another number you can drag, type or name. Make it generous: fifteen millimetres.",
     rules:
-      "Instead of checking by eye after every change, write down what must stay true. Here, the stand must weigh under two hundred grams: Command K, mass at most two hundred. It lands in the ledger, which checks it on every change, and when it fails, builds fixes and offers them. Accept one.",
+      "Instead of checking by eye after every change, write down what must stay true. | Here, the stand must weigh under two hundred grams: Command K, mass at most two hundred. | It lands in the ledger, which checks it on every change, | and when it fails, builds fixes and offers them. Accept one.",
     "better-versions":
-      "Sliders show one version at a time. The design space shows them all at once: width against depth, shaded by weight, with the edge of what passes your rule. Pin the one you have, jump to the lightest that passes, and compare the two, one ghosted over the other.",
+      "Sliders show one version at a time. | The design space shows them all at once: width against depth, shaded by weight, with the edge of what passes your rule. | Pin the one you have, | jump to the lightest that passes, | and compare the two, one ghosted over the other.",
     materials:
-      "Materials are one click, each drawn as it really looks: polished brass, walnut, grip rubber. Or as it will print: PLA, with its layer lines. Print it on its side instead, and the layers turn with it. Across the layers is a print's weak direction, and the strength studies take it into account.",
+      "Materials are one click, each drawn as it really looks: | polished brass, | walnut, | grip rubber. | Or as it will print: PLA, with its layer lines. | Print it on its side instead, and the layers turn with it. | Across the layers is a print's weak direction, and the strength studies take it into account.",
     "will-it-print":
-      "Will it print? Bring up the lens and switch it to overhangs: red would need supports. Then zebra stripes: on the rounded corner they bend smoothly through the curve and on into the flat faces, with no kinks.",
+      "Will it print? | Bring up the lens and switch it to overhangs: red would need supports. | Then zebra stripes: on the rounded corner they bend smoothly through the curve and on into the flat faces, with no kinks.",
     "make-it-yours":
-      "Every action has a key, and the ones you use most can live on the action ring. Each context has its own ring, and you decide what's on it. Put Round edges on the face ring, and it's one flick away: here it softens every edge around the top of the base.",
+      "Every action has a key, and the ones you use most can live on the action ring. | Each context has its own ring, and you decide what's on it. | Put Round edges on the face ring, | and it's one flick away: here it softens every edge around the top of the base.",
     "ship-it":
       "When it's right, export it: STL for any printer, 3MF to keep parts and materials together, or STEP for other CAD tools.",
     "wrap-up":
@@ -160,10 +162,19 @@ export const CHAPTERS = {
   },
 };
 
-/** Every spoken line, in playing order: { act, id, key, text }. The montage plays before Act 0 as "act0-montage". */
+/** A line's sentence groups: " | " splits a line into parts, each its own clip, the first said as the beat starts and
+ *  each later one where the script calls `d.cue()` (the picture holding until the one before has been said), or
+ *  straight after the one before when the script doesn't cue it. A line without " | " is one part. */
+export const partsOf = (text) => String(text ?? "").split(/\s*\|\s*/).map((p) => p.trim()).filter(Boolean);
+/** A part's id: the beat's for the first part, "<beat>.2", "<beat>.3", … for the rest. */
+export const partId = (beat, k) => (k ? `${beat}.${k + 1}` : beat);
+
+/** Every spoken part, in playing order: { act, id, beat, key, text }. The montage plays before Act 0 as "act0-montage". */
 export function spoken(acts = [0, 1, 2, 3]) {
   const out = [];
-  if (acts.includes(0)) out.push({ act: 0, id: "montage", key: "act0-montage", text: MONTAGE });
-  for (const act of acts) for (const [id, text] of Object.entries(LINES[act] ?? {})) if (text.trim()) out.push({ act, id, key: `act${act}-${id}`, text });
+  if (acts.includes(0)) out.push({ act: 0, id: "montage", beat: "montage", key: "act0-montage", text: MONTAGE });
+  for (const act of acts) for (const [beat, text] of Object.entries(LINES[act] ?? {})) {
+    partsOf(text).forEach((p, k) => out.push({ act, id: partId(beat, k), beat, key: `act${act}-${partId(beat, k)}`, text: p }));
+  }
   return out;
 }
