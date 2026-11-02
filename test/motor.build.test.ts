@@ -7,6 +7,12 @@
 // flats or a keyway and its key, out the front or out both ends. The wiring is
 // modelled for clearance: a connector (its socket, the mating plug and the
 // cable off it) or a cable through a strain relief, off the back or the side.
+// The mounting holes are tapped into a full front cap (NEMA 8–17), or clear
+// through a flange plate with the body relieved behind it for the bolts' nuts
+// (NEMA 23 up, servo motors); each frame comes with its usual kind, either can
+// be picked. A stepper's back shows what a real one does: the tie-rods' Phillips
+// heads in their counterbores and the shaft's end in the rear bearing; behind a
+// flange plate the tie-rods sit beside the corner holes, their heads on the plate.
 //
 // Coordinates: the shaft turns about Z; z = 0 is the mounting face (a motor's
 // flange face, a servo's case top), the body hangs below it, the shaft points up.
@@ -58,6 +64,39 @@ const servo = (name: string, s: Servo, H: number, sd: number, sl: number, w: Wir
 const flanged = (name: string, A: number, capF: number, capR: number, pcd: number, hr: number, D: number, L: number, sd: number, sl: number, w: Wiring): Size =>
   stepper(name, { A, c1: Math.round(A * 0.06), capF, A2: A - 2, c2: Math.round(A * 0.08), capR, B: +(pcd / Math.SQRT2).toFixed(2), hr, hd: capF, D, P: 3 }, L, sd, sl, w);
 
+const isStepper = (z: Size) => !z.servo && z.name.includes("stepper");
+/** A stepper's through-bolt head radius (M2 on a NEMA 8 to M6 on a 42), kept inside the rear cap's chamfered corner. */
+const screwHead = (z: Size) => {
+  const nominal = z.A < 25 ? 1.75 : z.A < 30 ? 2.25 : z.A < 50 ? 2.75 : z.A < 70 ? 3.5 : z.A < 100 ? 4.25 : 5;
+  const corner = (z.A2 - z.c1) / Math.SQRT2; // the chamfer line's distance from the centre, on the diagonal
+  return +Math.min(nominal, corner - z.B / Math.SQRT2 - 0.1).toFixed(2);
+};
+
+// the mounting holes: tapped (blind, threaded) or clear through a flange plate
+const nativeThrough = (z: Size) => (z.servo ? 0 : isStepper(z) && z.A < 50 ? 0 : 1);
+/** The mounting screws' nominal size (M2 … M8). */
+const thread = (z: Size) => {
+  if (isStepper(z) && z.A < 50) return z.A < 25 ? 2 : z.A < 30 ? 2.5 : 3;
+  const d = 2 * z.hr;
+  return d >= 8.4 ? 8 : d >= 6.4 ? 6 : d >= 5 ? 5 : d >= 4.3 ? 4 : 3;
+};
+const PITCH: Record<number, number> = { 2: 0.4, 2.5: 0.45, 3: 0.5, 4: 0.7, 5: 0.8, 6: 1, 8: 1.25 };
+/** A clearance hole's radius: the catalogue's where the frame comes with through holes, else ISO 273 medium. */
+const clearance = (z: Size) => (nativeThrough(z) ? z.hr : +((thread(z) * 1.1 + 0.1) / 2).toFixed(2));
+/** A tapped hole's depth: the catalogue's where the frame comes tapped, else 1.5 diameters (within the cap). */
+const tapDepth = (z: Size) => (nativeThrough(z) ? Math.min(0.8 * z.capF, 1.5 * thread(z)) : z.hd);
+/** Room on a flange plate for the tie-rods beside its holes, clear of the pilot (none on a NEMA 8). */
+const tieRodRoom = (z: Size) => {
+  const sr = screwHead(z), ty = z.B / 2 - (clearance(z) + sr + 1.5);
+  return isStepper(z) && Math.hypot(z.B / 2, ty) - (counterbore(z) + 0.22 * sr) - 0.5 > z.D / 2 ? 1 : 0;
+};
+/** The counterbore round a tie-rod's head: a little wider than the head, as far as the rear cap's corner allows. */
+const counterbore = (z: Size) => {
+  const sr = screwHead(z), room = (z.A2 - z.c1) / Math.SQRT2 - z.B / Math.SQRT2;
+  return +Math.max(sr + 0.15, Math.min(1.18 * sr, room - 0.22 * sr - 0.15)).toFixed(2);
+};
+const HOLES = ["Tapped (threaded)", "Through a flange plate"];
+
 // sockets: JST-PH (small steppers), 4-pin housings (NEMA 23 up), round M17-style (servo motors), a servo's lead
 const W_XS: Wiring = { cw: 8, ch: 4.5, cd: 3, pd: 6, cab: 3 };
 const W_S: Wiring = { cw: 13, ch: 5.5, cd: 4.5, pd: 7, cab: 4 };
@@ -104,6 +143,7 @@ async function buildMotor(s: CadSession): Promise<void> {
   // the controls
   await dis(s, "parameter.add", { name: "size", expression: String(DEFAULT_SIZE), options: SIZES.map((z) => z.name) });
   await dis(s, "parameter.add", { name: "length", expression: pick((z) => z.L), min: 12, max: 250, step: 0.5 });
+  await dis(s, "parameter.add", { name: "holes", expression: pick(nativeThrough), options: HOLES });
   await dis(s, "parameter.add", { name: "shaft", expression: "1", options: SHAFTS });
   await dis(s, "parameter.add", { name: "shaft_d", expression: pick((z) => z.sd), min: 2, max: 25, step: 0.05 });
   await dis(s, "parameter.add", { name: "shaft_len", expression: pick((z) => z.sl), min: 4, max: 100, step: 0.5 });
@@ -117,7 +157,7 @@ async function buildMotor(s: CadSession): Promise<void> {
   const hidden = (name: string, expression: string) => dis(s, "parameter.add", { name, expression, hidden: true });
   await hidden("fh", pick((z) => (z.servo ? 1 : 0))); // a hobby servo
   await hidden("fm", "1 - fh");                        // a motor (stepper or flanged servo motor)
-  for (const k of ["A", "c1", "capF", "A2", "c2", "capR", "B", "hr", "hd", "D", "P", "Lc", "Wc", "tab", "tabT", "tabTop", "hx", "hy", "thr", "bd", "bh", "ox", "horn_len", "cw", "ch", "cd", "pd", "cab"] as const) {
+  for (const k of ["A", "c1", "capF", "A2", "c2", "capR", "B", "hr", "D", "P", "Lc", "Wc", "tab", "tabT", "tabTop", "hx", "hy", "thr", "bd", "bh", "ox", "horn_len", "cw", "ch", "cd", "pd", "cab"] as const) {
     await hidden(k, pick((z) => z[(k === "horn_len" ? "horn" : k) as keyof Size] as number));
   }
   await hidden("two", "min(1, hy)"); // two holes per ear
@@ -149,6 +189,24 @@ async function buildMotor(s: CadSession): Promise<void> {
   await hidden("cz", "fm*(capR/2 - Lb) + fh*(1.5 + ch/2 - Lb)");        // a side socket's height
   await hidden("bx", "ch/2 + 1.5 - half");                              // a back socket's offset (clear of a rear shaft)
   await hidden("lead", "4*cab + 12");                                   // the cable stub shown for clearance
+  // the mounting holes: through a flange plate (its body relieved behind, clear of a nut on each bolt) or tapped
+  await hidden("thru", "fm*holes");
+  await hidden("tm", pick(thread));                                     // the screws' nominal size
+  await hidden("hcl", pick(clearance));                                 // a clearance hole's radius
+  await hidden("ft", "capF - thru*0.4*capF");                           // the flange plate's thickness
+  await hidden("dl", "B*0.7071 - 0.9*tm - 0.8");                        // the relief's line, on the diagonal, a nut's width in from the holes
+  // a stepper's tie-rods: heads in counterbores at the back (and on a flange plate, beside its holes); the rear bearing round the shaft's end
+  await hidden("fst", pick((z) => (isStepper(z) ? 1 : 0)));
+  await hidden("sr", pick(screwHead));                                  // head radius
+  await hidden("hh", "0.6*sr");                                         // head height
+  await hidden("cbr", pick(counterbore));                               // counterbore radius
+  await hidden("cc", "0.22*sr");                                        // its mouth's 45° chamfer
+  await hidden("vc", "(0.84*hh*hh - sr*sr)/(1.2*hh)");                  // a pan head's dome: its centre, up from the head's underside
+  await hidden("tr", pick(tieRodRoom));
+  await hidden("ty", "B/2 - thru*tr*(hcl + sr + 1.5)");                    // the tie-rods at (±B/2, ±ty): the corners, or beside a plate's holes
+  await hidden("rbo", "max(r + 1.5, min(1.4*r + 0.09*A2, sqrt(B*B/4 + ty*ty) - cbr - cc - 1))"); // bearing outer radius, clear of the screws
+  await hidden("bpd", "0.3*capR");                                      // bearing pocket depth
+  await hidden("sbd", "0.6*capR");                                      // how far the shaft's end runs into the cap
 
   // materials, after a black NEMA 23: anodised caps with the front face machined bright, a black laminated stack
   const mat = async (name: string, p: Record<string, unknown>) => (await dis(s, "material.create", { name, ...p }))[0];
@@ -161,6 +219,8 @@ async function buildMotor(s: CadSession): Promise<void> {
   const nylon = await mat("Connector, natural nylon", { kind: "plastic", finish: "satin", color: "#efeadc" });
   const relief = await mat("Strain relief, black", { kind: "plastic", finish: "matte", color: "#18191b" });
   const pvc = await mat("Cable, black PVC", { kind: "rubber", color: "#141416" });
+  const zinc = await mat("Steel, zinc plated", { kind: "metal", finish: "satin", color: "#c9ccd0", roughness: 0.3 });
+  const shield = await mat("Bearing shield, steel", { kind: "metal", finish: "satin", color: "#b4b8bd", roughness: 0.35 });
   const part = async (name: string, material: string, parent?: string) => {
     const c = (await dis(s, "component.create", { name, ...(parent ? { parent } : {}) }))[0];
     await dis(s, "material.assign", { component: c, material });
@@ -169,6 +229,7 @@ async function buildMotor(s: CadSession): Promise<void> {
   const housing = await part("Housing", anod), face = await part("Machined face", bright), stator = await part("Stator", stack);
   const caseC = await part("Servo case", caseMat);
   const shaftC = await part("Shaft", steel), hornC = await part("Horn", horn, shaftC);
+  const screwsC = await part("Screws", zinc), bearingC = await part("Rear bearing", shield);
   const connC = await part("Connector", nylon), reliefC = await part("Strain relief", relief), cable = await part("Cable", pvc);
 
   // ---- sketch helpers: every coordinate an expression ----
@@ -211,17 +272,103 @@ async function buildMotor(s: CadSession): Promise<void> {
   sk = await sketch(face, "XY", "Pilot bore");
   await circle(sk, 0, 0, "D/2");
   await solid(sk, "Pilot bore", { from: "-1", dist: "2", op: "cut", body: faceBody, when: "fm" });
-  for (const [comp, body, nm] of [[housing, front, "Mounting holes"], [face, faceBody, "Mounting holes, face"]] as const) {
-    sk = await sketch(comp, "XY", nm);
-    for (const [sx, sy] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) await circle(sk, `${sx}*B/2`, `${sy}*B/2`, "hr");
-    await solid(sk, nm, { from: "-hd", dist: "hd + 1", op: "cut", body, when: "fm" });
+  const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+  // through a flange plate: clearance holes, and the cap behind the plate relieved at the corners
+  sk = await sketch(housing, "XY", "Mounting holes");
+  for (const [sx, sy] of corners) await circle(sk, `${sx}*B/2`, `${sy}*B/2`, "hcl");
+  await solid(sk, "Mounting holes", { from: "-capF - 1", dist: "capF + 2", op: "cut", body: front, when: "thru" });
+  sk = await sketch(housing, "XY", "Relief");
+  for (const [sx, sy] of corners) await loop(sk, [[`${sx}*(1.4142*dl - A/2 - 1)`, `${sy}*(A/2 + 1)`], [`${sx}*(A/2 + 1)`, `${sy}*(A/2 + 1)`], [`${sx}*(A/2 + 1)`, `${sy}*(1.4142*dl - A/2 - 1)`]]);
+  await solid(sk, "Relief", { from: "-capF - 1", dist: "capF + 1 - ft", op: "cut", body: front, when: "thru" });
+  // tapped: drilled and threaded, one feature per frame (a hole's position and thread are numbers)
+  for (const [i, z] of SIZES.entries()) {
+    if (z.servo) continue;
+    const b = z.B / 2, tm = thread(z), depth = tapDepth(z);
+    const [h] = await dis(s, "feature.hole", {
+      name: `Tapped holes, M${tm}`, body: front, at: corners.map(([sx, sy]) => ({ x: sx * b, y: sy * b, z: 0 })),
+      diameter: num(tm - PITCH[tm]), depth: num(depth),
+      thread: { form: "metric", pitch: PITCH[tm], diameter: tm, length: +(depth - 0.5 * tm).toFixed(2), internal: true, representation: "cosmetic" },
+    });
+    await dis(s, "feature.setCondition", { feature: h, when: `(1 - holes)*max(0, 1 - abs(size - ${i}))` });
   }
+  sk = await sketch(face, "XY", "Mounting holes, face");
+  for (const [sx, sy] of corners) await circle(sk, `${sx}*B/2`, `${sy}*B/2`, "thru*hcl + (1 - thru)*tm/2");
+  await solid(sk, "Mounting holes, face", { from: "-1", dist: "2", op: "cut", body: faceBody, when: "fm" });
   sk = await sketch(stator, "XY", "Stator");
-  await octagon(sk, "A2/2", "c2");
+  await octagon(sk, "A2/2", "max(c2, thru*(A2 - 1.4142*dl))"); // relieved with the flange plate's front cap
   await solid(sk, "Stator", { from: "capR - Lb", dist: "Lb - capR - capF", when: "fm" });
   sk = await sketch(housing, "XY", "Rear cap");
   await octagon(sk, "A2/2", "c1");
-  await solid(sk, "Rear cap", { from: "-Lb", dist: "capR", when: "fm" });
+  const rearCap = await solid(sk, "Rear cap", { from: "-Lb", dist: "capR", when: "fm" });
+  // a stepper's tie-rods: Phillips pan heads just below the face, in counterbores chamfered at the mouth,
+  // at the back (and on a flange plate). Turned profiles, drawn on planes through the screws' rows (y = ±ty)
+  // in u (along x) and v (up z), each revolved about its screw's axis.
+  const rows = new Map<number, string>();
+  for (const sy of [1, -1]) rows.set(sy, (await dis(s, "plane.create", { origin: { x: 0, y: `${sy}*ty`, z: 0 }, normal: { x: 0, y: 1, z: 0 }, name: `Tie-rod row ${sy > 0 ? "+" : "−"}Y` }))[0]);
+  /** Revolve a profile about the screw at (sx·B/2, sy·ty): points as (radius, height out of the face) — the face
+   *  at `z0`, outwards `o` — with `arc` the index of a point the profile reaches by an arc about `arc.c` instead of a line. */
+  const turned = async (comp: string, sx: number, sy: number, z0: string, o: number, name: string, pts: [string, string][], op: "new" | "join" | "cut", when: string, body?: string, arc?: { at: number; c: [string, string] }) => {
+    const sk = (await dis(s, "sketch.create", { datum: rows.get(sy), component: comp, name }))[0];
+    const at = ([du, dz]: [string, string]): [string, string] => [`${sx}*B/2 + ${sx}*(${du})`, `${z0} + ${o}*(${dz})`];
+    const ids: string[] = [];
+    for (const q of pts) ids.push(await point(sk, ...at(q)));
+    for (let i = 0; i < ids.length; i++) {
+      const a = ids[i], b = ids[(i + 1) % ids.length];
+      if (arc && (i + 1) % ids.length === arc.at) {
+        const c = await point(sk, ...at(arc.c));
+        await dis(s, "sketch.addArc", { sketch: sk, center: { ref: c }, start: { ref: a }, end: { ref: b }, ccw: sx * o > 0 });
+      } else await dis(s, "sketch.addLine", { sketch: sk, start: { ref: a }, end: { ref: b } });
+    }
+    const [[x0, y0], [x1, y1]] = [at(["0", "-10"]), at(["0", "10"])];
+    const [axis] = await dis(s, "sketch.addLine", { sketch: sk, start: { x: x0, y: y0 }, end: { x: x1, y: y1 }, construction: true });
+    const [f] = await dis(s, "feature.revolve", { sketch: sk, axisLine: axis, operation: op, name, ...(body ? { body } : {}) });
+    await dis(s, "feature.setCondition", { feature: f, when });
+    return f;
+  };
+  const tieRods = async (end: "back" | "front", bodies: string[], when: string) => {
+    const z0 = end === "back" ? "-Lb" : "0", o = end === "back" ? -1 : 1, deep = "-(0.3 + hh)";
+    let heads = "";
+    for (const [sx, sy] of corners) {
+      // the counterbore, its mouth chamfered 45°
+      for (const body of bodies) {
+        await turned(end === "back" ? housing : body === front ? housing : face, sx, sy, z0, o, `Screw counterbore, ${end}`,
+          [["0", "1"], ["cbr + cc + 1", "1"], ["cbr", "-cc"], ["cbr", deep], ["0", deep]], "cut", when, body);
+      }
+      // the pan head: a short side, then a shallow dome up to the axis
+      const h = await turned(screwsC, sx, sy, z0, o, `Screw head, ${end}`,
+        [["0", deep], ["sr", deep], ["sr", `${deep} + 0.4*hh`], ["0", "-0.3"]], heads ? "join" : "new", when, heads || undefined, { at: 3, c: ["0", `${deep} + vc`] });
+      heads ||= h;
+      // the Phillips recess's cone
+      await turned(screwsC, sx, sy, z0, o, `Phillips cone, ${end}`, [["0", "1"], ["0.3*sr", "1"], ["0.3*sr", "-0.3"], ["0", "-0.3 - 0.55*hh"]], "cut", when, heads);
+    }
+    // and its four wings
+    for (const [nm, w, h] of [["Phillips recess", "0.62*sr", "0.12*sr"], ["Phillips recess, across", "0.12*sr", "0.62*sr"]]) {
+      sk = await sketch(screwsC, "XY", `${nm}, ${end}`);
+      for (const [sx, sy] of corners) await rect(sk, `${sx}*B/2 - ${w}`, `${sy}*ty - ${h}`, `${sx}*B/2 + ${w}`, `${sy}*ty + ${h}`);
+      await solid(sk, `${nm}, ${end}`, end === "back" ? { from: "-Lb - 1", dist: "1.3 + 0.35*hh", op: "cut", body: heads, when } : { from: "-0.3 - 0.35*hh", dist: "1.3 + 0.35*hh", op: "cut", body: heads, when });
+    }
+  };
+  await tieRods("back", [rearCap], "fst");
+  await tieRods("front", [front, faceBody], "fst*thru*tr");
+  // the rear bearing in its pocket, its shield ringed between the races, and the bore the shaft's end runs in
+  sk = await sketch(housing, "XY", "Bearing pocket");
+  await circle(sk, 0, 0, "rbo");
+  await solid(sk, "Bearing pocket", { from: "-Lb - 1", dist: "bpd + 1", op: "cut", body: rearCap, when: "fst" });
+  sk = await sketch(housing, "XY", "Shaft bore");
+  await circle(sk, 0, 0, "r + 0.05");
+  await solid(sk, "Shaft bore", { from: "-Lb - 1", dist: "sbd + 1.5", op: "cut", body: rearCap, when: "fst" });
+  sk = await sketch(bearingC, "XY", "Rear bearing");
+  await circle(sk, 0, 0, "rbo");
+  const bearing = await solid(sk, "Rear bearing", { from: "-Lb + 0.4", dist: "bpd - 0.4", when: "fst" });
+  sk = await sketch(bearingC, "XY", "Shield");
+  await circle(sk, 0, 0, "0.85*rbo");
+  await solid(sk, "Shield", { from: "-Lb", dist: "0.65", op: "cut", body: bearing, when: "fst" });
+  sk = await sketch(bearingC, "XY", "Inner race");
+  await circle(sk, 0, 0, "max(r + 0.8, 0.5*rbo)");
+  await solid(sk, "Inner race", { from: "-Lb + 0.4", dist: "0.5", op: "join", body: bearing, when: "fst" });
+  sk = await sketch(bearingC, "XY", "Bearing bore");
+  await circle(sk, 0, 0, "r + 0.05");
+  await solid(sk, "Bearing bore", { from: "-Lb - 1", dist: "bpd + 2", op: "cut", body: bearing, when: "fst" });
 
   // ---- a hobby servo: the case, its mounting ears and their holes, the boss round the output ----
   sk = await sketch(caseC, "XY", "Case");
@@ -260,7 +407,11 @@ async function buildMotor(s: CadSession): Promise<void> {
   await solid(sk, "Key", { dist: "kb", symmetric: true, when: "keyed" });
   sk = await sketch(shaftC, "XY", "Rear shaft");
   await circle(sk, 0, 0, "r");
-  await solid(sk, "Rear shaft", { from: "-Lb - rear_len", dist: "rear_len", when: "rear" });
+  await solid(sk, "Rear shaft", { from: "-Lb - rear_len", dist: "rear_len + fst*sbd", when: "rear" });
+  // a single-shaft stepper still shows the shaft's end, in the rear bearing
+  sk = await sketch(shaftC, "XY", "Shaft end");
+  await circle(sk, 0, 0, "r");
+  await solid(sk, "Shaft end", { from: "-Lb + 0.2", dist: "sbd - 0.2", when: "fst*(1 - rear)" });
   // a servo's horn: a single arm on the spline
   sk = await sketch(hornC, "XY", "Horn hub");
   await circle(sk, 0, 0, "max(1.25*r + 1.5, 3.5)");
@@ -310,6 +461,7 @@ async function buildMotor(s: CadSession): Promise<void> {
   await describeExample(s, { title: "Motor", description: "A stepper, hobby servo or servo motor at its catalogue size, to design a mount around: pick the frame, then set the length, the shaft and where the wires come out." }, {
     size: { label: "Motor", description: "NEMA stepper frames, hobby servo classes, and servo motors by flange size" },
     length: { label: "Body length", unit: "mm", description: "Behind the mounting face (a servo's case height); starts at the frame's common length" },
+    holes: { label: "Mounting holes", description: "Tapped into the front cap (NEMA 8–17), or clear through a flange plate with the body relieved behind for the nuts (NEMA 23 up, servo motors); starts at the frame's usual kind" },
     shaft: { label: "Shaft", description: "A flat or a keyway for a coupling or pulley to grip (a hobby servo always has its spline)" },
     shaft_d: { label: "Shaft diameter", unit: "mm" },
     shaft_len: { label: "Shaft length", unit: "mm", description: "From the mounting face to the tip" },
@@ -367,9 +519,24 @@ describe("Motor", () => {
       if (!z.servo) {
         // the mounting holes sit inside the flange, clear of its chamfered corners and of the pilot
         const corner = (z.A / 2 - z.c1) * Math.SQRT2 / 2 + z.A / 2 * Math.SQRT2 / 2; // chamfer line's distance from the centre (on the diagonal)
-        expect(z.B / 2 * Math.SQRT2 + z.hr, `${z.name}: holes clear the corners`).toBeLessThan(corner);
-        expect(z.B / 2 * Math.SQRT2 - z.hr, `${z.name}: holes clear the pilot`).toBeGreaterThan(z.D / 2);
+        expect(z.B / 2 * Math.SQRT2 + Math.max(z.hr, clearance(z)), `${z.name}: holes clear the corners`).toBeLessThan(corner);
+        expect(z.B / 2 * Math.SQRT2 - Math.max(z.hr, clearance(z)), `${z.name}: holes clear the pilot`).toBeGreaterThan(z.D / 2);
         expect(z.sd, `${z.name}: shaft inside the pilot`).toBeLessThan(z.D);
+        if (isStepper(z)) {
+          // the through-bolts' heads inside the rear cap's corners, the bearing inside them
+          const sc = scopeAt(motor, { size: i });
+          expect(z.B / Math.SQRT2 + sc.sr, `${z.name}: screw heads inside the corners`).toBeLessThan((z.A2 - z.c1) / Math.SQRT2);
+          expect(sc.rbo, `${z.name}: bearing round the shaft`).toBeGreaterThan(sc.r + 1);
+          expect(sc.rbo, `${z.name}: bearing clear of the screws`).toBeLessThan(z.B / Math.SQRT2 - sc.cbr);
+          expect(sc.holes, `${z.name}: its usual holes`).toBe(z.A < 50 ? 0 : 1);
+        }
+        {
+          // through a plate: the relief's line clear of the pilot, the holes and a nut on them clear of it
+          const sc = scopeAt(motor, { size: i, holes: 1 });
+          expect(sc.dl, z.name).toBeGreaterThan(z.D / 2);
+          expect(z.B / Math.SQRT2 - sc.dl, z.name).toBeGreaterThan(sc.hcl);
+          expect(sc.ft + 0.01, `${z.name}: plate deep enough for the tie-rods' heads`).toBeGreaterThan(sc.fst * (sc.hh + 0.3));
+        }
         // the socket fits the rear cap's side, and on its back beside a rear shaft
         expect(z.ch, z.name).toBeLessThan(z.capR);
         expect(z.cw, z.name).toBeLessThan(z.A2 - 2 * z.c1);
@@ -414,7 +581,8 @@ describe("Motor", () => {
   const sizes = SIZES.map((_, i) => i);
   for (const i of sizes) {
     it(`builds ${SIZES[i].name}, every wiring, every shaft, nothing overlapping`, async () => {
-      const configs: Record<string, number>[] = [{ size: i, wiring: 0, shaft: 1 }, { size: i, wiring: 2, shaft: 3, ends: 1 }];
+      const other = SIZES[i].servo ? 0 : 1 - nativeThrough(SIZES[i]); // the other kind of mounting hole
+      const configs: Record<string, number>[] = [{ size: i, wiring: 0, shaft: 1 }, { size: i, wiring: 2, shaft: 3, ends: 1, holes: other }];
       if (FULL || i === DEFAULT_SIZE || i === 10) configs.push({ size: i, wiring: 1, shaft: 2, ends: 1 }, { size: i, wiring: 3, shaft: 0, ends: 1 }, { size: i, wiring: 3, shaft: 3, angle: 135 });
       for (const set of configs) {
         const { solids, collide } = await evaluateAt(motor, set);
@@ -427,6 +595,12 @@ describe("Motor", () => {
         expect(names, at).toContain(servo ? "Case" : "Flange");
         expect(names, at).toContain("Shaft");
         expect(names.includes("Rear shaft"), at).toBe(!servo && !!set.ends);
+        const stepper = isStepper(SIZES[i]);
+        expect(names.includes("Shaft end"), at).toBe(stepper && !set.ends);
+        const thru = !servo && (set.holes ?? nativeThrough(SIZES[i])) === 1;
+        expect(names.includes("Screw head, back"), at).toBe(stepper);
+        expect(names.includes("Screw head, front"), at).toBe(thru && !!tieRodRoom(SIZES[i]));
+        expect(names.includes("Rear bearing"), at).toBe(stepper);
         expect(names.includes("Key"), at).toBe(!servo && set.shaft === 3);
         expect(names.includes("Horn hub"), at).toBe(servo);
         const side = set.wiring === 0 || set.wiring === 2, conn = set.wiring < 2;
@@ -454,10 +628,36 @@ describe("Motor", () => {
     expect(key.max.x).toBeCloseTo(sd / 2 - 1.2 + 2, 2); // proud of the shaft by kh − t1
   }, 60000);
 
+  it("taps the holes, or puts them through a flange plate with the body relieved behind", async () => {
+    for (const size of [DEFAULT_SIZE, 4]) {
+      const vol = async (holes: number) => {
+        const { solids, collide } = await evaluateAt(motor, { size, holes });
+        expect(collide.maxOverlap).toBeLessThan(0.01);
+        return { flange: bodyNamed(solids, "Flange")!.volume!, stator: bodyNamed(solids, "Stator")!.volume!, front: bodyNamed(solids, "Screw head, front") };
+      };
+      const tapped = await vol(0), through = await vol(1);
+      expect(through.stator, SIZES[size].name).toBeLessThan(tapped.stator * 0.95); // the corners relieved
+      expect(through.flange).toBeLessThan(tapped.flange);
+      expect(tapped.front).toBeUndefined();
+      expect(through.front!.bounds!.max.z).toBeLessThan(0); // the tie-rods' heads below the mounting face
+    }
+    // the tapped holes carry their thread
+    const tapped = Object.values(motor.doc.features).filter((f) => f.kind === "hole");
+    expect(tapped.map((f) => f.name)).toEqual(SIZES.filter((z) => !z.servo).map((z) => `Tapped holes, M${thread(z)}`));
+  }, 60000);
+
   it("follows the length and the shaft sliders", async () => {
     const { solids } = await evaluateAt(motor, { length: 70, shaft_d: 6.35, shaft_len: 30 });
     const rear = bodyNamed(solids, "Rear cap")!.bounds!, shaft = bodyNamed(solids, "Shaft")!.bounds!;
     expect(rear.min.z).toBeCloseTo(-70, 3);
+    // the tie-rods' pan heads: their domes 0.3 under the back face, the underside a head's height in
+    const heads = bodyNamed(solids, "Screw head, back")!, sc = scopeAt(motor, { length: 70 });
+    expect(heads.bounds!.min.z).toBeGreaterThan(-70 + 0.3 - 0.01); // (the Phillips cone takes the dome's crown)
+    expect(heads.bounds!.min.z).toBeLessThan(-70 + 0.3 + 0.15);
+    expect(heads.bounds!.max.z).toBeCloseTo(-70 + 0.3 + sc.hh, 1);
+    const flat = 4 * Math.PI * sc.sr ** 2 * sc.hh; // a flat-topped head
+    expect(heads.volume!).toBeLessThan(flat * 0.95);   // domed, and the recess cut
+    expect(heads.volume!).toBeGreaterThan(flat * 0.6);
     expect(shaft.max.z).toBeCloseTo(30, 3);
     expect(shaft.max.y - shaft.min.y).toBeCloseTo(6.35, 2);
   }, 60000);
