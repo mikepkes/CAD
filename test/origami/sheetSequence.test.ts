@@ -2,8 +2,8 @@
 // layers earlier folds stacked, layers kept a gap apart, the flap rule, turns,
 // and the posing, meshing and checking the viewport and the examples use.
 import { describe, it, expect } from "vitest";
-import { planSequence, sequenceAngles, poseSequence, sequenceClashes, sequenceFaces, sequenceMesh, sequenceUVs, polyArea, SeqFoldDef } from "../src/core/sheetSequence";
-import { applyPoint, IDENTITY } from "../src/math/transform";
+import { planSequence, sequenceAngles, poseSequence, sequenceClashes, sequenceFaces, sequenceMesh, sequenceUVs, polyArea, SeqFoldDef } from "../../src/core/sheetSequence";
+import { applyPoint, IDENTITY } from "../../src/math/transform";
 
 const PI = Math.PI;
 const rect = (w: number, h: number) => [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }];

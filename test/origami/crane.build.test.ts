@@ -4,29 +4,31 @@
 //   2  petal-fold the front: its bottom point lifts up over the top as the sides fold in
 //   3  turn over;  4  petal-fold the back (the bird base)
 //   5  narrow the legs: fold the front's lower edges to the centre;  6  turn over;  7  the same behind
-//   8  swing the legs up and out: the neck in front, the tail behind (each leg's layers turning as one about
-//      a crease through all of them — where an inside reverse fold, which paper only makes by bending,
-//      would tuck them between the body's layers)
+//   8  inside reverse folds: the neck and the tail swung up and out, each leg's point folded back on itself
+//      through every layer of it and tucked between the body's layers (core/sheetSequence.ts reverseStep: the end
+//      state and its layer order are declared; between the keyframes the point swings over as one and settles
+//      through its own layers by a few paper thicknesses — the bending transition isn't used here, see below)
 //   9  the head: the neck's tip turned down the same way
-//  10  fold the wings down, square to the body;  11  stand the bird up
-// Steps 1, 2, 4, 8 and 9 are collapses (core/sheetSequence.ts): their creases fold at once, one driven and
-// the rest solved so the paper stays joined, or one carried through a stack of layers. The sheet is drawn
+//  10  fold the wings down, square to the body (about the straight middle of each petal hinge: narrowing the legs
+//      folded the hinge's ends over with the legs' flaps, as it does in a real crane — see swings());  11  stand the bird up
+// Steps 1, 2, 4, 9 and 10 are collapses (core/sheetSequence.ts): their creases fold at once, one driven and
+// the rest solved so the paper stays joined, or one carried through a stack of layers; step 8 is a reverse fold. The sheet is drawn
 // point up (a diamond), its half-diagonal h: every crease is a fixed fraction of it, so the bird scales.
 //   BUILD_ORIGAMI=/abs/out npx vitest run test/crane.build.test.ts
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample, expectCommittedExample } from "./helpers";
-import { initKernel } from "../src/core/occ/kernel";
-import { serializeDocument } from "../src/core/persistence";
-import { evaluateFeatures, SolidEval } from "../src/core/features";
-import { resolveParameters } from "../src/core/parameters";
-import { planSequence, sequenceAngles, poseSequence, sequenceClashes, SheetSequence, SeqFoldDef } from "../src/core/sheetSequence";
-import { applyPoint, compose, invert } from "../src/math/transform";
-import type { CadSession } from "../src/core/command/session";
+import { realSession, describeExample, expectCommittedExample } from "../helpers";
+import { initKernel } from "../../src/core/occ/kernel";
+import { serializeDocument } from "../../src/core/persistence";
+import { evaluateFeatures, SolidEval } from "../../src/core/features";
+import { resolveParameters } from "../../src/core/parameters";
+import { planSequence, sequenceAngles, poseSequence, sequenceClashes, sequencePaper, paperOverlayStray, SheetSequence, SeqFoldDef } from "../../src/core/sheetSequence";
+import { applyPoint, compose, invert } from "../../src/math/transform";
+import type { CadSession } from "../../src/core/command/session";
 
 const OUT = process.env.BUILD_ORIGAMI || "";
-const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
+const wasm = readFileSync(fileURLToPath(new URL("../../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
 
 async function dis(s: CadSession, type: string, params: Record<string, unknown>): Promise<string[]> {
   const r = await s.dispatch(type, params);
@@ -38,8 +40,11 @@ async function dis(s: CadSession, type: string, params: Record<string, unknown>)
 const HELD = { x: -0.15, y: 0.02 };
 /** Where the petal fold's kite creases meet the side edges (1 − 1/√2 of the half-diagonal, along each axis). */
 const K = 1 - Math.SQRT1_2;
-/** Where a leg's narrowing crease meets the side edge (the angle at the leg's tip halved). */
-const N = 0.40054;
+/** Where a leg's narrowing crease meets the petal hinge, along the hinge from its middle (the leg's tip is 45° wide in
+ *  the bird base; its edge folded to its centre line puts the crease at 11.25°, and the hinge is 1 − K below the tip). */
+const P = (1 - K) * Math.tan(Math.PI / 16);
+/** Where that crease meets the side edge of the flat sheet (the same point, on the leg's top layer). */
+const N = 0.5 - (0.5 - K) * (P / K);
 
 /** Each fold: its line on the flat sheet (in half-diagonals, the centre at 0), and the rest of its definition. */
 type Fold = { a: [number, number]; b: [number, number] } & Record<string, unknown>;
@@ -68,7 +73,8 @@ function planned(upTo: number) {
     id, a: { x: f.a[0], y: f.a[1] }, b: { x: f.b[0], y: f.b[1] }, step: f.step as number,
     angle: f.angle != null ? ((f.angle as number) * Math.PI) / 180 : f.direction === "mountain" ? -1 : 1,
     ...(f.turn ? { turn: true } : {}), ...(f.collapse ? { collapse: true } : {}), ...(f.with ? { with: f.with as string } : {}),
-    ...(f.collapse && f.angle == null && !f.with ? { solve: true } : {}), ...(f.through ? { through: f.through as "both" } : {}), ...(f.depth != null ? { depth: f.depth as number } : {}),
+    ...(f.collapse && f.angle == null && !f.with ? { solve: true } : {}), ...(f.solve ? { solve: true } : {}), ...(f.through ? { through: f.through as "both" } : {}), ...(f.depth != null ? { depth: f.depth as number } : {}),
+    ...(f.reverse ? { reverse: f.reverse as "inside" } : {}), ...(f.bend ? { bend: true } : {}),
   }));
   const seq = planSequence([{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }], defs, HELD, 0.1 / 106);
   const T = poseSequence(seq, sequenceAngles(seq, upTo));
@@ -99,7 +105,9 @@ function swings(): Record<string, Fold> {
   const phi = (55 * Math.PI) / 180;
   for (const [leg, sy, way] of [["Neck", -1, 1], ["Tail", 1, -1]] as const) {
     const on: [number, number] = [-0.153, sy * 0.486]; // the leg's bottom layer
-    out[`swing${leg}`] = { ...at.drawn(on, [-0.5, 0], [-0.5 - 0.16 * Math.cos(phi), sy * 0.16 * Math.sin(phi)]), step: 8, collapse: true, through: "both", angle: 180 * way * at.facing(on) };
+    // (the bending transition — `bend: true` — meshes the legs' 8 layers with the body: 8 s a build and the path
+    // clashes worse than the swing, so the crane keeps the rigid swing; the keyframes are the same either way)
+    out[`swing${leg}`] = { ...at.drawn(on, [-0.5, 0], [-0.5 - 0.16 * Math.cos(phi), sy * 0.16 * Math.sin(phi)]), step: 8, reverse: "inside", angle: 180 * way * at.facing(on) };
   }
   Object.assign(FOLDS, out);
   // 9: the head — the neck's tip turned down over a line across it near its end
@@ -110,24 +118,24 @@ function swings(): Record<string, Fold> {
   const onNeck: [number, number] = [0.02, -0.93]; // near the tip of the B corner: the neck's end
   const w = 0.035; // just across the neck
   out.head = { ...at.drawn(onNeck, [q[0] - w * Math.cos(dir), q[1] - w * Math.sin(dir)], [q[0] + w * Math.cos(dir), q[1] + w * Math.sin(dir)]), step: 9, collapse: true, through: "both", angle: 180 * at.facing(onNeck) };
-  // 10: the wings down, square to the body, along the petals' hinges; 11: stand it up on the body's line
-  // (each petal's hinge opened back to square; the sides folded behind its face turn with it, where they meet the legs)
+  // 10: the wings down, square to the body, about the petals' hinges — the straight middle of each, |y| < P. Past
+  // there the hinge's ends were folded over when the legs were narrowed (steps 5 and 7: the crease from the leg's tip
+  // meets the hinge at P and runs on across the layers joined there, so the corner of each wing's base goes with the
+  // leg's flap — as it does in a real crane — and lies tucked on the body). The paper on the hinge's line turns with
+  // the wing (the petals' side creases, where they meet the legs' layers); the tucked corners' creases to the body —
+  // the hinge's folded ends and the side creases' folded ends, one segment on two layers — are freed and solved: the
+  // wing's own corner rides up with the wing, the body's stays tucked, and that segment (16 mm) opens by up to 8.7 mm,
+  // hidden at the wing's root. In a real crane the tucked corners swivel on the leg's root as the wing comes down, and
+  // the paper gives there; a rigid plan can't, so the wing's base passes through the tucked corners for the first half
+  // of the step (both measured below). 11: stand it up on the body's line.
   for (const [wing, sx] of [["Back", 1], ["Front", -1]] as const) {
-    out[`wing${wing}`] = { a: [sx * K, -K], b: [sx * K, K], step: 10, angle: -90, collapse: true };
-    // (as far as the legs' narrowing reached: past there the side edge stays with the leg)
-    out[`wing${wing}1`] = { a: [sx * K, K], b: [sx * N, N], step: 10, collapse: true, with: `wing${wing}` };
-    out[`wing${wing}2`] = { a: [sx * K, -K], b: [sx * N, -N], step: 10, collapse: true, with: `wing${wing}` };
-    // the kite creases between the petal's face and its sides open as it comes down (much of each side went into the
-    // leg when it was narrowed)
-    out[`wing${wing}Kite1`] = { a: [sx, 0], b: [sx * K, K], step: 10, collapse: true };
-    out[`wing${wing}Kite2`] = { a: [sx, 0], b: [sx * K, -K], step: 10, collapse: true };
+    out[`wing${wing}`] = { a: [sx * K, -P], b: [sx * K, P], step: 10, angle: -90, collapse: true };
+    for (const [end, sy] of [["T", 1], ["B", -1]] as const) {
+      out[`wing${wing}Side${end}`] = { a: [sx * N, sy * N], b: [sx * 0.5, sy * 0.5], step: 10, collapse: true, with: `wing${wing}` };
+      out[`wing${wing}Hinge${end}`] = { a: [sx * K, sy * P], b: [sx * K, sy * K], step: 10, collapse: true };
+      out[`wing${wing}Tuck${end}`] = { a: [sx * K, sy * K], b: [sx * N, sy * N], step: 10, collapse: true };
+    }
   }
-  // narrowing the legs creased a corner of each side inside the petals too (the paper there went with the leg's
-  // edge): those creases open again as the wings come down, the corners staying with the legs
-  const inSide = (p: [number, number]) => Math.abs(p[0]) > K - 1e-6 && Math.abs(p[1]) < Math.abs(p[0]) && Math.abs(p[0]) + Math.abs(p[1]) < 1;
-  planned(9).creasesOf("narrow").filter(([a, b]) => inSide([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2])).forEach(([a, b], i) => {
-    out[`wingCorner${i + 1}`] = { a, b, step: 10, collapse: true };
-  });
   out.stand = { a: [-0.6 * K, -0.5 * K], b: [-0.6 * K, 0.5 * K], step: 11, turn: true, angle: 90 }; // across the body, wings to the sides
   void at;
   return out;
@@ -218,19 +226,62 @@ describe("origami: a paper crane folded step by step", () => {
     expect(b.sheet!.sequence!.plan.steps).toBe(STEPS);
   }, 120000);
 
-  it("never passes through itself up to its head, and its creases stay joined", () => {
+  it("never passes through itself (but for the reverse folds' settling and the wings' tucked corners), and its creases stay joined", () => {
     const seq = evaluate(s)[ids.sheet].sheet!.sequence!.plan;
-    const hits: string[] = [];
-    for (let k = 0; k <= 9 * 20; k++) {
+    const hits: string[] = [], settling: string[] = [], corners: string[] = [];
+    for (let k = 0; k <= STEPS * 20; k++) {
       const c = sequenceClashes(seq, sequenceAngles(seq, k / 20), 0.75);
-      if (c.length) hits.push(`fold ${k / 20}: ${c.length}`);
+      if (!c.length) continue;
+      // the inside reverse folds (step 8): as the points settle into their declared order at the end of the swing,
+      // the legs' own layers pass through each other by a few paper thicknesses (at most the stack: 8 × 0.1 mm)
+      if (k / 20 > 7.4 && k / 20 < 8) settling.push(`fold ${k / 20}: ${c.length}`);
+      // the wings (step 10): each wing's base passes through the corners tucked on the body at its root (6 mm of
+      // paper that swivels aside in a real crane) through the first half of the step
+      else if (k / 20 > 9 && k / 20 < 9.6) corners.push(`fold ${k / 20}: ${c.length}`);
+      else hits.push(`fold ${k / 20}: ${c.length}`);
     }
     expect(hits).toEqual([]);
-    // the legs turn their whole stack over as one: its outer layers wrap round the crease a few layers wide
+    expect(settling.length).toBeLessThan(14);
+    expect(corners.length).toBeLessThan(14);
+    // the layer order after every step holds (checked by the plan), the neck and tail between the body's layers
+    expect(seq.layers?.length).toBe(STEPS);
+    // the points swing over as one stack: its outer layers wrap round the crease a few layers wide
     expect(widestJoin(seq, 10, 9)).toBeLessThan(5);
-    // (the wings, step 10, are an approximation still: narrowing the legs took most of each wing's inner sides into
-    // the body, so as a wing's face comes down its sides stay there — the kite creases between them open, out of
-    // sight inside the body, and slivers of those layers settle through the body's inner ones)
+    // the wings: the hinge's tucked ends open as the wing's corner rides up and the body's stays (16 mm segments at
+    // the root, between layers: 8.7 mm); at one of the four corners the collapse's tree still hangs the tucked corner
+    // from the body rather than the wing (core/sheetSequence.ts collapseStep, the tree), so that corner's own creases
+    // open too (37 mm — see README); every other crease stays joined but for the layers' spacing where the reverse
+    // folds nest the legs (the stack's thickness, 1.1 mm)
+    expect(widestJoin(seq, 10, 11)).toBeLessThan(40);
+    const T11 = poseSequence(seq, sequenceAngles(seq, 11)), h = 150 / Math.SQRT2, eps = 1e-6 * h;
+    for (const c of seq.creases) {
+      // the tucked corners' creases (the petals' hinge ends and side ends, the narrowing creases' and kite creases' parts within them)
+      const inCorner = (q: { x: number; y: number }) => Math.abs(q.x) > K * h - eps && Math.abs(q.y) < N * h + eps && Math.abs(q.x) + Math.abs(q.y) < h + eps && Math.abs(q.y) > P * h - eps;
+      if (inCorner(c.a) && inCorner(c.b)) continue;
+      for (const q of [c.a, c.b]) {
+        const a = applyPoint(T11[c.facets[0]], { ...q, z: 0 }), b = applyPoint(T11[c.facets[1]], { ...q, z: 0 });
+        expect(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z), `crease "${seq.folds[c.folds[c.folds.length - 1]].id}" at (${q.x.toFixed(2)}, ${q.y.toFixed(2)})`).toBeLessThan(2);
+      }
+    }
+  });
+
+  it("nests each leg's eight layers about the leg's folded edge when it swings up: the neck shows the paper's coloured side, like the body", () => {
+    // the neck (the B corner) across its width, between the swing and the head, on every layer: its rank in the leg's
+    // stack after step 7 (0 at the bottom) and its height after step 8 — the lower four reversed, then the upper four
+    const seq = evaluate(s)[ids.sheet].sheet!.sequence!.plan;
+    const T7 = poseSequence(seq, sequenceAngles(seq, 7)), T8 = poseSequence(seq, sequenceAngles(seq, 8));
+    const layers = new Map<number, { z7: number; z8: number }>();
+    for (let x = -0.2; x <= 0.2001; x += 0.01) {
+      const q = { x: +x.toFixed(3) * 150 / Math.SQRT2, y: -0.8 * 150 / Math.SQRT2 };
+      seq.facets.forEach((fc, k) => {
+        if (layers.has(k) || !fc.poly.every((p, i) => { const r = fc.poly[(i + 1) % fc.poly.length]; return (r.x - p.x) * (q.y - p.y) - (r.y - p.y) * (q.x - p.x) >= -1e-9; })) return;
+        layers.set(k, { z7: applyPoint(T7[k], { ...q, z: 0 }).z, z8: applyPoint(T8[k], { ...q, z: 0 }).z });
+      });
+    }
+    const byRank = [...layers.values()].sort((a, b) => a.z7 - b.z7);
+    expect(byRank.length).toBe(8);
+    const order8 = byRank.map((l, rank) => ({ rank, z: l.z8 })).sort((a, b) => a.z - b.z).map((l) => l.rank);
+    expect(order8).toEqual([3, 2, 1, 0, 7, 6, 5, 4]);
   });
 
   it("is a crane when done: wings spread level, the neck and the tail up either side, the body between", () => {
@@ -248,6 +299,37 @@ describe("origami: a paper crane folded step by step", () => {
     const side = (q: { x: number; y: number }) => (q.x - body.p.x) * (wingR.p.y - wingL.p.y) - (q.y - body.p.y) * (wingR.p.x - wingL.p.x);
     expect(Math.sign(side(neck.p))).toBe(-Math.sign(side(tail.p)));
   });
+
+  it("builds, at the end of every step, the shape the plan poses: every vertex of the built sheet is a corner of a posed facet", () => {
+    // (the build merges coplanar facets into faces where no crease is made yet; a crease of a collapse with no angle
+    // of its own — the head's crease carried through the neck's layers — counted as unmade once, and the head's
+    // layers were built unfolded, a spike where the plan posed a hook)
+    for (let fold = 1; fold <= STEPS; fold++) {
+      const r = evaluate(s, { fold })[ids.sheet];
+      expect(r.error, `fold ${fold}`).toBeUndefined();
+      const seq = r.sheet!.sequence!, T = poseSequence(seq.plan, sequenceAngles(seq.plan, fold)).map((t) => compose(seq.frame, t));
+      const corners = seq.plan.facets.flatMap((f, k) => f.poly.map((p) => applyPoint(T[k], { ...p, z: 0 })));
+      const P = r.mesh!.positions;
+      let worst = 0, at = "";
+      for (let i = 0; i < P.length; i += 3) {
+        let best = Infinity;
+        for (const c of corners) best = Math.min(best, Math.hypot(P[i] - c.x, P[i + 1] - c.y, P[i + 2] - c.z));
+        if (best > worst) { worst = best; at = `(${P[i].toFixed(1)}, ${P[i + 1].toFixed(1)}, ${P[i + 2].toFixed(1)})`; }
+      }
+      expect(worst, `fold ${fold}: the built vertex at ${at} is ${worst.toFixed(2)} mm from any posed corner`).toBeLessThan(0.05);
+    }
+  }, 120000);
+
+  it("keeps its drawn bends and crease marks on the paper at every end of a step and all through the folds (0.02 of a step at a time)", () => {
+    const seq = evaluate(s)[ids.sheet].sheet!.sequence!, bend = seq.bend ?? 0.4;
+    let worst = 0, at = 0;
+    for (let k = 0; k <= STEPS * 50; k++) {
+      const angles = sequenceAngles(seq.plan, k / 50), p = sequencePaper(seq.plan, angles, seq.frame, { radius: bend });
+      const d = paperOverlayStray(seq.plan, angles, seq.frame, p, bend);
+      if (d > worst) { worst = d; at = k / 50; }
+    }
+    expect(worst, `at fold ${at}`).toBe(0);
+  }, 120000);
 
   it("is a bird base after step 4: the petals up, the legs down, all flat", () => {
     const seq = evaluate(s)[ids.sheet].sheet!.sequence!;

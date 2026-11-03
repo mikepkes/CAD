@@ -28,7 +28,7 @@ import { Vec3 } from "../math/vec";
 import { Rigid, IDENTITY, axisAngle, compose, invert, applyPoint, applyVec } from "../math/transform";
 import { resolveComponentWorld } from "./recompute";
 import { SheetState, SheetFold, SheetRow, blankEdges, contourBlank, addFlange, jogFolds, flatPointOf, chordAcross, isSequenced } from "./sheet";
-import { sequenceAngles, sequenceUVs } from "./sheetSequence";
+import { sequenceAngles, sequenceUVs, sequencePaper } from "./sheetSequence";
 import { buildSheet, SheetBuild } from "./sheetBuild";
 import { flatBlankOf } from "./occ/sheet";
 import { localGearSolid, peekLocalGear, placeShape, gearExtent, Annulus } from "./occ/gear";
@@ -743,11 +743,22 @@ function applySheet(doc: CadDocument, scope: Scope, f: SheetFeature, bodies: Bod
         const direction: 1 | -1 = fd.direction === "mountain" ? -1 : fd.direction === "valley" ? 1 : angle != null && angle < 0 ? -1 : 1;
         // folds made in steps are sharp creases; a line may serve two steps (turn about it, then fold along it)
         // (a crease of a collapse without an angle is solved, starting its way by `direction`)
-        if (fd.step != null) return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle: angle ?? (fd.collapse ? direction : undefined), direction, radius: 0, step: fd.step, ...(fd.collapse && angle == null ? { solve: true } : {}), ...(fd.turn ? { turn: true } : {}), ...(fd.flip ? { flip: true } : {}), ...(fd.collapse ? { collapse: true } : {}), ...(fd.with ? { with: fd.with } : {}), ...(fd.through ? { through: fd.through } : {}), ...(fd.depth != null ? { depth: fd.depth } : {}), ...(fd.bend ? { bend: true } : {}) };
+        if (fd.step != null) return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle: angle ?? (fd.collapse ? direction : fd.reverse ? direction * Math.PI : undefined), direction, radius: 0, step: fd.step, ...(fd.collapse && angle == null ? { solve: true } : {}), ...(fd.turn ? { turn: true } : {}), ...(fd.flip ? { flip: true } : {}), ...(fd.collapse ? { collapse: true } : {}), ...(fd.with ? { with: fd.with } : {}), ...(fd.through ? { through: fd.through } : {}), ...(fd.depth != null ? { depth: fd.depth } : {}), ...(fd.bend ? { bend: true } : {}), ...(fd.reverse ? { reverse: fd.reverse } : {}) };
         return { id: fd.line, a: pt(l.p1), b: pt(l.p2), angle, direction, radius, extend: radius > 0 };
       });
       const origin = f.flip ? { x: wp.origin.x - N.x * t, y: wp.origin.y - N.y * t, z: wp.origin.z - N.z * t } : wp.origin;
-      state = { frame: { origin, x: wp.u, y: wp.v, z: N }, base: { regions }, ops: [], edges: blankEdges(regions, lines), folds, ...rules, fixed: f.fixed ?? regions[0].interior };
+      // slits: each cut line becomes a slot the sheet's thickness wide (at least 0.1) so the kernel has a face to cut
+      const cuts = (f.cuts ?? []).map((id) => {
+        const l = sk.entities[id];
+        if (!l || l.kind !== "line") throw new Error(`cut "${id}" isn't a line of sketch "${sk.name}"`);
+        return { id, a: pt(l.p1), b: pt(l.p2) };
+      });
+      const slotW = Math.max(0.1, t);
+      const ops = cuts.map((c) => {
+        const e = { x: c.b.x - c.a.x, y: c.b.y - c.a.y }, L = Math.hypot(e.x, e.y) || 1, n = { x: (-e.y / L) * slotW / 2, y: (e.x / L) * slotW / 2 };
+        return { op: "cut" as const, poly: [{ x: c.a.x + n.x, y: c.a.y + n.y }, { x: c.b.x + n.x, y: c.b.y + n.y }, { x: c.b.x - n.x, y: c.b.y - n.y }, { x: c.a.x - n.x, y: c.a.y - n.y }] };
+      });
+      state = { frame: { origin, x: wp.u, y: wp.v, z: N }, base: { regions }, ops, edges: blankEdges(regions, lines), folds, ...rules, fixed: f.fixed ?? regions[0].interior, ...(cuts.length ? { cuts } : {}) };
       if (f.progressExpr != null && f.progressExpr !== "") state.progress = strictExpr(f.progressExpr, "progress", scope);
     }
     const built = buildSheet(state);
@@ -1572,7 +1583,7 @@ export class GeometryCache {
 }
 
 function cloneMesh(m: SolidMesh): SolidMesh {
-  return { positions: m.positions.slice(), normals: m.normals.slice(), indices: m.indices.slice(), edges: m.edges.slice(), triangleCount: m.triangleCount, faceRanges: m.faceRanges?.slice(), faceNames: m.faceNames?.slice(), ...(m.uvs ? { uvs: m.uvs.slice() } : {}) };
+  return { positions: m.positions.slice(), normals: m.normals.slice(), indices: m.indices.slice(), edges: m.edges.slice(), triangleCount: m.triangleCount, faceRanges: m.faceRanges?.slice(), faceNames: m.faceNames?.slice(), ...(m.uvs ? { uvs: m.uvs.slice() } : {}), ...(m.paper ? { paper: m.paper } : {}) };
 }
 
 /** Sketches a feature reads. */
@@ -1981,11 +1992,14 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
         if (body.sheet?.pattern) {
           const sh = body.sheet;
           row.sheet = { thickness: sh.thickness, kFactor: sh.kFactor, unfolded: !!sh.unfolded, ...(sh.edited && !sh.unfolded ? { stale: true } : {}), angles: Object.fromEntries(Object.entries(sh.angles ?? {}).map(([k, v]) => [k, Math.round(v * 180 / Math.PI * 1e6) / 1e6])), edges: sh.edges.map((e) => e.name), flat: sh.pattern! };
+          if (sh.panels && !sh.seq && !(sh.edited && !sh.unfolded)) { row.sheet.panels = sh.panels; row.sheet.frame = sh.frame; }
           if (sh.seq && !(sh.edited && !sh.unfolded)) {
             const progress = sh.unfolded ? 0 : sh.progress;
-            row.sheet.sequence = { plan: sh.seq, ...(progress != null ? { progress } : {}), frame: sh.frame };
+            const bend = sh.radius > 0 ? sh.radius : 4 * sh.thickness;
+            row.sheet.sequence = { plan: sh.seq, ...(progress != null ? { progress } : {}), frame: sh.frame, bend };
             // the paper's own coordinates on its mesh, so a material drawn on it stays put as it folds
             row.mesh.uvs = sequenceUVs(sh.seq, sequenceAngles(sh.seq, progress), sh.frame, row.mesh.positions);
+            row.mesh.paper = sequencePaper(sh.seq, sequenceAngles(sh.seq, progress), sh.frame, { radius: bend });
           }
         }
         if (later) { pending.push(later); keep = true; }

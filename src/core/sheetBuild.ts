@@ -18,16 +18,18 @@ export function buildSheet(s: SheetState): SheetBuild {
     const outline = faceEdges(blank).map((e) => outlineItem(e.type, e.pts));
     const { min, max } = flatBounds(outline);
     const t = s.thickness;
-    const line = (f: SheetFold, angle: number, a = f.a, b = f.b): FlatFoldLine => ({ id: f.id, a, b, angle: deg(angle), radius: f.radius, allowance: bendAllowance(angle, f.radius, s) });
-    const pattern = (lines: FlatFoldLine[]): FlatPattern => ({ outline, folds: lines, min, max, thickness: t, kFactor: s.kFactor });
+    const line = (f: SheetFold, angle: number, a = f.a, b = f.b): FlatFoldLine => ({ id: f.id, a, b, angle: deg(angle), radius: f.radius, allowance: bendAllowance(angle, f.radius, s), ...(f.step != null ? { step: f.step } : {}) });
+    const pattern = (lines: FlatFoldLine[]): FlatPattern => ({ outline, folds: lines, ...(s.cuts?.length ? { cuts: s.cuts } : {}), min, max, thickness: t, kFactor: s.kFactor });
 
     if (s.unfolded) {
       const shape = flatSheet(blank, t, s.frame);
       return { shape, state: { ...s, edited: false }, pattern: pattern(s.folds.map((f) => line(f, f.angle ?? s.angles?.[f.id] ?? 0))), warnings: [] };
     }
 
-    // folds that turn: bends (a zone of the blank) or creases (a hinge line)
-    const active = s.folds.filter((f) => f.angle == null || Math.abs(f.angle) > 1e-9);
+    // folds that turn: bends (a zone of the blank) or creases (a hinge line); with every driven fold at 0 (a pop-up
+    // card open flat) the solved creases lie flat too, so nothing folds
+    const driven = s.folds.some((f) => f.angle != null && Math.abs(f.angle) > 1e-9);
+    const active = driven ? s.folds.filter((f) => f.angle == null || Math.abs(f.angle) > 1e-9) : [];
     const strips: Strip[] = [], stripFold: number[] = [], creases: { a: typeof s.fixed; b: typeof s.fixed }[] = [];
     active.forEach((f, i) => {
       if (f.radius > 0 && f.angle != null) {
@@ -104,8 +106,8 @@ function buildSequenced(s: SheetState): SheetBuild {
     loop.pop(); // back at the start
     const gap = Math.max(s.thickness, MIN_LAYER_GAP);
     for (const f of s.folds) if (f.angle == null) throw new Error(`fold "${f.id}" needs an angle (folds made in steps aren't solved)`);
-    const seq = planSequence(loop, s.folds.map((f) => ({ id: f.id, a: f.a, b: f.b, angle: f.angle!, step: f.step!, turn: f.turn, flip: f.flip, collapse: f.collapse, with: f.with, solve: f.solve, through: f.through, depth: f.depth, bend: f.bend })), s.fixed, gap);
-    const crease = seq.creases.filter((c) => !c.bend).map((c) => ({ id: seq.folds[c.folds[c.folds.length - 1]].id, a: c.a, b: c.b, angle: deg(c.angle), radius: 0, allowance: 0 }));
+    const seq = planSequence(loop, s.folds.map((f) => ({ id: f.id, a: f.a, b: f.b, angle: f.angle!, step: f.step!, turn: f.turn, flip: f.flip, collapse: f.collapse, with: f.with, solve: f.solve, through: f.through, depth: f.depth, bend: f.bend, reverse: f.reverse })), s.fixed, gap);
+    const crease = seq.creases.filter((c) => !c.bend).map((c) => { const f = seq.folds[c.folds[c.folds.length - 1]]; return { id: f.id, a: c.a, b: c.b, angle: deg(c.angle), radius: 0, allowance: 0, step: seq.folds[c.folds[0]].step }; });
     const pattern: FlatPattern = { outline, folds: crease, min, max, thickness: s.thickness, kFactor: s.kFactor };
     const angles = sequenceAngles(seq, s.unfolded ? 0 : s.progress);
     const T = poseSequence(seq, angles);

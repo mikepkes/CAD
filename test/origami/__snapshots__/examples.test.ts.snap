@@ -1,0 +1,101 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bundled examples > public/examples/crane.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet203",
+    "max": [
+      56.9,
+      49.8,
+      35.8,
+    ],
+    "min": [
+      -94.2,
+      -38.2,
+      -23.7,
+    ],
+    "name": "Crane",
+    "volume": 0,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/masu.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet179",
+    "max": [
+      26.5,
+      26.8,
+      26.5,
+    ],
+    "min": [
+      -26.5,
+      -26.8,
+      -0,
+    ],
+    "name": "Masu box",
+    "volume": 0,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/origami.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet55",
+    "max": [
+      105.3,
+      297.1,
+      0.6,
+    ],
+    "min": [
+      -0.3,
+      -17.6,
+      -57.6,
+    ],
+    "name": "Paper airplane",
+    "volume": 0,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/popup-box.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet59",
+    "max": [
+      75,
+      100,
+      75,
+    ],
+    "min": [
+      0,
+      0,
+      0,
+    ],
+    "name": "Card",
+    "volume": 0,
+  },
+]
+`;
+
+exports[`bundled examples > public/examples/popup-card.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
+[
+  {
+    "body": "sheet145",
+    "max": [
+      90,
+      130,
+      90,
+    ],
+    "min": [
+      0,
+      0,
+      0,
+    ],
+    "name": "Card",
+    "volume": 0,
+  },
+]
+`;

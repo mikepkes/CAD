@@ -1,5 +1,6 @@
 // The store's built solids as the bodies a transform-driven view draws (the turntable recorder, the demo's pose
 // sweeps, the motion study's ghosts): each with its material, wood frame and owning component.
+import type { PaperOverlay } from "../core/sheetSequence";
 import { hiddenIds, bodyVisible } from "../core/visibility";
 import { materialForComponent, referenceOf, type CadDocument } from "../core/document";
 import { materialSpec, woodFrameFromBounds } from "./material";
@@ -7,7 +8,7 @@ import type { SolidView } from "./SceneManager";
 
 export interface SolidEvalLike {
   featureId: string; sketchId: string;
-  mesh?: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; edges: Float32Array; uvs?: Float32Array };
+  mesh?: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; edges: Float32Array; uvs?: Float32Array; paper?: PaperOverlay };
   bounds?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
   threadDecals?: SolidView["threadDecals"];
 }
@@ -25,7 +26,7 @@ export function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEva
     const mat = materialForComponent(doc, componentId);
     const material = mat ? materialSpec(mat) : undefined;
     const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;
-    out.push({ solid: { id: sol.featureId, positions: sol.mesh.positions, normals: sol.mesh.normals, indices: sol.mesh.indices, edges: sol.mesh.edges, ...(sol.mesh.uvs ? { uvs: sol.mesh.uvs } : {}), threadDecals: sol.threadDecals, material, woodFrame, ...(referenceOf(doc, componentId) === "ghost" ? { reference: true } : {}) }, componentId });
+    out.push({ solid: { id: sol.featureId, positions: sol.mesh.positions, normals: sol.mesh.normals, indices: sol.mesh.indices, edges: sol.mesh.edges, ...(sol.mesh.uvs ? { uvs: sol.mesh.uvs } : {}), ...(sol.mesh.paper ? { paper: sol.mesh.paper } : {}), threadDecals: sol.threadDecals, material, woodFrame, ...(referenceOf(doc, componentId) === "ghost" ? { reference: true } : {}) }, componentId });
   }
   return out;
 }

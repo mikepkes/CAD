@@ -533,7 +533,10 @@ Paper paperField(vec2 q){
   float fib = smoothstep(0.25, 0.75, f * 0.5 + 0.5) * fibreAA;
   Paper P;
   P.tone = 1.0 + uFibre * (0.06 * form + 0.04 * fleck + 0.12 * (fib - 0.25));
-  P.h = uFibre * (0.006 * fleck + 0.01 * fib);
+  // the relief: the fibre flecks and fibres up close, and a gentle cockle at the formation's scale (paper is never
+  // quite flat), so light breaks up a little across a face; each term fades before it's finer than the pixels
+  float cockle = snoise(vec3(q * 0.045, 7.3)) * (1.0 - smoothstep(2.0, 6.0, px));
+  P.h = uFibre * (0.006 * fleck + 0.01 * fib + 0.035 * cockle);
   return P;
 }`;
 

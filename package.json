@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:full": "vitest run --mode full",
+    "test:origami": "vitest run --mode origami",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p mcp/tsconfig.json",
     "mcp:build": "esbuild mcp/main.ts --bundle --platform=node --format=esm --packages=external --outfile=dist-mcp/server.mjs",

@@ -14,6 +14,8 @@
 // positions; the normal equations solved in envelope form after a reverse Cuthill–McKee ordering, so a few
 // hundred vertices solve in milliseconds), each started from the last. Panels are then placed by the best rigid fit
 // of their three vertices. Pure geometry: no kernel.
+//
+// EXPERIMENTAL, like all paper folding: see the note and known gaps at the top of core/sheetSequence.ts.
 
 import type { Pt } from "./geometry/profile";
 import type { Rigid } from "../math/transform";

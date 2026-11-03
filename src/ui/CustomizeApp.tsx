@@ -14,6 +14,7 @@ import { useStore } from "../model/store";
 import { deserializeDocument } from "../core/persistence";
 import { editCommitter } from "./editCommitter";
 import { DrawingView } from "./DrawingView";
+import { CreasePatternView } from "./CreasePatternView";
 import { Control, FlexureReadout, LoadingOverlay, LoadProblem, MotionBadge, SaveButton, modelTitle, viewerControls, type LoadFailure } from "./CustomizeControls";
 import { BuildProgress } from "./BuildProgress";
 import { Toast } from "./Toast";
@@ -51,6 +52,9 @@ export function CustomizeApp() {
   const doc = useStore((s) => s.session.doc);
   const hasDrawing = useStore((s) => !!s.session.doc.drawing);
   const openDrawing = useStore((s) => s.openDrawing);
+  // a paper model (origami, a pop-up card): a built sheet with fold lines has a crease pattern to print
+  const hasCrease = useStore((s) => Object.values(s.solids).some((b) => (b.sheet?.flat.folds.length ?? 0) > 0));
+  const [crease, setCrease] = useState(false);
   const rev = useStore((s) => s.rev); // re-render as the model resolves
   const [state, setState] = useState<"loading" | "building" | "ready" | "error">("loading");
   const [failure, setFailure] = useState<LoadFailure | null>(null);
@@ -184,6 +188,11 @@ export function CustomizeApp() {
                     ▤ Drawing (PDF)
                   </button>
                 )}
+                {hasCrease && (
+                  <button className="cz-drawing" title="The flat sheet with its mountain and valley folds, cuts and fold steps, to print at true size and fold" onClick={() => setCrease(true)}>
+                    ◇ Crease pattern
+                  </button>
+                )}
                 <SaveButton onSave={() => void shareModel(example || "model", { flush: () => committer.current.flush() })} />
               </div>
             </>
@@ -191,6 +200,7 @@ export function CustomizeApp() {
         </section>
       )}
       <DrawingView viewer />
+      {crease && hasCrease && <CreasePatternView onClose={() => setCrease(false)} />}
       <Toast />
       {state === "ready" && <BuildProgress />}
       {(state === "loading" || state === "building") && <LoadingOverlay phase={state} name={title} />}
