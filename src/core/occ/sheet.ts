@@ -82,7 +82,11 @@ type Kind = "fuse" | "cut" | "common";
 function boolean(kind: Kind, a: OcAny, b: OcAny): OcAny {
   const oc = OC();
   const ctor = kind === "fuse" ? oc.BRepAlgoAPI_Fuse : kind === "cut" ? oc.BRepAlgoAPI_Cut : oc.BRepAlgoAPI_Common;
-  const op = new ctor(a, b);
+  // not the two-shape constructor: it runs the boolean as it is made, and the Build() would run it again
+  const op = new ctor(), args = new oc.NCollection_List_TopoDS_Shape(), tools = new oc.NCollection_List_TopoDS_Shape();
+  args.Append(a); tools.Append(b);
+  op.SetArguments(args); op.SetTools(tools);
+  args.delete(); tools.delete();
   try {
     op.Build();
     if (!op.IsDone()) throw new Error(`sheet ${kind} failed in the kernel`);

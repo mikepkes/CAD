@@ -137,7 +137,7 @@ export function buildRegionsSolid(wp: WorkPlane, regions: Profile[], distance: n
   for (const region of regions) {
     const s = buildSolid(wp, region, distance);
     if (!result) { result = s; continue; }
-    const fused = (result as unknown as { fuse: (o: Shape3D) => Shape3D }).fuse(s);
+    const fused = fuseShapes(result, s);
     result.delete(); s.delete();
     result = fused;
   }
@@ -197,7 +197,7 @@ export function buildSweepSolid(profile: Profile, pathWp: WorkPlane, path: { sta
   let solid = sweepLoop(profile.outer);
   for (const hole of profile.holes) {
     const inner = sweepLoop(hole);
-    const next = (solid as unknown as { cut: (o: Shape3D) => Shape3D }).cut(inner);
+    const next = cutShapes(solid, inner);
     solid.delete();
     inner.delete();
     solid = next;
@@ -333,7 +333,7 @@ export function buildSpineSweep(spec: SpineSweepSpec): Shape3D {
     let solid = pipe((r) => r.outer);
     for (let h = 0; h < holes; h++) {
       const inner = pipe((r) => r.holes[h]);
-      const next = (solid as unknown as { cut: (o: Shape3D) => Shape3D }).cut(inner);
+      const next = cutShapes(solid, inner);
       solid.delete(); inner.delete();
       solid = next;
     }
@@ -343,10 +343,42 @@ export function buildSpineSweep(spec: SpineSweepSpec): Shape3D {
 
 /** Boolean-combine two solids. Consumes neither operand (caller frees them). */
 export function fuseShapes(a: Shape3D, b: Shape3D): Shape3D {
-  return (a as unknown as { fuse: (o: Shape3D, opts?: unknown) => Shape3D }).fuse(b);
+  return booleanOf("fuse", a, b);
 }
 export function cutShapes(base: Shape3D, tool: Shape3D): Shape3D {
-  return (base as unknown as { cut: (o: Shape3D, opts?: unknown) => Shape3D }).cut(tool);
+  return booleanOf("cut", base, tool);
+}
+
+type BooleanBuilder = { SetArguments(l: unknown): void; SetTools(l: unknown): void; Build(): void; IsDone(): boolean; SimplifyResult(u: boolean, v: boolean, tol: number): void; Shape(): unknown; delete(): void };
+
+/** A boolean builder with its arguments set but not yet built. Not the two-shape constructor
+ *  (replicad's fuse and cut use it): that one runs the whole boolean as it is made, so the Build()
+ *  after it ran it a second time — every boolean cost twice what it does. */
+function booleanBuilder<B = BooleanBuilder>(kind: BooleanKind, a: Shape3D, tools: Shape3D[]): B {
+  type List = { Append(s: unknown): void; delete(): void };
+  const oc = getOC() as unknown as Record<string, new () => BooleanBuilder> & { NCollection_List_TopoDS_Shape: new () => List };
+  const ctor = kind === "fuse" ? oc.BRepAlgoAPI_Fuse : kind === "cut" ? oc.BRepAlgoAPI_Cut : oc.BRepAlgoAPI_Common;
+  const raw = (s: Shape3D) => (s as unknown as { wrapped: unknown }).wrapped;
+  const args = new oc.NCollection_List_TopoDS_Shape(), list = new oc.NCollection_List_TopoDS_Shape();
+  const b = new ctor();
+  try {
+    args.Append(raw(a));
+    for (const t of tools) list.Append(raw(t));
+    b.SetArguments(args); b.SetTools(list);
+  } finally { args.delete(); list.delete(); }
+  return b as B;
+}
+
+/** One boolean as replicad's fuse/cut make it (simplified result, a 3D shape), built once. */
+function booleanOf(kind: BooleanKind, a: Shape3D, b: Shape3D): Shape3D {
+  const builder = booleanBuilder(kind, a, [b]);
+  try {
+    builder.Build();
+    builder.SimplifyResult(true, true, 1e-3);
+    const out = castOwned(builder.Shape());
+    if (!isShape3D(out as never)) { out.delete(); throw new Error(`Could not ${kind} as a 3d shape`); }
+    return out;
+  } finally { builder.delete(); }
 }
 /** Wrap a raw OCC shape a builder returned, and free the raw handle: replicad's
  *  cast() wraps a downcast copy and leaves the original — which holds the whole
@@ -803,6 +835,30 @@ export function buildThread(s: ThreadBuildSpec): Shape3D {
   throw lastErr ?? new Error("modeled thread did not form");
 }
 
+const RODS = new Map<string, Shape3D | Error>();
+const RODS_MAX = 8;
+
+/** buildThread once per spec: the rod (or why it couldn't form), kept for the next build that asks
+ *  for the same thread — a slider that moves or resizes the body it joins, the rebuild a collision
+ *  check or an export makes — where a long modelled thread is seconds of sweeping and booleans.
+ *  Owned by the memo: place a copy, don't free it. */
+export function threadRod(s: ThreadBuildSpec): Shape3D {
+  const key = JSON.stringify([s.form, s.pitch, s.majorDiameter, s.length, !!s.leftHand, s.starts ?? 1, s.depth ?? null, s.custom ?? null]);
+  let hit = RODS.get(key);
+  if (hit) RODS.delete(key); // most recently used last
+  else {
+    try { hit = buildThread(s); } catch (e) { hit = e instanceof Error ? e : new Error(kernelErrorMessage(e)); }
+    while (RODS.size >= RODS_MAX) {
+      const [k, old] = RODS.entries().next().value as [string, Shape3D | Error];
+      RODS.delete(k);
+      if (!(old instanceof Error)) old.delete();
+    }
+  }
+  RODS.set(key, hit);
+  if (hit instanceof Error) throw hit;
+  return hit;
+}
+
 type SweepConfig = { frenet?: boolean; forceProfileSpineOthogonality?: boolean; binormal?: boolean };
 
 /** Guard against OCC quietly dropping the thread ribs/grooves (some pitch/size
@@ -1049,25 +1105,12 @@ export type BooleanKind = "fuse" | "cut" | "intersect";
 export function booleanWithHistory(kind: BooleanKind, a: Shape3D, b: Shape3D | Shape3D[]): { shape: Shape3D; parents: number[][] } {
   type Builder = { Build(): void; IsDone(): boolean; SimplifyResult(u: boolean, v: boolean, tol: number): void; Shape(): unknown; Modified(s: unknown): OcList; IsDeleted(s: unknown): boolean; delete(): void };
   type OcList = { Size(): number; First(): { IsSame(o: unknown): boolean; HashCode?(n: number): number }; RemoveFirst(): void; delete(): void };
-  type ShapeList = { Append(s: unknown): void; delete(): void };
-  type ListBuilder = Builder & { SetArguments(l: ShapeList): void; SetTools(l: ShapeList): void; SetUseOBB(v: boolean): void; SetNonDestructive(v: boolean): void };
-  const oc = getOC() as unknown as Record<string, new (a?: unknown, b?: unknown) => Builder> & { NCollection_List_TopoDS_Shape: new () => ShapeList };
-  const ctor = kind === "fuse" ? oc.BRepAlgoAPI_Fuse : kind === "cut" ? oc.BRepAlgoAPI_Cut : oc.BRepAlgoAPI_Common;
-  const raw = (s: Shape3D) => (s as unknown as { wrapped: unknown }).wrapped;
+  type ListBuilder = Builder & { SetUseOBB(v: boolean): void; SetNonDestructive(v: boolean): void };
   const tools = Array.isArray(b) ? b : [b];
-  let builder: Builder;
-  if (Array.isArray(b)) {
-    // many tools at once (a pattern of cuts): one pass, with oriented bounding boxes to rule out the
-    // tool/face pairs that can't meet (a small tool's box beside a long curved face's box often overlaps it)
-    const args = new oc.NCollection_List_TopoDS_Shape(), list = new oc.NCollection_List_TopoDS_Shape();
-    const lb = new ctor() as ListBuilder;
-    try {
-      args.Append(raw(a));
-      for (const t of b) list.Append(raw(t));
-      lb.SetArguments(args); lb.SetTools(list); lb.SetUseOBB(true); lb.SetNonDestructive(true);
-    } finally { args.delete(); list.delete(); }
-    builder = lb;
-  } else builder = new ctor(raw(a), raw(b));
+  const builder = booleanBuilder<ListBuilder>(kind, a, tools);
+  // many tools at once (a pattern of cuts): one pass, with oriented bounding boxes to rule out the
+  // tool/face pairs that can't meet (a small tool's box beside a long curved face's box often overlaps it)
+  if (Array.isArray(b)) { builder.SetUseOBB(true); builder.SetNonDestructive(true); }
   const inputs = [...facesOf(a), ...tools.flatMap((t) => facesOf(t))];
   let outFaces: OcFace[] = [];
   try {

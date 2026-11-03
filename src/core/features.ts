@@ -15,7 +15,7 @@ import { FaceRef } from "../sketch/types";
 import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
   planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
-  boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, buildThread,
+  boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, threadRod,
   faceGeoms, faceKinds, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape, keepHalfSpace,
   readNurbsBrep, chainWire, surfaceExtrude, surfaceRevolve, surfaceLoft, surfaceSweep, planarPatch, sewShapes, thickenShape, offsetSurface, untrimFaces, hasSolid, buildSpineSweep, SpineSweepSpec,
 } from "./occ/kernel";
@@ -1006,9 +1006,10 @@ function placeAlong(base: Shape3D, from: Vec3, axis: Vec3, p: Vec3): Shape3D {
 /** A −Z cutter (mouth at origin) oriented to drill along `axis` from point `p`. */
 const orientCutter = (base: Shape3D, axis: Vec3, p: Vec3): Shape3D => placeAlong(base, { x: 0, y: 0, z: -1 }, axis, p);
 
-/** A modelled thread rod (+Z) for a spec; throws if the helical sweep degenerates. */
+/** A modelled thread rod (+Z) for a spec; throws if the helical sweep degenerates. Built once per
+ *  spec (see threadRod) and owned by that memo: place a copy of it, don't free it. */
 function buildThreadRod(spec: ThreadSpec, clearance: number): Shape3D {
-  return buildThread({
+  return threadRod({
     form: spec.form, pitch: spec.pitch, majorDiameter: spec.diameter + clearance, length: spec.length,
     leftHand: spec.leftHand, starts: spec.starts, depth: spec.depth, custom: spec.profilePoints,
   });
@@ -1096,15 +1097,13 @@ function applyHole(scope: Scope, f: HoleFeature, bodies: Body[], out: Record<str
       };
       if (f.thread.representation === "modeled") {
         try {
-          const shape = buildThreadRod(f.thread, 0.1);
-          try {
-            const tapNames = genericNames(`${f.id}:tap`, faceKinds(shape));
-            pts.forEach((p, i) => {
-              const tap = placeAlong(shape, { x: 0, y: 0, z: 1 }, axis, p);
-              try { booleanInto("cut", target, tap, namesAt(tapNames, i), f.id); }
-              finally { tap.delete(); }
-            });
-          } finally { shape.delete(); }
+          const shape = buildThreadRod(f.thread, 0.1); // the memo's: placed copies are cut, it is kept
+          const tapNames = genericNames(`${f.id}:tap`, faceKinds(shape));
+          pts.forEach((p, i) => {
+            const tap = placeAlong(shape, { x: 0, y: 0, z: 1 }, axis, p);
+            try { booleanInto("cut", target, tap, namesAt(tapNames, i), f.id); }
+            finally { tap.delete(); }
+          });
         } catch (e) { addDecals(`modelled thread fell back to cosmetic: ${kernelErrorMessage(e)}`); }
       } else {
         addDecals();
