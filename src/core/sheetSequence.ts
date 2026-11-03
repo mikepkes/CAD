@@ -1320,7 +1320,7 @@ export const creaseMade = (c: SeqCrease, angles: number[], seq?: Pick<SheetSeque
 /** A triangle mesh of the sheet posed at `angles` (world = frame ∘ facet placement): the
  *  facets fanned (front faces on the paper's top), their flat coordinates as uvs, and as
  *  edges the outline plus every crease made so far. */
-export function sequenceMesh(seq: SheetSequence, angles: number[], frame: Rigid): { positions: Float32Array; normals: Float32Array; indices: Uint32Array; uvs: Float32Array; edges: Float32Array; paper: PaperOverlay } {
+export function sequenceMesh(seq: SheetSequence, angles: number[], frame: Rigid, bend?: number): { positions: Float32Array; normals: Float32Array; indices: Uint32Array; uvs: Float32Array; edges: Float32Array; paper: PaperOverlay } {
   const T = poseSequence(seq, angles).map((t) => compose(frame, t));
   const nv = seq.facets.reduce((s, f) => s + f.poly.length, 0), nt = seq.facets.reduce((s, f) => s + f.poly.length - 2, 0);
   const positions = new Float32Array(3 * nv), normals = new Float32Array(3 * nv), uvs = new Float32Array(2 * nv), indices = new Uint32Array(3 * nt);
@@ -1336,7 +1336,7 @@ export function sequenceMesh(seq: SheetSequence, angles: number[], frame: Rigid)
   const segs: [Rigid, Pt, Pt][] = [...seq.outline.map((o) => [T[o.facet], o.a, o.b] as [Rigid, Pt, Pt]), ...seq.creases.filter((c) => !c.bend && creaseMade(c, angles, seq)).map((c) => [T[c.facets[0]], c.a, c.b] as [Rigid, Pt, Pt])];
   const edges = new Float32Array(6 * segs.length);
   segs.forEach(([M, a, b], i) => { const p = applyPoint(M, at3(a)), q = applyPoint(M, at3(b)); edges.set([p.x, p.y, p.z, q.x, q.y, q.z], 6 * i); });
-  return { positions, normals, indices, uvs, edges, paper: sequencePaper(seq, angles, frame) };
+  return { positions, normals, indices, uvs, edges, paper: sequencePaper(seq, angles, frame, { radius: bend }) };
 }
 
 /** What makes folded paper readable on screen, besides its surface: its raw cut edges (the outline, not the
@@ -1348,16 +1348,29 @@ export interface PaperOverlay {
   /** Contact shadows: triangles on the layers under (or over) a flap's edge, just off the layer, darkest at the
    *  edge and fading `width` away from it — positions (world), colours (rgba, the alpha the fade), indices. */
   shadow: { positions: Float32Array; colors: Float32Array; indices: Uint32Array };
+  /** The bends: a rounded strip over every crease folded past a few degrees — a circular arc of the sheet's bend
+   *  radius between the two facets, or, where the facets' edges lie apart (a flap folded flat sits a gap or more
+   *  off its layer, the outer layers of a nested fold further), the arc that joins the two edges — shaded like the
+   *  paper (positions, normals, sheet coordinates (x, y, 1), indices; the front face the paper's top). Display only:
+   *  the facets underneath stay the sharp hinges the plan poses. */
+  bends: { positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array };
+  /** Crease marks, as line segments (world): `dark` along valleys lying flat or nearly so (a pre-crease, a shallow
+   *  fold: the trough of the crease), `light` along mountains lying flat and along the crest of every sharp fold
+   *  (the stress whitening of a folded sheet). A crease not made yet leaves nothing. */
+  marks: { dark: Float32Array; light: Float32Array };
 }
+
+const ARC_SEGS = 8;
 
 /** The paper overlay (PaperOverlay) of the sheet posed at `angles`: read from the layer stack — for every raw edge
  *  of a facet, the facets lying with it within a few gaps that the strip `width` beyond the edge falls on. */
-export function sequencePaper(seq: SheetSequence, angles: number[], frame: Rigid, width?: number): PaperOverlay {
+export function sequencePaper(seq: SheetSequence, angles: number[], frame: Rigid, opts: { width?: number; radius?: number } = {}): PaperOverlay {
   const T = poseSequence(seq, angles), W = T.map((t) => compose(frame, t));
+  const width = opts.width, radius = opts.radius ?? 4 * seq.gap;
   const outline = new Float32Array(6 * seq.outline.length);
   seq.outline.forEach((o, i) => { const p = applyPoint(W[o.facet], at3(o.a)), q = applyPoint(W[o.facet], at3(o.b)); outline.set([p.x, p.y, p.z, q.x, q.y, q.z], 6 * i); });
   const scale = Math.max(1, ...seq.facets.flatMap((f) => f.poly.map((p) => Math.max(Math.abs(p.x), Math.abs(p.y)))));
-  const w = width ?? Math.max(10 * seq.gap, 0.012 * scale), DARK = 0.32, NEAR = 3.5 * seq.gap;
+  const w = width ?? Math.max(8 * seq.gap, 0.01 * scale), DARK = 0.2, NEAR = 3.5 * seq.gap;
   const pos: number[] = [], col: number[] = [], idx: number[] = [];
   const fams = layerFamilies(T);
   for (const fam of fams) {
@@ -1392,7 +1405,67 @@ export function sequencePaper(seq: SheetSequence, angles: number[], frame: Rigid
       }
     }
   }
-  return { outline, shadow: { positions: new Float32Array(pos), colors: new Float32Array(col), indices: new Uint32Array(idx) } };
+  // the bends and the crease marks
+  const bp: number[] = [], bn: number[] = [], bu: number[] = [], bi: number[] = [], dark: number[] = [], light: number[] = [];
+  const unit = (v: V3) => unit3(v), inward = (k: number, a: Pt, b: Pt) => { // into facet k from its edge a→b, in its plane (world)
+    const e = sub2(b, a), L = len2(e) || 1, c = centroid(seq.facets[k].poly), m = sub2(c, mul2(add2(a, b), 0.5));
+    const off = dot2(m, e) / (L * L), perp = sub2(m, mul2(e, off)), Lp = len2(perp) || 1;
+    return unit(applyVec(W[k], at3(mul2(perp, 1 / Lp))));
+  };
+  const bez = (P0: V3, P1: V3, P2: V3, P3: V3, u: number) => { const v = 1 - u; return add3(add3(mul3(P0, v * v * v), mul3(P1, 3 * v * v * u)), add3(mul3(P2, 3 * v * u * u), mul3(P3, u * u * u))); };
+  const dbez = (P0: V3, P1: V3, P2: V3, P3: V3, u: number) => { const v = 1 - u; return add3(add3(mul3(sub3(P1, P0), 3 * v * v), mul3(sub3(P2, P1), 6 * v * u)), mul3(sub3(P3, P2), 3 * u * u)); };
+  for (const c of seq.creases) {
+    if (c.bend || !creaseMade(c, angles, seq)) continue;
+    const [A, B] = c.facets, nA = W[A].z, nB = W[B].z;
+    const phi = Math.acos(Math.max(-1, Math.min(1, dot3(nA, nB)))); // how far folded: 0 flat … π folded flat
+    const PA = [applyPoint(W[A], at3(c.a)), applyPoint(W[A], at3(c.b))], PB = [applyPoint(W[B], at3(c.a)), applyPoint(W[B], at3(c.b))];
+    const e = unit(sub3(PA[1], PA[0]));
+    if (phi < 20 * rad1) {
+      // lying flat (a pre-crease, a shallow fold): the trough of a valley, the ridge of a mountain
+      const seg = [PA[0], PA[1]].flatMap((q) => [q.x, q.y, q.z]);
+      (c.angle >= 0 ? dark : light).push(...seg);
+      if (phi < 8 * rad1) continue;
+    }
+    const mA = inward(A, c.a, c.b), mB = inward(B, c.a, c.b);
+    const ends: V3[][] = [];
+    for (let end = 0; end < 2; end++) {
+      const P = PA[end], Q = PB[end], ch = sub3(Q, P), v = sub3(mB, mA), Lv = Math.hypot(v.x, v.y, v.z);
+      // back along each facet by s, so the arc between them has the bend radius (a flap lying flat already has
+      // its edges a gap or more apart: no need)
+      const need = 2 * radius * Math.sin(phi / 2), s = Lv > 1e-9 ? Math.max(0, (need - Math.hypot(ch.x, ch.y, ch.z)) / Lv) : 0;
+      const P0 = add3(P, mul3(mA, s)), Q0 = add3(Q, mul3(mB, s)), chord = sub3(Q0, P0), d = Math.hypot(chord.x, chord.y, chord.z);
+      if (d < 1e-6 * scale) { ends.length = 0; break; }
+      const r = d / (2 * Math.sin(Math.max(phi, 1e-3) / 2)), k = (4 / 3) * Math.tan(phi / 4) * r;
+      ends.push([P0, add3(P0, mul3(mA, -k)), sub3(Q0, mul3(mB, k)), Q0]);
+    }
+    if (!ends.length) continue;
+    // the strip: the arc at each end, ruled between; the front face the paper's top (A's top side)
+    const base = bp.length / 3;
+    let flip = false;
+    for (let end = 0; end < 2; end++) {
+      const [P0, P1, P2, P3] = ends[end];
+      for (let j = 0; j <= ARC_SEGS; j++) {
+        const u = j / ARC_SEGS, p = bez(P0, P1, P2, P3, u), t = unit(dbez(P0, P1, P2, P3, u));
+        let n = unit(cross3(e, t));
+        if (end === 0 && j === 0) flip = dot3(n, nA) < 0;
+        if (flip) n = mul3(n, -1);
+        bp.push(p.x, p.y, p.z); bn.push(n.x, n.y, n.z);
+        const q = end === 0 ? c.a : c.b;
+        bu.push(q.x, q.y, 1);
+        if (end === 0 && j === Math.floor(ARC_SEGS / 2) && phi > 150 * rad1) light.push(p.x, p.y, p.z); // the crest of a sharp fold: its stress mark …
+        if (end === 1 && j === Math.floor(ARC_SEGS / 2) && phi > 150 * rad1) light.push(p.x, p.y, p.z); // … from this end to that
+      }
+    }
+    for (let j = 0; j < ARC_SEGS; j++) {
+      const a0 = base + j, a1 = base + j + 1, b0 = base + ARC_SEGS + 1 + j, b1 = base + ARC_SEGS + 2 + j;
+      if (flip) bi.push(a0, b0, a1, a1, b0, b1); else bi.push(a0, a1, b0, a1, b1, b0);
+    }
+  }
+  return {
+    outline, shadow: { positions: new Float32Array(pos), colors: new Float32Array(col), indices: new Uint32Array(idx) },
+    bends: { positions: new Float32Array(bp), normals: new Float32Array(bn), uvs: new Float32Array(bu), indices: new Uint32Array(bi) },
+    marks: { dark: new Float32Array(dark), light: new Float32Array(light) },
+  };
 }
 
 /** Flat coordinates (mm) for each vertex of a mesh of the posed sheet (world coords): the facet it lies on, unfolded. */

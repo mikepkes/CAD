@@ -1599,7 +1599,7 @@ export class SceneManager {
       eseg.userData.edges = true; // the body's B-rep edges (the lens redraws these)
       this.solidsGroup.add(eseg);
     }
-    if (s.paper && !clip && !s.reference && !s.variant) for (const o of paperOverlay(s.paper, this.lineResolution(), faded)) this.solidsGroup.add(o);
+    if (s.paper && !clip && !s.reference && !s.variant) for (const o of paperOverlay(s.paper, this.lineResolution(), faded, this.materialFor(s), paperTint(s))) this.solidsGroup.add(o);
 
     for (const d of s.threadDecals ?? []) this.renderThreadSleeve(d, color, faded);
   }
@@ -1716,7 +1716,7 @@ export class SceneManager {
       const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(solid.edges, 3));
       const lines = new THREE.LineSegments(eg, solid.reference ? referenceEdgeMaterial(solid, false, null) : solid.material?.kind === "paper" ? paperEdgeMaterial(false) : new THREE.LineBasicMaterial({ color: 0x20242e }));
       g.add(lines);
-      const paper = solid.paper && !solid.reference ? paperOverlay(solid.paper, this.lineResolution(), false) : [];
+      const paper = solid.paper && !solid.reference ? paperOverlay(solid.paper, this.lineResolution(), false, mat, paperTint(solid)) : [];
       for (const o of paper) g.add(o);
       if (solid.id) this.animMeshes.set(solid.id, { mesh, lines, paper });
       if (solid.material?.kind === "wood" && solid.woodFrame) {
@@ -1766,9 +1766,12 @@ export class SceneManager {
     const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(m.edges, 3));
     a.lines.geometry = eg;
     if (m.paper && a.paper?.length) {
-      const [outline, shadow] = a.paper as [LineSegments2, THREE.Mesh];
+      const [outline, shadow, bends, dark, light] = a.paper as [LineSegments2, THREE.Mesh, THREE.Mesh, LineSegments2, LineSegments2];
       outline.geometry.dispose(); outline.geometry = new LineSegmentsGeometry().setPositions(m.paper.outline);
       shadow.geometry.dispose(); shadow.geometry = shadowGeometry(m.paper);
+      bends.geometry.dispose(); bends.geometry = bendGeometry(m.paper);
+      dark.geometry.dispose(); dark.geometry = new LineSegmentsGeometry().setPositions(m.paper.marks.dark);
+      light.geometry.dispose(); light.geometry = new LineSegmentsGeometry().setPositions(m.paper.marks.light);
     }
   }
 
@@ -2672,19 +2675,44 @@ function referenceEdgeMaterial(s: SolidView, faded: boolean, clip: THREE.Plane[]
 }
 const referenceColor = (s: SolidView) => new THREE.Color(s.material?.color ?? COLORS().ghost);
 
-/** Folded paper's readability (core/sheetSequence.ts PaperOverlay): its raw cut edges as a crisp dark line, about
- *  1.6 px, drawn a little toward the eye so the layer a flap lies on doesn't hide it; and the contact shadow each
- *  flap casts on the layer beneath along its edge, a translucent strip fading away from the edge, not writing depth. */
-function paperOverlay(p: PaperOverlay, resolution: THREE.Vector2, faded: boolean): THREE.Object3D[] {
-  const lm = new LineMaterial({ color: 0x3a3631, linewidth: 1.6, transparent: true, opacity: faded ? 0.25 : 0.85, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
-  lm.resolution.copy(resolution);
-  const outline = new LineSegments2(new LineSegmentsGeometry().setPositions(p.outline), lm);
-  outline.renderOrder = 2;
+/** Folded paper's readability (core/sheetSequence.ts PaperOverlay), all display only: its raw cut edges as a fine
+ *  line in a deeper shade of its own colour, drawn a little toward the eye so the layer a flap lies on doesn't hide
+ *  it; the soft contact shadow a flap casts on the layer beneath along its edge (a translucent strip fading away from
+ *  the edge, not writing depth); the bends, rounded strips over the creases shaded with the paper's own material;
+ *  and the crease marks, a soft dark line along a valley lying flat, a faint light one along a flat mountain and
+ *  along the crest of every sharp fold. */
+function paperOverlay(p: PaperOverlay, resolution: THREE.Vector2, faded: boolean, material: THREE.Material, tint: THREE.Color): THREE.Object3D[] {
+  const line = (positions: Float32Array, color: THREE.Color | number, width: number, opacity: number, order: number) => {
+    const lm = new LineMaterial({ color: color instanceof THREE.Color ? color.getHex() : color, linewidth: width, transparent: true, opacity: faded ? opacity * 0.3 : opacity, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+    lm.resolution.copy(resolution);
+    const l = new LineSegments2(new LineSegmentsGeometry().setPositions(positions), lm);
+    l.renderOrder = order;
+    return l;
+  };
+  const outline = line(p.outline, tint, 1.1, 0.55, 3);
   const sm = new THREE.MeshBasicMaterial({ color: 0x000000, vertexColors: true, transparent: true, depthWrite: false, opacity: faded ? 0.3 : 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, side: THREE.DoubleSide });
   const shadow = new THREE.Mesh(shadowGeometry(p), sm);
   shadow.renderOrder = 1;
-  for (const o of [outline, shadow]) { o.userData.paper = true; o.raycast = () => {}; }
-  return [outline, shadow];
+  const bm = material.clone();
+  bm.polygonOffset = true; bm.polygonOffsetFactor = -4; bm.polygonOffsetUnits = -4; // over the sharp hinge it rounds
+  const bends = new THREE.Mesh(bendGeometry(p), bm);
+  bends.renderOrder = 2;
+  const dark = line(p.marks.dark, 0x000000, 1.1, 0.22, 3), light = line(p.marks.light, 0xffffff, 1.0, 0.18, 3);
+  const out: THREE.Object3D[] = [outline, shadow, bends, dark, light];
+  for (const o of out) { o.userData.paper = true; o.raycast = () => {}; }
+  return out;
+}
+/** A deeper shade of the paper's own colour, for its edges. */
+function paperTint(s: SolidView): THREE.Color {
+  return new THREE.Color(s.material?.color ?? "#f2efe8").multiplyScalar(0.45);
+}
+function bendGeometry(p: PaperOverlay): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(p.bends.positions, 3));
+  g.setAttribute("normal", new THREE.BufferAttribute(p.bends.normals, 3));
+  g.setAttribute("sheetUV", new THREE.BufferAttribute(p.bends.uvs, 3));
+  g.setIndex(new THREE.BufferAttribute(p.bends.indices, 1));
+  return g;
 }
 function shadowGeometry(p: PaperOverlay): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();

@@ -1862,10 +1862,11 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
           if (sh.panels && !sh.seq && !(sh.edited && !sh.unfolded)) { row.sheet.panels = sh.panels; row.sheet.frame = sh.frame; }
           if (sh.seq && !(sh.edited && !sh.unfolded)) {
             const progress = sh.unfolded ? 0 : sh.progress;
-            row.sheet.sequence = { plan: sh.seq, ...(progress != null ? { progress } : {}), frame: sh.frame };
+            const bend = sh.radius > 0 ? sh.radius : 4 * sh.thickness;
+            row.sheet.sequence = { plan: sh.seq, ...(progress != null ? { progress } : {}), frame: sh.frame, bend };
             // the paper's own coordinates on its mesh, so a material drawn on it stays put as it folds
             row.mesh.uvs = sequenceUVs(sh.seq, sequenceAngles(sh.seq, progress), sh.frame, row.mesh.positions);
-            row.mesh.paper = sequencePaper(sh.seq, sequenceAngles(sh.seq, progress), sh.frame);
+            row.mesh.paper = sequencePaper(sh.seq, sequenceAngles(sh.seq, progress), sh.frame, { radius: bend });
           }
         }
         if (later) { pending.push(later); keep = true; }

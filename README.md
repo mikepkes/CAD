@@ -127,8 +127,22 @@ On screen, paper folded in steps is drawn as its zero-thickness surface, the
 layers a gap apart and every crease a sharp hinge; to keep a flap folded back
 onto a layer of the same colour readable, the viewport adds (display only,
 `sequencePaper` in `src/core/sheetSequence.ts`) the sheet's raw cut edges as a
-crisp dark line and, read from the layer stack, the soft contact shadow each
-flap casts along its edge on the layer it lies on.
+fine line in a deeper shade of its colour and, read from the layer stack, the
+soft contact shadow each flap casts along its edge on the layer it lies on; the
+bends, a rounded strip over every crease folded past a few degrees — an arc of
+the sheet's bend radius (its `radius`, else four thicknesses: 0.4 mm on
+150 mm paper, about three pixels across at 1080p, enough for a highlight and a
+shadow) between the two facets, or, where a flap folded flat sits a gap or more
+off its layer, the arc that joins the two edges, so a nested fold's outer layers
+wrap the inner ones — shaded with the paper's own material; and crease marks,
+a soft dark line along a valley lying flat (a pre-crease, a shallow fold), a
+faint light one along a flat mountain and along the crest of a sharp fold. The
+plan underneath keeps its sharp hinges and its layer spacing: real bend
+geometry would have to run through the collapse and reverse-fold machinery
+(every facet cut back by its bend allowance, the hinge axes offset by the
+radius), which is a larger change than its look is worth yet. The paper shader
+also carries a gentle cockle in its relief (formation scale, in the sheet's own
+coordinates, faded before it is finer than the pixels, like its fibres).
 
 **Pop-up cards** are the other kind of folding: a card cut along slits
 (`cuts`) and creased, folded all at once as rigid origami on one `open` slider

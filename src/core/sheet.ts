@@ -906,7 +906,9 @@ export interface SheetRow {
   flat: FlatPattern;
   /** Folded in steps: the plan, where the build posed it (progress; undefined = all done) and the sheet's frame — what the
    *  viewport poses a fold animation from without a rebuild (sequenceMesh). */
-  sequence?: { plan: SheetSequence; progress?: number; frame: Rigid };
+  sequence?: { plan: SheetSequence; progress?: number; frame: Rigid;
+    /** The bend radius the viewport rounds its creases with (the sheet's `radius`, else four thicknesses: display only). */
+    bend?: number };
   /** Folded all at once (rigid origami, a pop-up card): each panel's placement (flat → sheet-local) and its outline
    *  in the flat (segments, unordered), and the sheet's frame — for checks of the folded state (what lies where). */
   panels?: { T: Rigid; segs: Seg[] }[];

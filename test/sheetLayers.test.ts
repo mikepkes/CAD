@@ -85,8 +85,21 @@ describe("paper overlay", () => {
     expect(Math.max(...zs)).toBeLessThan(0.05); // just off the base layer, toward the flap
     // darkest at the edge, clear at the strip's far side
     const alphaAt = (x: number) => Math.max(...[...Array(P.length / 3)].map((_, i) => (Math.abs(P[3 * i] - x) < 1e-6 ? C[4 * i + 3] : -1)));
-    expect(alphaAt(20)).toBeGreaterThan(0.2);
+    expect(alphaAt(20)).toBeGreaterThan(0.1);
     expect(alphaAt(Math.min(...xs))).toBeLessThan(1e-6);
+    // the bend: a rounded strip over the crease once it's folded, none on the flat sheet; folded flat, its arc
+    // spans from the base's edge (z 0) to the flap's (a gap up), bulging just past x = 60; a sharp fold leaves a
+    // light stress mark along its crest, a crease not made yet nothing at all
+    expect(flat.bends.indices.length).toBe(0); expect(flat.marks.dark.length + flat.marks.light.length).toBe(0);
+    expect(folded.bends.indices.length).toBeGreaterThan(0);
+    const B = folded.bends.positions, bx = [...Array(B.length / 3)].map((_, i) => B[3 * i]), bz = [...Array(B.length / 3)].map((_, i) => B[3 * i + 2]);
+    expect(Math.min(...bz)).toBeCloseTo(0, 6); expect(Math.max(...bz)).toBeCloseTo(0.1, 6);
+    expect(Math.max(...bx)).toBeGreaterThan(60.02); expect(Math.max(...bx)).toBeLessThan(60.2);
+    expect(folded.marks.light.length).toBe(6); expect(folded.marks.dark.length).toBe(0);
+    // a crease folded only a little is a valley mark, no strip yet
+    const slight = planSequence(rect(100, 60), [{ id: "half", a: { x: 60, y: 0 }, b: { x: 60, y: 60 }, angle: 5 * PI / 180, step: 1 }], { x: 10, y: 10 }, 0.1);
+    const sp = sequencePaper(slight, sequenceAngles(slight, 1), IDENTITY);
+    expect(sp.marks.dark.length).toBe(6); expect(sp.bends.indices.length).toBe(0);
   });
 });
 

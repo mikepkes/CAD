@@ -19,7 +19,7 @@ export interface SolidMesh {
   indices: Uint32Array;
   edges: Float32Array; // flat xyz, line segment pairs
   /** Paper folded in steps: its raw edges and contact shadows, for the viewport (core/sheetSequence.ts PaperOverlay). */
-  paper?: { outline: Float32Array; shadow: { positions: Float32Array; colors: Float32Array; indices: Uint32Array } };
+  paper?: { outline: Float32Array; shadow: { positions: Float32Array; colors: Float32Array; indices: Uint32Array }; bends: { positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array }; marks: { dark: Float32Array; light: Float32Array } };
   triangleCount: number;
   /** Per B-rep face, in face order: [start, count] into `indices` (flat pairs). */
   faceRanges?: number[];
