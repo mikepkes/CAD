@@ -227,20 +227,20 @@ exports[`bundled examples > public/examples/gimbal.json > replays, builds on bot
 
 exports[`bundled examples > public/examples/roubo.json > is clear at rest and while its joints are driven 1`] = `
 [
-  "rest: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
-  "viseGap = 0: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext742 × ext815 718, ext742 × ext825 718, ext754 × ext803 718, ext764 × ext803 718, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
-  "viseGap = 34: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
-  "viseGap = 68: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
-  "viseGap = 102: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
-  "viseGap = 136: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
-  "viseGap = 170: ext1009 × ext895 4849.3, ext1047 × ext895 4849.3, ext895 × ext971 4849.3, ext895 × rev1035 954.8, ext895 × rev1073 954.8, ext895 × rev997 954.8",
+  "rest: ext1037 × ext923 4849.3, ext1075 × ext923 4849.3, ext923 × ext999 4849.3, ext923 × rev1025 954.8, ext923 × rev1063 954.8, ext923 × rev1101 954.8",
+  "viseGap = 0: ext1037 × ext923 4849.3, ext1075 × ext923 4849.3, ext744 × ext817 718, ext744 × ext827 718, ext756 × ext805 718, ext766 × ext805 718, ext923 × ext999 4849.3, ext923 × rev1025 954.8, ext923 × rev1063 954.8, ext923 × rev1101 954.8",
+  "viseGap = 34: ext1037 × ext923 4849.3, ext1075 × ext923 4849.3, ext923 × ext999 4849.3, ext923 × rev1025 954.8, ext923 × rev1063 954.8, ext923 × rev1101 954.8",
+  "viseGap = 68: ext1037 × ext923 4849.3, ext1075 × ext923 4849.3, ext923 × ext999 4849.3, ext923 × rev1025 954.8, ext923 × rev1063 954.8, ext923 × rev1101 954.8",
+  "viseGap = 102: ext1037 × ext923 4849.3, ext1075 × ext923 4849.3, ext923 × ext999 4849.3, ext923 × rev1025 954.8, ext923 × rev1063 954.8, ext923 × rev1101 954.8",
+  "viseGap = 136: ext1037 × ext923 4849.3, ext1075 × ext923 4849.3, ext923 × ext999 4849.3, ext923 × rev1025 954.8, ext923 × rev1063 954.8, ext923 × rev1101 954.8",
+  "viseGap = 170: ext1037 × ext923 4849.3, ext1075 × ext923 4849.3, ext923 × ext999 4849.3, ext923 × rev1025 954.8, ext923 × rev1063 954.8, ext923 × rev1101 954.8",
 ]
 `;
 
 exports[`bundled examples > public/examples/roubo.json > replays, builds on both geometry paths, and matches its snapshot 1`] = `
 [
   {
-    "body": "ext1009",
+    "body": "ext1037",
     "max": [
       -618.8,
       -373.9,
@@ -255,7 +255,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 14778.1,
   },
   {
-    "body": "ext1047",
+    "body": "ext1075",
     "max": [
       -735.9,
       -373.9,
@@ -512,20 +512,20 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
   {
     "body": "ext677",
     "max": [
-      -654,
-      -180,
-      291,
+      -653.6,
+      20,
+      291.3,
     ],
     "min": [
-      -686,
+      -686.4,
       -352,
-      259,
+      258.6,
     ],
     "name": "Vise screw",
-    "volume": 138330.6,
+    "volume": 175867.8,
   },
   {
-    "body": "ext692",
+    "body": "ext694",
     "max": [
       -624,
       -352,
@@ -540,7 +540,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 57905.8,
   },
   {
-    "body": "ext742",
+    "body": "ext744",
     "max": [
       -658,
       -221.8,
@@ -555,7 +555,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 117833.4,
   },
   {
-    "body": "ext754",
+    "body": "ext756",
     "max": [
       -652,
       -230.1,
@@ -570,7 +570,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 11084.7,
   },
   {
-    "body": "ext764",
+    "body": "ext766",
     "max": [
       -652,
       -310.1,
@@ -585,7 +585,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 11084.7,
   },
   {
-    "body": "ext774",
+    "body": "ext776",
     "max": [
       -649.6,
       -270.1,
@@ -600,7 +600,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 12562.6,
   },
   {
-    "body": "ext803",
+    "body": "ext805",
     "max": [
       -670,
       -221.8,
@@ -615,7 +615,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 117833.4,
   },
   {
-    "body": "ext815",
+    "body": "ext817",
     "max": [
       -652,
       -310.1,
@@ -630,7 +630,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 11084.7,
   },
   {
-    "body": "ext825",
+    "body": "ext827",
     "max": [
       -652,
       -230.1,
@@ -643,6 +643,21 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     ],
     "name": "Pin",
     "volume": 11084.7,
+  },
+  {
+    "body": "ext860",
+    "max": [
+      -638,
+      -120,
+      307,
+    ],
+    "min": [
+      -702,
+      -150,
+      243,
+    ],
+    "name": "Vise nut",
+    "volume": 43938.3,
   },
   {
     "body": "ext89",
@@ -660,7 +675,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 21114000,
   },
   {
-    "body": "ext895",
+    "body": "ext923",
     "max": [
       -570,
       -363,
@@ -675,7 +690,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 362752.4,
   },
   {
-    "body": "ext971",
+    "body": "ext999",
     "max": [
       -603,
       -373.9,
@@ -690,7 +705,22 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 14778.1,
   },
   {
-    "body": "rev1035",
+    "body": "rev1025",
+    "max": [
+      -579,
+      -385.8,
+      206.3,
+    ],
+    "min": [
+      -624,
+      -424.2,
+      154.1,
+    ],
+    "name": "Revolve",
+    "volume": 15888.1,
+  },
+  {
+    "body": "rev1063",
     "max": [
       -603.9,
       -385.8,
@@ -705,7 +735,7 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
     "volume": 15888.1,
   },
   {
-    "body": "rev1073",
+    "body": "rev1101",
     "max": [
       -759.1,
       -385.8,
@@ -715,21 +745,6 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
       -816.8,
       -424.2,
       248.4,
-    ],
-    "name": "Revolve",
-    "volume": 15888.1,
-  },
-  {
-    "body": "rev997",
-    "max": [
-      -579,
-      -385.8,
-      206.3,
-    ],
-    "min": [
-      -624,
-      -424.2,
-      154.1,
     ],
     "name": "Revolve",
     "volume": 15888.1,

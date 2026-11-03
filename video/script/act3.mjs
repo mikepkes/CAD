@@ -401,39 +401,55 @@ export async function act3(d) {
     await load(d, "bistable");
     await d.clickEl(".side-toggle.right"); // the Mechanism tab lives in the right panel
     await d.run((c) => window.__vibecadDemo.mockAgent(c), forcesCache);
+    await d.run(() => { const st = window.__vibecadDemo.store.getState(); if (!st.agentOpen) st.toggleAgent(); }); // Claude's panel open
+    await d.settle(300);
   });
+  // the line's three groups land on the prompt, the analysis opening (the callout on "bistable switch") and the marks
   await d.beat("bistable-forces", async () => {
-    await d.lower("Bistable switch", "Claude opens the force analysis for you");
     await d.api("cursor", true);
-    await d.clickEl(`${await d.toolbar("agent")} button`, "Agent");
     await d.clickEl(".agent-input textarea");
     await d.type(forcesCache.prompt, 40);
     await d.key("Enter");
-    await d.fast("Claude working", () => d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 }));
-    await d.page.waitForSelector("[data-testid=rest-marker]", { timeout: 60000 }).catch(() => d.note("no rest markers"));
-    await d.page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Sweep travel"), null, { timeout: 60000 }).catch(() => d.note("sweep did not finish"));
+    await d.cue(); // it runs the force analysis on a bistable switch
+    const g2 = d.now();
     await d.api("cursor", false);
+    // at speed until Claude opens the analysis (its first tool call); the callout as the line names the switch
+    // ("bistable switch" ends 2.4 s into its group, in the default voice)
+    await d.page.waitForFunction(() => window.__vibecadDemo.ui.getState().panels.mechanism, null, { timeout: 60000 }).catch(() => d.note("no mechanism panel"));
+    const early = 2450 - d.screenSince(g2);
+    if (early > 0) await d.wait(early);
+    await d.lower("Bistable switch", "Claude opens the force analysis for you");
+    await d.fast("Claude working", async () => {
+      await d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 });
+      await d.page.waitForSelector("[data-testid=rest-marker]", { timeout: 60000 }).catch(() => d.note("no rest markers"));
+      await d.page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Sweep travel"), null, { timeout: 60000 }).catch(() => d.note("sweep did not finish"));
+    });
+    await d.cue(); // and marks both rest positions and the snap force
     await d.wait(300); d.pick("force analysis");
-    await d.wait(1200);
-  }, { minMs: 12000 });
+  });
+  // off camera: Claude's panel closes, the switch is pushed part way (3.5 mm, near the snap) so its blades are strained
+  // and the strain lens reads a share of the limit, and its material's editor opens on the print direction (Z: flat
+  // on the bed, as the example saves it)
+  await d.cut(async () => {
+    await d.run(async () => {
+      const D = window.__vibecadDemo, st = D.store.getState();
+      if (st.agentOpen) st.toggleAgent();
+      await st.setParameterExpr("travel", "3.5");
+      D.ui.getState().togglePanel("materials", true);
+    });
+    await d.settle(300);
+    await d.clickEl("button[aria-label^='Edit TPU 68D']");
+    await d.settle(300);
+  });
   await d.beat("print-direction", async () => {
     await d.lower("Print direction", "the strain study knows a print is weaker across its layers");
     await d.api("cursor", true);
-    await d.run(() => { const st = window.__vibecadDemo.store.getState(); st.agentOpen && st.toggleAgent(); });
-    await d.clickEl(".k-panel-toggle button", "Materials"); await d.settle(300);
-    await d.clickEl("button[aria-label^='Edit TPU 68D']"); await d.wait(600);
+    await d.cue(); // Stand it on end: printed along X, its blades are pulled across their layers
     await d.clickEl("[aria-label='Print direction'] button", "=X");
-    await d.settle(500); await d.wait(900);
-    await d.clickEl(".k-tabs button", "Mechanism"); await d.settle(400);
-    await d.wait(2600);
-    await d.clickEl(".k-tabs button", "Materials"); await d.wait(300);
-    await d.clickEl("button[aria-label^='Edit TPU 68D']"); await d.wait(400); // the editor closed with the tab
-    await d.clickEl("[aria-label='Print direction'] button", "=Z");
-    await d.settle(400);
-    await d.clickEl(".k-tabs button", "Mechanism"); await d.settle(300);
+    await d.settle(400); await d.wait(300);
+    await d.clickEl(".k-tabs button", "Mechanism"); await d.settle(300); // the same strain, a bigger share of a lower limit
     await d.api("cursor", false);
-    await d.wait(1600);
-  }, { minMs: 9000 });
+  });
   await d.cut(async () => {
     await d.run(() => { const D = window.__vibecadDemo; D.ui.getState().togglePanel("lens", false); D.ui.getState().togglePanel("mechanism", false); D.ui.getState().togglePanel("materials", false); D.store.getState().agentOpen && D.store.getState().toggleAgent(); });
     await d.clickEl(".side-toggle.right");
@@ -445,60 +461,26 @@ export async function act3(d) {
     await d.lower("Flexure gimbal", "steers a mirror on eight blades");
     await sweep(d, "alpha", there(-8, 8, 4), 1600); d.pick("gimbal"); await sweep(d, "beta", there(-8, 8, 4), 1600);
   });
-  await clip("roubo", "roubo", "Roubo workbench", "the leg vise, and the shop drawing to build it from", async () => {
-    const t0 = d.now(), fast0 = d.timing.fast.length;
-    // seconds of the clip seen so far: a sped-up span (over 3 s) plays at 1/ceil(len/3) of its length
-    const onScreen = () => d.timing.fast.slice(fast0).reduce((t, f) => {
-      const len = f.end - f.start;
-      return t - (f.cut ? len : len <= 3 ? 0 : len - len / Math.ceil(len / 3));
-    }, d.now() - t0);
-    // the vise opens on "Its leg vise opens" (the default voice's word timings, seconds into the clip)
-    let opensAt = 4.3;
-    try {
-      const w = JSON.parse(readFileSync(new URL("../vo/af_heart/act3-roubo.words.json", import.meta.url), "utf8")).words;
-      const i = w.findIndex((x, k) => /^its$/i.test(x.w) && /^leg/i.test(w[k + 1]?.w ?? ""));
-      if (i >= 0) opensAt = w[i].s;
-    } catch { /* no cached timings: the fallback */ }
-    await d.api("aim", { dir: [0.45, -1, 0.5], ms: 1000, margin: 0.7 });
-    await sweep(d, "L", there(1700, 2100, 4), 2400);
-    // in on the leg vise, square-on to its travel (the slider's axis, from the model) so the chop's motion lies in
-    // the picture, seen from the end of the bench it sits at, a little from above; then it opens and closes (posed)
-    const vise = await d.api("componentBox", ["Vise chop", "Leg FL"]), gap = [60, 170];
-    const view = await d.run(([box, travel]) => {
-      const D = window.__vibecadDemo, doc = D.store.getState().session.doc;
-      const j = Object.values(doc.joints).find((q) => q.kind === "slider" && q.valueExpr.trim() === "viseGap");
-      const a = j?.axis ?? { x: 0, y: -1, z: 0 }; // in the base's frame: the vise slides on the bench (ground)
-      const n = Math.hypot(a.x, a.y, a.z) || 1, ax = [a.x / n, a.y / n, a.z / n];
-      // across the travel, level: axis × up, turned toward the vise's side of the bench
-      let p = [ax[1], -ax[0], 0];
-      if (Math.hypot(p[0], p[1]) < 1e-6) p = [1, 0, 0];
-      const all = D.bounds().reduce((u, b) => ({ x0: Math.min(u.x0, b.min.x), x1: Math.max(u.x1, b.max.x), y0: Math.min(u.y0, b.min.y), y1: Math.max(u.y1, b.max.y) }), { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity });
-      const off = [(box.min.x + box.max.x) / 2 - (all.x0 + all.x1) / 2, (box.min.y + box.max.y) / 2 - (all.y0 + all.y1) / 2];
-      if (p[0] * off[0] + p[1] * off[1] < 0) p = [-p[0], -p[1], 0];
-      // a little from above, kept square to the travel
-      const v = [p[0], p[1], 0.3], k = v[0] * ax[0] + v[1] * ax[1] + v[2] * ax[2];
-      // the box framed: the leg and chop, stretched over the chop's travel so the opening stays centred
-      const t = { x: ax[0] * travel, y: ax[1] * travel, z: ax[2] * travel }, frame = { min: { ...box.min }, max: { ...box.max } };
-      for (const c of ["x", "y", "z"]) { frame.min[c] += Math.min(0, t[c]); frame.max[c] += Math.max(0, t[c]); }
-      return { dir: [v[0] - k * ax[0], v[1] - k * ax[1], v[2] - k * ax[2]], frame };
-    }, [vise, gap[1] - gap[0]]);
-    // the move lands as "Its" is said (shortened, down to 0.8 s, when the resize ran long)
-    const aimMs = Math.round(1000 * Math.min(1.3, Math.max(0.8, opensAt - onScreen())));
-    const lead = opensAt - aimMs / 1000 - onScreen();
-    if (lead > 0) await d.wait(lead * 1000);
-    await d.api("aim", { dir: view.dir, box: view.frame, ms: aimMs, margin: 1.15 });
-    await d.api("poseSweep", "viseGap", gap[0], gap[1], 2200);
-    d.pick("leg vise");
-    await d.api("poseSweep", "viseGap", gap[1], gap[0], 1800);
-    await d.api("poseEnd");
-    await d.api("aim", { dir: [0.45, -1, 0.5], ms: 1000, margin: 0.7 });
+  // the workbench, from one camera angle: the whole bench seen from the end its leg vise is on, the vise standing open
+  // its full 170 mm so its threaded screw shows. The length resizes it, then the shop drawing opens on its words.
+  await load(d, "roubo", async () => {
+    await d.run(async () => { await window.__vibecadDemo.store.getState().setParameterExpr("viseGap", "170"); });
+    await d.settle(300);
+    await d.api("aim", { dir: [-1, -0.4, 0.4], ms: 300, margin: 0.85 }); // the left end: square across the vise's gap
+    await noToast();
+  });
+  await d.beat("roubo", async () => {
+    await d.lower("Roubo workbench", "resized from its length, with the shop drawing to build it from");
+    await sweep(d, "L", there(1700, 2100, 3), 2000);
+    d.pick("workbench");
     await d.api("cursor", true);
-    await d.clickEl("button", "Export ▾"); await d.wait(400);
+    await d.clickEl("button", "Export ▾");
+    await d.cue(); // with its shop drawing and cut list straight from the model
     await d.clickEl("[role=menuitem]", "Shop drawing");
     await d.fast("drawing the views", () => d.page.waitForSelector(".drawing-sheet svg", { timeout: 60000 }));
     await d.api("cursor", false);
-    await d.wait(3000);
-    // the drawing stays up to the end of the clip; it closes in the cut, so the bench never flashes back
+    await d.wait(500);
+    // the drawing stays up to the end of the beat; it closes in the cut, so the bench never flashes back
   });
 
   await d.cut(async () => {

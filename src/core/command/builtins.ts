@@ -2778,14 +2778,16 @@ export const BUILTINS: CommandDef<any>[] = [
       "Builds a thread at `at` along `axis` (default +Z, the threaded length running from the point). `spec` gives the form, pitch, (major) diameter and length. " +
       "`spec.internal` cuts the thread into a body as a tap (the body should already have a tap-drill bore at the minor diameter); otherwise it is external — `operation` \"new\" makes a standalone threaded rod, \"join\" adds the threads onto an existing shaft (`body` picks which). " +
       "`spec.representation` \"cosmetic\" (default) keeps the solid a plain cylinder and shades the thread with a procedural normal-map texture (cheap, and it exports as a plain cylinder); \"modeled\" is real helical geometry (heavier — several seconds — and it automatically falls back to cosmetic with a warning if the kernel can't form it cleanly). " +
-      "`spec.leftHand`, `spec.starts` (multi-start), `spec.depth` (radial height override) and a `spec.profilePoints` custom section are supported. Returns the feature id.",
+      "`spec.leftHand`, `spec.starts` (multi-start), `spec.depth` (radial height override) and a `spec.profilePoints` custom section are supported. " +
+      "`component` puts `at` and `axis` in that component's frame, so the thread moves with it (a screw on a part a joint drives). Returns the feature id.",
     paramsSchema: {
       type: "object",
       required: ["at", "spec"],
       additionalProperties: false,
       properties: {
-        at: { ...V3_SCHEMA, required: ["x", "y", "z"], description: "Base point of the threaded length (world mm)." },
+        at: { ...V3_SCHEMA, required: ["x", "y", "z"], description: "Base point of the threaded length (mm: in `component`'s frame, else the world)." },
         axis: { ...V3_SCHEMA, description: "Thread axis direction (default +Z)." },
+        component: { type: "string", description: "A component whose frame `at` and `axis` are in, so the thread moves with it. Default: the world." },
         spec: THREAD_SPEC_SCHEMA,
         operation: { type: "string", enum: ["new", "join", "cut"], description: "external only: standalone rod (new) or added to a shaft (join)." },
         body: { type: "string", description: "Target body for join/cut; default the most recent." },
@@ -2798,10 +2800,12 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A cosmetic ½-10 ACME leadscrew", params: { at: { x: 0, y: 0, z: 0 }, spec: { form: "acme", pitch: 2.54, diameter: 12.7, length: 60 } } },
       { note: "A 2-start ballscrew", params: { at: { x: 0, y: 0, z: 0 }, spec: { form: "ballscrew", pitch: 5, diameter: 16, length: 50, starts: 2, representation: "modeled" } } },
     ],
-    apply(draft, p: { at: Vec3; axis?: Vec3; spec: ThreadSpecParams; operation?: "new" | "join" | "cut"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+    apply(draft, p: { at: Vec3; axis?: Vec3; component?: string; spec: ThreadSpecParams; operation?: "new" | "join" | "cut"; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      if (p.component && !draft.components[p.component]) throw new Error(`No component "${p.component}"`);
       const id = ctx.alloc("thr");
       draft.features[id] = {
         id, kind: "thread", name: p.name ?? `Thread ${p.spec.form}`, at: p.at, axis: p.axis, spec: p.spec,
+        ...(p.component ? { component: p.component } : {}),
         ...(p.operation ? { operation: p.operation } : {}),
         ...(p.body ? { body: p.body } : {}),
         ...(p.requireEffect ? { requireEffect: true } : {}),

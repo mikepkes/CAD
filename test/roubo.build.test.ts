@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { realSession, expectCommittedExample } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
-import { collideFeatures, evaluateFeatures } from "../src/core/features";
+import { collideFeatures, evaluateFeatures, GeometryCache } from "../src/core/features";
 import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
@@ -34,6 +34,8 @@ const N = {
   RTEN: 28,                                     // stretcher tenon length
   LA: 360, ARM_W: 30, ARM_T: 12,                // criss-cross: arm length, arm section
   CHOP_T: 42, CHOP_Z: 150,                      // vise chop thickness; its foot off the floor
+  LS_MAX: 130, VISE_MAX: 170,                   // the leg size's and the vise opening's slider maxima
+  SCREW_D: 32, NUT_T: 30,                       // vise screw diameter; its nut's length behind the leg
 };
 // The bench is centred on the origin: x across ±L/2, y across ±D/2, z from −H/2 (floor) to H/2 (top surface).
 const TEN = "LS*0.55", OFF = "LS*0.225";       // through-tenon side; its inset from the leg face
@@ -66,10 +68,13 @@ async function mortise(s: CadSession, cmp: string, target: string, datum: string
   await dis(s, "feature.extrude", { sketch: sid, distance: "1", operation: "cut", extent: "throughAll", symmetric: true, body: target, name: "Mortise" });
 }
 
+// one cache across the test's builds, as the app keeps: the vise screw's modelled thread is built once, then moved
+const cache = new GeometryCache({ generations: 6 });
+
 function bodies(s: CadSession): { count: number; byName: Record<string, { lo: number[]; hi: number[] }> } {
   const scope = resolveParameters(s.doc.parameters).scope;
   placeComponentSketches(s.doc, scope);
-  const sol = Object.values(evaluateFeatures(s.doc, scope)).filter((b) => b.mesh && b.bounds);
+  const sol = Object.values(evaluateFeatures(s.doc, scope, cache)).filter((b) => b.mesh && b.bounds);
   const byName: Record<string, { lo: number[]; hi: number[] }> = {};
   for (const b of sol) {
     const c = s.doc.components[s.doc.sketches[b.sketchId]?.componentId ?? ""]?.name ?? "?";
@@ -88,8 +93,8 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
     ["D", N.D, 400, 700, 10, "Depth", "Front to back across the top"],
     ["H", N.H, 750, 950, 5, "Height", "Floor to the top surface; about your wrist height when standing"],
     ["TT", N.TT, 60, 140, 5, "Top thickness", "How thick the laminated top is"],
-    ["LS", N.LS, 70, 130, 5, "Leg size", "The legs' square section"],
-    ["viseGap", 60, 0, 170, 5, "Vise opening", "How far the leg vise's chop stands open"],
+    ["LS", N.LS, 70, N.LS_MAX, 5, "Leg size", "The legs' square section"],
+    ["viseGap", 60, 0, N.VISE_MAX, 5, "Vise opening", "How far the leg vise's chop stands open"],
   ];
   for (const [name, val, min, max, step, label, description] of P) await dis(s, "parameter.add", { name, expression: String(val), min, max, step, label, unit: "mm", description });
 
@@ -153,12 +158,19 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   // the chop slides out along −Y from the front-left leg's face by viseGap
   await dis(s, "joint.create", { kind: "slider", moved: chop, baseOrigin: { x: viseX, y: `-D/2-${N.CHOP_T}`, z: `-H/2+${N.CHOP_Z}` }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: -1, z: 0 }, value: "viseGap", name: "Vise slide" });
 
-  // the steel screw, on its own frame at the screw axis on the chop's front face, back through chop and leg
+  // the steel screw, on its own frame at the screw axis on the chop's front face: a plain shank through the chop,
+  // then a modelled thread (Ø32 at a coarse 12 mm pitch, as on a traditional vise screw; a finer one costs seconds
+  // more to build) back through the leg and the nut behind it, long enough to stay in the nut with the vise open its
+  // full VISE_MAX and the leg at its thickest. The thread is drawn in the screw's frame, so it moves with the chop.
   const screw = (await dis(s, "component.create", { name: "Vise screw", parent: chop }))[0];
   await dis(s, "joint.create", { kind: "rigid", base: chop, moved: screw, baseOrigin: { x: 0, y: 0, z: screwZ }, movedOrigin: { x: 0, y: 0, z: 0 }, name: "Screw seat" });
   const ssk = (await dis(s, "sketch.create", { plane: "XZ", component: screw, name: "Vise screw" }))[0];
-  await dis(s, "sketch.addCircle", { sketch: ssk, center: { x: 0, y: 0 }, radius: 16 });
-  await dis(s, "feature.extrude", { sketch: ssk, distance: `LS+${N.CHOP_T + 30}`, direction: "reverse", name: "Vise screw" });
+  await dis(s, "sketch.addCircle", { sketch: ssk, center: { x: 0, y: 0 }, radius: N.SCREW_D / 2 });
+  const shank = (await dis(s, "feature.extrude", { sketch: ssk, distance: String(N.CHOP_T), direction: "reverse", name: "Vise screw" }))[0];
+  await dis(s, "feature.thread", {
+    at: { x: 0, y: N.CHOP_T, z: 0 }, axis: { x: 0, y: 1, z: 0 }, component: screw, operation: "join", body: shank, name: "Vise screw thread",
+    spec: { form: "trapezoidal", pitch: 12, diameter: N.SCREW_D, length: N.VISE_MAX + N.LS_MAX + N.NUT_T, representation: "modeled" },
+  });
 
   // garter: a black-steel flange the screw passes through, bolted to the chop's front face
   const garter = (await dis(s, "component.create", { name: "Vise garter", parent: chop }))[0];
@@ -208,6 +220,20 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   };
   await bore(chop, chopFeat, { plane: "XZ" }, "0", screwZ, "Screw bore");
   await bore(flLeg.cmp, flLeg.feat, { datum: front }, viseX, "H/2-150", "Screw bore");
+
+  // ---- the screw's nut: a cast flange and boss on the back of the front-left leg, NUT_T long, bored to clear the
+  // thread (its flange tops out 118 below the top surface: under the slab up to that thick)
+  const legBack = (await dis(s, "plane.create", { base: "XZ", offset: "D/2-LS", name: "Leg FL back" }))[0]; // y = −D/2 + LS
+  const nut = (await dis(s, "component.create", { name: "Vise nut", parent: flLeg.cmp }))[0];
+  const nutRing = async (r: number, len: number, join?: string) => {
+    const sid = (await dis(s, "sketch.create", { datum: legBack, component: nut, name: "Vise nut" }))[0];
+    const c = (await dis(s, "sketch.addPoint", { sketch: sid, x: viseX, y: "H/2-150" }))[0];
+    await dis(s, "sketch.addCircle", { sketch: sid, center: { ref: c }, radius: r });
+    await dis(s, "sketch.addCircle", { sketch: sid, center: { ref: c }, radius: 17 }); // the thread clears
+    return (await dis(s, "feature.extrude", { sketch: sid, distance: String(len), direction: "reverse", ...(join ? { operation: "join", body: join } : {}), name: "Vise nut" }))[0]; // +Y, away from the leg
+  };
+  const nutFlange = await nutRing(32, 12);
+  await nutRing(24, N.NUT_T, nutFlange);
 
   // ---- channels so the scissor sits recessed into both jaws, the leg and the chop
   {
@@ -302,6 +328,7 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   await dis(s, "material.assign", { material: beech });
   await dis(s, "material.assign", { material: steel, component: screw });
   await dis(s, "material.assign", { material: blackIron, component: garter });   // flange + bolts inherit
+  await dis(s, "material.assign", { material: blackIron, component: nut });
   for (const a of armIds) await dis(s, "material.assign", { material: blackIron, component: a }); // criss-cross = black cast iron; pins inherit
   await dis(s, "material.assign", { material: iron, component: wheel });
   for (const l of landingIds) await dis(s, "material.assign", { material: iron, component: l });  // landings are cast too
@@ -326,8 +353,14 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     expectCommittedExample(s, "roubo");
 
     const b0 = bodies(s);
-    // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw+garter + 2 arms + 5 pins + wheel + 3 landings + 3 handles = 33
-    expect(b0.count).toBe(33);
+    // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw+garter+nut + 2 arms + 5 pins + wheel + 3 landings + 3 handles = 34
+    expect(b0.count).toBe(34);
+    // the screw's thread is real geometry (not the cosmetic fallback): less than a plain Ø32 rod of its length
+    const sc0 = resolveParameters(s.doc.parameters).scope; placeComponentSketches(s.doc, sc0);
+    const rows = Object.values(evaluateFeatures(s.doc, sc0, cache));
+    expect(rows.find((r) => r.name === "Vise screw thread")?.warning).toBeUndefined();
+    const rod = rows.find((r) => r.name === "Vise screw" && r.mesh)!;
+    expect(rod.volume!).toBeLessThan(Math.PI * 16 * 16 * (N.CHOP_T + N.VISE_MAX + N.LS_MAX + N.NUT_T) * 0.9);
 
     const chopName = s.doc.components[chop].name;
     const chopFront = () => bodies(s).byName[chopName].lo[1];
@@ -336,6 +369,13 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     const closed = chopFront();
     await set("viseGap", 150);
     expect(closed - chopFront()).toBeCloseTo(150, 0); // the chop racks out by the gap
+    // open all the way, with the thickest legs, the screw still runs right through its nut
+    for (const ls of [N.LS, N.LS_MAX]) {
+      await set("LS", ls); await set("viseGap", N.VISE_MAX);
+      const b = bodies(s);
+      expect(b.byName["Vise screw"].hi[1], `LS ${ls}`).toBeGreaterThanOrEqual(b.byName["Vise nut"].hi[1] - 0.01);
+    }
+    await set("LS", N.LS);
     await set("viseGap", 60);
 
     // the slab: one board per lamination, together L × D × TT, its top at H/2
@@ -349,7 +389,7 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
 
     await set("L", 2100); await set("D", 600); await set("H", 900); await set("TT", 80); await set("LS", 120);
     const b1 = bodies(s);
-    expect(b1.count).toBe(33);
+    expect(b1.count).toBe(34);
     sl = slab(b1);
     expect(sl.x).toBeCloseTo(2100, 0);
     expect(sl.y).toBeCloseTo(599.2, 0);

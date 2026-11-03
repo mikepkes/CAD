@@ -1657,10 +1657,11 @@ function stepFrame(doc: CadDocument, f: FeatureDef, reads: Body[]): Rigid {
 }
 
 /** A step's cache key and frame, or undefined when a body it reads has no signature. */
-function stepKey(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Body[], instance?: Rigid): { key: string; frame: Rigid } | undefined {
+function stepKey(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Body[], instance?: Rigid, own?: Rigid): { key: string; frame: Rigid } | undefined {
   const reads = bodiesRead(doc, f, bodies);
   if (reads.some((b) => !b.sig || !b.frame)) return undefined;
-  const frame = stepFrame(doc, f, reads);
+  // a feature authored in a component's frame works in that frame, so it replays as the component moves
+  const frame = own ?? stepFrame(doc, f, reads);
   const inv = invert(frame);
   const def = Object.fromEntries(Object.entries(f).filter(([k]) => !DERIVED_FIELD.test(k)));
   const params = new Set<string>();
@@ -1802,6 +1803,25 @@ function applyInTemplateFrame(apply: () => void, f: FeatureDef, bodies: Body[], 
   }
 }
 
+/** Apply a feature authored in a component's frame (a thread with `component`): its
+ *  target (the body it names, else the most recent) is moved into the frame by T⁻¹
+ *  (T = the component's world), the feature runs, and the target and any body it
+ *  made, with the thread decals they gained, are moved out by T. */
+function applyInComponentFrame(apply: () => void, f: ThreadFeature, bodies: Body[], T: Rigid) {
+  const op = f.spec.internal ? "cut" : f.operation ?? "new";
+  const target = op === "new" ? undefined : !f.body || f.body === "last" ? bodies[bodies.length - 1] : bodies.find((b) => b.id === f.body);
+  const n = bodies.length, decals = target?.decals?.length ?? 0;
+  const moveOut = (b: Body, from: number) => {
+    replaceShape(b, transformShape(b.shape, T));
+    for (const d of b.decals?.slice(from) ?? []) { d.at = applyPoint(T, d.at); d.axis = applyVec(T, d.axis); }
+  };
+  if (target) replaceShape(target, transformShape(target.shape, invert(T)));
+  try { apply(); } finally {
+    if (target) moveOut(target, decals);
+    for (const b of bodies.slice(n)) moveOut(b, 0);
+  }
+}
+
 /** Build every feature in order into live bodies (caller frees the shapes).
  *  With a cache, unchanged steps replay instead of running the kernel. */
 /** Which phase a build is in, and how far through it: building the features, then meshing the bodies.
@@ -1823,19 +1843,23 @@ const FEATURE_SHARE = 0.9;
 export function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): { bodies: Body[]; out: Record<string, SolidEval> } {
   const out: Record<string, SolidEval> = {};
   const bodies: Body[] = [];
-  let worlds: Map<string, Rigid> | undefined; // component frames, resolved only for pattern instances
+  let worlds: Map<string, Rigid> | undefined; // component frames, resolved only when a feature needs one
   const active = activeFeatures(doc, scope);
   let done = 0;
   for (const f of active) {
     buildProgress?.((FEATURE_SHARE * done) / active.length, { phase: "features", done, total: active.length });
     done++;
-    let T: Rigid | undefined;
+    let T: Rigid | undefined, own: Rigid | undefined;
     if (f.instanceFrame) {
       worlds ??= resolveComponentWorld(doc, scope);
       T = compose(worlds.get(f.instanceFrame.component) ?? IDENTITY, invert(worlds.get(f.instanceFrame.template) ?? IDENTITY));
+    } else if (f.kind === "thread" && f.component) {
+      worlds ??= resolveComponentWorld(doc, scope);
+      own = worlds.get(f.component) ?? IDENTITY;
     }
-    const run = T ? () => applyInTemplateFrame(() => applyFeature(doc, scope, f, bodies, out), f, bodies, T!) : () => applyFeature(doc, scope, f, bodies, out);
-    const step = cache ? stepKey(doc, scope, f, bodies, T) : undefined;
+    const apply = () => applyFeature(doc, scope, f, bodies, out);
+    const run = T ? () => applyInTemplateFrame(apply, f, bodies, T!) : own && f.kind === "thread" ? () => applyInComponentFrame(apply, f, bodies, own!) : apply;
+    const step = cache ? stepKey(doc, scope, f, bodies, T, own) : undefined;
     if (cache && step) cachedStep(cache, step.key, step.frame, doc, f, bodies, out, run);
     else run();
   }

@@ -9,7 +9,7 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D, kernelErrorMessage } from "../occ/kernel";
-import { evaluateFeaturesStaged, StagedEvaluation, withBuildProgress, type BuildProgressSink, type BuildStep, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
+import { evaluateFeatures, evaluateFeaturesStaged, StagedEvaluation, withBuildProgress, type BuildProgressSink, type BuildStep, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
 import { meshesTo3mf } from "../export/threemf";
 import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
@@ -77,11 +77,14 @@ export interface GeometryBackend {
 const scopeOf = (doc: CadDocument) => resolveParameters(doc.parameters).scope;
 
 /** The drawing sheet and cut list of a document (placed as the recompute places components). */
-function drawingOf(doc: CadDocument, opts?: SheetOptions): { svg: string; parts: CutPart[] } {
+function drawingOf(doc: CadDocument, opts?: SheetOptions, cache?: GeometryCache): { svg: string; parts: CutPart[] } {
   const scope = scopeOf(doc);
   const d = geometryDoc(structuredClone(doc), scope);
   placeComponentSketches(d, scope);
-  return { svg: drawingSheetSVG(d, scope, opts), parts: cutList(d, scope) };
+  // the views and the cut list read the same bodies: built once, through the render's cache when there is one (the
+  // model on screen is the one drawn, so it replays rather than rebuilds: a modelled thread takes seconds)
+  const built = evaluateFeatures(d, scope, cache);
+  return { svg: drawingSheetSVG(d, scope, opts, built), parts: cutList(d, scope, built) };
 }
 
 /** Expand component patterns into concrete instances and place every sketch in
@@ -294,7 +297,7 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       const bodies = analyzeOf(req.doc, req.opts);
       return { res: { id: req.id, kind: "analyze", bodies }, transfer: bodies.flatMap((b) => [b.curvature.buffer as ArrayBuffer, b.combs.buffer as ArrayBuffer]) };
     }
-    if (req.kind === "drawing") return { res: { id: req.id, kind: "drawing", ...drawingOf(req.doc, req.opts) }, transfer: [] };
+    if (req.kind === "drawing") return { res: { id: req.id, kind: "drawing", ...drawingOf(req.doc, req.opts, cache) }, transfer: [] };
     if (req.kind === "distance") {
       const doc = geometryDoc(req.doc, scope);
       return { res: { id: req.id, kind: "distance", distance: bodyDistance(doc, scopeOf(doc), req.a, req.b) }, transfer: [] };
@@ -354,7 +357,7 @@ export class InlineGeometryBackend implements GeometryBackend {
     return analyzeOf(doc, opts);
   }
   async drawing(doc: CadDocument, opts?: SheetOptions): Promise<{ svg: string; parts: CutPart[] }> {
-    return drawingOf(doc, opts);
+    return drawingOf(doc, opts, this.cache);
   }
   async distance(doc: CadDocument, a: string, b: string): Promise<number> {
     const d = geometryDoc(doc, scopeOf(doc));
