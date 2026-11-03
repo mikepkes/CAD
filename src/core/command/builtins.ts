@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument, Material, RoleRef, MemberFeature, SurfaceFeature, SheetFoldDef, FlangeFeature, GearDim, GearFeature, GearKind, findConfiguration } from "../document";
+import { CadDocument, Material, RoleRef, MemberFeature, SurfaceFeature, SheetFoldDef, FlangeFeature, GearDim, GearFeature, GearKind, findConfiguration, JointKind, JointDof, JointLimit, JOINT_DOFS, isAngularDof } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -259,6 +259,52 @@ function exprPoint(o: ExprVec3, scope: Record<string, number>, what: string): { 
   }
   return Object.keys(exprs).length ? { value, exprs } : { value };
 }
+
+/** A joint motion expression, checked: it must evaluate now (so a typo fails the
+ *  command, not every rebuild after). Kept as given. */
+function motionExpr(v: number | string, scope: Record<string, number>, what: string): string {
+  let n: number;
+  try { n = compileExpr(String(v)).eval(scope); } catch (e) { throw new Error(`${what}: ${(e as Error).message}`); }
+  if (!Number.isFinite(n)) throw new Error(`${what} does not evaluate (${v})`);
+  return String(v);
+}
+
+/** A ball joint's tilt / heading / spin expressions, each checked. */
+function ballExprs(b: Partial<Record<"tilt" | "heading" | "spin", number | string>> | undefined, scope: Record<string, number>): Partial<Record<"tilt" | "heading" | "spin", string>> {
+  const out: Partial<Record<"tilt" | "heading" | "spin", string>> = {};
+  for (const k of ["tilt", "heading", "spin"] as const) if (b?.[k] !== undefined) out[k] = motionExpr(b[k]!, scope, `ball.${k}`);
+  return out;
+}
+
+/** Joint stops, checked against the motion values the kind has (JOINT_DOFS). */
+function jointLimits(kind: JointKind, limits: Partial<Record<JointDof, JointLimit>> | undefined): Partial<Record<JointDof, JointLimit>> | undefined {
+  if (!limits || !Object.keys(limits).length) return undefined;
+  const dofs = JOINT_DOFS[kind] ?? [];
+  const out: Partial<Record<JointDof, JointLimit>> = {};
+  for (const [k, l] of Object.entries(limits) as [JointDof, JointLimit][]) {
+    if (!dofs.includes(k)) throw new Error(`a ${kind} joint has no "${k}" to limit${dofs.length ? ` (it has ${dofs.join(", ")})` : ""}`);
+    if (l.min !== undefined && !Number.isFinite(l.min)) throw new Error(`limits.${k}.min is not a number`);
+    if (l.max !== undefined && !Number.isFinite(l.max)) throw new Error(`limits.${k}.max is not a number`);
+    if (l.min !== undefined && l.max !== undefined && l.min > l.max) throw new Error(`limits.${k}: min ${l.min} is above max ${l.max}`);
+    if (k === "tilt" && l.max !== undefined && l.max < 0) throw new Error("limits.tilt.max is the cone's half-angle: it can't be negative");
+    out[k] = { ...(l.min !== undefined ? { min: l.min } : {}), ...(l.max !== undefined ? { max: l.max } : {}) };
+  }
+  return out;
+}
+
+const LIMIT_SCHEMA: JSONSchema = { type: "object", additionalProperties: false, properties: { min: { type: "number" }, max: { type: "number" } } };
+const LIMITS_SCHEMA: JSONSchema = {
+  type: "object",
+  additionalProperties: false,
+  description: "Stops on the motion values (degrees, or mm for a travel): a value driven past one is held there, and a motion study sweeps between them. `value` (revolute, slider, flexure, cylindrical's angle), `slide` (cylindrical's travel), `tilt` / `heading` / `spin` (ball: `tilt.max` is the half-angle of the cone it can swing in).",
+  properties: { value: LIMIT_SCHEMA, slide: LIMIT_SCHEMA, tilt: LIMIT_SCHEMA, heading: LIMIT_SCHEMA, spin: LIMIT_SCHEMA },
+};
+const BALL_SCHEMA: JSONSchema = {
+  type: "object",
+  additionalProperties: false,
+  description: "ball only: the pose, each a number or an expression in degrees (one left out stays 0). `spin` twists the part about `axis`, then `tilt` leans its axis over toward `heading` (measured round `axis` from base +X, or +Y when `axis` lies near X).",
+  properties: { tilt: { type: ["number", "string"] }, heading: { type: ["number", "string"] }, spin: { type: ["number", "string"] } },
+};
 
 /** A flexure strip's dimensions: numbers as given, expressions evaluated (and
  *  kept, so they follow the parameters). Each must come out positive. */
@@ -706,9 +752,12 @@ export const BUILTINS: CommandDef<any>[] = [
   {
     type: "joint.create",
     title: "Joint",
-    summary: "Position a component relative to another (rigid / revolute / slider).",
+    summary: "Position a component relative to another (rigid / revolute / slider / cylindrical / ball …).",
     description:
-      "Joins the `moved` component to `base` (default root) so a connector point on each — given in that component's LOCAL coordinates — coincides, then applies the joint motion. `rigid` fixes it; `revolute` leaves free rotation about `axis` (base-local) by `value` degrees; `slider` leaves free translation along `axis` by `value`. `pin-slot` rotates about `axis` but SOLVES the angle so the moved-body point `pin` stays on the slot line (`slotPoint`+`slotDir` in `slotBase`'s frame) — a 1-DOF mechanism constraint, so the kernel finds the angle instead of you supplying trig. `value` is a parametric expression (a seed for pin-slot). " +
+      "Joins the `moved` component to `base` (default root) so a connector point on each — given in that component's LOCAL coordinates — coincides, then applies the joint motion. `rigid` fixes it; `revolute` leaves free rotation about `axis` (base-local) by `value` degrees; `slider` leaves free translation along `axis` by `value`. " +
+      "`cylindrical` does both: it turns about `axis` by `value` degrees and slides along it by `slide` (a shaft in a plain bearing, a screw in its nut). " +
+      "`ball` turns freely about the connector point: `ball` {tilt, heading, spin} in degrees — `spin` twists the part about `axis`, then `tilt` leans that axis over toward `heading` (round `axis` from base +X); a cone of travel is `limits: {tilt: {max}}`. " +
+      "`limits` puts stops on any of these values ({value|slide|tilt|heading|spin: {min, max}}): a value driven past one is held there, and the motion study sweeps between them. To drive one joint from another by a gear, belt or rack ratio, use joint.couple. `pin-slot` rotates about `axis` but SOLVES the angle so the moved-body point `pin` stays on the slot line (`slotPoint`+`slotDir` in `slotBase`'s frame) — a 1-DOF mechanism constraint, so the kernel finds the angle instead of you supplying trig. `value` is a parametric expression (a seed for pin-slot). " +
       "`flexure` is a compliant hinge: it moves like `revolute` but carries a `flexure` section {length, width, thickness} so its strain, stiffness and stored energy can be computed (a small-length flexural pivot; the hinge material is the moved component's, or `flexure.material`). " +
       "`beam` is a long compliant strip clamped from `baseOrigin` (on base) to `movedOrigin` (on moved), both in the parts' as-modelled coordinates: it places nothing (other joints place both parts) but its energy, force and strain are solved as a large-deflection beam as they move — e.g. the curved beams of a bistable switch. Give `beam` {width, thickness, profile: straight|cosine}. " +
       "`planar` lets `moved` translate and turn in the base's XY plane: `planar` {x, y, angle} gives each axis an expression to drive it, and an axis left out is free — it settles where the stored elastic energy (beams, flexures) is least, so a part floats on its compliant supports (e.g. a flexure stage's parasitic drift). " +
@@ -718,7 +767,10 @@ export const BUILTINS: CommandDef<any>[] = [
       required: ["moved", "baseOrigin", "movedOrigin"],
       additionalProperties: false,
       properties: {
-        kind: { type: "string", enum: ["rigid", "revolute", "slider", "pin-slot", "flexure", "beam", "planar"], description: "Joint type (default rigid)." },
+        kind: { type: "string", enum: ["rigid", "revolute", "slider", "pin-slot", "flexure", "beam", "planar", "cylindrical", "ball"], description: "Joint type (default rigid)." },
+        slide: { type: ["number", "string"], description: "cylindrical only: the travel along `axis` (mm), a number or an expression." },
+        ball: BALL_SCHEMA,
+        limits: LIMITS_SCHEMA,
         planar: {
           type: "object",
           additionalProperties: false,
@@ -761,8 +813,10 @@ export const BUILTINS: CommandDef<any>[] = [
     examples: [
       { note: "Pin a bracket to the base at its origin", params: { moved: "cmp3", baseOrigin: { x: 40, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 } } },
       { note: "Revolute joint spun 30°", params: { kind: "revolute", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 20 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "30" } },
+      { note: "A shaft that turns and slides in its bearing, 0–40 mm of travel", params: { kind: "cylindrical", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "spin", slide: "travel", limits: { slide: { min: 0, max: 40 } } } },
+      { note: "A ball joint leaning 20° toward +Y, in a 30° cone", params: { kind: "ball", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 50 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, ball: { tilt: 20, heading: 90 }, limits: { tilt: { max: 30 } } } },
     ],
-    apply(draft, p: { kind?: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam" | "planar"; planar?: Partial<Record<"x" | "y" | "angle", number | string>>; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string; via?: { x: number | string; y: number | string }[]; when?: string }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
+    apply(draft, p: { kind?: JointKind; slide?: number | string; ball?: Partial<Record<"tilt" | "heading" | "spin", number | string>>; limits?: Partial<Record<JointDof, JointLimit>>; planar?: Partial<Record<"x" | "y" | "angle", number | string>>; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string; via?: { x: number | string; y: number | string }[]; when?: string }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
@@ -810,6 +864,14 @@ export const BUILTINS: CommandDef<any>[] = [
       }
       if (p.closes && p.solve) throw new Error("a closing joint is the constraint; give `solve` to the joints it determines");
       if (p.closes && !Object.values(draft.joints).some((j) => j.moved === p.moved && !j.closes)) throw new Error("a closing joint's moved component must already be placed by another joint");
+      if (p.slide !== undefined && kind !== "cylindrical") throw new Error("`slide` is a cylindrical joint's travel (a slider's is its `value`)");
+      if (p.ball && kind !== "ball") throw new Error("`ball` goes with a ball joint");
+      if (kind === "ball" && p.solve) throw new Error("a ball joint's three values can't be solved; drive them");
+      if ((kind === "cylindrical" || kind === "ball") && Math.hypot(p.axis?.x ?? 0, p.axis?.y ?? 0, p.axis?.z ?? 1) < 1e-9) throw new Error(`a ${kind} joint needs a non-zero axis`);
+      const slideExpr = kind === "cylindrical" ? motionExpr(p.slide ?? 0, scope, "slide") : undefined;
+      const ball = kind === "ball" ? ballExprs(p.ball, scope) : undefined;
+      if (p.value !== undefined && kind === "cylindrical") motionExpr(p.value, scope, "value");
+      const limits = jointLimits(kind, p.limits);
       const id = ctx.alloc("jnt");
       const count = Object.keys(draft.joints).length + 1;
       const v3 = (q: Vec3) => ({ x: q.x, y: q.y, z: q.z });
@@ -831,8 +893,86 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(section ? { flexure: { ...section, ...(p.flexure!.material ? { material: p.flexure!.material } : {}) } } : {}),
         ...(beam ? { beam } : {}),
         ...(planar ? { planar, planarValue: { x: 0, y: 0, angle: 0 } } : {}),
+        ...(slideExpr !== undefined ? { slideExpr, slideValue: 0 } : {}),
+        ...(ball ? { ball, ballValue: { tilt: 0, heading: 0, spin: 0 } } : {}),
+        ...(limits ? { limits } : {}),
       };
       return { createdIds: [id], message: `${draft.joints[id].kind} joint` };
+    },
+  },
+  {
+    type: "joint.couple",
+    title: "Couple joints",
+    summary: "Drive one joint's value from another's by a ratio: a gear mesh, a belt or a rack and pinion.",
+    description:
+      "Makes the `driven` joint follow the `driver` joint: `kind` \"gear\" (an external mesh: the driven turns the other way, sign −1), \"belt\" (a belt or chain, or a pinion inside a ring gear: the same way, +1) or \"rack\" (rack and pinion, +1). " +
+      "For gear and belt the driven value is offset + sign·ratio·driver, so `ratio` is the driver's teeth over the driven's (a pulley's diameter over the other's); like drives like (an angle an angle, a slide a slide). " +
+      "For rack, one side turns and the other slides, and `ratio` is the travel per turn in mm (π·module·pinion teeth): a turn of θ° slides sign·ratio·θ/360, and a slide of s turns sign·360·s/ratio degrees — either may drive. " +
+      "`sign` (1 or −1) overrides the kind's direction (a bevel pair, an idler, a joint whose axis points the other way). `offset` is the driven value with the driver at 0 (a tooth phase). " +
+      "The driven joint's own value expression is unused while it is coupled; a joint is driven by one coupling at most, and couplings chain — a gear train is one coupling per mesh, each driven by the last. " +
+      "`driverDof` / `drivenDof` pick a cylindrical joint's `slide` instead of its angle (`value`, the default; a rack picks the side that makes it turn↔slide). Returns the coupling id.",
+    paramsSchema: {
+      type: "object",
+      required: ["driver", "driven"],
+      additionalProperties: false,
+      properties: {
+        driver: { type: "string", description: "The joint that drives (revolute, slider, cylindrical, flexure or pin-slot)." },
+        driven: { type: "string", description: "The joint it drives (revolute, slider or cylindrical; not solved, not a closing joint)." },
+        kind: { type: "string", enum: ["gear", "belt", "rack"], description: "gear (default; turns the other way), belt (the same way), rack (turn ↔ slide)." },
+        ratio: { type: ["number", "string"], description: "gear / belt: driver teeth ÷ driven teeth (default 1). rack: travel per turn, mm. A number or an expression." },
+        sign: { type: "integer", enum: [1, -1], description: "Direction: overrides the kind's (gear −1, belt +1, rack +1)." },
+        offset: { type: ["number", "string"], description: "The driven value when the driver is at 0 (degrees or mm). Default 0." },
+        driverDof: { type: "string", enum: ["value", "slide"], description: "A cylindrical driver's angle (value) or travel (slide)." },
+        drivenDof: { type: "string", enum: ["value", "slide"], description: "A cylindrical driven joint's angle (value) or travel (slide)." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A 30-tooth gear driving a 15-tooth one: twice as fast, the other way", params: { driver: "jnt7", driven: "jnt9", kind: "gear", ratio: "30/15" } },
+      { note: "A belt from a 20 mm pulley to a 60 mm one", params: { driver: "jnt7", driven: "jnt9", kind: "belt", ratio: "20/60" } },
+      { note: "A module-2, 12-tooth pinion driving a rack", params: { driver: "jnt7", driven: "jnt11", kind: "rack", ratio: "pi*2*12" } },
+    ],
+    apply(draft, p: { driver: string; driven: string; kind?: "gear" | "belt" | "rack"; ratio?: number | string; sign?: 1 | -1; offset?: number | string; driverDof?: "value" | "slide"; drivenDof?: "value" | "slide"; name?: string }, ctx) {
+      const drv = draft.joints[p.driver], dvn = draft.joints[p.driven];
+      if (!drv) throw new Error(`No joint "${p.driver}"`);
+      if (!dvn) throw new Error(`No joint "${p.driven}"`);
+      if (p.driver === p.driven) throw new Error("a joint can't drive itself");
+      const kind = p.kind ?? "gear";
+      if (!["revolute", "slider", "cylindrical", "flexure", "pin-slot"].includes(drv.kind) || drv.closes) throw new Error(`a ${drv.closes ? "closing" : drv.kind} joint has no value to drive with`);
+      if (!["revolute", "slider", "cylindrical"].includes(dvn.kind) || dvn.closes || dvn.solve) throw new Error(`a ${dvn.closes ? "closing" : dvn.solve ? "solved" : dvn.kind} joint can't be driven by a coupling`);
+      for (const [j, d, side] of [[drv, p.driverDof, "driverDof"], [dvn, p.drivenDof, "drivenDof"]] as const) {
+        if (d === "slide" && j.kind !== "cylindrical") throw new Error(`${side} "slide" is a cylindrical joint's travel; ${j.name} is ${j.kind}`);
+      }
+      // A rack turns one side and slides the other: on a cylindrical side, pick the value that does.
+      let driverDof = p.driverDof ?? "value", drivenDof = p.drivenDof ?? "value";
+      if (kind === "rack") {
+        if (!p.drivenDof && dvn.kind === "cylindrical") drivenDof = isAngularDof(drv.kind, driverDof) ? "slide" : "value";
+        if (!p.driverDof && drv.kind === "cylindrical") driverDof = isAngularDof(dvn.kind, drivenDof) ? "slide" : "value";
+      }
+      const a = isAngularDof(drv.kind, driverDof), b = isAngularDof(dvn.kind, drivenDof);
+      if (kind === "rack" && a === b) throw new Error(`a rack couples a turn to a slide; ${drv.name} and ${dvn.name} both ${a ? "turn" : "slide"}`);
+      if (kind !== "rack" && a !== b) throw new Error(`a ${kind} couples like to like; ${drv.name} ${a ? "turns" : "slides"} and ${dvn.name} ${b ? "turns" : "slides"} (a turn to a slide is a rack)`);
+      const couplings = (draft.couplings ??= {});
+      const taken = Object.values(couplings).find((c) => c.driven === p.driven && (c.drivenDof ?? "value") === drivenDof);
+      if (taken) throw new Error(`${dvn.name} is already driven by ${taken.name}`);
+      // no loops: follow the driver back up its own train
+      for (let at: string | undefined = p.driver, n = 0; at && n <= Object.keys(couplings).length; n++) {
+        if (at === p.driven) throw new Error(`${dvn.name} already drives ${drv.name} (through the couplings): that would be a loop`);
+        at = Object.values(couplings).find((c) => c.driven === at)?.driver;
+      }
+      const scope = resolveParameters(draft.parameters).scope;
+      const ratioExpr = motionExpr(p.ratio ?? 1, scope, "ratio");
+      const ratioValue = compileExpr(ratioExpr).eval(scope);
+      if (kind === "rack" && !(Math.abs(ratioValue) > 0)) throw new Error("a rack's ratio is its travel per turn: it can't be 0");
+      const offsetExpr = p.offset !== undefined ? motionExpr(p.offset, scope, "offset") : undefined;
+      const id = ctx.alloc("cpl");
+      couplings[id] = {
+        id, name: p.name ?? `${drv.name} → ${dvn.name}`, kind, driver: p.driver, driven: p.driven,
+        ...(driverDof !== "value" ? { driverDof } : {}), ...(drivenDof !== "value" ? { drivenDof } : {}),
+        ratioExpr, ratioValue, sign: p.sign ?? (kind === "gear" ? -1 : 1),
+        ...(offsetExpr !== undefined && offsetExpr !== "0" ? { offsetExpr } : {}),
+      };
+      return { createdIds: [id], message: `${kind} coupling: ${dvn.name} follows ${drv.name}` };
     },
   },
   {
@@ -931,18 +1071,22 @@ export const BUILTINS: CommandDef<any>[] = [
     title: "Joint template",
     summary: "A relational joint for a component pattern, stamped once per instance.",
     description:
-      "Adds a joint rule to a pattern. `base`/`moved` are role refs {role: self|prev|root, component, port}; the expander resolves them to concrete instances each rebuild (self → instance i, prev → i-1, root → ground). `appliesTo`: \"first\" (i=0, the grounding/seed joints), \"rest\" (i>=1, the repeating chain), or \"all\". `value` (degrees for revolute, length for slider) may reference the 0-based instance index `i` and parameters; a regular mechanism reuses the same expression every stage.",
+      "Adds a joint rule to a pattern. `base`/`moved` are role refs {role: self|prev|root, component, port}; the expander resolves them to concrete instances each rebuild (self → instance i, prev → i-1, root → ground). `appliesTo`: \"first\" (i=0, the grounding/seed joints), \"rest\" (i>=1, the repeating chain), or \"all\". `value` (degrees for revolute, length for slider) may reference the 0-based instance index `i` and parameters; a regular mechanism reuses the same expression every stage. " +
+      "A `cylindrical` template takes `slide` too (its travel), a `ball` template `ball` {tilt, heading, spin}, as joint.create; both may use `i`, and `limits` stops them as joint.create's do.",
     paramsSchema: {
       type: "object",
       required: ["pattern", "base", "moved"],
       additionalProperties: false,
       properties: {
         pattern: { type: "string" },
-        kind: { type: "string", enum: ["rigid", "revolute", "slider"] },
+        kind: { type: "string", enum: ["rigid", "revolute", "slider", "cylindrical", "ball"] },
         base: ROLE_REF_SCHEMA,
         moved: ROLE_REF_SCHEMA,
         axis: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, description: "Joint axis in base-local coords (default +Z)." },
         value: { type: "string", description: "Motion expression; may use `i` and parameters." },
+        slide: { type: ["number", "string"], description: "cylindrical only: the travel along `axis`; may use `i`." },
+        ball: BALL_SCHEMA,
+        limits: LIMITS_SCHEMA,
         appliesTo: { type: "string", enum: ["first", "rest", "all"], description: "Which instances get this joint (default all)." },
         name: { type: "string" },
       },
@@ -951,13 +1095,23 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "Ground + drive the first bar", params: { pattern: "apat1", kind: "revolute", base: { role: "root", origin: { x: 0, y: 0, z: 0 } }, moved: { role: "self", component: "cmp3", port: "bottom" }, axis: { x: 0, y: -1, z: 0 }, value: "theta", appliesTo: "first" } },
       { note: "Chain each bar to the previous stage's top", params: { pattern: "apat1", kind: "revolute", base: { role: "prev", component: "cmp4", port: "top" }, moved: { role: "self", component: "cmp3", port: "bottom" }, axis: { x: 0, y: -1, z: 0 }, value: "2*theta-180", appliesTo: "rest" } },
     ],
-    apply(draft, p: { pattern: string; kind?: "rigid" | "revolute" | "slider"; base: RoleRef; moved: RoleRef; axis?: Vec3; value?: string; appliesTo?: "first" | "rest" | "all"; name?: string }, ctx) {
+    apply(draft, p: { pattern: string; kind?: "rigid" | "revolute" | "slider" | "cylindrical" | "ball"; base: RoleRef; moved: RoleRef; axis?: Vec3; value?: string; slide?: number | string; ball?: Partial<Record<"tilt" | "heading" | "spin", number | string>>; limits?: Partial<Record<JointDof, JointLimit>>; appliesTo?: "first" | "rest" | "all"; name?: string }, ctx) {
       if (!draft.componentPatterns[p.pattern]) throw new Error(`No pattern "${p.pattern}"`);
+      const kind = p.kind ?? "revolute";
+      if (p.slide !== undefined && kind !== "cylindrical") throw new Error("`slide` is a cylindrical joint's travel");
+      if (p.ball && kind !== "ball") throw new Error("`ball` goes with a ball joint");
+      const scope = { ...resolveParameters(draft.parameters).scope, i: 0 }; // checked at the first instance
+      const slideExpr = kind === "cylindrical" ? motionExpr(p.slide ?? 0, scope, "slide") : undefined;
+      const ball = kind === "ball" ? ballExprs(p.ball, scope) : undefined;
+      const limits = jointLimits(kind, p.limits);
       const id = ctx.alloc("jtpl");
       draft.jointTemplates[id] = {
-        id, name: p.name ?? "Joint template", patternId: p.pattern, kind: p.kind ?? "revolute",
+        id, name: p.name ?? "Joint template", patternId: p.pattern, kind,
         base: p.base, moved: p.moved, axis: p.axis ?? { x: 0, y: 0, z: 1 },
         valueExpr: String(p.value ?? "0"), appliesTo: p.appliesTo ?? "all",
+        ...(slideExpr !== undefined ? { slideExpr } : {}),
+        ...(ball ? { ball } : {}),
+        ...(limits ? { limits } : {}),
       };
       return { createdIds: [id], message: "Joint template" };
     },

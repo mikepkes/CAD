@@ -19,7 +19,7 @@ import { sketchIsEmpty } from "./sketchStatus";
 import { onViewportTheme, viewportColors } from "../viewport/palette";
 import { buildBodies } from "../viewport/buildBodies";
 import { motionGhostPoses, sweepTrail, SweepPace, SWEEP_TRAIL } from "../viewport/motionGhosts";
-import { driveParams } from "../model/motionStudy";
+import { driveJoints, type Drive } from "../model/motionStudy";
 
 function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
   let inside = false;
@@ -219,7 +219,7 @@ function ViewportInner({ overlays, label }: { overlays?: ReactNode; label?: stri
     const unsubTheme = onViewportTheme(() => updateExtrudeHandle(scene, useStore.getState()));
     // The motion study's ghosts: while it runs, the parts it turns sweep round frame by frame, paced by the check
     // running behind them (motionGhosts.ts); gone when the study ends or they're switched off.
-    type Sweep = { run: NonNullable<AppState["motionRun"]>; drives: string[]; pace: SweepPace; frame: number; bodies?: { solids: unknown; doc: unknown; list: ReturnType<typeof buildBodies> } };
+    type Sweep = { run: NonNullable<AppState["motionRun"]>; drives: Drive[]; pace: SweepPace; frame: number; bodies?: { solids: unknown; doc: unknown; list: ReturnType<typeof buildBodies> } };
     let sweep: Sweep | null = null;
     const drawSweep = (now: number) => {
       if (!sweep) return;
@@ -236,7 +236,7 @@ function ViewportInner({ overlays, label }: { overlays?: ReactNode; label?: stri
       if (sweep) cancelAnimationFrame(sweep.frame);
       sweep = null;
       if (!run) { scene.clearMotionGhosts(); return; }
-      sweep = { run, drives: driveParams(s.session.doc), pace: new SweepPace(run.started, run.poses, run.lastMs ?? undefined), frame: requestAnimationFrame(drawSweep) };
+      sweep = { run, drives: driveJoints(s.session.doc), pace: new SweepPace(run.started, run.poses, run.lastMs ?? undefined), frame: requestAnimationFrame(drawSweep) };
     };
     const unsub = useStore.subscribe((s) => {
       controller.setBase(buildView(s));

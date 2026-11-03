@@ -15,6 +15,10 @@ import type { CadDocument, RoleRef } from "../core/document";
 import { resolveParameters } from "../core/parameters";
 import { compileExpr } from "../math/expr";
 import { sketchStatus } from "./sketchStatus";
+import { CouplingForm, CouplingRow, JointForm, JointRow, MotionFields, MotionValues, NO_MOTION, motionParams } from "./JointForms";
+
+const TEMPLATE_KINDS = ["revolute", "slider", "cylindrical", "ball", "rigid"] as const;
+type TemplateKind = (typeof TEMPLATE_KINDS)[number];
 
 /** Resolve a count expression against the document's parameters for display. */
 function resolvedCount(doc: CadDocument, expr: string, fallback: number): number {
@@ -152,11 +156,11 @@ function TemplateForm({ doc, patternId, sourceComps, onClose }: { doc: CadDocume
   const createJointTemplate = useStore((s) => s.createJointTemplate);
   const first = sourceComps[0] ?? "";
   const portsOf = (cid: string) => Object.keys(doc.components[cid]?.connectors ?? {});
-  const [kind, setKind] = useState<"revolute" | "slider" | "rigid">("revolute");
+  const [kind, setKind] = useState<TemplateKind>("revolute");
   const [base, setBase] = useState<{ role: RoleRef["role"]; component: string; port: string }>({ role: "root", component: first, port: portsOf(first)[0] ?? "" });
   const [moved, setMoved] = useState<{ role: RoleRef["role"]; component: string; port: string }>({ role: "self", component: first, port: portsOf(first)[0] ?? "" });
   const [axis, setAxis] = useState({ x: "0", y: "-1", z: "0" });
-  const [value, setValue] = useState("0");
+  const [motion, setMotion] = useState<MotionValues>(NO_MOTION);
   const [appliesTo, setAppliesTo] = useState<"first" | "rest" | "all">("all");
 
   const refOf = (r: { role: RoleRef["role"]; component: string; port: string }): RoleRef =>
@@ -186,7 +190,7 @@ function TemplateForm({ doc, patternId, sourceComps, onClose }: { doc: CadDocume
     await createJointTemplate(patternId, {
       kind, base: refOf(base), moved: refOf(moved),
       axis: { x: +axis.x || 0, y: +axis.y || 0, z: +axis.z || 0 },
-      value, appliesTo,
+      ...motionParams(kind, motion), appliesTo,
     });
     onClose();
   };
@@ -194,7 +198,7 @@ function TemplateForm({ doc, patternId, sourceComps, onClose }: { doc: CadDocume
   return (
     <div className="asm-tform" onClick={(e) => e.stopPropagation()}>
       <div className="asm-ref">
-        <select className="asm-sel" value={kind} onChange={(e) => setKind(e.target.value as "revolute")}><option value="revolute">revolute</option><option value="slider">slider</option><option value="rigid">rigid</option></select>
+        <select className="asm-sel" value={kind} onChange={(e) => setKind(e.target.value as TemplateKind)}>{TEMPLATE_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</select>
         <select className="asm-sel" value={appliesTo} onChange={(e) => setAppliesTo(e.target.value as "all")} title="Which instances get this joint"><option value="all">all</option><option value="first">first (i=0)</option><option value="rest">rest (i≥1)</option></select>
       </div>
       <RefEditor label="base" r={base} set={setBase} />
@@ -202,8 +206,8 @@ function TemplateForm({ doc, patternId, sourceComps, onClose }: { doc: CadDocume
       <div className="asm-ref">
         <span className="muted-inline" style={{ width: 38 }}>axis</span>
         {(["x", "y", "z"] as const).map((k) => <input key={k} className="dim-expr" style={{ width: 34 }} value={axis[k]} onChange={(e) => setAxis({ ...axis, [k]: e.target.value })} />)}
-        <input className="dim-expr" style={{ width: 70 }} placeholder="value (uses i)" value={value} onChange={(e) => setValue(e.target.value)} />
       </div>
+      <MotionFields kind={kind} v={motion} set={setMotion} hint="uses i" />
       <div className="asm-ref">
         <button className="asm-btn" onClick={() => void submit()}>add joint template</button>
         <button className="asm-btn" onClick={onClose}>cancel</button>
@@ -217,6 +221,7 @@ function PatternsSection({ doc }: { doc: CadDocument }) {
   const editPatternCount = useStore((s) => s.editPatternCount);
   const deletePattern = useStore((s) => s.deletePattern);
   const editJointTemplateValue = useStore((s) => s.editJointTemplateValue);
+  const editJointTemplateParams = useStore((s) => s.editJointTemplateParams);
   const setJointTemplateAppliesTo = useStore((s) => s.setJointTemplateAppliesTo);
   const deleteJointTemplate = useStore((s) => s.deleteJointTemplate);
   const [formFor, setFormFor] = useState<string | null>(null);
@@ -243,9 +248,15 @@ function PatternsSection({ doc }: { doc: CadDocument }) {
                 <span className="tree-icon" style={{ color: "var(--ic-joint)" }}>⚙</span>
                 <span className="tree-label muted-inline">{t.moved.port ?? t.moved.role}→{t.base.role === "root" ? "root" : (t.base.port ?? t.base.role)}</span>
                 <select className="asm-sel" value={t.appliesTo} title="Which instances" onClick={(e) => e.stopPropagation()} onChange={(e) => void setJointTemplateAppliesTo(t.id, e.target.value as "all")}><option value="all">all</option><option value="first">first</option><option value="rest">rest</option></select>
-                {t.kind !== "rigid" && (
-                  <input className="dim-expr" style={{ width: 70 }} defaultValue={t.valueExpr} key={t.id + t.valueExpr} title="Value (degrees/length; may use i)" onClick={(e) => e.stopPropagation()} onBlur={(e) => { if (e.target.value !== t.valueExpr) void editJointTemplateValue(t.id, e.target.value); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                {t.kind !== "rigid" && t.kind !== "ball" && (
+                  <input className="dim-expr" style={{ width: 70 }} defaultValue={t.valueExpr} key={t.id + t.valueExpr} title={t.kind === "slider" ? "Travel (may use i)" : "Angle, degrees (may use i)"} onClick={(e) => e.stopPropagation()} onBlur={(e) => { if (e.target.value !== t.valueExpr) void editJointTemplateValue(t.id, e.target.value); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
                 )}
+                {t.kind === "cylindrical" && (
+                  <input className="dim-expr" style={{ width: 54 }} defaultValue={t.slideExpr ?? "0"} key={t.id + "s" + t.slideExpr} title="Travel along the axis (may use i)" onClick={(e) => e.stopPropagation()} onBlur={(e) => { if (e.target.value !== (t.slideExpr ?? "0")) void editJointTemplateParams(t.id, { slide: e.target.value }); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                )}
+                {t.kind === "ball" && (["tilt", "heading", "spin"] as const).map((k) => (
+                  <input key={t.id + k + t.ball?.[k]} className="dim-expr" style={{ width: 40 }} defaultValue={t.ball?.[k] ?? "0"} placeholder={k} title={`${k[0].toUpperCase()}${k.slice(1)}, degrees (may use i)`} onClick={(e) => e.stopPropagation()} onBlur={(e) => { if (e.target.value !== (t.ball?.[k] ?? "0")) void editJointTemplateParams(t.id, { ball: { ...t.ball, [k]: e.target.value } }); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                ))}
                 <button className="asm-x" title="Delete joint template" onClick={(e) => { e.stopPropagation(); void deleteJointTemplate(t.id); }}>✕</button>
               </div>
             ))}
@@ -264,7 +275,7 @@ export function BrowserPanel() {
   const session = useStore((s) => s.session);
   useStore((s) => s.rev); // re-render on changes
   const startSketch = useStore((s) => s.startSketch);
-  const editJointValue = useStore((s) => s.editJointValue);
+  const [adding, setAdding] = useState<"joint" | "coupling" | null>(null);
   const showHiddenGhosts = useStore((s) => s.showHiddenGhosts);
   const toggleGhosts = useStore((s) => s.toggleShowHiddenGhosts);
   const isolate = useStore((s) => s.isolate);
@@ -294,16 +305,16 @@ export function BrowserPanel() {
           </div>
         ))}
         <ComponentNode doc={doc} id={doc.rootComponentId} depth={0} />
-        {Object.values(doc.joints).map((j) => (
-          <div key={j.id} className="tree-row" style={{ paddingLeft: 22 }} title={j.error ? `Unresolved: ${j.error}` : `${j.kind} joint: ${doc.components[j.moved]?.name ?? j.moved} → ${doc.components[j.base]?.name ?? j.base}`}>
-            <span className="tree-icon" style={{ color: "var(--ic-joint)" }}>⚙</span>
-            <span className="tree-label">{j.name} <span className="muted-inline">· {j.kind}</span></span>
-            {j.kind !== "rigid" && (
-              <input className="dim-expr" style={{ width: 54 }} defaultValue={j.valueExpr} key={j.id + j.valueExpr} title={j.kind === "revolute" ? "Angle (degrees)" : "Distance"} onClick={(e) => e.stopPropagation()} onBlur={(e) => { if (e.target.value !== j.valueExpr) editJointValue(j.id, e.target.value); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
-            )}
-            {j.error && <span className="dof-dot bad" />}
+        {Object.values(doc.joints).map((j) => <JointRow key={j.id} doc={doc} j={j} />)}
+        {Object.values(doc.couplings ?? {}).map((c) => <CouplingRow key={c.id} doc={doc} c={c} />)}
+        {Object.keys(doc.components).length > 1 && (
+          <div className="tree-row asm-actions" style={{ paddingLeft: 22 }}>
+            <button className="asm-btn" title="Joint a component to another" onClick={() => setAdding(adding === "joint" ? null : "joint")}>+ joint</button>
+            {Object.keys(doc.joints).length > 1 && <button className="asm-btn" title="Drive one joint from another by a gear, belt or rack ratio" onClick={() => setAdding(adding === "coupling" ? null : "coupling")}>+ coupling</button>}
           </div>
-        ))}
+        )}
+        {adding === "joint" && <div className="tree-row" style={{ paddingLeft: 22 }}><JointForm doc={doc} onClose={() => setAdding(null)} /></div>}
+        {adding === "coupling" && <div className="tree-row" style={{ paddingLeft: 22 }}><CouplingForm doc={doc} onClose={() => setAdding(null)} /></div>}
         <PatternsSection doc={doc} />
         {empty && Object.keys(doc.joints).length === 0 && <div className="muted">No sketches yet.</div>}
       </div>

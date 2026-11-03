@@ -15,7 +15,7 @@ export function drivesOf(doc: Pick<CadDocument, "joints" | "parameters">): Param
   const out: Parameter[] = [];
   for (const j of Object.values(doc.joints)) {
     if (j.solve || j.closes || j.kind === "beam" || j.kind === "rigid") continue;
-    for (const e of j.kind === "planar" ? Object.values(j.planar ?? {}) : [j.valueExpr]) {
+    for (const e of j.kind === "planar" ? Object.values(j.planar ?? {}) : j.kind === "ball" ? Object.values(j.ball ?? {}) : [j.valueExpr, ...(j.slideExpr !== undefined ? [j.slideExpr] : [])]) {
       let deps: string[] = [];
       try { deps = compileExpr(String(e)).deps; } catch { continue; }
       for (const p of doc.parameters) if (deps.includes(p.name) && p.min != null && p.max != null && !out.includes(p)) out.push(p);

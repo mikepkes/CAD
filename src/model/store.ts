@@ -31,7 +31,7 @@ import type { SolidEval, BuildStep } from "../core/features";
 import { GeometryBackend, InlineGeometryBackend, TopologyOpts, ExportFormat, EvaluateResult } from "../core/geometry/backend";
 import { hasFlexures } from "../sim/flexure";
 import { WorkerGeometryBackend } from "./worker-backend";
-import { runMotionStudy, driveParams, motionKey, poseCount, MotionStatus, MotionResult } from "./motionStudy";
+import { runMotionStudy, driveParams, driveJoints, motionKey, studyPoseCount, MotionStatus, MotionResult } from "./motionStudy";
 import { meshesToStlBinary } from "../core/export/stl";
 import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
@@ -411,7 +411,14 @@ export interface AppState {
   startFaceExtrude: (hit: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => Promise<void>;
   editFeatureDistance: (featureId: string, expr: string) => Promise<void>;
   editJointValue: (jointId: string, expr: string) => Promise<void>;
+  /** Change a joint's creating parameters (its slide, a ball's values, its limits…), merged over what it has. */
+  editJointParams: (jointId: string, patch: Record<string, unknown>) => Promise<void>;
+  /** Delete a joint, and the couplings that drive it or that it drives first. */
   deleteJoint: (jointId: string) => Promise<void>;
+  createJoint: (params: Record<string, unknown>) => Promise<boolean>;
+  createCoupling: (params: Record<string, unknown>) => Promise<boolean>;
+  editCoupling: (couplingId: string, patch: Record<string, unknown>) => Promise<void>;
+  deleteCoupling: (couplingId: string) => Promise<void>;
   // ---- parametric jointed assemblies ----
   addConnector: (componentId: string, name: string, origin: { x: number; y: number; z: number }) => Promise<void>;
   deleteConnector: (componentId: string, name: string) => Promise<void>;
@@ -420,6 +427,7 @@ export interface AppState {
   deletePattern: (patternId: string) => Promise<void>;
   createJointTemplate: (patternId: string, params: Record<string, unknown>) => Promise<void>;
   editJointTemplateValue: (templateId: string, expr: string) => Promise<void>;
+  editJointTemplateParams: (templateId: string, patch: Record<string, unknown>) => Promise<void>;
   setJointTemplateAppliesTo: (templateId: string, appliesTo: "first" | "rest" | "all") => Promise<void>;
   deleteJointTemplate: (templateId: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
@@ -1304,7 +1312,7 @@ export const useStore = create<AppState>((set, get) => {
       if (known) { set({ hasMotionStudy: true, motionStatus: known.status, motionResult: known, motionProgress: 1, motionPrevious: null, motionCoarse: null, motionEta: null, motionRun: null }); return; }
       const lastMs = motionLastMs.get(doc.id);
       const started = performance.now();
-      const motionRun = { started, poses: poseCount(driveParams(doc).length, MOTION_STEPS), lastMs: lastMs ?? null };
+      const motionRun = { started, poses: studyPoseCount(driveJoints(doc), MOTION_STEPS), lastMs: lastMs ?? null };
       set({ hasMotionStudy: true, motionStatus: "running", motionProgress: 0, motionResult: null, motionCoarse: null, motionEta: lastMs != null ? Math.round(lastMs / 1000) : null, motionRun });
       try {
         if (!studyReady) { await studyGeometry.init({ wasmUrl: occWasmUrl }); studyReady = studyGeometry.ready(); }
@@ -1517,8 +1525,25 @@ export const useStore = create<AppState>((set, get) => {
       const op = get().session.timeline.find((o) => o.type === "joint.create" && o.createdIds.includes(jointId));
       if (op) await get().editOperation(op.opId, { ...op.params, value: expr });
     },
-    deleteJoint: async (jointId) => {
+    editJointParams: async (jointId, patch) => {
       const op = get().session.timeline.find((o) => o.type === "joint.create" && o.createdIds.includes(jointId));
+      if (op) await get().editOperation(op.opId, { ...op.params, ...patch });
+    },
+    deleteJoint: async (jointId) => {
+      // its couplings reference it: remove them first, as a pattern's templates go before it
+      const couplings = get().session.timeline.filter((o) => o.type === "joint.couple" && (o.params.driver === jointId || o.params.driven === jointId));
+      for (const c of couplings) await get().deleteOperation(c.opId);
+      const op = get().session.timeline.find((o) => o.type === "joint.create" && o.createdIds.includes(jointId));
+      if (op) await get().deleteOperation(op.opId);
+    },
+    createJoint: async (params) => (await runDispatch("joint.create", params)).ok,
+    createCoupling: async (params) => (await runDispatch("joint.couple", params)).ok,
+    editCoupling: async (couplingId, patch) => {
+      const op = get().session.timeline.find((o) => o.type === "joint.couple" && o.createdIds.includes(couplingId));
+      if (op) await get().editOperation(op.opId, { ...op.params, ...patch });
+    },
+    deleteCoupling: async (couplingId) => {
+      const op = get().session.timeline.find((o) => o.type === "joint.couple" && o.createdIds.includes(couplingId));
       if (op) await get().deleteOperation(op.opId);
     },
 
@@ -1551,6 +1576,10 @@ export const useStore = create<AppState>((set, get) => {
     editJointTemplateValue: async (templateId, expr) => {
       const op = get().session.timeline.find((o) => o.type === "joint.template" && o.createdIds.includes(templateId));
       if (op) await get().editOperation(op.opId, { ...op.params, value: expr });
+    },
+    editJointTemplateParams: async (templateId, patch) => {
+      const op = get().session.timeline.find((o) => o.type === "joint.template" && o.createdIds.includes(templateId));
+      if (op) await get().editOperation(op.opId, { ...op.params, ...patch });
     },
     setJointTemplateAppliesTo: async (templateId, appliesTo) => {
       const op = get().session.timeline.find((o) => o.type === "joint.template" && o.createdIds.includes(templateId));

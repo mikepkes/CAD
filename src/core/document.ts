@@ -723,11 +723,37 @@ export interface TimelineGroup {
  *    on the moved body stays on a slot line on another body (a 1-DOF closed-loop
  *    constraint). This is how a real mechanism — e.g. a leg-vise criss-cross — is
  *    driven: the kernel finds the angle instead of the author supplying trig.
+ *  - cylindrical: turns about `axis` by `value` degrees AND slides along it by
+ *    `slide` (a shaft in a plain bearing, a vise screw in its nut, a telescope tube)
+ *  - ball: turns freely about the connector point (a ball joint, a trailer
+ *    hitch, a camera mount), its pose given as swing and twist (see `ball`)
  */
+export type JointKind = "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam" | "planar" | "cylindrical" | "ball";
+
+/** One of a joint's motion values, by name: `value` (the angle of a revolute,
+ *  flexure, pin-slot or cylindrical joint, the travel of a slider), `slide` (a
+ *  cylindrical joint's travel), and a ball joint's `tilt`, `heading` and `spin`. */
+export type JointDof = "value" | "slide" | "tilt" | "heading" | "spin";
+
+/** The motion values a joint of each kind has that `limits` may stop. */
+export const JOINT_DOFS: Partial<Record<JointKind, JointDof[]>> = {
+  revolute: ["value"], slider: ["value"], flexure: ["value"], cylindrical: ["value", "slide"], ball: ["tilt", "heading", "spin"],
+};
+
+/** Whether a joint's motion value is an angle (degrees) rather than a length (mm). */
+export const isAngularDof = (kind: JointKind, dof: JointDof): boolean => dof !== "slide" && kind !== "slider";
+
+/** A mechanical stop on one motion value: the value is held within [min, max]
+ *  (degrees or mm), and a motion study sweeps it between them. */
+export interface JointLimit {
+  min?: number;
+  max?: number;
+}
+
 export interface Joint {
   id: string;
   name: string;
-  kind: "rigid" | "revolute" | "slider" | "pin-slot" | "flexure" | "beam" | "planar";
+  kind: JointKind;
   base: string;  // base component id (root = ground)
   moved: string; // the component this joint places
   /** Connector point on each component, in that component's LOCAL coordinates. */
@@ -773,6 +799,24 @@ export interface Joint {
   planar?: Partial<Record<"x" | "y" | "angle", string>>;
   /** planar only: where each axis is now (driven, or settled). */
   planarValue?: { x: number; y: number; angle: number };
+  /** cylindrical only: the travel along `axis` (mm), beside the angle in `valueExpr`. */
+  slideExpr?: string;
+  slideValue?: number;
+  /** ball only: the moved part's orientation about the connector, in degrees, as
+   *  twist then swing: `spin` turns it about `axis` (its own axis at rest), then
+   *  `tilt` leans that axis over toward `heading` (measured round `axis` from the
+   *  base's +X, or +Y when `axis` lies near X). A value left out stays at 0.
+   *  Chosen over three Euler angles because a real ball joint's travel is a
+   *  cone: `limits.tilt.max` is its half-angle, and each value is a motion one
+   *  can name and sweep (how far it leans, which way, how far it's twisted).
+   *  Its one singularity — `heading` means nothing at zero tilt — is harmless:
+   *  the pose there is the same whatever the heading. */
+  ball?: Partial<Record<"tilt" | "heading" | "spin", string>>;
+  /** ball only: where each value is now. */
+  ballValue?: { tilt: number; heading: number; spin: number };
+  /** Stops on the motion values (JOINT_DOFS): a value driven past one is held
+   *  there, and a motion study sweeps between them. */
+  limits?: Partial<Record<JointDof, JointLimit>>;
   /** Connector points given as expressions in the parameters (per coordinate);
    *  baseOrigin / movedOrigin hold their last evaluation. */
   originExprs?: { base?: Partial<Record<"x" | "y" | "z", string>>; moved?: Partial<Record<"x" | "y" | "z", string>> };
@@ -846,14 +890,48 @@ export interface JointTemplate {
   id: string;
   name: string;
   patternId: string;
-  kind: "rigid" | "revolute" | "slider";
+  kind: "rigid" | "revolute" | "slider" | "cylindrical" | "ball";
   base: RoleRef;
   moved: RoleRef;
   axis: { x: number; y: number; z: number };
   valueExpr: string;
+  /** cylindrical: the travel along `axis` (may use `i`). */
+  slideExpr?: string;
+  /** ball: the tilt / heading / spin expressions (may use `i`). */
+  ball?: Partial<Record<"tilt" | "heading" | "spin", string>>;
+  limits?: Partial<Record<JointDof, JointLimit>>;
   /** Which instances get this joint: the first (i=0), the rest (i>=1), or all.
    *  Grounding/seed joints are "first"; the repeating chain joints are "rest". */
   appliesTo: "first" | "rest" | "all";
+}
+
+/** A coupling: one joint's motion value driven by another's by a ratio — a gear
+ *  mesh, a belt or chain, a rack and pinion — instead of each written out as an
+ *  expression of the drive. The driven value is
+ *      offset + sign · ratio · driver           (gear, belt: like drives like)
+ *      offset + sign · ratio · driver / 360     (rack: a turn drives a slide)
+ *      offset + sign · 360 · driver / ratio     (rack: a slide drives a turn)
+ *  so `ratio` is the driver's teeth over the driven's (one pulley's diameter over
+ *  the other's) for a gear or belt, and the travel per turn (mm: π·module·teeth)
+ *  for a rack. While coupled, the driven joint's own value expression is unused.
+ *  Couplings chain into a train, each link reading the value the last one set. */
+export interface Coupling {
+  id: string;
+  name: string;
+  /** gear: an external mesh, turning the other way (sign −1 unless given);
+   *  belt: a belt or chain, the same way (+1); rack: rack and pinion (+1). */
+  kind: "gear" | "belt" | "rack";
+  driver: string;
+  /** Which of the driver's values drives: `value` (default) or a cylindrical joint's `slide`. */
+  driverDof?: "value" | "slide";
+  driven: string;
+  drivenDof?: "value" | "slide";
+  ratioExpr: string;
+  ratioValue: number;
+  sign: 1 | -1;
+  /** The driven value with the driver at 0 (a phase), an expression; default 0. */
+  offsetExpr?: string;
+  error?: string;
 }
 
 /** Duplicate a component subtree N times, where N is a parameter expression.
@@ -1002,6 +1080,8 @@ export interface CadDocument {
    *  These stay as design intent; the expander materializes instances at rebuild. */
   componentPatterns: Record<string, ComponentPattern>;
   jointTemplates: Record<string, JointTemplate>;
+  /** Joint couplings (gears, belts, racks): one joint's value driven by another's. */
+  couplings?: Record<string, Coupling>;
   /** Appearance library; components reference these by id. */
   materials: Record<string, Material>;
   sketches: Record<string, Sketch>;
@@ -1079,6 +1159,7 @@ export function createDocument(id = "doc1"): CadDocument {
     joints: {},
     componentPatterns: {},
     jointTemplates: {},
+    couplings: {},
     materials: {},
     sketches: {},
     features: {},

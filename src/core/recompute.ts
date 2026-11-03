@@ -11,7 +11,7 @@ import { compileExpr, Scope } from "../math/expr";
 import { planeById, offsetPlane, makePlaneFromNormal, WorkPlane } from "../geometry/plane";
 import { Rigid, IDENTITY, translation, compose, invert, applyPoint, applyVec, rotationAbout } from "../math/transform";
 import { Vec3 } from "../math/vec";
-import { Joint } from "./document";
+import { Coupling, Joint, JointDof, isAngularDof } from "./document";
 import { DimensionConstraint, Sketch, SketchArc, SketchCircle, SketchLine, SketchPoint } from "../sketch/types";
 
 export interface SketchEvaluation {
@@ -157,12 +157,7 @@ const DEG = Math.PI / 180;
  *  `moved` inherits the base's full pose — position AND orientation. Composing
  *  only a translation here would leave a child of a rotated base un-rotated, so
  *  its connector (the bearing) would drift off its mate. */
-function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope): Rigid {
-  let value = j.valueValue;
-  // a solved joint keeps the loop solve's value (its expression is only the first seed)
-  if (!j.solve) {
-    try { const v = compileExpr(j.valueExpr).eval(scope); if (Number.isFinite(v)) value = v; } catch { /* keep last */ }
-  }
+function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope, value: number, slide = 0): Rigid {
   j.valueValue = value;
   // Seat `moved` so its connector coincides with the base connector (base-local).
   const seat = translation({ x: j.baseOrigin.x - j.movedOrigin.x, y: j.baseOrigin.y - j.movedOrigin.y, z: j.baseOrigin.z - j.movedOrigin.z });
@@ -172,6 +167,19 @@ function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope): Rigid {
   } else if (j.kind === "slider") {
     const m = Math.hypot(j.axis.x, j.axis.y, j.axis.z) || 1;
     motion = translation({ x: (j.axis.x / m) * value, y: (j.axis.y / m) * value, z: (j.axis.z / m) * value });
+  } else if (j.kind === "cylindrical") {
+    // turn about the axis through the connector and slide along it (the two commute)
+    j.slideValue = slide;
+    const m = Math.hypot(j.axis.x, j.axis.y, j.axis.z) || 1;
+    motion = compose(translation({ x: (j.axis.x / m) * slide, y: (j.axis.y / m) * slide, z: (j.axis.z / m) * slide }), rotationAbout(j.axis, value * DEG, j.baseOrigin));
+  } else if (j.kind === "ball") {
+    const bv = (j.ballValue ??= { tilt: 0, heading: 0, spin: 0 });
+    for (const k of ["tilt", "heading", "spin"] as const) {
+      const e = j.ball?.[k];
+      if (e !== undefined) try { const v = compileExpr(e).eval(scope); if (Number.isFinite(v)) bv[k] = v; } catch { /* keep last */ }
+      bv[k] = clampDof(j, k, bv[k]);
+    }
+    motion = ballMotion(j.axis, bv, j.baseOrigin);
   } else if (j.kind === "planar") {
     const pv = (j.planarValue ??= { x: 0, y: 0, angle: 0 });
     for (const k of ["x", "y", "angle"] as const) {
@@ -184,6 +192,47 @@ function jointWorld(baseWorld: Rigid, j: Joint, scope: Scope): Rigid {
     motion = IDENTITY; // rigid
   }
   return compose(baseWorld, compose(motion, seat));
+}
+
+/** A unit vector perpendicular to `n` (unit): +X with its `n` part taken out, or
+ *  +Y when `n` lies near X — where a ball joint's heading is measured from. */
+export function referencePerpendicular(n: Vec3): Vec3 {
+  const t = Math.abs(n.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const d = t.x * n.x + t.y * n.y + t.z * n.z;
+  const e = { x: t.x - d * n.x, y: t.y - d * n.y, z: t.z - d * n.z };
+  const m = Math.hypot(e.x, e.y, e.z);
+  return { x: e.x / m, y: e.y / m, z: e.z / m };
+}
+
+/** A ball joint's motion about `center` (base-local): twist by `spin` about the
+ *  axis, then swing the axis over by `tilt` toward the direction `heading`
+ *  degrees round it from the reference perpendicular. The swing turns about
+ *  axis × toward, which carries the axis straight toward `toward`, so a part at
+ *  tilt t, heading h has its axis at angle t from rest, leaning toward h. */
+export function ballMotion(axis: Vec3, v: { tilt: number; heading: number; spin: number }, center: Vec3): Rigid {
+  const m = Math.hypot(axis.x, axis.y, axis.z) || 1;
+  const n = { x: axis.x / m, y: axis.y / m, z: axis.z / m };
+  const toward = applyVec(rotationAbout(n, v.heading * DEG, { x: 0, y: 0, z: 0 }), referencePerpendicular(n));
+  const swing = { x: n.y * toward.z - n.z * toward.y, y: n.z * toward.x - n.x * toward.z, z: n.x * toward.y - n.y * toward.x };
+  return compose(rotationAbout(swing, v.tilt * DEG, center), rotationAbout(n, v.spin * DEG, center));
+}
+
+/** A motion value held within the joint's stops for it, if it has any. */
+export function clampDof(j: Pick<Joint, "limits">, dof: JointDof, v: number): number {
+  const l = j.limits?.[dof];
+  if (!l) return v;
+  if (l.max !== undefined && v > l.max) return l.max;
+  if (l.min !== undefined && v < l.min) return l.min;
+  return v;
+}
+
+/** What a coupling makes of its driver's value (see Coupling): like for like by
+ *  the ratio, or a rack's turn ↔ travel by the travel per turn. */
+export function couplingOutput(c: Pick<Coupling, "kind" | "ratioValue" | "sign">, driver: number, driverAngular: boolean, drivenAngular: boolean, offset = 0): number {
+  const r = c.ratioValue;
+  if (driverAngular === drivenAngular) return offset + c.sign * r * driver;
+  if (driverAngular) return offset + (c.sign * r * driver) / 360; // a turn drives a slide
+  return r ? offset + (c.sign * 360 * driver) / r : offset;        // a slide drives a turn
 }
 
 /** Solve a pin-slot joint: rotate `moved` about `axis` (through baseOrigin, in the
@@ -278,9 +327,51 @@ function placeComponents(doc: CadDocument, scope: Scope): Map<string, Rigid> {
     if (j.closes) closures.push(j); // a constraint, not a placement
     else jointByMoved.set(j.moved, j);
   }
+  // Couplings, by the joint value each drives (`${joint}.${dof}`), with their ratios and phases now.
+  const coupled = new Map<string, Coupling>();
+  const offsets = new Map<string, number>();
+  for (const c of Object.values(doc.couplings ?? {})) {
+    c.error = undefined;
+    try { const v = compileExpr(c.ratioExpr).eval(scope); if (Number.isFinite(v)) c.ratioValue = v; } catch { /* keep last */ }
+    let off = 0;
+    if (c.offsetExpr) try { const v = compileExpr(c.offsetExpr).eval(scope); if (Number.isFinite(v)) off = v; } catch { /* 0 */ }
+    offsets.set(c.id, off);
+    if (!doc.joints[c.driver]) { c.error = `driver joint "${c.driver}" not found`; continue; }
+    if (!doc.joints[c.driven]) { c.error = `driven joint "${c.driven}" not found`; continue; }
+    coupled.set(`${c.driven}.${c.drivenDof ?? "value"}`, c);
+  }
   const tree = (): Map<string, Rigid> => {
     const world = new Map<string, Rigid>();
     const active = new Set<string>();
+    // Each joint value once per placement: its expression, or what its coupling makes of its driver's
+    // (followed down the train, so a chain reads each link's value), then held within its stops.
+    const values = new Map<string, number>();
+    const following = new Set<string>();
+    const valueOf = (j: Joint, dof: "value" | "slide"): number => {
+      const key = `${j.id}.${dof}`;
+      const known = values.get(key);
+      if (known !== undefined) return known;
+      const stored = dof === "slide" ? j.slideValue ?? 0 : j.valueValue;
+      let v = stored;
+      const c = coupled.get(key);
+      if (c) {
+        if (following.has(key)) { c.error = "couplings form a loop"; return stored; }
+        following.add(key);
+        const drv = doc.joints[c.driver];
+        if (drv.kind === "pin-slot") resolve(drv.moved); // its angle is found by placing it
+        const dd = c.driverDof ?? "value";
+        v = couplingOutput(c, valueOf(drv, dd), isAngularDof(drv.kind, dd), isAngularDof(j.kind, dof), offsets.get(c.id));
+        following.delete(key);
+      } else if (j.solve || j.kind === "pin-slot") {
+        return stored; // the solve's value (its expression is only the first seed)
+      } else {
+        const e = dof === "slide" ? j.slideExpr : j.valueExpr;
+        if (e !== undefined) try { const x = compileExpr(e).eval(scope); if (Number.isFinite(x)) v = x; } catch { /* keep last */ }
+      }
+      v = clampDof(j, dof, v);
+      values.set(key, v);
+      return v;
+    };
     const resolve = (id: string): Rigid => {
       const cached = world.get(id);
       if (cached) return cached;
@@ -290,7 +381,7 @@ function placeComponents(doc: CadDocument, scope: Scope): Map<string, Rigid> {
       const j = jointByMoved.get(id);
       let W: Rigid;
       if (j && j.kind === "pin-slot") W = jointWorldPinSlot(resolve(j.base), resolve(j.slotBase ?? j.base), j);
-      else if (j) W = jointWorld(resolve(j.base), j, scope);
+      else if (j) W = jointWorld(resolve(j.base), j, scope, valueOf(j, "value"), j.kind === "cylindrical" ? valueOf(j, "slide") : 0);
       else if (c.parentId) W = compose(resolve(c.parentId), translation(c.transform.position));
       else W = IDENTITY;
       active.delete(id);

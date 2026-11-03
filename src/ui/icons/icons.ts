@@ -181,6 +181,9 @@ export const ICONS = {
   "joint-flexure": { label: "Flexure joint", d: "M3 16h6v5H3zM15 3h6v5h-6zM6 16C6 10 18 14 18 8" },
   "joint-beam": { label: "Beam joint", d: "M4 3v18M4 6L2 8M4 10l-2 2M4 14l-2 2M4 18l-2 2M4 9c6 0 11 2 16 6", dash: "M4 9h16", dots: [[20, 15, 1.5]] },
   "joint-planar": { label: "Planar joint", d: "M2 19l5-6h15l-5 6zM12 3v7M9.5 5.5L12 3l2.5 2.5M6 8h12M8.5 5.5L6 8l2.5 2.5M15.5 5.5L18 8l-2.5 2.5" },
+  "joint-cylindrical": { label: "Cylindrical joint", d: "M2 12h5M17 12h5M7 8.5h10v7H7zM8.5 5.5A5 5 0 0 1 15.5 5.5M15.5 5.5l-.3-2.4M15.5 5.5l-2.3.6M8 20h8M10 18l-2 2 2 2M14 18l2 2-2 2" },
+  "joint-ball": { label: "Ball joint", d: `${circle(12, 10, 4.5)}M6 10a6 6 0 0 0 12 0M12 5.5L15.5 2M12 16v3M7.5 21h9` },
+  "joint-coupling": { label: "Couple joints", d: `${circle(8.5, 9.5, 5.5)}${circle(17.5, 16, 3.5)}M8.5 2.5V4M8.5 15v1.5M1.5 9.5H3M14 9.5h1.5M17.5 11v1.5M17.5 19.5V21M21 16h1.5`, dots: [[8.5, 9.5, 1.4], [17.5, 16, 1.2]] },
   "assembly-pattern": { label: "Pattern components", d: "M2.5 9.5h5v5h-5zM9.5 9.5h5v5h-5zM16.5 9.5h5v5h-5zM7.5 12h2M14.5 12h2M5 4.5c4-2 10-2 14 0M16.5 2.5l2.5 2-2 2.5" },
 
   // ---------------------------------------------------------------- document data

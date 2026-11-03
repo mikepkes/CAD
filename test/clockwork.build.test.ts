@@ -15,8 +15,8 @@
 // Every gear is one feature.gear, each pair placed by `mesh` (or, for the
 // bevel and worm pairs, by the maths in feature.gear's description), so the
 // teeth are phased to mesh at rest; every shaft is a component on a revolute
-// joint whose value is `turn` times the gear ratios down the train, so they
-// stay meshed as it turns. Printable: every gear has a 5 mm bore on a 4.8 mm
+// joint, driven from the last by a coupling per mesh (joint.couple: the tooth
+// ratio and the way it turns), so they stay meshed as it turns. Printable: every gear has a 5 mm bore on a 4.8 mm
 // pin and 0.1 mm of backlash a side.
 //   BUILD_CLOCKWORK=/abs/out npx vitest run test/clockwork.build.test.ts
 import { describe, it, beforeAll, expect } from "vitest";
@@ -94,17 +94,13 @@ const STAR = add(S5, GC, 90);
 const G_CRANK = { z0: L2 + FW + 1, z1: L2 + FW + 3.5 };  // the crank plate, above G
 const G_STAR = { z0: G_CRANK.z1 + 1, z1: G_CRANK.z1 + 6 }; // the star and the locking disc
 
-// ---- the drive: every shaft's turn as `turn` times the ratios to it ----
+// ---- the drive: the gear train is couplings (each shaft follows the last by its tooth ratio, see the joints
+// below); what isn't a ratio — the planets' differential, the Scotch yoke's sine, the Geneva's steps — is
+// written out as `turn` times the ratios to it ----
 const carrier = `turn*${Z.sun}/(${Z.sun}+${Z.ring})`;
-const s2 = `-${carrier}*${Z.A}/${Z.B}`;
-const s3 = `${carrier}*${Z.A}/${Z.B}*${Z.C}/${Z.D}`;
-const s4 = `-${carrier}*${Z.A}/${Z.B}*${Z.C}/${Z.D}*${Z.E}/${Z.F}`;
-const cross = `${carrier}*${Z.A}/${Z.B}*${Z.C}/${Z.D}*${Z.E}/${Z.F}*${Z.H}/${Z.I}`; // −(S4)·H/I, about +X
-const dial = `${cross}*${Z.starts}/${Z.J}`;
 const planet = `-(turn - ${carrier})*${Z.sun}/${Z.planet}`;    // relative to the carrier
 const kTurn = `(-${carrier}*${Z.A}/${Z.K})`;
 const rack = `-${YOKE.r}*sin(rad(${kTurn}))`;                 // mm along X: the crank pin's x (at 90° at rest)
-const pinion = `(${rack})*360/(pi*${M}*${Z.P})`;              // rolled along by the rack
 const crank = `(-${carrier}*${Z.A}/${Z.G})`;
 /** The star's turn for a crank turned `t`: whole steps of 360/n, plus the step in progress while the pin is in a slot
  *  (|ψ| < 90 − 180/n from the line of centres), where the slot follows the pin: atan2(sin ψ, GC/a − cos ψ). */
@@ -306,20 +302,31 @@ export async function buildClockwork(s: CadSession): Promise<Record<string, stri
   }
   await block(s, starC, STAR.x + 3, STAR.y - 1.5, STAR.x + 9, STAR.y + 1.5, G_STAR.z1, G_STAR.z1 + 1.5, "Star hand");
 
-  // ---- the joints: one drive, every ratio written out ----
-  await joint(drive, at(S1), up, "turn", "Knob");
-  await joint(carrierC, at(S1), up, carrier, "Carrier");
+  // ---- the joints: one drive; each gear mesh a coupling, by its tooth ratio ----
+  const [knobJ] = await joint(drive, at(S1), up, "turn", "Knob");
+  const [carrierJ] = await joint(carrierC, at(S1), up, "0", "Carrier");
   for (let i = 0; i < 3; i++) await joint(planets[i], at(add(S1, pr, 90 + 120 * i)), up, planet, `Planet ${i + 1}`, "revolute", carrierC);
-  await joint(crankKC, at(SK), up, kTurn, "Crank K");
-  await joint(rackC, at(S1), alongX, rack, "Rack", "slider");
-  await joint(pinionC, at(SP), up, pinion, "Pinion P");
-  await joint(s2C, at(S2), up, s2, "Shaft 2");
-  await joint(s3C, at(S3), up, s3, "Shaft 3");
-  await joint(s4C, at(S4), up, s4, "Shaft 4");
-  await joint(crossC, { x: r3(I_HEEL_X), y: r3(S4.y), z: r3(H_APEX) }, alongX, cross, "Cross shaft");
-  await joint(wheelC, at(JC), up, dial, "Wheel");
-  await joint(crankC, at(S5), up, crank, "Geneva crank");
+  const [crankKJ] = await joint(crankKC, at(SK), up, "0", "Crank K");
+  const [rackJ] = await joint(rackC, at(S1), alongX, rack, "Rack", "slider");
+  const [pinionJ] = await joint(pinionC, at(SP), up, "0", "Pinion P");
+  const [s2J] = await joint(s2C, at(S2), up, "0", "Shaft 2");
+  const [s3J] = await joint(s3C, at(S3), up, "0", "Shaft 3");
+  const [s4J] = await joint(s4C, at(S4), up, "0", "Shaft 4");
+  const [crossJ] = await joint(crossC, { x: r3(I_HEEL_X), y: r3(S4.y), z: r3(H_APEX) }, alongX, "0", "Cross shaft");
+  const [wheelJ] = await joint(wheelC, at(JC), up, "0", "Wheel");
+  const [crankJ] = await joint(crankC, at(S5), up, "0", "Geneva crank");
   await joint(starC, at(STAR), up, star, "Geneva star");
+  const couple = (driver: string, driven: string, kind: "gear" | "belt" | "rack", ratio: string, sign?: 1 | -1) =>
+    dis(s, "joint.couple", { driver, driven, kind, ratio, ...(sign ? { sign } : {}) });
+  await couple(knobJ, carrierJ, "gear", `${Z.sun}/(${Z.sun}+${Z.ring})`, 1); // the sun inside a fixed ring: the carrier turns its way
+  await couple(carrierJ, s2J, "gear", `${Z.A}/${Z.B}`);
+  await couple(s2J, s3J, "gear", `${Z.C}/${Z.D}`);
+  await couple(s3J, s4J, "gear", `${Z.E}/${Z.F}`);
+  await couple(s4J, crossJ, "gear", `${Z.H}/${Z.I}`);                      // the bevel pair, onto +X
+  await couple(crossJ, wheelJ, "gear", `${Z.starts}/${Z.J}`, 1);          // the worm: the wheel turns its way
+  await couple(carrierJ, crankKJ, "gear", `${Z.A}/${Z.K}`);
+  await couple(carrierJ, crankJ, "gear", `${Z.A}/${Z.G}`);
+  await couple(rackJ, pinionJ, "rack", `pi*${M}*${Z.P}`);                 // rolled along by the rack
   // the cut parts' sketches would draw as loose circles over them
   const cuts = Object.values(s.doc.sketches).filter((k) => ["Locking disc", "Locking disc relief", "Star", "Star slots", "Star locking arcs"].includes(k.name)).map((k) => k.id);
   const hid = await s.setVisibility(cuts, false);
