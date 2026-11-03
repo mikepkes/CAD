@@ -181,20 +181,20 @@ export async function act3(d) {
     const sketches = Object.values(doc.sketches).filter((sk) => !others.some((l) => l.ids.has(sk.componentId))).map((sk) => sk.id);
     return { name: near.name, box: near.box, fade: [...others.flatMap((l) => l.top), ...new Set(front), ...sketches] };
   });
+  /** Wait (inside a load's cut) until the "Opened …" toast has gone: a short beat would otherwise open under it. */
+  const noToast = () => d.page.waitForFunction(() => !document.querySelector(".toast"), null, { timeout: 6000 }).catch(() => {});
   if (hasExample("walker")) {
     let leg = null; // found while the model loads (inside its cut): the beat's picture never waits on it
     await clip("walker", "walker", "Jansen wind walker", "one crank, twelve legs, overlapping strides", async () => {
       // posed from the crank angle: the legs' joint positions are parameters that follow `t`. The crank never stops
-      // or changes speed; a short look at the whole walker, then, as "twelve legs" is said, every leg but one and
-      // the frame fade out (display only: nothing rebuilds, so no cut) while the camera moves in on that one leg,
-      // which holds the rest of the line. Shots land on words from the default voice's timings
-      // (video/vo/af_heart/act3-walker.words.json, made by the sync check) when cached, else these.
-      const fallback = { legs: 5.78, end: 14.14 };
-      let words = [];
-      try { words = JSON.parse(readFileSync(new URL("../vo/af_heart/act3-walker.words.json", import.meta.url), "utf8")).words ?? []; } catch {}
-      const said = (w) => (w === "end" ? words.at(-1)?.e : words.find((x) => x.w.toLowerCase().replace(/[^a-z]/g, "") === w)?.s) ?? fallback[w];
+      // or changes speed. The whole walker while "one crank drives twelve legs"; as that's said, every leg but one
+      // and the frame fade out (display only: nothing rebuilds, so no cut) while the camera moves in on that one
+      // leg, and the second group ("Each foot glides along the ground, then lifts and swings forward") is cued as
+      // the close-up lands, so the leg's foot glides and swings under it. The close-up holds most of the beat.
+      // Timed from the default voice's clip lengths (seconds into the beat).
       const t0 = d.timing.events.findLast((e) => e.kind === "beat")?.t ?? d.now(); // the line starts with the beat
-      const tIso = said("legs"), tEnd = said("end") + 0.7;
+      const [m1, m2] = d.speech.ms.map((ms) => ms / 1000);
+      const tClose = Math.max(1.8, m1 - 1.0), tCue = Math.max(tClose + 1.3, m1 + 0.15), tEnd = tCue + m2 + 0.5;
       // about 100°/s, a whole number of turns by the end: the built pose, so putting the parts back shows no jump
       const v = (360 * Math.max(1, Math.round((tEnd * 100) / 360))) / tEnd;
       let at = 0;
@@ -203,22 +203,32 @@ export async function act3(d) {
         await d.api("poseSweep", "t", at, to, Math.max(150, Math.round((t0 + s - d.now()) * 1000)), { ease: false });
         at = to;
       };
-      await Promise.all([d.api("aim", { dir: [0.35, -1, 0.3], ms: 1000, margin: 0.85 }), turn(Math.min(2.6, tIso / 2))]);
+      // the crank runs on its own clock, through the cue's wait
+      const crank = turn(tClose).then(() => turn(tEnd));
+      await d.api("aim", { dir: [0.5, -1, 0.3], ms: Math.round(tClose * 1000) - 100, margin: 0.85 });
       d.pick("walker");
-      await Promise.all([d.api("aim", { dir: [0.9, -0.6, 0.15], ms: 1500, margin: 0.8 }), turn(tIso)]);
       if (!leg) { d.note("walker: no leg assembly found among the example's components; the whole walker kept turning"); console.error("  ✗ walker: no leg assembly found"); }
       else d.event("view", `one leg: ${leg.name}`);
-      // "…of eleven bars each": the rest fade out as the camera comes in from the side, along the crank axis, so the
-      // leg's linkage reads; then a slow push in from lower down, through "gliding along the ground"
-      await Promise.all([
-        leg && d.api("fadeComponents", leg.fade, 0, 900),
-        leg && d.api("aim", { dir: [0.25, -1, 0.12], box: leg.box, ms: 1800, margin: 1.15 }).then(() => d.api("aim", { dir: [0.4, -1, 0.02], box: leg.box, ms: 4200, margin: 1.05 })),
-        turn(tEnd),
+      // the rest fade out as the camera comes in from the side, along the crank axis, so the leg's linkage reads;
+      // then a slow push in from lower down, through "glides along the ground … swings forward"
+      const close = leg && Promise.all([
+        d.api("fadeComponents", leg.fade, 0, 900),
+        d.api("aim", { dir: [0.25, -1, 0.12], box: leg.box, ms: 1500, margin: 1.15 })
+          .then(() => d.api("aim", { dir: [0.4, -1, 0.02], box: leg.box, ms: Math.max(1500, Math.round((tEnd - tClose - 1.6) * 1000)), margin: 1.05 })),
       ]);
+      await d.wait(Math.max(0, (t0 + tCue - d.now()) * 1000));
+      await d.cue();
+      await Promise.all([close, crank]);
       await d.api("poseEnd"); // the others stay faded out: nothing pops back
     }, async () => { // the leg, and the others' see-through look compiled here, so the fade starts without a stall
       leg = await walkerLeg();
-      if (leg) await d.api("prepareFade", leg.fade);
+      if (!leg) return;
+      // posed already (at the built pose, so nothing moves), and what will fade drawn a hair see-through: each part's
+      // see-through copy is made and drawn here, in the cut, not on the frame the fade starts (a half-second hitch)
+      await d.api("poseSweep", "t", 0, 0, 1);
+      await d.api("fadeComponents", leg.fade, 0.99, 0);
+      await d.settle(200, { camera: false });
+      await noToast();
     });
   } else d.note("no walker example yet: walker clip skipped");
   await clip("skadis", "skadis", "SKÅDIS gravity holder", "the load's own weight closes the grip", async () => {
@@ -255,32 +265,91 @@ export async function act3(d) {
     await back;
     // held apart to the end: the next clip's load puts the parts back (openText ends the pose)
   });
+  // the handlebar's construction, from the example's own features: the bar's 3D sweep and the right grip's. Each
+  // sweep's path sketch, shown, draws its spine and its sections on it (core/sweepGuides); they're shown inside the
+  // load's cut and faded out, so the beat opens on the finished cockpit.
+  let bar = null;
   await clip("handlebar", "handlebar", "Bike handlebar", "a 3D sweep with a tapering section, a wrapped hex grip", async () => {
-    // timed to the line's words (seconds into the beat, Heart's clip): the whole bar while "one sweep along a 3D curve",
-    // the stem by "stem clamp" (7.5 s), then in close on a grip just before "rubber grips" (9.3 s), held through "wings" (12 s)
+    // "A bike cockpit, in organic surfaces": the whole cockpit, turning. "The bar sweeps a tapering section along a 3D
+    // curve" (cued): everything else fades away and the bar with it, leaving its spine and the profile along it,
+    // shrinking from the clamp to the grips; then the swept bar fades in over them. "and the grips wear a hex pattern
+    // wrapped round them" (cued): in on the right grip, its five sections on its axis, then the rubber grip, hex and
+    // all, fading in over them as the rest of the cockpit comes back
     const t0 = d.timing.events.findLast((e) => e.kind === "beat")?.t ?? d.now();
     const at = (s) => d.wait(Math.max(0, (t0 + s - d.now()) * 1000));
-    const stem = await d.api("componentBox", ["Stem", "Faceplate", "Faceplate bolts", "Top cap"]);
-    const grip = await d.api("componentBox", ["Grip R", "Collar R", "End plug R"]);
-    await d.api("aim", { dir: [0.3, -1, 0.55], ms: 1000, margin: 0.8 });
-    await d.api("turntable", 10);
-    await at(5.0);
-    await d.api("turntable", null);
-    await at(5.7);
-    await d.api("aim", { dir: [0.2, -0.7, 0.9], box: stem, ms: 1400, margin: 1.2 });
-    await at(8.0);
-    await d.api("aim", { dir: [0.6, -0.8, 0.5], box: grip, ms: 1200, margin: 0.8 });
+    const fade = (ids, to, ms) => d.api("fadeComponents", ids, to, ms);
+    await d.api("aim", { dir: [0.35, -1, 0.6], ms: 1200, margin: 0.72 });
+    await d.api("turntable", 8);
+    await at(Math.max(1.4, d.speech.ms[0] / 1000 - 0.9));
+    await d.api("turntable", null); // eases to a stop by the cue
+    await d.cue();
+    if (!bar) { d.note("handlebar: no 3D sweeps found"); return; }
+    d.event("view", "the bar's spine and tapering sections");
+    await Promise.all([
+      fade([...bar.rest, ...bar.grip, bar.barBody], 0, 700),
+      fade([bar.barPath], 1, 700),
+      // the bar side to side, from in front and above, so its rise and sweep read
+      d.api("aim", { dir: [0.2, -1, 0.55], frame: [0.04, 0.2, 0.96, 0.8], parts: ["Bar"], ms: 1300 }),
+    ]);
+    await d.wait(700);
+    d.event("view", "the swept bar");
+    await Promise.all([fade([bar.barBody], 1, 900), fade([bar.barPath], 0.35, 900)]);
+    d.pick("handlebar sweep");
+    await d.cue();
+    d.event("view", "the grip's sections, then the grip");
+    await Promise.all([
+      fade([bar.gripPath], 1, 600), fade([bar.barPath], 0, 600),
+      d.api("aim", { dir: [0.75, -0.9, 0.45], box: bar.gripBox, ms: 1000, margin: 0.85 }),
+    ]);
+    await d.wait(400); // the five sections on the grip's axis, round at the collar, swelling into the palm wing
+    await Promise.all([fade(bar.grip, 1, 900), fade(bar.rest, 1, 900), fade([bar.gripPath], 0, 900)]);
     d.pick("handlebar grip");
-    await at(12.1);
+    await d.api("turntable", 10);
+    await d.wait(700);
+    await d.api("turntable", null);
+  }, async () => {
+    // show the bar's and the right grip's path sketches (each draws its sweep's construction), faded out to start
+    bar = await d.run(async () => {
+      const D = window.__vibecadDemo, st = D.store.getState(), doc = st.session.doc;
+      const sweep = (n) => Object.values(doc.features).find((f) => f.kind === "sweep" && f.path3d && f.name === n);
+      const b = sweep("Bar"), g = sweep("Grip R");
+      if (!b || !g) return null;
+      const compOf = (f) => doc.sketches[f.pathSketch]?.componentId;
+      await st.setVisibility([b.pathSketch, g.pathSketch], true);
+      const top = doc.components[doc.rootComponentId]?.children ?? [];
+      const cockpit = top.length === 1 ? doc.components[top[0]]?.children ?? [] : top; // the parts, under one assembly
+      return {
+        barPath: b.pathSketch, gripPath: g.pathSketch, barBody: b.id,
+        // the grip's bodies, not its component: that would fade its path sketch along with it
+        grip: D.componentBodies(["Grip R"]), rest: cockpit.filter((c) => c !== compOf(b) && c !== compOf(g)),
+        barBox: D.bounds(b.id), gripBox: D.componentBox(["Grip R", "Collar R", "End plug R"]),
+      };
+    });
+    if (!bar) return;
+    await d.settle(200);
+    // all but gone, not gone: a guide still drawn has its see-through look compiled, so it fades in without a stall
+    await d.api("fadeComponents", [bar.barPath, bar.gripPath], 0.004, 0);
+    // what will fade, drawn a hair see-through: its see-through copies are made here, in the cut, not on the frame
+    // the fade starts
+    await d.api("fadeComponents", [...bar.rest, ...bar.grip, bar.barBody], 0.99, 0);
+    await d.settle(200);
+    await noToast();
   });
-  await clip("origami", "origami", "Paper airplane", "a flat sheet to a finished dart, fold by fold", async () => {
-    await d.api("aim", { dir: [0.4, -0.8, 0.9], ms: 900, margin: 0.75 });
+  // one sentence (about 3.4 s): the whole fold under it, the camera swinging round to the finished dart as it folds
+  // posed flat inside the load's cut: the saved example is the finished dart
+  await load(d, "origami", async () => { await d.api("poseSweep", "fold", 6, 0, 1); await noToast(); });
+  await d.beat("origami", async () => {
+    await d.lower("Paper airplane", "a flat sheet to a finished dart, fold by fold");
     d.pick("origami folds", { len: 2.2, speed: 3 }); // the whole fold, sped up: the montage's longer shot
-    await d.api("poseSweep", "fold", 0, 6, 6600, { ease: false });
-    await d.api("aim", { dir: [0.8, -0.5, 0.45], ms: 1500, margin: 0.85 });
-    await d.wait(800);
+    const ms = Math.max(2400, d.speech.ms[0] - 200);
+    await Promise.all([
+      d.api("poseSweep", "fold", 0, 6, ms, { ease: false }),
+      // framed by the built dart's box: room to spare for the flat sheet, closing in as it folds to the dart
+      d.api("aim", { dir: [0.4, -0.8, 0.9], ms: 700, margin: 1.3 }).then(() => d.api("aim", { dir: [0.8, -0.5, 0.45], ms: ms - 600, margin: 0.85 })),
+    ]);
+    await d.wait(300);
     await d.api("poseEnd");
-  }, () => d.api("poseSweep", "fold", 6, 0, 1)); // posed flat inside the load's cut: the saved example is the finished dart
+  });
   // the stage count grows the lift, so the camera dollies out ahead of the new stages and back in once they're gone
   const liftView = { dir: [1, -1, 0.8], margin: 1.2 }; // the iso view, a little room round the lift
   const setStages = (n) => d.run(async (x) => { await window.__vibecadDemo.store.getState().setParameterExpr("stages", String(x)); }, n);
@@ -290,7 +359,7 @@ export async function act3(d) {
   })));
   // a glide that doesn't wait: the stages keep changing under it
   const dolly = (box, ms) => { d.event("view", "aim"); return d.run((o) => { window.__vibecadDemo.aim(o); }, { ...liftView, box, ms }); };
-  await load(d, "scissor-jointed");
+  await load(d, "scissor-jointed", noToast);
   const lift = await d.cut(async () => { // the lift's box at each stage count, built off camera; then framed at three
     const boxes = {};
     for (const n of [4, 5, 3]) { await setStages(n); await d.settle(100); boxes[n] = await liftBox(); }
@@ -299,8 +368,9 @@ export async function act3(d) {
   });
   await d.beat("scissor-jointed", async () => {
     await d.lower("Jointed scissor lift", "the stage count is a slider, and it still moves");
-    // 3→4→5→4→3 (as `sweep`): out to five stages across the first two steps, hold, then in to three once the fifth is gone
-    const values = [3, 4, 5, 4, 3], step = 2600 / values.length, t0 = Date.now(), start = d.now();
+    // about 4 s in all, for a 3 s line: the stage count 3→4→5→4→3 (as `sweep`), out to five stages across the first
+    // two steps, then in to three once the fifth is gone; then one quick close and open
+    const values = [3, 4, 5, 4, 3], ms = 2000, step = ms / values.length, t0 = Date.now(), start = d.now();
     await dolly(lift[5], 2 * step);
     for (const [i, v] of values.entries()) {
       const t = Date.now();
@@ -310,15 +380,21 @@ export async function act3(d) {
       const left = step - (Date.now() - t);
       if (left > 0) await d.wait(left);
     }
-    if (Date.now() - t0 > 2600 * 1.6) d.timing.fast.push({ label: "rebuilding stages", start, end: d.now() });
+    if (Date.now() - t0 > ms * 1.6) d.timing.fast.push({ label: "rebuilding stages", start, end: d.now() });
     // the opening angle drives the stamped joints: the bars swing at display rate, no rebuild (closed and open again,
     // ending on the built 40°, so putting the parts back shows no jump)
     d.pick("scissor lift");
-    await d.api("poseSweep", "theta", 40, 22, 1300);
-    await d.api("poseSweep", "theta", 22, 40, 1300);
+    await d.api("poseSweep", "theta", 40, 24, 900);
+    await d.api("poseSweep", "theta", 24, 40, 900);
     await d.api("poseEnd");
-  }, { minMs: 6500 });
-  await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", async () => { await sweep(d, "width", [64, 76], 900); d.pick("star box"); await sweep(d, "width", [88, 76, 64], 2100); });
+  });
+  // one sentence (about 3.3 s): no minimum, the beat is its line
+  await load(d, "starbox", noToast);
+  await d.beat("starbox", async () => {
+    await d.lower("Snap-together star box", "snaps sized for each material");
+    // each width is a rebuild of a couple of seconds: one sweep out and back, sped up as a whole to fit the line
+    d.pick("star box"); await sweep(d, "width", [76, 88, 76, 64], 2600);
+  });
 
   // the bistable switch: ask Claude, which opens the force analysis itself (set_panel / run_action), sweeps it, and puts the lens on strain
   await d.cut(async () => {
@@ -363,7 +439,12 @@ export async function act3(d) {
     await d.clickEl(".side-toggle.right");
   });
 
-  await clip("gimbal", "gimbal", "Flexure gimbal", "steers a mirror on eight blades", async () => { await sweep(d, "alpha", there(-8, 8, 6), 2400); d.pick("gimbal"); await sweep(d, "beta", there(-8, 8, 6), 2400); });
+  // one sentence (about 3.5 s): no minimum, the beat is its line
+  await load(d, "gimbal", noToast);
+  await d.beat("gimbal", async () => {
+    await d.lower("Flexure gimbal", "steers a mirror on eight blades");
+    await sweep(d, "alpha", there(-8, 8, 4), 1600); d.pick("gimbal"); await sweep(d, "beta", there(-8, 8, 4), 1600);
+  });
   await clip("roubo", "roubo", "Roubo workbench", "the leg vise, and the shop drawing to build it from", async () => {
     const t0 = d.now(), fast0 = d.timing.fast.length;
     // seconds of the clip seen so far: a sped-up span (over 3 s) plays at 1/ceil(len/3) of its length

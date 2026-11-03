@@ -55,7 +55,8 @@ export function fadeMaterial(orig: THREE.Material): THREE.Material {
   m.onBeforeCompile = orig.onBeforeCompile;
   m.customProgramCacheKey = orig.customProgramCacheKey;
   m.userData = { ...orig.userData, cached: false }; // the copy is its object's own: disposed with it
-  if ((orig as THREE.ShaderMaterial).isShaderMaterial) (m as THREE.ShaderMaterial).uniforms = (orig as THREE.ShaderMaterial).uniforms;
+  // (not a fat line's: its opacity IS a uniform, so sharing them would fade the original too; the copy keeps its own)
+  if ((orig as THREE.ShaderMaterial).isShaderMaterial && !(orig as { isLineMaterial?: boolean }).isLineMaterial) (m as THREE.ShaderMaterial).uniforms = (orig as THREE.ShaderMaterial).uniforms;
   m.transparent = true;
   return m;
 }
