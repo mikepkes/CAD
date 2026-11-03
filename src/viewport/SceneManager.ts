@@ -1677,7 +1677,7 @@ export class SceneManager {
   // and updates its grain-frame uniforms in place, so grain travels with a part.
   private matCache = new Map<string, THREE.Material>();
   /** While animating: each body's mesh and edge lines, by body id (for setAnimationMesh). */
-  private animMeshes = new Map<string, { mesh: THREE.Mesh; lines: THREE.LineSegments }>();
+  private animMeshes = new Map<string, { mesh: THREE.Mesh; lines: THREE.LineSegments; solid: SolidView; componentId: string; ghost?: { mat: THREE.Material; edge: THREE.Material; mesh: THREE.MeshStandardMaterial; lines: THREE.LineBasicMaterial } }>();
   // ---- transform-driven animation (turntable / mechanism recording) ----
 
   /** Begin animation: build `bodies` into per-component groups (world-baked at the
@@ -1710,7 +1710,7 @@ export class SceneManager {
       const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(solid.edges, 3));
       const lines = new THREE.LineSegments(eg, solid.reference ? referenceEdgeMaterial(solid, false, null) : solid.material?.kind === "paper" ? paperEdgeMaterial(false) : new THREE.LineBasicMaterial({ color: 0x20242e }));
       g.add(lines);
-      if (solid.id) this.animMeshes.set(solid.id, { mesh, lines });
+      if (solid.id) this.animMeshes.set(solid.id, { mesh, lines, solid, componentId });
       if (solid.material?.kind === "wood" && solid.woodFrame) {
         this.animWood.push({ mat, axis: new THREE.Vector3(...solid.woodFrame.axis), pith: new THREE.Vector3(...solid.woodFrame.pith), cid: componentId });
       }
@@ -1745,6 +1745,30 @@ export class SceneManager {
       if (G) g.matrix.copy(G); else g.matrix.identity();
       g.updateMatrixWorld(true);
     }
+  }
+
+  /** While animating: draw the bodies of `componentIds` see-through, in the reference-part look, `k` of the way
+   *  there (0 as built, 1 the reference look), so the parts inside them show (the demo ghosts a cover to show the
+   *  works behind it). Display only; the others go back to as built. */
+  setAnimationGhost(componentIds: Iterable<string>, k: number) {
+    const ids = new Set(componentIds);
+    for (const a of this.animMeshes.values()) {
+      const on = k > 0 && ids.has(a.componentId);
+      if (!on) { this.unghost(a); continue; }
+      if (!a.ghost) {
+        a.ghost = { mat: a.mesh.material as THREE.Material, edge: a.lines.material as THREE.Material, mesh: referenceMaterial(a.solid, false, null), lines: referenceEdgeMaterial(a.solid, false, null) };
+        a.mesh.material = a.ghost.mesh; a.lines.material = a.ghost.lines;
+      }
+      a.ghost.mesh.opacity = 1 + (0.22 - 1) * k; // referenceMaterial's own opacities at k = 1
+      a.ghost.lines.opacity = 1 + (0.7 - 1) * k;
+    }
+    this.invalidate();
+  }
+  private unghost(a: { mesh: THREE.Mesh; lines: THREE.LineSegments; ghost?: { mat: THREE.Material; edge: THREE.Material; mesh: THREE.Material; lines: THREE.Material } }) {
+    if (!a.ghost) return;
+    a.mesh.material = a.ghost.mat; a.lines.material = a.ghost.edge;
+    a.ghost.mesh.dispose(); a.ghost.lines.dispose();
+    delete a.ghost;
   }
 
   /** Swap one animated body's geometry (its id, in its build-pose frame): a sheet folding in steps
@@ -1860,6 +1884,7 @@ export class SceneManager {
     if (!this.animating) return;
     this.animating = false;
     this.recording = false;
+    for (const a of this.animMeshes.values()) this.unghost(a); // the materials the bodies were built with go with them
     this.clearGroup(this.solidsGroup);
     this.animGroups.clear(); this.animBuildInv.clear(); this.animWood = []; this.animMeshes.clear(); this.animDeltas.clear();
     if (this.lastData) this.update(this.lastData);
