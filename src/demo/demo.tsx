@@ -17,6 +17,8 @@ import { useLens } from "../ui/concepts/lens/lens";
 import { getActiveScene } from "../viewport/sceneRef";
 import { buildBodies } from "../viewport/turntableRecorder";
 import { resolveComponentWorld } from "../core/recompute";
+import { expandAssembly, hasAssemblyPatterns, instanceComponentOf } from "../core/assembly";
+import type { CadDocument } from "../core/document";
 import { resolveParameters } from "../core/parameters";
 import { resolveSketchPlane } from "../geometry/plane";
 import { compileExpr } from "../math/expr";
@@ -95,6 +97,10 @@ const turn = { rate: 0, target: 0, raf: 0 };
 
 /** The director's handle on the app. Every method is plain data in, plain data out (it crosses Playwright). */
 /** The pose sweeps' running state: which document's parts are posed, and the parameter values they're posed at. */
+/** Every component's world frame for a pose, a pattern's instances included (expanded to their frames only: the
+ *  joints its templates stamp, not their geometry). The swept parameter must not change a pattern's count. */
+const worldOf = (doc: CadDocument, scope: Record<string, number>) =>
+  resolveComponentWorld(hasAssemblyPatterns(doc) ? expandAssembly(doc, scope, { framesOnly: true }) : doc, scope);
 let pose: { doc: unknown; scope: Record<string, number>; overrides: Record<string, string>; sheets: { id: string; seq: NonNullable<NonNullable<SolidEval["sheet"]>["sequence"]>; progress: string; last?: number }[] } | null = null;
 
 const api = {
@@ -247,14 +253,16 @@ const api = {
         return f?.kind === "sheet" && f.progressExpr && seq && sol.mesh ? [{ id: sol.featureId, seq, progress: f.progressExpr }] : [];
       });
       pose = { doc, scope: { ...resolveParameters(doc.parameters).scope }, overrides: {}, sheets };
-      scene.beginAnimation(buildBodies(doc, st.solids as never), resolveComponentWorld(doc, pose.scope), true);
+      // a pattern's instance bodies move with their instance components, placed by the joints its templates stamp
+      const bodies = buildBodies(doc, st.solids as never).map((b) => ({ ...b, componentId: instanceComponentOf(doc, b.solid.id ?? "") ?? b.componentId }));
+      scene.beginAnimation(bodies, worldOf(doc, pose.scope), true);
     }
     const p = pose;
     // re-solved each step, so parameters that follow this one (a linkage's joint positions) follow it too
     const at = (v: number) => {
       p.overrides[name] = String(v);
       p.scope = resolveParameters(doc.parameters.map((q) => (p.overrides[q.name] != null ? { ...q, expr: p.overrides[q.name] } : q))).scope;
-      scene.setAnimationPose(resolveComponentWorld(doc, p.scope));
+      scene.setAnimationPose(worldOf(doc, p.scope));
       for (const sh of p.sheets) {
         let k: number;
         try { k = compileExpr(sh.progress).eval(p.scope); } catch { continue; }

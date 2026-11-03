@@ -11,8 +11,9 @@ import { realSession, describeExample, expectCommittedExample } from "./helpers"
 import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { evaluateFeatures } from "../src/core/features";
-import { expandAssembly, instanceSolids } from "../src/core/assembly";
-import { placeComponentSketches } from "../src/core/recompute";
+import { expandAssembly, instanceSolids, instanceComponentOf } from "../src/core/assembly";
+import { placeComponentSketches, resolveComponentWorld } from "../src/core/recompute";
+import { compose, invert, applyPoint } from "../src/math/transform";
 import { resolveParameters } from "../src/core/parameters";
 import type { CadSession } from "../src/core/command/session";
 
@@ -127,5 +128,42 @@ describe("jointed parametric scissor (geometry)", () => {
     // vertex totals match (same topology, transformed)
     const verts = (bs: typeof fast) => bs.reduce((n, b) => n + b.mesh!.positions.length, 0);
     expect(verts(fast)).toBe(verts(rebuilt));
+  }, 120000);
+
+  it("theta poses the built bars by their stamped joints (no rebuild), landing where a rebuild puts them", async () => {
+    const s = realSession();
+    await buildScissor(s);
+    await s.recompute();
+    const doc = s.doc;
+    const scopeAt = (theta: number) => resolveParameters(doc.parameters.map((q) => (q.name === "theta" ? { ...q, expr: String(theta) } : q))).scope;
+    const framesAt = (theta: number) => resolveComponentWorld(expandAssembly(doc, scopeAt(theta), { framesOnly: true }), scopeAt(theta));
+    const builtAt = (theta: number) => {
+      placeComponentSketches(doc, scopeAt(theta));
+      return instanceSolids(doc, scopeAt(theta), evaluateFeatures(doc, scopeAt(theta)));
+    };
+    // the bodies as built at 40°, each moved by its instance component's delta to the 22° pose (as the demo's
+    // pose sweep and the scene's setAnimationPose do) ...
+    const built = builtAt(40), W40 = framesAt(40), W22 = framesAt(22);
+    const posed: Record<string, number[]> = {};
+    for (const b of Object.values(built)) {
+      const cid = instanceComponentOf(doc, b.featureId);
+      expect(cid, b.featureId).toBeDefined(); // every bar is a pattern instance
+      expect(W40.has(cid!)).toBe(true);
+      const D = compose(W22.get(cid!)!, invert(W40.get(cid!)!));
+      const p = b.mesh!.positions, out: number[] = [];
+      for (let i = 0; i < p.length; i += 3) { const q = applyPoint(D, { x: p[i], y: p[i + 1], z: p[i + 2] }); out.push(q.x, q.y, q.z); }
+      posed[b.featureId] = out;
+    }
+    // ... are the bodies a rebuild at 22° makes, vertex for vertex
+    const rebuilt = builtAt(22);
+    expect(Object.keys(posed).sort()).toEqual(Object.keys(rebuilt).sort());
+    let worst = 0;
+    for (const [id, out] of Object.entries(posed)) {
+      const r = rebuilt[id].mesh!.positions;
+      expect(out.length).toBe(r.length);
+      for (let i = 0; i < r.length; i++) worst = Math.max(worst, Math.abs(out[i] - r[i]));
+    }
+    expect(worst).toBeLessThan(1e-3);
+    expect(instanceComponentOf(doc, "not-an-instance")).toBeUndefined();
   }, 120000);
 });

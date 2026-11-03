@@ -283,7 +283,12 @@ export async function act3(d) {
       if (left > 0) await d.wait(left);
     }
     if (Date.now() - t0 > 2600 * 1.6) d.timing.fast.push({ label: "rebuilding stages", start, end: d.now() });
-    d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600);
+    // the opening angle drives the stamped joints: the bars swing at display rate, no rebuild (closed and open again,
+    // ending on the built 40°, so putting the parts back shows no jump)
+    d.pick("scissor lift");
+    await d.api("poseSweep", "theta", 40, 22, 1300);
+    await d.api("poseSweep", "theta", 22, 40, 1300);
+    await d.api("poseEnd");
   }, { minMs: 6500 });
   await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", async () => { await sweep(d, "width", [64, 76], 900); d.pick("star box"); await sweep(d, "width", [88, 76, 64], 2100); });
 
