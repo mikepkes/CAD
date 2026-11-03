@@ -60,6 +60,8 @@ function slidersOf(doc: CadDocument, n: number): { geom: Slider | null; pose: Sl
  *  feature (by kind), the meshing, then the measuring. */
 async function timedEvaluate(backend: InlineGeometryBackend, doc: CadDocument) {
   const kinds: Record<string, number> = {};
+  const each: Record<string, number> = {};
+  const meshed: number[] = []; // per body, in the order they are meshed (their rows' order)
   const features = Object.values(doc.features);
   let last = performance.now(), lastStep: BuildStep | undefined;
   let featuresMs = 0, meshingMs = 0;
@@ -71,17 +73,26 @@ async function timedEvaluate(backend: InlineGeometryBackend, doc: CadDocument) {
       const f = features.filter((x) => !x.configSuppressed)[lastStep.done];
       const k = f?.kind ?? "?";
       kinds[k] = (kinds[k] ?? 0) + (now - last);
+      if (f) each[`${f.kind} ${f.name}`] = (each[`${f.kind} ${f.name}`] ?? 0) + (now - last);
       featuresMs += now - last;
-    } else if (lastStep?.phase === "meshing") meshingMs += now - last;
+    } else if (lastStep?.phase === "meshing") { meshingMs += now - last; meshed[lastStep.done] = (meshed[lastStep.done] ?? 0) + now - last; }
     last = now; lastStep = step;
   };
   const cache = (backend as unknown as { cache: GeometryCache }).cache;
   const h0 = cache.hits, m0 = cache.misses;
-  const r = await backend.evaluate(doc, sink, () => { const now = performance.now(); if (lastStep?.phase === "meshing") meshingMs += now - last; meshesAt = now - t0; lastStep = undefined; });
+  const r = await backend.evaluate(doc, sink, (shown) => {
+    const now = performance.now();
+    if (lastStep?.phase === "meshing") { meshingMs += now - last; meshed[lastStep.done] = (meshed[lastStep.done] ?? 0) + now - last; }
+    meshesAt = now - t0; lastStep = undefined;
+    Object.values(shown.solids).filter((x) => x.mesh).forEach((x, i) => { if (meshed[i]) each[`mesh ${x.name}`] = meshed[i]; });
+  });
   const total = performance.now() - t0;
   const errors = Object.values(r.solids).filter((x) => x.error).map((x) => `${x.name}: ${x.error}`);
-  return { meshesMs: ms(meshesAt), measureMs: ms(total - meshesAt), featuresMs: ms(featuresMs), meshingMs: ms(meshingMs), hits: cache.hits - h0, misses: cache.misses - m0, kinds: Object.fromEntries(Object.entries(kinds).map(([k, v]) => [k, ms(v)])), errors };
+  return { meshesMs: ms(meshesAt), measureMs: ms(total - meshesAt), featuresMs: ms(featuresMs), meshingMs: ms(meshingMs), hits: cache.hits - h0, misses: cache.misses - m0, kinds: Object.fromEntries(Object.entries(kinds).map(([k, v]) => [k, ms(v)])), slowest: slowest(each), errors };
 }
+
+/** The features that took longest (over 50 ms), slowest first. */
+const slowest = (each: Record<string, number>) => Object.fromEntries(Object.entries(each).filter(([, v]) => v > 50).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => [k, ms(v)]));
 
 async function main() {
   const text = readFileSync(file, "utf8");
