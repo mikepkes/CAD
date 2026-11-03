@@ -43,7 +43,7 @@ export const SCENES = {
     example: "crane", title: "Paper crane", intro: "Folded from a square, step by step", param: "fold", mode: "pose",
     moves: stepMoves(["Square base", "Petal fold", "Turn over", "Petal fold behind", "Narrow the legs", "Turn over",
       "Narrow behind", "Inside reverse folds: neck and tail", "The head", "Wings down", "Stand up"], 3000),
-    stills: [-1, 0, 1, 3, 4, 7, 8],
+    stills: [-1, 0, 1, 3, 4, 7, 8, 9],
   },
   masu: {
     example: "masu", title: "Masu box", intro: "Folded from a square, step by step", param: "fold", mode: "pose",
