@@ -27,11 +27,11 @@ exports[`bundled examples > public/examples/crane.json > replays, builds on both
     "max": [
       56.9,
       49.8,
-      44.8,
+      35.8,
     ],
     "min": [
       -94.2,
-      -69,
+      -38.2,
       -23.7,
     ],
     "name": "Crane",

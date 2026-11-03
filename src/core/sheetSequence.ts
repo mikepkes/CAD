@@ -453,7 +453,7 @@ function checkLayers(seq: SheetSequence, scale: number): LayerOrder[] {
     const order = layerOrderOf(polys, T, seq.gap, scale, k);
     // paper that bent isn't a stack of planes: from a bending step on, there's no order to check
     if ((seq.collapses ?? []).some((c) => c.bend && c.step <= k)) { out.push(order); continue; }
-    const creases: LayerCrease[] = seq.creases.map((c) => ({ facets: c.facets, a: c.a, b: c.b, fold: `"${seq.folds[c.folds[c.folds.length - 1]].id}"`, made: creaseMade(c, angles, seq.folds) }));
+    const creases: LayerCrease[] = seq.creases.map((c) => ({ facets: c.facets, a: c.a, b: c.b, fold: `"${seq.folds[c.folds[c.folds.length - 1]].id}"`, made: creaseMade(c, angles, seq) }));
     const names = seq.folds.filter((f) => f.step === k).map((f) => `"${f.id}"`);
     const errs = validateLayers(polys, T, order, creases, seq.gap, scale, `step ${k} (fold ${names.slice(0, 2).join(", ")}${names.length > 2 ? ", …" : ""})`);
     if (errs.length) throw new Error(errs.slice(0, 3).join("; ") + (errs.length > 3 ? ` (and ${errs.length - 3} more)` : ""));
@@ -1303,10 +1303,19 @@ export function poseSequence(seq: Pick<SheetSequence, "facets" | "folds" | "coll
   });
 }
 
-/** A crease shows once its fold has started. A bending transition's seam (flat when its step is done) is one only
- *  while the step runs: then the panels lie flat in their facet again, and the seam merges back. */
-export const creaseMade = (c: SeqCrease, angles: number[], folds?: Pick<SeqFold, "angle">[]) =>
-  c.folds.some((j) => Math.abs(angles[j]) > 1e-9) && !(c.bend && Math.abs(c.angle) < 1e-9 && folds && c.folds.every((j) => Math.abs(angles[j]) < 1e-9 || Math.abs(angles[j]) > Math.abs(folds[j].angle) - 1e-9));
+/** A crease shows once its fold has started — a fold of a collapse with no angle of its own (a crease turning with
+ *  another, a crease carried through the layers, one freed to be solved) once the collapse's driving fold has. A
+ *  bending transition's seam (flat when its step is done) is one only while the step runs: then the panels lie flat
+ *  in their facet again, and the seam merges back. */
+export const creaseMade = (c: SeqCrease, angles: number[], seq?: Pick<SheetSequence, "folds" | "collapses">) => {
+  const started = (j: number) => {
+    if (Math.abs(angles[j]) > 1e-9) return true;
+    const f = seq?.folds[j];
+    return !!f && f.collapse != null && Math.abs(f.angle) < 1e-9 && Math.abs(angles[seq!.collapses![f.collapse].driver]) > 1e-9;
+  };
+  const folds = seq?.folds;
+  return c.folds.some(started) && !(c.bend && Math.abs(c.angle) < 1e-9 && folds && c.folds.every((j) => Math.abs(angles[j]) < 1e-9 || Math.abs(angles[j]) > Math.abs(folds[j].angle) - 1e-9));
+};
 
 /** A triangle mesh of the sheet posed at `angles` (world = frame ∘ facet placement): the
  *  facets fanned (front faces on the paper's top), their flat coordinates as uvs, and as
@@ -1324,7 +1333,7 @@ export function sequenceMesh(seq: SheetSequence, angles: number[], frame: Rigid)
     }
     for (let i = 1; i + 1 < f.poly.length; i++) indices.set([base, base + i, base + i + 1], 3 * t++);
   });
-  const segs: [Rigid, Pt, Pt][] = [...seq.outline.map((o) => [T[o.facet], o.a, o.b] as [Rigid, Pt, Pt]), ...seq.creases.filter((c) => !c.bend && creaseMade(c, angles)).map((c) => [T[c.facets[0]], c.a, c.b] as [Rigid, Pt, Pt])];
+  const segs: [Rigid, Pt, Pt][] = [...seq.outline.map((o) => [T[o.facet], o.a, o.b] as [Rigid, Pt, Pt]), ...seq.creases.filter((c) => !c.bend && creaseMade(c, angles, seq)).map((c) => [T[c.facets[0]], c.a, c.b] as [Rigid, Pt, Pt])];
   const edges = new Float32Array(6 * segs.length);
   segs.forEach(([M, a, b], i) => { const p = applyPoint(M, at3(a)), q = applyPoint(M, at3(b)); edges.set([p.x, p.y, p.z, q.x, q.y, q.z], 6 * i); });
   return { positions, normals, indices, uvs, edges };
@@ -1421,7 +1430,7 @@ function facetsMeet(A: V3[], na: V3, B: V3[], nb: V3, eps: number): boolean {
 export function sequenceFaces(seq: SheetSequence, angles: number[]): { loops: Pt[][]; facets: number[] }[] {
   const parent = seq.facets.map((_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  for (const c of seq.creases) if (!creaseMade(c, angles, seq.folds)) parent[find(c.facets[0])] = find(c.facets[1]);
+  for (const c of seq.creases) if (!creaseMade(c, angles, seq)) parent[find(c.facets[0])] = find(c.facets[1]);
   const groups = new Map<number, number[]>();
   seq.facets.forEach((_, i) => { const r = find(i); groups.set(r, [...(groups.get(r) ?? []), i]); });
   const scale = Math.max(1, ...seq.facets.flatMap((f) => f.poly.map((p) => Math.max(Math.abs(p.x), Math.abs(p.y)))));

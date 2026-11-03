@@ -300,6 +300,26 @@ describe("origami: a paper crane folded step by step", () => {
     expect(Math.sign(side(neck.p))).toBe(-Math.sign(side(tail.p)));
   });
 
+  it("builds, at the end of every step, the shape the plan poses: every vertex of the built sheet is a corner of a posed facet", () => {
+    // (the build merges coplanar facets into faces where no crease is made yet; a crease of a collapse with no angle
+    // of its own — the head's crease carried through the neck's layers — counted as unmade once, and the head's
+    // layers were built unfolded, a spike where the plan posed a hook)
+    for (let fold = 1; fold <= STEPS; fold++) {
+      const r = evaluate(s, { fold })[ids.sheet];
+      expect(r.error, `fold ${fold}`).toBeUndefined();
+      const seq = r.sheet!.sequence!, T = poseSequence(seq.plan, sequenceAngles(seq.plan, fold)).map((t) => compose(seq.frame, t));
+      const corners = seq.plan.facets.flatMap((f, k) => f.poly.map((p) => applyPoint(T[k], { ...p, z: 0 })));
+      const P = r.mesh!.positions;
+      let worst = 0, at = "";
+      for (let i = 0; i < P.length; i += 3) {
+        let best = Infinity;
+        for (const c of corners) best = Math.min(best, Math.hypot(P[i] - c.x, P[i + 1] - c.y, P[i + 2] - c.z));
+        if (best > worst) { worst = best; at = `(${P[i].toFixed(1)}, ${P[i + 1].toFixed(1)}, ${P[i + 2].toFixed(1)})`; }
+      }
+      expect(worst, `fold ${fold}: the built vertex at ${at} is ${worst.toFixed(2)} mm from any posed corner`).toBeLessThan(0.05);
+    }
+  }, 120000);
+
   it("is a bird base after step 4: the petals up, the legs down, all flat", () => {
     const seq = evaluate(s)[ids.sheet].sheet!.sequence!;
     const T = poseSequence(seq.plan, sequenceAngles(seq.plan, 4)).map((t) => compose(seq.frame, t));
