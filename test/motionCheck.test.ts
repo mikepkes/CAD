@@ -59,4 +59,18 @@ describe("verdicts kept per set of values", () => {
     expect(motionKey(wider)).not.toBe(motionKey(a));
     expect(motionKey(other)).not.toBe(motionKey(a));
   });
+
+  it("a geometry edit needs a new check; a pose or a rename doesn't", () => {
+    const at = (depth: string, extra: object = {}) => ({
+      ...docWith({ j: { kind: "revolute", valueExpr: "spin" } }, [{ name: "spin" }]),
+      features: { f1: { id: "f1", kind: "extrude", sketch: "s1", distanceExpr: depth, distanceValue: Number(depth) } },
+      ...extra,
+    });
+    const a = at("10");
+    expect(motionKey(at("12"))).not.toBe(motionKey(a)); // a deeper extrude may now hit
+    const posed = at("10");
+    posed.joints.j.valueValue = 90; // turning the joint moves its evaluated pose, not the design
+    expect(motionKey(posed)).toBe(motionKey(a));
+    expect(motionKey(at("10", { name: "Clock", hidden: ["f1"] }))).toBe(motionKey(a));
+  });
 });
