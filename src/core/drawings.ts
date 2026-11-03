@@ -225,20 +225,20 @@ export interface DrawingModel {
   sections: Record<string, { id: string; edges: Float32Array; caps: Vec3[][] }[]>;
 }
 
-/** Sections cut before, by the body's content signature and the plane (null: nothing of it is on the side looked
- *  at), where it sits and the plane: drawing again — a dimension added, the drawing reopened — cuts only what changed. Bodies built without a
- *  cache have no signature and are cut every time. */
+/** Sections cut before, by the body's content signature, where it sits and the plane (null: nothing of it is on
+ *  the side looked at): drawing again — a dimension added, the drawing reopened — cuts only what changed. Bodies
+ *  built without a cache have no signature and are cut every time. */
 const SECTION_CUTS = new Map<string, { edges: Float32Array; caps: Vec3[][] } | null>();
 
 /** The drawing model of a document (placed). The bodies come through `cache` when given, so the model on screen
- *  replays rather than rebuilds. A section keeps a body wholly on the side it looks at whole and leaves out one
- *  wholly behind the cut; only a body the plane crosses is cut. Empty while the kernel isn't loaded. */
+ *  replays rather than rebuilds. That is a pass inside the evaluation that built it, not one of its own: it
+ *  starts no cache generation, so it evicts nothing (the cached meshes it doesn't read stay). A section keeps a
+ *  body wholly on the side it looks at whole and leaves out one wholly behind the cut; only a body the plane
+ *  crosses is cut. Empty while the kernel isn't loaded. */
 export function drawingModel(doc: CadDocument, scope: Scope, cache?: GeometryCache): DrawingModel {
   const out: DrawingModel = { bodies: [], sections: {} };
   if (!isKernelReady()) return out;
-  let bodies: ReturnType<typeof evaluateBodies>["bodies"];
-  cache?.begin();
-  try { bodies = evaluateBodies(doc, scope, cache).bodies; } finally { cache?.end(); }
+  const bodies = evaluateBodies(doc, scope, cache).bodies;
   try {
     for (const b of bodies) {
       try { out.bodies.push({ id: b.id, ...namedTopology(b.shape, b.faceNames) }); } catch { out.bodies.push({ id: b.id, edges: [], vertices: [] }); }
