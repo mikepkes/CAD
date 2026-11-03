@@ -477,6 +477,6 @@ export async function act3(d) {
   await d.beat("outro", async () => {
     await d.lower(null);
     await d.api("cursor", false);
-    await d.api("titleCard", { title: "VibeCAD", subtitle: "mikepkes.github.io/CAD", chips: ["Free", "Open source (MIT)", "Browser or desktop"] });
+    await d.api("titleCard", { title: "Get VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Browser or desktop"] });
   }, { minMs: 6000 });
 }

@@ -1,5 +1,5 @@
-// Act 0 · The demo's opening, after the montage: the title, what VibeCAD is (said over the title, a model turning
-// slowly behind it), where to get it. Then the demo goes straight to the showcase (Act 3). The phone stand is the
+// Act 0 · The demo's opening, after the montage: the title, and what VibeCAD is (said over the title, a model turning
+// slowly behind it). Then the demo goes straight to the showcase (Act 3); where to get it is the outro's. The phone stand is the
 // tutorial's; the demo doesn't show it.
 // Narration: lines.mjs, by beat id.
 
@@ -30,9 +30,5 @@ export async function act0(d) {
     await d.api("titleCard", TITLE);
     await d.api("turntable", 10);
   }, { minMs: 6000 });
-
-  await d.beat("get-vibecad", async () => {
-    await d.api("titleCard", { title: "Get VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)"] });
-  });
   await d.api("turntable", null);
 }
