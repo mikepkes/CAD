@@ -1417,7 +1417,12 @@ function applyMirror(doc: CadDocument, f: MirrorFeature, bodies: Body[], out: Re
 // mirror plane, an edge selector by axis) is keyed in the world, where a moved
 // body reads as a different input, as it should.
 
-interface BodyState { id: string; name: string; sketchId: string; distance: number; shape: Shape3D; faceNames: string[]; decals?: ThreadDecal[]; sig: string; frame: Rigid; member?: MemberMeta; sheet?: SheetState }
+interface BodyState {
+  id: string; name: string; sketchId: string; distance: number; shape: Shape3D; faceNames: string[]; decals?: ThreadDecal[]; sig: string; frame: Rigid; member?: MemberMeta; sheet?: SheetState;
+  /** What the collision check knows of a round body's shape (kept by a cache made with `keepShapeHints`): a gear
+   *  placed as is (its pose, without the shape it describes) and the annuli that hold it. */
+  hints?: { pose?: Omit<NonNullable<Body["pose"]>, "shape">; hull?: Hull[] };
+}
 interface StepEffect { bodies: (BodyState & { added: boolean })[]; removed?: string[]; row?: SolidEval; planes: Record<string, WorkPlane> }
 interface BodyEval { mesh: SolidMesh; bounds?: Bounds3; mass: MassProps; surface?: boolean }
 
@@ -1431,6 +1436,9 @@ export class GeometryCache {
   private generation = 0;
   private readonly generations: number;
   private readonly meshBudget: number;
+  /** Whether replayed bodies keep what the collision check rules pairs out with (a gear's pose, a round body's
+   *  annuli), moved with them: the motion study's cache, where a pose replays every body the joints only move. */
+  readonly keepShapeHints: boolean;
   /** Feature steps replayed from cache / run through the kernel. */
   hits = 0;
   misses = 0;
@@ -1440,9 +1448,10 @@ export class GeometryCache {
    * configuration, an undo) replay from cache. `meshBudgetBytes` caps the
    * cached meshes, dropping the least recently used first.
    */
-  constructor(opts: { generations?: number; meshBudgetBytes?: number } = {}) {
+  constructor(opts: { generations?: number; meshBudgetBytes?: number; keepShapeHints?: boolean } = {}) {
     this.generations = Math.max(1, Math.floor(opts.generations ?? 1));
     this.meshBudget = opts.meshBudgetBytes ?? 256 * 1024 * 1024;
+    this.keepShapeHints = !!opts.keepShapeHints;
   }
   step(key: string): StepEffect | undefined { const s = this.steps.get(key); if (s) s.used = this.generation; return s?.eff; }
   storeStep(key: string, eff: StepEffect): void { this.dropStep(key); this.steps.set(key, { eff, used: this.generation }); }
@@ -1599,9 +1608,20 @@ const bodyState = (b: Body): BodyState => ({ id: b.id, name: b.name, sketchId: b
 /** A recorded body brought back live in `frame`: moved by the frame's delta since it was recorded, if it has one. */
 function replayBody(b: BodyState, frame: Rigid): Body {
   const delta = compose(frame, invert(b.frame));
-  if (samePose(delta, IDENTITY)) return { ...bodyState(b as unknown as Body), frame };
-  const decals = b.decals?.map((d) => ({ ...structuredClone(d), at: applyPoint(delta, d.at), axis: applyVec(delta, d.axis) }));
-  return { ...bodyState(b as unknown as Body), shape: moveShape(b.shape, delta), decals, frame };
+  const still = samePose(delta, IDENTITY);
+  const live: Body = still ? { ...bodyState(b as unknown as Body), frame }
+    : { ...bodyState(b as unknown as Body), shape: moveShape(b.shape, delta), decals: b.decals?.map((d) => ({ ...structuredClone(d), at: applyPoint(delta, d.at), axis: applyVec(delta, d.axis) })), frame };
+  // the collision check's hints, moved with the body and describing its new shape
+  if (b.hints?.pose) live.pose = { ...b.hints.pose, T: still ? b.hints.pose.T : compose(delta, b.hints.pose.T), shape: live.shape };
+  if (b.hints?.hull) live.hull = { shape: live.shape, parts: still ? b.hints.hull : b.hints.hull.map((h) => ({ ...h, o: applyPoint(delta, h.o), d: applyVec(delta, h.d) })) };
+  return live;
+}
+
+/** A body's collision hints, as far as they still describe its shape (see BodyState.hints). */
+function shapeHints(b: Body): BodyState["hints"] {
+  const pose = b.pose && b.pose.shape === b.shape ? { key: b.pose.key, T: b.pose.T, ...(b.pose.sharp ? { sharp: b.pose.sharp } : {}) } : undefined;
+  const hull = hullOf(b);
+  return pose || hull ? { ...(pose ? { pose } : {}), ...(hull ? { hull } : {}) } : undefined;
 }
 
 /** Run one step through `run`, recording what it did; or replay a recorded effect. */
@@ -1637,7 +1657,8 @@ function cachedStep(cache: GeometryCache, key: string, frame: Rigid, doc: CadDoc
     if (was && was.shape === b.shape && was.names === b.faceNames && was.decals === (b.decals?.length ?? 0)) continue;
     b.sig = contentHash(`${key}|${b.id}`);
     b.frame = frame;
-    eff.bodies.push({ ...bodyState(b), added: !was });
+    const hints = cache.keepShapeHints ? shapeHints(b) : undefined;
+    eff.bodies.push({ ...bodyState(b), added: !was, ...(hints ? { hints } : {}) });
   }
   if (out[f.id]) eff.row = structuredClone(out[f.id]);
   for (const [sid, plane] of planesBefore) { const now = doc.sketches[sid]?.plane; if (now && now !== plane) eff.planes[sid] = now; }
@@ -2029,9 +2050,15 @@ function annulusBoxApart(c: Hull, box: Bounds3): boolean {
 
 /** Build every body and measure how much any two of them interpenetrate. Used by
  *  the motion study to pass/fail a configuration: designed point/line contact has
- *  no volume, so only real overlap registers. */
-export function collideFeatures(doc: CadDocument, scope: Scope): CollisionResult {
-  const { bodies, out } = evaluateBodies(doc, scope);
+ *  no volume, so only real overlap registers. With a cache (made with
+ *  keepShapeHints), a body a pose only moves is not rebuilt: its build replays,
+ *  moved to where the pose puts it (a step is keyed in its own frame), so a study
+ *  builds the bodies once and checks placed copies of them at every other pose. */
+export function collideFeatures(doc: CadDocument, scope: Scope, cache?: GeometryCache): CollisionResult {
+  cache?.begin();
+  let built: ReturnType<typeof evaluateBodies>;
+  try { built = evaluateBodies(doc, scope, cache); } finally { cache?.end(); }
+  const { bodies, out } = built;
   const buildError = Object.values(out).find((o) => o.error)?.error;
   const overlaps: CollisionResult["overlaps"] = [];
   let maxOverlap = 0;

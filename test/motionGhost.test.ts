@@ -79,6 +79,21 @@ describe("the sweep drawn while the check runs", () => {
     const steps = at.slice(30, 90).map((a, i) => at[30 + i + 1] - a);
     expect(Math.max(...steps) / Math.min(...steps)).toBeLessThan(1.3);
   });
+  it("paces by the poses after the first, which builds the bodies the rest only move", () => {
+    // the first pose 800 ms, the other 14 160 ms each: the check ends at 3040 ms
+    const pace = new SweepPace(0, 15);
+    let half = 0, at = 0;
+    for (let t = 0; t <= 3040; t += 20) {
+      const done = t < 800 ? 0 : 1 + Math.floor((t - 800) / 160);
+      at = pace.advance(t, Math.min(done, 15) / 15);
+      if (!half && at >= 0.5) half = t;
+    }
+    expect(at).toBeGreaterThan(0.97);
+    // each drive's turn gets about its share of the time after the first pose, not most of it the first drive
+    const share = (half - 800) / (3040 - 800);
+    expect(share).toBeGreaterThan(0.35);
+    expect(share).toBeLessThan(0.65);
+  });
   it("waits on a check slower than its guess rather than finishing early", () => {
     const pace = new SweepPace(0, 10, 2000);
     let at = 0;

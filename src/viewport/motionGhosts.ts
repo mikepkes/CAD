@@ -1,7 +1,7 @@
 // Motion ghosts: while a motion study runs, the viewport draws the parts it turns sweeping round, see-through (an
 // onion skin: the leading pose strongest, a short wake fading behind it), so the motion can be watched while the
 // live model stays as built. The sweep is drawn at display rate rather than pose by pose as the check reaches them
-// (a check rebuilds the model, most of a second a pose, coarse poses first): each drive in turn goes once round its
+// (a fraction of a second a pose once the first has built the bodies, coarse poses first): each drive in turn goes once round its
 // full circle at a steady pace, set so the tour ends about when the check does (by the check's own progress, else
 // by the last run's time), while the check runs behind it and its verdict ends the study. Poses are placed the way
 // a pose sweep places them (resolveComponentWorld), never rebuilt, so drawing them costs the check nothing.
@@ -16,9 +16,9 @@ export const SWEEP_TRAIL = 4;
 /** Degrees between one pose of the wake and the next. */
 export const SWEEP_WAKE_DEG = 12;
 /** A first guess at a pose's check (ms), until the study has checked one (or has a last run to go by). */
-export const GUESS_POSE_MS = 700;
+export const GUESS_POSE_MS = 300;
 /** The least time (ms) the sweep gives itself to finish its tour, when the check is due to end any moment. */
-const MIN_LEFT_MS = 400;
+const MIN_LEFT_MS = 120;
 /** How far (in poses) the sweep may run ahead of the check's progress. */
 const AHEAD_POSES = 1.5;
 
@@ -47,23 +47,31 @@ export function sweepTrail(drives: string[], at: number, trail = SWEEP_TRAIL, wa
 }
 
 /** The pace of the drawn sweep: how far round its tour (0..1) it is at each frame. It moves steadily, at the rate
- *  that ends the tour when the check is expected to end: by the check's progress so far (the time to its latest
- *  pose over the share checked), before that by `guessMs` (the last run's time, or a guess per pose), stretched if
- *  the first pose is slower than that; and it keeps within a pose or two of the check. */
+ *  that ends the tour when the check is expected to end: by the pace of the check's poses since its first (which
+ *  builds the bodies the rest only move, so is slower), with just the one checked by that pose's time, before any
+ *  by `guessMs` (the last run's time, or a guess per pose), stretched if the first pose is slower than that; and it
+ *  keeps within a pose or two of the check. */
 export class SweepPace {
   private at = 0;
   private last: number;
   private seen = 0;
   private seenAt: number;
+  private first?: { t: number; p: number };
   constructor(private readonly start: number, private readonly poses: number, private readonly guessMs = poses * GUESS_POSE_MS) {
     this.last = start; this.seenAt = start;
   }
   /** Where the tour is at `now` (ms, the clock `start` was read on), the check `progress` (0..1) of the way through. */
   advance(now: number, progress: number): number {
-    if (progress > this.seen) { this.seen = progress; this.seenAt = now; }
+    if (progress > this.seen) { this.first ??= { t: now, p: progress }; this.seen = progress; this.seenAt = now; }
     const elapsed = now - this.start;
-    const total = this.seen > 0 ? (this.seenAt - this.start) / this.seen : Math.max(this.guessMs, elapsed * this.poses);
-    const left = Math.max(total - elapsed, MIN_LEFT_MS);
+    let toGo: number; // ms
+    if (!this.first) toGo = Math.max(this.guessMs, elapsed * this.poses) - elapsed;
+    else {
+      const f = this.first;
+      const perAll = this.seen > f.p ? (this.seenAt - f.t) / (this.seen - f.p) : (this.seenAt - this.start) / this.seen;
+      toGo = (1 - this.seen) * perAll - (now - this.seenAt);
+    }
+    const left = Math.max(toGo, MIN_LEFT_MS);
     const dt = Math.max(0, now - this.last);
     this.last = now;
     // never more than a pose and a half ahead of the check: a check that stalls holds the sweep rather than letting it
