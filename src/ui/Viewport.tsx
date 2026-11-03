@@ -7,7 +7,8 @@ import { AppState, useStore } from "../model/store";
 import { resolveSketchPlane, to3d } from "../geometry/plane";
 import { extractRegions, loopPolygon, Region } from "../core/geometry/profile";
 import { resolveParameters } from "../core/parameters";
-import { hiddenIds, bodyVisible, sketchVisible } from "../core/visibility";
+import { hiddenIds, bodyVisible, sketchVisible, sketchesOfOffFeatures } from "../core/visibility";
+import { featureActive } from "../core/features";
 import { compileExpr } from "../math/expr";
 import { materialForComponent, referenceOf } from "../core/document";
 import { materialSpec, woodFrameFromBounds } from "../viewport/material";
@@ -74,8 +75,11 @@ function buildView(s: AppState): ViewData {
   const doc = s.session.doc;
   // Hidden items aren't drawn (bodies can come back as ghosts in "show hidden" mode).
   const hidden = hiddenIds(doc);
+  // A sketch only switched-off features use isn't drawn either.
+  const { scope } = resolveParameters(doc.parameters);
+  const offSketches = sketchesOfOffFeatures(doc, (f) => featureActive(f, scope));
   const ghostSketches = Object.values(doc.sketches)
-    .filter((sk) => sk.id !== s.activeSketchId && sketchVisible(doc, sk.id, hidden))
+    .filter((sk) => sk.id !== s.activeSketchId && !offSketches.has(sk.id) && sketchVisible(doc, sk.id, hidden))
     .map((sk) => ({ sketch: sk, plane: resolveSketchPlane(sk) }));
   const datumPlanes = Object.values(doc.planes)
     .filter((d) => d.plane && !hidden.has(d.id))

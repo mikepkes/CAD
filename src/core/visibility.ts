@@ -4,7 +4,7 @@
 // planes are hidden by id; hiding a component hides everything in it. The
 // active configuration may hide more on top of the document's own list.
 
-import type { CadDocument } from "./document";
+import type { CadDocument, FeatureDef } from "./document";
 
 /** Everything hidden right now: the document's list plus the active configuration's. */
 export function hiddenIds(doc: CadDocument): Set<string> {
@@ -41,6 +41,22 @@ export function bodyVisible(doc: CadDocument, body: { featureId: string; sketchI
 export function sketchVisible(doc: CadDocument, sketchId: string, hidden = hiddenIds(doc)): boolean {
   const sk = doc.sketches[sketchId];
   return !!sk && !hidden.has(sketchId) && !componentHidden(doc, sk.componentId, hidden);
+}
+
+/** The sketches only switched-off features use: every feature naming the
+ *  sketch (`sketchId`, `sketchIds` or another `…SketchId`) is off, so its
+ *  outline would show through geometry that no longer exists. */
+export function sketchesOfOffFeatures(doc: CadDocument, isOn: (f: FeatureDef) => boolean): Set<string> {
+  const off = new Set<string>(), on = new Set<string>();
+  for (const f of Object.values(doc.features)) {
+    const into = isOn(f) ? on : off;
+    for (const [k, v] of Object.entries(f)) {
+      if (typeof v === "string" && /^(sketchId|\w+SketchId)$/.test(k)) into.add(v);
+      else if (k === "sketchIds" && Array.isArray(v)) for (const id of v) if (typeof id === "string") into.add(id);
+    }
+  }
+  for (const id of on) off.delete(id);
+  return off;
 }
 
 /** Ids that can be hidden: features (bodies), sketches, components, datum planes. */

@@ -8,7 +8,8 @@ import { initKernel } from "../src/core/occ/kernel";
 import { evaluateFeatures, exportFusedBlob, bodyTopology } from "../src/core/features";
 import { resolveParameters } from "../src/core/parameters";
 import { serializeDocument, deserializeDocument } from "../src/core/persistence";
-import { hiddenIds, bodyVisible, sketchVisible, isolationList } from "../src/core/visibility";
+import { hiddenIds, bodyVisible, sketchVisible, isolationList, sketchesOfOffFeatures } from "../src/core/visibility";
+import { featureActive } from "../src/core/features";
 import { createCadMcpServer } from "../mcp/server";
 import type { CadSession } from "../src/core/command/session";
 
@@ -32,6 +33,16 @@ async function scene() {
 
 describe("visibility", () => {
   beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
+
+  it("leaves out the sketch of a feature that's switched off, until a feature that's on uses it", async () => {
+    const { s, sk, pin } = await scene();
+    const off = () => sketchesOfOffFeatures(s.doc, (f) => featureActive(f, scopeOf(s)));
+    expect(off().has(sk)).toBe(false);
+    await s.dispatch("feature.setCondition", { feature: pin, when: "0" });
+    expect(off().has(sk)).toBe(true);
+    await s.dispatch("feature.extrude", { sketch: sk, distance: "4" });
+    expect(off().has(sk)).toBe(false);
+  });
 
   it("hides a body by id and everything in a hidden component", async () => {
     const { s, box, comp, sk, pin } = await scene();
