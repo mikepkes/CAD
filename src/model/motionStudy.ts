@@ -1,9 +1,11 @@
-// Motion study: sweep a model's revolute joints through a full turn and check
-// that nothing collides. Each driven joint (a revolute joint whose motion value
-// is a bare parameter) is swept 0..360° independently; at each pose the geometry
-// backend measures body-body interpenetration. Any real overlap — or a build
-// that fails ("crash") — fails the study, so a customize-mode slider value that
-// would jam or break the mechanism can be flagged.
+// Motion study: sweep a model's driven joints through their range and check
+// that nothing collides. Each drive (a joint motion value that is a bare
+// parameter) is swept independently: an unlimited angle 0..360°, a limited one
+// or a travel between its joint's stops; at each pose the geometry backend
+// measures body-body interpenetration. Any real overlap — or a build that fails
+// ("crash") — fails the study, so a customize-mode slider value that would jam
+// or break the mechanism can be flagged. A joint a coupling drives follows its
+// driver, so the parts it carries are checked through the coupling.
 //
 // It runs coarse first: a few poses spread round the turn (a jam usually shows
 // there, and fails at once), then the poses between them. A study can take
@@ -12,31 +14,75 @@
 // verdicts per set of parameter values (motionKey) so a value seen before
 // answers at once.
 
-import { CadDocument, Joint } from "../core/document";
+import { CadDocument, Joint, JointDof, isAngularDof } from "../core/document";
 import { GeometryBackend } from "../core/geometry/backend";
 
 const BARE_PARAM = /^[a-zA-Z_]\w*$/;
 
-/** The driven joint parameters to sweep — each revolute joint whose value is a
- *  single parameter (so sweeping that parameter drives exactly that joint). */
+/** The driven joint parameters to sweep — each joint motion value that is a
+ *  single parameter (so sweeping that parameter drives exactly that motion). */
 export function driveParams(doc: CadDocument): string[] {
   return driveJoints(doc).map((d) => d.param);
 }
 
-/** The driven joints, with the kind of motion each makes. */
-export function driveJoints(doc: CadDocument): { param: string; kind: Joint["kind"] }[] {
+/** One drive the study sweeps: the parameter, the kind of joint it moves, and
+ *  how — a full turn (an angle without stops), or between `from` and `to` (a
+ *  travel, or an angle with stops: `range`). */
+export interface Drive {
+  param: string;
+  kind: Joint["kind"];
+  motion: "turn" | "slide" | "range";
+  from: number;
+  to: number;
+  unit: "°" | "mm";
+  /** Other parameters held at these values while this one is swept (else 0):
+   *  a ball's heading is swept leaning over at the edge of its cone. */
+  hold?: Record<string, number>;
+}
+
+/** The driven joints, with the kind of motion each makes. A travel without
+ *  stops on its joint has no known range, so it isn't swept. */
+export function driveJoints(doc: CadDocument): Drive[] {
   const seen = new Set<string>();
-  const out: { param: string; kind: Joint["kind"] }[] = [];
+  const out: Drive[] = [];
+  const coupled = new Set(Object.values(doc.couplings ?? {}).map((c) => `${c.driven}.${c.drivenDof ?? "value"}`));
+  const param = (e: string | undefined) => { const x = (e ?? "").trim(); return BARE_PARAM.test(x) && doc.parameters.some((p) => p.name === x) ? x : undefined; };
+  const add = (j: Joint, dof: JointDof, expr: string | undefined, hold?: Record<string, number>) => {
+    const p = param(expr);
+    if (!p || seen.has(p) || coupled.has(`${j.id}.${dof}`)) return;
+    const l = j.limits?.[dof];
+    let d: Drive;
+    if (isAngularDof(j.kind, dof)) {
+      const min = l?.min ?? (dof === "tilt" && l?.max !== undefined ? 0 : undefined), max = l?.max;
+      d = min === undefined && max === undefined ? { param: p, kind: j.kind, motion: "turn", from: 0, to: 360, unit: "°" }
+        : { param: p, kind: j.kind, motion: "range", from: min ?? max! - 360, to: max ?? min! + 360, unit: "°" };
+    } else {
+      if (l?.min === undefined || l?.max === undefined) return;
+      d = { param: p, kind: j.kind, motion: "slide", from: l.min, to: l.max, unit: "mm" };
+    }
+    seen.add(p); out.push(hold ? { ...d, hold } : d);
+  };
   for (const j of Object.values(doc.joints)) {
-    if (j.kind !== "revolute") continue;
-    const expr = (j.valueExpr ?? "").trim();
-    if (BARE_PARAM.test(expr) && doc.parameters.some((p) => p.name === expr) && !seen.has(expr)) {
-      seen.add(expr); out.push({ param: expr, kind: j.kind });
+    if (j.solve || j.closes) continue;
+    if (j.kind === "revolute" || j.kind === "slider") add(j, "value", j.valueExpr);
+    else if (j.kind === "cylindrical") { add(j, "value", j.valueExpr); add(j, "slide", j.slideExpr); }
+    else if (j.kind === "ball") {
+      add(j, "tilt", j.ball?.tilt);
+      // the heading only shows leaning over: sweep it at the cone's edge (or square to the axis)
+      const tilt = param(j.ball?.tilt);
+      add(j, "heading", j.ball?.heading, tilt ? { [tilt]: j.limits?.tilt?.max ?? 90 } : undefined);
+      add(j, "spin", j.ball?.spin);
     }
   }
   return out;
 }
 
+/** A drive's value at sample `k` of `steps`: round a full turn (0 up to, not
+ *  including, 360), or from one stop to the other, both included. */
+export function driveValue(d: Pick<Drive, "motion" | "from" | "to">, k: number, steps: number): number {
+  if (d.motion === "turn") return (360 * k) / steps;
+  return steps > 1 ? d.from + ((d.to - d.from) * k) / (steps - 1) : d.from;
+}
 export type MotionStatus = "idle" | "running" | "pass" | "fail";
 
 export interface MotionResult {
@@ -76,6 +122,15 @@ export function poseCount(drives: number, steps: number): number {
   return drives > 0 ? drives * steps - (drives - 1) : 0;
 }
 
+/** Whether a drive's first sample is the rest pose (every drive at 0), which only one drive need check. */
+const startsAtRest = (d: Drive, steps: number): boolean => !d.hold && driveValue(d, 0, steps) === 0;
+
+/** How many poses a study of these drives checks: `steps` each, the rest pose (every drive at 0) only once. */
+export function studyPoseCount(drives: Drive[], steps: number): number {
+  const atRest = drives.filter((d) => startsAtRest(d, steps)).length;
+  return drives.length * steps - Math.max(0, atRest - 1);
+}
+
 /** The key a verdict is kept under: the design and every parameter's expression
  *  except the swept drives' own (the study poses those itself). */
 export function motionKey(doc: CadDocument): string {
@@ -89,10 +144,10 @@ export function motionVerdict(doc: CadDocument, res: MotionResult): string {
   if (res.status === "fail") return res.reason ?? "Parts collide";
   const drives = driveJoints(doc);
   const label = (n: string) => doc.parameters.find((p) => p.name === n)?.label;
-  const kinds = new Set(drives.map((d) => d.kind));
+  const motions = new Set(drives.map((d) => d.motion));
   // [one joint, several joints]
-  const [one, many] = kinds.size === 1 && kinds.has("revolute") ? ["turns a full circle", "turn a full circle"]
-    : kinds.size === 1 && (kinds.has("slider") || kinds.has("pin-slot")) ? ["slides its full travel", "slide their full travel"]
+  const [one, many] = motions.size === 1 && motions.has("turn") ? ["turns a full circle", "turn a full circle"]
+    : motions.size === 1 && motions.has("slide") ? ["slides its full travel", "slide their full travel"]
     : ["moves through its full range", "move through their full range"];
   const free = "with nothing in the way";
   if (drives.length > 1) return `All ${drives.length} joints ${many} ${free}`;
@@ -100,8 +155,8 @@ export function motionVerdict(doc: CadDocument, res: MotionResult): string {
   return l ? `${l} ${one} ${free}` : `${one[0].toUpperCase()}${one.slice(1)} ${free}`;
 }
 
-/** Sweep each driven joint through 360° (the others held at 0) and pass/fail on
- *  collision or a build error. Returns `null` if cancelled. */
+/** Sweep each driven joint through its range (the others held at 0) and
+ *  pass/fail on collision or a build error. Returns `null` if cancelled. */
 export async function runMotionStudy(
   backend: GeometryBackend,
   doc: CadDocument,
@@ -109,42 +164,45 @@ export async function runMotionStudy(
 ): Promise<MotionResult | null> {
   const steps = opts.steps ?? 12;
   const tol = opts.overlapTolerance ?? 1;
-  const joints = driveParams(doc);
-  if (!joints.length) return { status: "pass", worstOverlap: 0 }; // nothing to move
+  const drives = driveJoints(doc);
+  if (!drives.length) return { status: "pass", worstOverlap: 0 }; // nothing to move
   const called = (n: string) => doc.parameters.find((p) => p.name === n)?.label || n;
-  const total = poseCount(joints.length, steps);
+  const total = studyPoseCount(drives, steps);
   const { first, rest } = sampleOrder(steps, opts.coarse ?? 4);
   let done = 0;
   let worst = 0;
-  const pose = async (j: string, k: number): Promise<MotionResult | null | undefined> => {
+  let restChecked = false;
+  const pose = async (d: Drive, k: number): Promise<MotionResult | null | undefined> => {
     if (opts.cancelled?.()) return null;
-    const angle = (360 * k) / steps;
-    const overrides: Record<string, string> = { [j]: String(angle) };
-    for (const other of joints) if (other !== j) overrides[other] = "0";
+    const v = driveValue(d, k, steps);
+    const at = `${called(d.param)} = ${d.unit === "°" ? `${Math.round(v)}°` : `${Math.round(v * 10) / 10} mm`}`;
+    const overrides: Record<string, string> = { [d.param]: String(v) };
+    for (const other of drives) if (other !== d) overrides[other.param] = "0";
+    for (const [p, h] of Object.entries(d.hold ?? {})) overrides[p] = String(h);
     opts.onPose?.(overrides);
     let res;
     try {
       res = await backend.collide(doc, overrides);
     } catch (e) {
-      return { status: "fail", reason: `crash at ${called(j)} = ${Math.round(angle)}°: ${(e as Error).message}`, worstOverlap: worst };
+      return { status: "fail", reason: `crash at ${at}: ${(e as Error).message}`, worstOverlap: worst };
     }
     done++; opts.onProgress?.(done / total);
     if (res.buildError) {
-      return { status: "fail", reason: `build error at ${called(j)} = ${Math.round(angle)}°: ${res.buildError}`, worstOverlap: worst };
+      return { status: "fail", reason: `build error at ${at}: ${res.buildError}`, worstOverlap: worst };
     }
     worst = Math.max(worst, res.maxOverlap);
     if (res.maxOverlap > tol) {
       const pair = [...res.overlaps].sort((a, b) => b.volume - a.volume)[0];
       const where = pair ? `${pair.a} hits ${pair.b}` : "parts overlap";
-      return { status: "fail", reason: `${where} at ${called(j)} = ${Math.round(angle)}°`, worstOverlap: worst };
+      return { status: "fail", reason: `${where} at ${at}`, worstOverlap: worst };
     }
     return undefined; // clear
   };
   for (const pass of [first, rest]) {
-    for (const [i, j] of joints.entries()) {
+    for (const d of drives) {
       for (const k of pass) {
-        if (k === 0 && i > 0) continue; // every drive at 0: checked once, on the first drive's turn
-        const r = await pose(j, k);
+        if (k === 0 && startsAtRest(d, steps)) { if (restChecked) continue; restChecked = true; } // every drive at 0: checked once
+        const r = await pose(d, k);
         if (r !== undefined) return r;
       }
     }

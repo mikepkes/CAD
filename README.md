@@ -47,8 +47,9 @@ revolution, and a locking disc holds the star still in between (the star's joint
 is written with `floor` and `atan2`, so it dwells and steps). Every gear is one
 `feature.gear`, each pair placed by its `mesh` option (centre distance and
 tooth phase as expressions of its mate's), and every shaft is a revolute joint
-whose value is `turn` times the tooth ratios down the train — so the teeth stay
-in mesh, which the motion study checks. Printable: 5 mm bores on pins, 0.1 mm
+driven down the train by a **coupling** per mesh (`joint.couple`: the tooth
+ratio, and which way it turns; the rack rocks the pinion by its travel per
+turn) — so the teeth stay in mesh, which the motion study checks. Printable: 5 mm bores on pins, 0.1 mm
 backlash a side.
 
 And **https://mikepkes.github.io/CAD/?mode=customize&example=skadis** — a
@@ -530,9 +531,12 @@ model stays visible — a floating card on desktop, a bottom sheet on phones. Ev
 immediately; after a short dwell a **motion study** runs on a dedicated worker
 and a badge reports whether the configuration still works: *checking…* (with
 progress) → *passes* or *fails*, naming what collides. The study sweeps each
-driven revolute joint through a full 360° turn and fails if any two bodies
-interpenetrate or the build errors — so a value that would jam or break the
-mechanism is flagged before you print it.
+drive (a joint value that is a bare parameter) through its range — an angle
+through a full 360° turn, or between its joint's stops if it has them; a
+travel between its stops; a ball joint's heading round the edge of its cone —
+and fails if any two bodies interpenetrate or the build errors, so a value
+that would jam or break the mechanism is flagged before you print it. A joint
+a coupling drives follows its driver through the sweep.
 
 A **named choice** (an enum, such as the star box's print `material`) is a
 dropdown of names whose value is the chosen index, 0, 1, 2…. Other parameters
@@ -597,7 +601,9 @@ since they need real B-reps.)
 component patterns (with an editable count expression), and their joint
 templates (editable drive value and `appliesTo`), with inline forms to add a
 connector, pattern a component, or add a joint template — and delete buttons for
-each. Everything is also scriptable via the commands above.
+each. Joints and couplings are listed there too, each value editable in place
+(a coupled one shows what drives it), with **+ joint** and **+ coupling** forms.
+Everything is also scriptable via the commands above.
 
 Closed loops (a scissor is one per stage) use the same trick the hand-built
 jointed models use: each joint's `value` is an expression of one driver, so the
@@ -612,6 +618,36 @@ single frame (single-component bodies — the common case — are exact). See
 `test/assembly.test.ts`, `test/backend_assembly.test.ts` and
 `test/scissor_jointed.build.test.ts` (which checks the fast path matches a full
 rebuild).
+
+### Joint kinds, stops and couplings
+
+`joint.create` (and `joint.template`, for a pattern) places a part by:
+
+- **rigid**, **revolute** (an angle about `axis`), **slider** (a travel along it);
+- **cylindrical** — both at once: `value` turns it about the axis, `slide`
+  moves it along it (a shaft in a plain bearing, a screw in its nut);
+- **ball** — any orientation about the connector point, given as swing and
+  twist: `spin` turns the part about `axis`, then `tilt` leans that axis over
+  toward `heading` (round the axis from +X). That, rather than three Euler
+  angles, because a real ball joint's travel is a cone: `limits.tilt.max` is
+  its half-angle, and each value is one motion you can name and sweep. Its one
+  singularity (heading means nothing at zero tilt) is harmless — the pose is
+  the same there whatever the heading;
+- the compliant and solved kinds: pin-slot, flexure, beam, planar.
+
+**Stops.** `limits: { value | slide | tilt | heading | spin: { min, max } }`
+holds a value within its range, however it is driven, and gives the motion
+study the range to sweep.
+
+**Couplings.** `joint.couple` drives one joint's value from another's, so a
+gear train is one coupling per mesh instead of a hand-written expression per
+shaft: **gear** (an external mesh, turning the other way), **belt** (the same
+way), each with `ratio` = driver teeth ÷ driven teeth; **rack** (rack and
+pinion, either side driving) with `ratio` = travel per turn in mm. `sign`
+overrides the direction (a bevel pair, a worm), `offset` sets a phase.
+Couplings chain — each link reads the value the last one set — and refuse a
+loop or a second driver. The clockwork example's train is built this way.
+See `test/jointKinds.test.ts`.
 
 ## License
 

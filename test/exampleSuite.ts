@@ -118,6 +118,8 @@ function allMotionSamples(doc: CadDocument): { name: string; values: number[] }[
   const drives = [...Object.values(doc.joints), ...Object.values(doc.jointTemplates ?? {})].flatMap((j) => [
     { kind: j.kind, expr: (j.valueExpr ?? "").trim() },
     ...("planar" in j && j.planar ? Object.values(j.planar).map((e) => ({ kind: j.kind, expr: String(e).trim() })) : []), // a planar joint's driven axes
+    ...(j.slideExpr !== undefined ? [{ kind: j.kind, expr: j.slideExpr.trim() }] : []), // a cylindrical joint's travel
+    ...Object.values(j.ball ?? {}).map((e) => ({ kind: j.kind, expr: String(e).trim() })), // a ball joint's swing and twist
   ]);
   const out: { name: string; values: number[] }[] = [];
   for (const p of doc.parameters) {

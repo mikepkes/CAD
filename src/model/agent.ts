@@ -7,7 +7,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { CommandRegistry } from "../core/command/registry";
-import { CadDocument, FeatureDef } from "../core/document";
+import { CadDocument, Coupling, FeatureDef, Joint } from "../core/document";
 import { resolveSketchPlane } from "../geometry/plane";
 import type { SolidEval } from "../core/features";
 import { hotkeys } from "./hotkeys";
@@ -144,6 +144,30 @@ export function describeFeature(f: FeatureDef): Record<string, unknown> {
   }
 }
 
+/** A joint for the agent: its kind, the parts, axis, stops, and each motion value as {expr, value} (`by`, the
+ *  coupling, in place of `expr` when a coupling drives it). */
+export function describeJoint(doc: CadDocument, j: Joint): Record<string, unknown> {
+  const r = (n: number) => Math.round(n * 1000) / 1000;
+  const by = (dof: "value" | "slide") => Object.values(doc.couplings ?? {}).find((c) => c.driven === j.id && (c.drivenDof ?? "value") === dof)?.id;
+  const motion = (dof: "value" | "slide", expr: string | undefined, value: number | undefined) => { const c = by(dof); return { ...(c ? { by: c } : { expr: expr ?? "0" }), value: r(value ?? 0) }; };
+  const values = j.kind === "rigid" || j.kind === "beam" ? {}
+    : j.kind === "ball" ? { ball: Object.fromEntries((["tilt", "heading", "spin"] as const).map((k) => [k, { expr: j.ball?.[k] ?? "0", value: r(j.ballValue?.[k] ?? 0) }])) }
+      : j.kind === "planar" ? { planar: { ...(j.planar ?? {}) }, ...(j.planarValue ? { planarValue: { x: r(j.planarValue.x), y: r(j.planarValue.y), angle: r(j.planarValue.angle) } } : {}) }
+        : { value: motion("value", j.valueExpr, j.valueValue), ...(j.kind === "cylindrical" ? { slide: motion("slide", j.slideExpr, j.slideValue) } : {}) };
+  return {
+    id: j.id, name: j.name, kind: j.kind, base: j.base, moved: j.moved, axis: j.axis, ...values,
+    ...(j.limits ? { limits: j.limits } : {}), ...(j.solve ? { solve: true } : {}), ...(j.closes ? { closes: true } : {}), ...(j.error ? { error: j.error } : {}),
+  };
+}
+
+/** A coupling for the agent: driver → driven, by what ratio and which way. */
+export function describeCoupling(c: Coupling): Record<string, unknown> {
+  return {
+    id: c.id, name: c.name, kind: c.kind, driver: c.driver, driven: c.driven, ratio: c.ratioExpr, ratioValue: c.ratioValue, sign: c.sign,
+    ...(c.driverDof ? { driverDof: c.driverDof } : {}), ...(c.drivenDof ? { drivenDof: c.drivenDof } : {}), ...(c.offsetExpr ? { offset: c.offsetExpr } : {}), ...(c.error ? { error: c.error } : {}),
+  };
+}
+
 /** Compact, id-rich summary of the document for the agent. */
 export function describeDocument(doc: CadDocument, mode: string, activeSketchId: string | null, solids?: Record<string, SolidEval>): unknown {
   const r = (n: number) => Math.round(n * 1000) / 1000;
@@ -171,6 +195,9 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
     activeSketchId,
     sketches,
     features: Object.values(doc.features).map((f) => describeFeature(f)),
+    // Joints: what each places on what, and its motion values now (expression and value; a coupled one names its driver).
+    ...(Object.keys(doc.joints).length ? { joints: Object.values(doc.joints).map((j) => describeJoint(doc, j)) } : {}),
+    ...(Object.keys(doc.couplings ?? {}).length ? { couplings: Object.values(doc.couplings!).map(describeCoupling) } : {}),
     parameters: doc.parameters.map((p) => ({ name: p.name, expr: p.expr, value: p.value, ...(p.label ? { label: p.label } : {}), ...(p.unit ? { unit: p.unit } : {}), ...(p.description ? { description: p.description } : {}), ...(p.configuredBy ? { configuredBy: p.configuredBy, baseExpr: p.baseExpr } : {}) })),
     ...(doc.about ? { about: doc.about } : {}), // the title and intro (document.describe)
     ...(doc.hidden?.length ? { hidden: doc.hidden } : {}),

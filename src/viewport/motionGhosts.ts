@@ -7,6 +7,7 @@
 // a pose sweep places them (resolveComponentWorld), never rebuilt, so drawing them costs the check nothing.
 
 import type { CadDocument } from "../core/document";
+import type { Drive } from "../model/motionStudy";
 import { resolveParameters } from "../core/parameters";
 import { resolveComponentWorld } from "../core/recompute";
 import type { Rigid } from "../math/transform";
@@ -22,18 +23,27 @@ const MIN_LEFT_MS = 120;
 /** How far (in poses) the sweep may run ahead of the check's progress. */
 const AHEAD_POSES = 1.5;
 
-/** The overrides that pose the tour `at` (0..1) of the way round: every drive in turn through 360°, the others at 0. */
-export function sweepPose(drives: string[], at: number): Record<string, string> {
+/** A drive the sweep tours: a parameter name (a full turn), or a motion study drive (a turn, or from one stop to
+ *  the other, with any values held while it moves). */
+export type SweepDrive = string | Pick<Drive, "param" | "motion" | "from" | "to" | "hold">;
+
+/** The overrides that pose the tour `at` (0..1) of the way round: every drive in turn through its range (a
+ *  full 360° turn, or stop to stop), the others at 0. */
+export function sweepPose(drives: SweepDrive[], at: number): Record<string, string> {
   const n = drives.length, x = Math.min(Math.max(at, 0), 1) * n;
   const k = Math.min(Math.floor(x), n - 1);
   const out: Record<string, string> = {};
-  drives.forEach((d, i) => { out[d] = i === k ? String(+((x - k) * 360).toFixed(3)) : "0"; });
+  const name = (d: SweepDrive) => (typeof d === "string" ? d : d.param);
+  for (const d of drives) out[name(d)] = "0";
+  const d = drives[k], f = x - k;
+  if (typeof d !== "string") for (const [p, h] of Object.entries(d.hold ?? {})) out[p] = String(h);
+  out[name(d)] = String(+(typeof d === "string" || d.motion === "turn" ? f * 360 : d.from + (d.to - d.from) * f).toFixed(3));
   return out;
 }
 
-/** The tour at `at` and its wake, newest first: `trail` poses `wakeDeg` apart going back along the drive turning
- *  now (none from before its turn began). */
-export function sweepTrail(drives: string[], at: number, trail = SWEEP_TRAIL, wakeDeg = SWEEP_WAKE_DEG): Record<string, string>[] {
+/** The tour at `at` and its wake, newest first: `trail` poses `wakeDeg` apart (of a full turn; the same share of
+ *  a drive's range) going back along the drive moving now (none from before its turn began). */
+export function sweepTrail(drives: SweepDrive[], at: number, trail = SWEEP_TRAIL, wakeDeg = SWEEP_WAKE_DEG): Record<string, string>[] {
   const n = drives.length;
   if (!n) return [];
   const x = Math.min(Math.max(at, 0), 1) * n, k = Math.min(Math.floor(x), n - 1);

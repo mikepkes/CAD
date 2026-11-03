@@ -197,6 +197,9 @@ export function expandAssembly(doc: CadDocument, scope: Scope, opts: { framesOnl
           axis: { x: t.axis.x, y: t.axis.y, z: t.axis.z },
           valueExpr: substituteIndex(t.valueExpr, i),
           valueValue: 0,
+          ...(t.kind === "cylindrical" ? { slideExpr: substituteIndex(t.slideExpr ?? "0", i), slideValue: 0 } : {}),
+          ...(t.kind === "ball" ? { ball: Object.fromEntries(Object.entries(t.ball ?? {}).map(([k, e]) => [k, substituteIndex(e, i)])), ballValue: { tilt: 0, heading: 0, spin: 0 } } : {}),
+          ...(t.limits ? { limits: t.limits } : {}),
         };
         joints[jid] = j;
       }

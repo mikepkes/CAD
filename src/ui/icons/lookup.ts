@@ -26,6 +26,7 @@ const COMMANDS: Record<string, IconName> = {
   "component.setReference": "component-reference",
   "joint.create": "joint-rigid",
   "joint.template": "joint-revolute",
+  "joint.couple": "joint-coupling",
   "assembly.pattern": "assembly-pattern",
   // materials, drawings
   "material.create": "material-add",
@@ -108,6 +109,8 @@ export const JOINT_ICONS: Record<string, IconName> = {
   flexure: "joint-flexure",
   beam: "joint-beam",
   planar: "joint-planar",
+  cylindrical: "joint-cylindrical",
+  ball: "joint-ball",
 };
 
 /** feature.primitive `shape` → icon. */
