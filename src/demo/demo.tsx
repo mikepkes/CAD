@@ -17,6 +17,8 @@ import { useLens } from "../ui/concepts/lens/lens";
 import { getActiveScene } from "../viewport/sceneRef";
 import { buildBodies } from "../viewport/turntableRecorder";
 import { resolveComponentWorld } from "../core/recompute";
+import { expandAssembly, hasAssemblyPatterns, instanceComponentOf } from "../core/assembly";
+import type { CadDocument } from "../core/document";
 import { resolveParameters } from "../core/parameters";
 import { resolveSketchPlane } from "../geometry/plane";
 import { compileExpr } from "../math/expr";
@@ -25,6 +27,8 @@ import type { SolidEval } from "../core/features";
 import { setAgentClientFactory } from "../model/agent";
 import { replayClient, recordingClient, type AgentCache } from "./agentReplay";
 import * as stand from "./stand";
+import { componentsNamed, explodeOffsets, exploded } from "./explode";
+import type { Vec3 } from "../math/vec";
 import "./demo.css";
 
 interface TitleCard { title: string; subtitle?: string; chips?: string[]; /** The opening title: bigger, on an opaque ground. */ hero?: boolean }
@@ -95,7 +99,66 @@ const turn = { rate: 0, target: 0, raf: 0 };
 
 /** The director's handle on the app. Every method is plain data in, plain data out (it crosses Playwright). */
 /** The pose sweeps' running state: which document's parts are posed, and the parameter values they're posed at. */
-let pose: { doc: unknown; scope: Record<string, number>; overrides: Record<string, string>; sheets: { id: string; seq: NonNullable<NonNullable<SolidEval["sheet"]>["sequence"]>; progress: string; last?: number }[] } | null = null;
+/** Every component's world frame for a pose, a pattern's instances included (expanded to their frames only: the
+ *  joints its templates stamp, not their geometry). The swept parameter must not change a pattern's count. */
+const worldOf = (doc: CadDocument, scope: Record<string, number>) =>
+  resolveComponentWorld(hasAssemblyPatterns(doc) ? expandAssembly(doc, scope, { framesOnly: true }) : doc, scope);
+let pose: {
+  doc: unknown; scope: Record<string, number>; overrides: Record<string, string>; sheets: { id: string; seq: NonNullable<NonNullable<SolidEval["sheet"]>["sequence"]>; progress: string; last?: number }[];
+  /** poseExplode's offsets (by component) and how far apart they are, 0…1 */
+  explode: { by: Map<string, Vec3>; k: number };
+} | null = null;
+
+/** Ease `set` from `from` to `to` over `ms`, a frame at a time. */
+function tween(from: number, to: number, ms: number, set: (v: number) => void, ease = true): Promise<void> {
+  set(from);
+  const t0 = performance.now();
+  return new Promise((done) => {
+    const tick = () => {
+      const k = Math.min(1, (performance.now() - t0) / Math.max(1, ms)), e = ease ? k * k * (3 - 2 * k) : k;
+      set(from + (to - from) * e);
+      if (k < 1) requestAnimationFrame(tick); else done();
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+/** The pose sweeps' state, begun (the parts handed to the scene to move, at the built pose) if it isn't yet. */
+function posed() {
+  const scene = getActiveScene(), st = useStore.getState(), doc = st.session.doc;
+  if (!scene) return null;
+  if (!pose || pose.doc !== doc) {
+    // sheets folded in steps, and the expression that runs their steps
+    const sheets = Object.values(st.solids as Record<string, SolidEval>).flatMap((sol) => {
+      const f = doc.features[sol.featureId], seq = sol.sheet?.sequence;
+      return f?.kind === "sheet" && f.progressExpr && seq && sol.mesh ? [{ id: sol.featureId, seq, progress: f.progressExpr }] : [];
+    });
+    pose = { doc, scope: { ...resolveParameters(doc.parameters).scope }, overrides: {}, sheets, explode: { by: new Map(), k: 0 } };
+    // a pattern's instance bodies move with their instance components, placed by the joints its templates stamp
+    const bodies = buildBodies(doc, st.solids as never).map((b) => ({ ...b, componentId: instanceComponentOf(doc, b.solid.id ?? "") ?? b.componentId }));
+    scene.beginAnimation(bodies, worldOf(doc, pose.scope), true);
+  }
+  return pose;
+}
+/** Place the posed parts at the pose's parameter values, exploded as far as it is. */
+function placePosed(p: NonNullable<typeof pose>) {
+  getActiveScene()?.setAnimationPose(exploded(worldOf(useStore.getState().session.doc, p.scope), p.explode.by, p.explode.k));
+}
+
+/** What fading `ids` draws see-through: a component's bodies and sketches, and its sub-components'; a body or sketch id
+ *  as it is. */
+export function fadeKeys(ids: string[], doc = useStore.getState().session.doc, solids: Record<string, { featureId: string; sketchId?: string }> = useStore.getState().solids): string[] {
+  const comps = new Set<string>(), keys = new Set<string>();
+  const add = (id: string) => { if (comps.has(id)) return; comps.add(id); for (const c of doc.components[id]?.children ?? []) add(c); };
+  for (const id of ids) { if (doc.components[id]) add(id); else keys.add(id); }
+  if (!comps.size) return [...keys];
+  for (const b of Object.values(solids)) {
+    const cid = (b.sketchId ? doc.sketches[b.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
+    if (comps.has(cid)) keys.add(b.featureId);
+  }
+  for (const sk of Object.values(doc.sketches)) if (comps.has(sk.componentId ?? doc.rootComponentId)) keys.add(sk.id);
+  return [...keys];
+}
 
 const api = {
   // ---- waiting ----
@@ -198,12 +261,10 @@ const api = {
     }
     return lo.x <= hi.x ? { min: lo, max: hi } : null;
   },
-  /** The ids of the bodies in the named components (and their sub-components). */
+  /** The ids of the bodies in the named components (and their sub-components; "Pad*" matches by the name's start). */
   componentBodies(names: string[]) {
     const { session, solids } = useStore.getState(), doc = session.doc;
-    const ids = new Set<string>();
-    const add = (id: string) => { if (ids.has(id)) return; ids.add(id); for (const c of doc.components[id]?.children ?? []) add(c); };
-    for (const c of Object.values(doc.components)) if (names.includes(c.name)) add(c.id);
+    const ids = componentsNamed(doc, names);
     return Object.values(solids).flatMap((b) => {
       const cid = (b.sketchId ? doc.sketches[b.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
       return b.mesh && b.bounds && ids.has(cid) ? [b.featureId] : [];
@@ -238,23 +299,14 @@ const api = {
    *  and paper folded in steps (its `progress`: the sheet is re-posed from its fold plan, no kernel); other
    *  geometry that depends on the parameter doesn't change. The parts stay posed (sweeps chain) until `poseEnd`. */
   poseSweep(name: string, from: number, to: number, ms: number, opts: { ease?: boolean } = {}): Promise<void> {
-    const scene = getActiveScene(), st = useStore.getState(), doc = st.session.doc;
-    if (!scene) return Promise.resolve();
-    if (!pose || pose.doc !== doc) {
-      // sheets folded in steps, and the expression that runs their steps
-      const sheets = Object.values(st.solids as Record<string, SolidEval>).flatMap((sol) => {
-        const f = doc.features[sol.featureId], seq = sol.sheet?.sequence;
-        return f?.kind === "sheet" && f.progressExpr && seq && sol.mesh ? [{ id: sol.featureId, seq, progress: f.progressExpr }] : [];
-      });
-      pose = { doc, scope: { ...resolveParameters(doc.parameters).scope }, overrides: {}, sheets };
-      scene.beginAnimation(buildBodies(doc, st.solids as never), resolveComponentWorld(doc, pose.scope), true);
-    }
-    const p = pose;
+    const p = posed(), scene = getActiveScene();
+    if (!p || !scene) return Promise.resolve();
+    const doc = useStore.getState().session.doc;
     // re-solved each step, so parameters that follow this one (a linkage's joint positions) follow it too
     const at = (v: number) => {
       p.overrides[name] = String(v);
       p.scope = resolveParameters(doc.parameters.map((q) => (p.overrides[q.name] != null ? { ...q, expr: p.overrides[q.name] } : q))).scope;
-      scene.setAnimationPose(resolveComponentWorld(doc, p.scope));
+      placePosed(p);
       for (const sh of p.sheets) {
         let k: number;
         try { k = compileExpr(sh.progress).eval(p.scope); } catch { continue; }
@@ -263,19 +315,39 @@ const api = {
         scene.setAnimationMesh(sh.id, sequenceMesh(sh.seq.plan, sequenceAngles(sh.seq.plan, k), sh.seq.frame));
       }
     };
-    at(from); // before the next frame draws, so a chained sweep never shows the built pose
-    const t0 = performance.now();
-    return new Promise((done) => {
-      const tick = () => {
-        const k = Math.min(1, (performance.now() - t0) / ms), e = opts.ease === false ? k : k * k * (3 - 2 * k);
-        at(from + (to - from) * e);
-        if (k < 1) requestAnimationFrame(tick); else done();
-      };
-      requestAnimationFrame(tick);
-    });
+    // `at(from)` runs before the next frame draws, so a chained sweep never shows the built pose
+    return tween(from, to, ms, at, opts.ease !== false);
+  },
+  /** An exploded view of the posed parts (display only, as the sweeps are; it holds through them): each component
+   *  named in `offsets` ("Pivot pin*" matches by the name's start), with everything under it unless that's named
+   *  too, slides by its offset (mm, world), eased from where it is to `to` of the way (1 apart, 0 together) over `ms`. */
+  poseExplode(offsets: Record<string, [number, number, number]>, to: number, ms: number): Promise<void> {
+    const p = posed();
+    if (!p) return Promise.resolve();
+    p.explode.by = explodeOffsets(useStore.getState().session.doc, offsets);
+    return tween(p.explode.k, to, ms, (k) => { p.explode.k = k; placePosed(p); });
+  },
+  /** Draw the posed parts in the named components (and under them) see-through, as reference parts are, faded in
+   *  from `from` to `to` (0 as built, 1 see-through) over `ms`: the works inside a part show. Ends with `poseEnd`. */
+  poseGhost(names: string[], from: number, to: number, ms: number): Promise<void> {
+    const scene = getActiveScene();
+    if (!posed() || !scene) return Promise.resolve();
+    const ids = componentsNamed(useStore.getState().session.doc, names);
+    return tween(from, to, ms, (k) => scene.setAnimationGhost(ids, k));
   },
   /** Put the parts back to the built model after `poseSweep`s. */
   poseEnd() { pose = null; getActiveScene()?.endAnimation(); },
+  /** Fade components (by id: each with its sub-components' bodies and sketches), bodies or sketches (by id) to
+   *  `opacity` over `ms`: 0 to isolate a part without a visual pop, 1 to bring them back. Display only (the document,
+   *  and so their eye toggles, are untouched, and nothing rebuilds), so it runs smoothly while parts are posed.
+   *  Resolves when the fade has finished. Opening another document puts everything back. */
+  async fadeComponents(ids: string[], opacity: number, ms = 800): Promise<void> {
+    await getActiveScene()?.fadeBodies(fadeKeys(ids), opacity, ms);
+    await new Promise((done) => setTimeout(done, ms + 20));
+  },
+  /** Ready a later `fadeComponents` of these (compile their see-through look now, e.g. while a model loads), so the
+   *  fade starts on the frame it's asked for. */
+  async prepareFade(ids: string[]): Promise<void> { await getActiveScene()?.warmFades(fadeKeys(ids)); },
   /** Ease a side panel to `px` wide over `ms` (as dragging its edge would), e.g. to widen Parameters while values are edited. */
   sideWidth(side: "left" | "right", px: number, ms = 600): Promise<void> {
     const from = useUi.getState().sideWidth[side], t0 = performance.now();
@@ -289,8 +361,8 @@ const api = {
     });
   },
   // ---- documents ----
-  async openText(text: string, name = "model.vibecad.json") { api.poseEnd(); await useStore.getState().openFile(new File([text], name)); await api.settle(); },
-  async newDocument() { api.poseEnd(); await useStore.getState().newDocument(); await api.settle(); },
+  async openText(text: string, name = "model.vibecad.json") { api.poseEnd(); getActiveScene()?.clearFades(); await useStore.getState().openFile(new File([text], name)); await api.settle(); },
+  async newDocument() { api.poseEnd(); getActiveScene()?.clearFades(); await useStore.getState().newDocument(); await api.settle(); },
   documentText() { return JSON.stringify(useStore.getState().session.doc); },
   // ---- the agent ----
   mockAgent(cache: AgentCache | null) {

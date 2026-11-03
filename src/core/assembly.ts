@@ -211,6 +211,19 @@ export function hasAssemblyPatterns(doc: CadDocument): boolean {
   return Object.keys(doc.componentPatterns ?? {}).length > 0;
 }
 
+/** The instance component a pattern-instance body moves with: `instanceSolids` names instance i of a template
+ *  body `${pattern}#${i}__${feature}` (keeping the template's sketch), and it moves with instance i of that
+ *  sketch's component. Undefined for a body outside every pattern. A view that poses the built parts (moving
+ *  each component by its joint, no rebuild) maps bodies to components with this, and places the components
+ *  with `resolveComponentWorld(expandAssembly(doc, scope, { framesOnly: true }), scope)`. */
+export function instanceComponentOf(doc: CadDocument, featureId: string): string | undefined {
+  const m = /^(.+?)#(\d+)__(.+)$/.exec(featureId);
+  if (!m || !doc.componentPatterns?.[m[1]]) return undefined;
+  const f = doc.features[m[3]] as { sketchId?: string } | undefined;
+  const comp = f?.sketchId ? doc.sketches[f.sketchId]?.componentId : undefined;
+  return comp ? `${m[1]}#${m[2]}__${comp}` : undefined;
+}
+
 // ---- fast render path: instance by transforming the source mesh -------------
 
 function xformMesh(m: SolidMesh, T: Rigid): SolidMesh {

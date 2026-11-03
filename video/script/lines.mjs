@@ -13,6 +13,8 @@
 export const VIDEOS = {
   demo: {
     title: "VibeCAD demo", file: "vibecad-demo", acts: [0, 3], montage: true,
+    // the intro music (git-ignored, made on the GPU box: see video/README.md "Music"); mixed under the montage, fading out
+    music: "video/music/intro.wav",
     // the YouTube description (video/youtube.mjs adds the chapters under it)
     description: "VibeCAD is free, open-source parametric CAD that runs in your browser or as a desktop app. This demo shows what it can do: section views and motion studies, gears and linkages, compliant mechanisms and their forces, organic surfaces, folded paper, a shop drawing from a workbench, and parts built just by asking Claude.\n\nTry it: https://mikepkes.github.io/CAD\nSource (MIT): https://github.com/mikepkes/CAD\nTo learn to model, watch the phone stand tutorial.",
   },

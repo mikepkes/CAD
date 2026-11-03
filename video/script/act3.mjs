@@ -139,9 +139,9 @@ export async function act3(d) {
    * structure, not by ids: a leg is a parent component named like one ("Leg w0", its bars as children), else the
    * components sharing a leg tag, the first word with a digit in their names ("Rocker w0" … "Foot w0"; "w0m" its
    * mirror). Parts jointed to one leg's bars only (pins) go with that leg. Returns its name, its world box at the
-   * built pose, and what to hide for its close-up: every other leg (top ids), the fixed bodies between it and the
-   * camera (the frame, whose end wall covers the leg's upper bars) and the sketches still shown (each bar's outline
-   * stays at the built pose while the posed bar moves); null when fewer than two legs are found.
+   * built pose, and what to fade out for its close-up: every other leg (top component ids), the fixed bodies between
+   * it and the camera (body ids: the frame, whose end wall covers the leg's upper bars) and the sketches still shown
+   * (the bars' outlines would clutter the one leg); null when fewer than two legs are found.
    */
   const walkerLeg = () => d.run(() => {
     const st = window.__vibecadDemo.store.getState(), doc = st.session.doc, root = doc.rootComponentId;
@@ -185,48 +185,88 @@ export async function act3(d) {
     const front = Object.values(st.solids).filter((b) => {
       const cid = (b.sketchId ? doc.sketches[b.sketchId]?.componentId : undefined) ?? root;
       return b.mesh && b.bounds && !inLeg(cid) && !moved.has(cid) && b.bounds.min.y <= near.box.min.y + 0.01;
-    }).map((b) => b.featureId.split("/")[0]);
+    }).map((b) => b.featureId);
     const sketches = Object.values(doc.sketches).filter((sk) => !others.some((l) => l.ids.has(sk.componentId))).map((sk) => sk.id);
-    return { name: near.name, box: near.box, hide: [...others.flatMap((l) => l.top), ...new Set(front), ...sketches] };
+    return { name: near.name, box: near.box, fade: [...others.flatMap((l) => l.top), ...new Set(front), ...sketches] };
   });
   if (hasExample("walker")) {
+    let leg = null; // found while the model loads (inside its cut): the beat's picture never waits on it
     await clip("walker", "walker", "Jansen wind walker", "one crank, twelve legs, overlapping strides", async () => {
       // posed from the crank angle: the legs' joint positions are parameters that follow `t`. The crank never stops
-      // (120°/s, then 90°/s on the one leg): the camera moves while it turns, and the hiding is cut from the edit.
-      const turn = (from, to, ms) => d.api("poseSweep", "t", from, to, ms, { ease: false });
-      await Promise.all([d.api("aim", { dir: [0.35, -1, 0.3], ms: 1000, margin: 0.85 }), turn(0, 360, 3000)]);
+      // or changes speed; a short look at the whole walker, then, as "twelve legs" is said, every leg but one and
+      // the frame fade out (display only: nothing rebuilds, so no cut) while the camera moves in on that one leg,
+      // which holds the rest of the line. Shots land on words from the default voice's timings
+      // (video/vo/af_heart/act3-walker.words.json, made by the sync check) when cached, else these.
+      const fallback = { legs: 5.78, end: 14.14 };
+      let words = [];
+      try { words = JSON.parse(readFileSync(new URL("../vo/af_heart/act3-walker.words.json", import.meta.url), "utf8")).words ?? []; } catch {}
+      const said = (w) => (w === "end" ? words.at(-1)?.e : words.find((x) => x.w.toLowerCase().replace(/[^a-z]/g, "") === w)?.s) ?? fallback[w];
+      const t0 = d.timing.events.findLast((e) => e.kind === "beat")?.t ?? d.now(); // the line starts with the beat
+      const tIso = said("legs"), tEnd = said("end") + 0.7;
+      // about 100°/s, a whole number of turns by the end: the built pose, so putting the parts back shows no jump
+      const v = (360 * Math.max(1, Math.round((tEnd * 100) / 360))) / tEnd;
+      let at = 0;
+      const turn = async (s) => { // the crank, at its steady rate, until `s` into the line (an overrun is made up by the next)
+        const to = v * s;
+        await d.api("poseSweep", "t", at, to, Math.max(150, Math.round((t0 + s - d.now()) * 1000)), { ease: false });
+        at = to;
+      };
+      await Promise.all([d.api("aim", { dir: [0.35, -1, 0.3], ms: 1000, margin: 0.85 }), turn(Math.min(2.6, tIso / 2))]);
       d.pick("walker");
-      await Promise.all([d.api("aim", { dir: [0.9, -0.6, 0.15], ms: 1500, margin: 0.8 }), turn(360, 720, 3000)]);
-      await turn(720, 1440, 6000);
-      // "…while the rest lift and swing forward": every leg but one goes, and the camera closes in on that one
-      const leg = await d.cut(async () => {
-        const found = await walkerLeg();
-        if (!found) return null;
-        // PUPPET: hidden by command, as clicking their eye toggles in the browser would (the panels are closed for
-        // the montage). Hiding re-evaluates the document (seconds, frozen): cut, and the crank resumes where it was.
-        await d.run(async (ids) => { await window.__vibecadDemo.store.getState().setVisibility(ids, false); }, found.hide);
-        await turn(1440, 1440, 1); // re-pose the visible bodies inside the cut too
-        return found;
-      });
+      await Promise.all([d.api("aim", { dir: [0.9, -0.6, 0.15], ms: 1500, margin: 0.8 }), turn(tIso)]);
       if (!leg) { d.note("walker: no leg assembly found among the example's components; the whole walker kept turning"); console.error("  ✗ walker: no leg assembly found"); }
       else d.event("view", `one leg: ${leg.name}`);
-      // in from the side, along the crank axis, so the leg's linkage reads; it ends on a whole turn (the built pose),
-      // so putting the parts back shows no jump
-      await Promise.all([leg && d.api("aim", { dir: [0.25, -1, 0.12], box: leg.box, ms: 1400, margin: 1.15 }), turn(1440, 1800, 4000)]);
-      await d.api("poseEnd");
+      // "…of eleven bars each": the rest fade out as the camera comes in from the side, along the crank axis, so the
+      // leg's linkage reads; then a slow push in from lower down, through "gliding along the ground"
+      await Promise.all([
+        leg && d.api("fadeComponents", leg.fade, 0, 900),
+        leg && d.api("aim", { dir: [0.25, -1, 0.12], box: leg.box, ms: 1800, margin: 1.15 }).then(() => d.api("aim", { dir: [0.4, -1, 0.02], box: leg.box, ms: 4200, margin: 1.05 })),
+        turn(tEnd),
+      ]);
+      await d.api("poseEnd"); // the others stay faded out: nothing pops back
+    }, async () => { // the leg, and the others' see-through look compiled here, so the fade starts without a stall
+      leg = await walkerLeg();
+      if (leg) await d.api("prepareFade", leg.fade);
     });
   } else d.note("no walker example yet: walker clip skipped");
   await clip("skadis", "skadis", "SKÅDIS gravity holder", "the load's own weight closes the grip", async () => {
+    // timed to the line's words (seconds into the beat, Heart's clip): the whole holder while "grips by weight"; the
+    // cover goes see-through as the camera closes in on "Set something in it" (2.8 s), so the rack drops between the
+    // pinions behind it on "pushes a rack down between two pinions" (4.7–6.9 s) and the pads shut on "clamp it" (9.1 s);
+    // then out to a three-quarter view, and on "every part prints, pins included" (12.8–14.5 s) the parts slide
+    // apart along the way they go together, out from the board, all apart by "pins": the pins that go in from
+    // behind, the rack and arms, the cover, foot and pads, and the shouldered pins through the cover in front
+    const t0 = d.timing.events.findLast((e) => e.kind === "beat")?.t ?? d.now();
+    const at = (s) => d.wait(Math.max(0, (t0 + s - d.now()) * 1000));
+    const works = await d.api("componentBox", ["Back plate", "Lower arm*", "Upper arm*"]);
+    const out = -1; // -y: out from the board, toward the viewer
+    const explode = {
+      "Foot pin*": [0, 20 * out, 0], "Pad pin*": [0, 20 * out, 0],
+      Linkage: [0, 45 * out, 0],
+      Cover: [0, 95 * out, 0], Foot: [0, 95 * out, 0],
+      "Pad, right": [70, 95 * out, 0], "Pad, left": [-70, 95 * out, 0], // and aside, so they don't hide the middle
+      "Pivot pin*": [0, 135 * out, 0], "Guide pin*": [0, 135 * out, 0],
+      "Stand-in item*": [0, 95 * out, 250], // lifted up out of the frame: not a part
+    };
     await d.api("aim", { dir: [0.25, -1, 0.35], ms: 1000, margin: 0.9 });
-    await d.api("poseSweep", "drop", 0, 6.4, 2600);
+    await at(2.5);
+    await Promise.all([d.api("poseGhost", ["Cover"], 0, 1, 1000), d.api("aim", { dir: [0.1, -1, 0.2], box: works, ms: 1500, margin: 1.15 })]);
+    await at(4.4);
+    d.event("view", "cover see-through: the rack and pinions");
+    const drop = d.api("poseSweep", "drop", 0, 6.4, 4700);
+    await at(6.0);
     d.pick("skadis holder");
-    await d.wait(900);
-    await d.api("poseSweep", "drop", 6.4, 0, 1800);
-    // closer, from below the front: the pinions and parallelogram arms on the cheeks
-    await d.api("aim", { dir: [0.6, -1, -0.35], box: await d.api("componentBox", ["Lower arm, right", "Upper arm, right", "Pad, right", "Lower arm, left", "Upper arm, left", "Pad, left", "Rack"]), ms: 1400, margin: 1.15 });
-    await d.api("poseSweep", "drop", 0, 6.4, 2400);
-    await d.wait(700);
-    await d.api("poseEnd");
+    await drop;
+    await at(9.8);
+    // the printed parts' box, as far apart as they'll go (about: the pads go aside as well as out)
+    const parts = await d.api("componentBox", ["Back plate", "Lower arm*", "Upper arm*", "Foot"]); // the item stands clear
+    const apart = { min: { ...parts.min, x: parts.min.x - 70, y: parts.min.y + 95 * out }, max: { ...parts.max, x: parts.max.x + 70 } };
+    await Promise.all([d.api("poseGhost", ["Cover"], 1, 0, 900), d.api("aim", { dir: [0.75, -1, 0.4], box: apart, ms: 1800, margin: 0.85 })]);
+    await at(12.3);
+    d.event("view", "exploded along the assembly");
+    await d.api("poseExplode", explode, 1, 1500);
+    await at(15.2);
+    // held apart to the end: the next clip's load puts the parts back (openText ends the pose)
   });
   await clip("handlebar", "handlebar", "Bike handlebar", "a 3D sweep with a tapering section, a wrapped hex grip", async () => {
     // timed to the line's words (seconds into the beat, Heart's clip): the whole bar while "one sweep along a 3D curve",
@@ -284,7 +324,12 @@ export async function act3(d) {
       if (left > 0) await d.wait(left);
     }
     if (Date.now() - t0 > 2600 * 1.6) d.timing.fast.push({ label: "rebuilding stages", start, end: d.now() });
-    d.pick("scissor lift"); await sweep(d, "theta", there(40, 22, 6), 2600);
+    // the opening angle drives the stamped joints: the bars swing at display rate, no rebuild (closed and open again,
+    // ending on the built 40°, so putting the parts back shows no jump)
+    d.pick("scissor lift");
+    await d.api("poseSweep", "theta", 40, 22, 1300);
+    await d.api("poseSweep", "theta", 22, 40, 1300);
+    await d.api("poseEnd");
   }, { minMs: 6500 });
   await clip("starbox", "starbox", "Snap-together star box", "snaps sized for each material", async () => { await sweep(d, "width", [64, 76], 900); d.pick("star box"); await sweep(d, "width", [88, 76, 64], 2100); });
 

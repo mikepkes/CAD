@@ -189,6 +189,33 @@ for (const c of cues) {
   timeline.cues.push({ act: c.act, id: c.id, from: c.from, to: c.to, startMs: Math.round((c.from / FPS) * 1000), slotMs: Math.round(((c.to - c.from) / FPS) * 1000), text: c.text, clips: Object.fromEntries(clips.map((k) => [k.voice.id, { ms: k.ms, file: k.file.slice(ROOT.length) }])) });
 }
 const voiced = cues.some((c) => c.clips.length);
+// ---- the intro music (VIDEOS[…].music, a WAV; --no-music leaves it out): under the montage at full level, dipping under
+// the montage's line, then fading out over the title as the narration takes over ----
+const music = (() => {
+  const file = video.music && join(ROOT, video.music);
+  if (!file || process.argv.includes("--no-music")) return null;
+  if (!existsSync(file)) { console.warn(`music: ${video.music} not found, the cut has none`); return null; }
+  let { samples, sampleRate } = readWav(file);
+  if (sampleRate !== SR) throw new Error(`${video.music}: ${sampleRate} Hz, expected ${SR} (afconvert -f WAVE -d LEI16@${SR} -c 1)`);
+  const montage = cues.find((c) => c.id === "montage"), firstLine = cues.find((c) => c.id !== "montage");
+  const sec = (f) => Math.round((f / FPS) * SR);
+  const LEVEL = 0.55, UNDER = 0.2, RAMP = Math.round(0.25 * SR), FADE = Math.round(3 * SR);
+  // full under the montage's picks, under the voice while the montage line plays, out over the title before the first line
+  const fadeEnd = Math.min(firstLine ? sec(firstLine.from) : sec(outFrame), montage ? sec(montage.to) + FADE : FADE);
+  const fadeStart = fadeEnd - FADE;
+  const said = montage?.clips.find((k) => k.voice === vo?.voices[0]);
+  const duckFrom = montage ? sec(montage.from) : -1, duckTo = said ? duckFrom + Math.round((said.ms / 1000) * SR) : -1;
+  const gain = new Float32Array(Math.min(samples.length, totalSamples));
+  for (let i = 0; i < gain.length; i++) {
+    const inDuck = duckFrom >= 0 && i >= duckFrom - RAMP && i <= duckTo + RAMP;
+    const d = !inDuck ? 0 : i < duckFrom ? (i - (duckFrom - RAMP)) / RAMP : i > duckTo ? 1 - (i - duckTo) / RAMP : 1;
+    const g = LEVEL - (LEVEL - UNDER) * Math.max(0, Math.min(1, d));
+    const out = i < fadeStart ? 1 : i >= fadeEnd ? 0 : 0.5 * (1 + Math.cos((Math.PI * (i - fadeStart)) / FADE)); // an eased fade
+    gain[i] = g * out;
+  }
+  console.log(`music: ${video.music}, under the montage, out by ${(fadeEnd / SR).toFixed(1)} s`);
+  return { samples, gain };
+})();
 const mixes = []; // { voice, wav } per voice with any clip
 if (voiced) {
   mkdirSync(join(out, "vo"), { recursive: true });
@@ -209,6 +236,7 @@ if (voiced) {
       free = at + samples.length;
       n++;
     }
+    if (music) for (let i = 0; i < Math.min(music.samples.length, totalSamples); i++) mix[i] += music.samples[i] * music.gain[i];
     if (slip > 0.05) console.log(`  ${v.id}: slips up to ${slip.toFixed(1)} s behind the picture`);
     if (free > totalSamples) console.warn(`  ${v.id}: its last line runs ${((free - totalSamples) / SR).toFixed(1)} s past the end of the video (cut off)`);
     if (!n) continue;
