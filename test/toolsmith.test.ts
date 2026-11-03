@@ -7,6 +7,7 @@ import { realSession, sessionFromDoc } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { evaluateFeatures, SolidEval } from "../src/core/features";
 import { resolveParameters } from "../src/core/parameters";
+import { placeComponentSketches } from "../src/core/recompute";
 import { serializeDocument, deserializeDocument } from "../src/core/persistence";
 import type { CadSession } from "../src/core/command/session";
 
@@ -214,6 +215,29 @@ describe("proposal 6 — feature.thread", () => {
     expect(body0(s).error).toBeUndefined();
     expect(vol0(s)).toBeLessThan(30 * 30 * 16);
     expect(body0(s).threadDecals?.length).toBe(2); // one per hole
+  });
+
+  it("a thread drawn in a component's frame moves with the component", async () => {
+    const s = realSession();
+    await s.dispatch("parameter.add", { name: "g", expression: "0" });
+    const part = (await s.dispatch("component.create", { name: "Rod" })).createdIds![0];
+    await s.dispatch("joint.create", { kind: "slider", moved: part, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, value: "g" });
+    const sk = (await s.dispatch("sketch.create", { plane: "XY", component: part })).createdIds![0];
+    await s.dispatch("sketch.addCircle", { sketch: sk, center: { x: 0, y: 0 }, radius: 5 });
+    const rod = (await s.dispatch("feature.extrude", { sketch: sk, distance: "20" })).createdIds![0];
+    expect((await s.dispatch("feature.thread", { at: { x: 0, y: 0, z: 20 }, component: "nope", spec: { form: "metric", pitch: 1.5, diameter: 10, length: 16 } })).ok).toBe(false);
+    await s.dispatch("feature.thread", { at: { x: 0, y: 0, z: 20 }, component: part, operation: "join", body: rod, spec: { form: "metric", pitch: 1.5, diameter: 10, length: 16 } });
+    const decalAt = async (g: number) => {
+      await s.dispatch("parameter.set", { name: "g", expression: String(g) });
+      await s.recompute();
+      const scope = resolveParameters(s.doc.parameters).scope;
+      placeComponentSketches(s.doc, scope);
+      return Object.values(evaluateFeatures(s.doc, scope)).find((b) => b.mesh)!.threadDecals![0].at;
+    };
+    expect(await decalAt(0)).toMatchObject({ x: 0, y: 0, z: 20 });
+    const moved = await decalAt(30);
+    expect(moved.x).toBeCloseTo(30, 6); // on the rod's end, wherever the joint puts it
+    expect(moved.z).toBeCloseTo(20, 6);
   });
 
   it("errors when an internal thread has no body to tap", async () => {

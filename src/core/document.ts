@@ -625,10 +625,13 @@ export interface ThreadFeature {
   id: string;
   kind: "thread";
   name: string;
-  /** Base point of the thread (world mm) — the start of the threaded length. */
+  /** Base point of the thread (mm, in `component`'s frame, else the world) — the start of the threaded length. */
   at: { x: number; y: number; z: number };
   /** Thread axis direction (default +Z). */
   axis?: { x: number; y: number; z: number };
+  /** The component whose frame `at` and `axis` are in, so the thread moves with
+   *  it (a screw on a part a joint drives); default the world. */
+  component?: string;
   spec: ThreadSpec;
   /** external only: combine with a body (new = standalone rod, join = add to a
    *  shaft). internal is always cut. Default new. */
