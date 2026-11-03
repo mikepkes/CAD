@@ -230,14 +230,11 @@ export async function act3(d) {
     });
   } else d.note("no walker example yet: walker clip skipped");
   await clip("skadis", "skadis", "SKÅDIS gravity holder", "the load's own weight closes the grip", async () => {
-    // timed to the line's words (seconds into the beat, Heart's clip): the whole holder while "grips by weight"; the
-    // cover goes see-through as the camera closes in on "Set something in it" (2.8 s), so the rack drops between the
-    // pinions behind it on "pushes a rack down between two pinions" (4.7–6.9 s) and the pads shut on "clamp it" (9.1 s);
-    // then out to a three-quarter view, and on "every part prints, pins included" (12.8–14.5 s) the parts slide
-    // apart along the way they go together, out from the board, all apart by "pins": the pins that go in from
-    // behind, the rack and arms, the cover, foot and pads, and the shouldered pins through the cover in front
-    const t0 = d.timing.events.findLast((e) => e.kind === "beat")?.t ?? d.now();
-    const at = (s) => d.wait(Math.max(0, (t0 + s - d.now()) * 1000));
+    // cued to the line's three sentence groups: the whole holder while "a pegboard holder that grips by weight", the
+    // cover going see-through as the camera closes in; then (group 2) the rack drops between the pinions behind it on
+    // "the load pushes a rack down between two pinions" and the pads shut on "clamp it"; then (group 3) out to a
+    // three-quarter view, the parts sliding apart along the way they go together on "every part prints, pins included":
+    // the pins that go in from behind, the rack and arms, the cover, foot and pads, and the shouldered pins in front
     const works = await d.api("componentBox", ["Back plate", "Lower arm*", "Upper arm*"]);
     const out = -1; // -y: out from the board, toward the viewer
     const explode = {
@@ -248,24 +245,22 @@ export async function act3(d) {
       "Pivot pin*": [0, 135 * out, 0], "Guide pin*": [0, 135 * out, 0],
       "Stand-in item*": [0, 95 * out, 250], // lifted up out of the frame: not a part
     };
-    await d.api("aim", { dir: [0.25, -1, 0.35], ms: 1000, margin: 0.9 });
-    await at(2.5);
-    await Promise.all([d.api("poseGhost", ["Cover"], 0, 1, 1000), d.api("aim", { dir: [0.1, -1, 0.2], box: works, ms: 1500, margin: 1.15 })]);
-    await at(4.4);
+    await d.api("aim", { dir: [0.25, -1, 0.35], ms: 900, margin: 0.9 });
+    await Promise.all([d.api("poseGhost", ["Cover"], 0, 1, 1000), d.api("aim", { dir: [0.1, -1, 0.2], box: works, ms: 1300, margin: 1.15 })]);
+    await d.cue(); // "the load pushes a rack down between two pinions, swinging the pads in to clamp it"
     d.event("view", "cover see-through: the rack and pinions");
-    const drop = d.api("poseSweep", "drop", 0, 6.4, 4700);
-    await at(6.0);
+    const drop = d.api("poseSweep", "drop", 0, 6.4, 4200);
+    await d.wait(1600);
     d.pick("skadis holder");
     await drop;
-    await at(9.8);
     // the printed parts' box, as far apart as they'll go (about: the pads go aside as well as out)
     const parts = await d.api("componentBox", ["Back plate", "Lower arm*", "Upper arm*", "Foot"]); // the item stands clear
     const apart = { min: { ...parts.min, x: parts.min.x - 70, y: parts.min.y + 95 * out }, max: { ...parts.max, x: parts.max.x + 70 } };
-    await Promise.all([d.api("poseGhost", ["Cover"], 1, 0, 900), d.api("aim", { dir: [0.75, -1, 0.4], box: apart, ms: 1800, margin: 0.85 })]);
-    await at(12.3);
+    const back = Promise.all([d.api("poseGhost", ["Cover"], 1, 0, 900), d.api("aim", { dir: [0.75, -1, 0.4], box: apart, ms: 1600, margin: 0.85 })]);
+    await d.cue(); // "Every part prints, pins included."
     d.event("view", "exploded along the assembly");
-    await d.api("poseExplode", explode, 1, 1500);
-    await at(15.2);
+    await d.api("poseExplode", explode, 1, 1400);
+    await back;
     // held apart to the end: the next clip's load puts the parts back (openText ends the pose)
   });
   await clip("handlebar", "handlebar", "Bike handlebar", "a 3D sweep with a tapering section, a wrapped hex grip", async () => {
@@ -437,46 +432,85 @@ export async function act3(d) {
     await d.run(() => window.__vibecadDemo.store.getState().closeDrawing());
     await d.api("newDocument");
     await d.run((c) => { const D = window.__vibecadDemo; D.mockAgent(c); D.view("iso"); const st = D.store.getState(); if (st.showPlanes) st.toggleShowPlanes(); }, agentCache);
-    await d.settle(400);
+    // PUPPET: the panel opens off camera (the bistable beat already showed the Agent button), its prompt box focused,
+    // so the beat starts on the typing
+    await d.run(() => { const st = window.__vibecadDemo.store.getState(); if (!st.agentOpen) st.toggleAgent(); });
+    await d.settle(300);
+    await d.clickEl(".agent-input textarea");
   });
   await d.beat("agent", async () => {
+    // Four sentence groups, each cued to what it names: the vase as its prompt is typed and built; the lamp shade and
+    // the Voronoi pattern each as its prompt is sent, so "cuts the windows" and "wraps the cells" land as that result
+    // appears; the parametric model as its parameters and history open. The prompts are typed fast and the builds sped
+    // up (Claude's turns and the rebuilds take about 14, 50 and 70 s live; at most 3 s on screen each, with the speed
+    // chyron), so the line, not the waiting, sets the beat's length.
     await d.lower("Ask Claude", "it builds with the same commands you do");
     await d.api("cursor", true);
-    await d.clickEl(`${await d.toolbar("agent")} button`, "Agent");
-    const ask = async (text, label) => {
-      await d.clickEl(".agent-input textarea");
-      await d.type(text, 40);
-      await d.key("Enter");
-      await d.fast(label, async () => {
-        await d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 });
-        // the window cuts, and then the Voronoi openings (one boolean of ~50 cutters through the twisted shell's
-        // spline walls), take far longer than settle's usual 20 s
-        if (!(await d.api("settle", 400, 150000, true))) d.note("settle timed out");
-      });
+    const build = (label) => d.fast(label, async () => {
+      await d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 });
+      // the window cuts, and then the Voronoi openings (one boolean of ~50 cutters through the twisted shell's
+      // spline walls), take far longer than settle's usual 20 s
+      if (!(await d.api("settle", 400, 150000, true))) d.note("settle timed out");
+    });
+    // a prompt typed in about `ms`, a few characters a keystroke (a long prompt at typing speed would hold the beat)
+    const typeIn = async (text, ms) => {
+      d.event("type", text);
+      const n = Math.ceil(text.length / 4);
+      for (let i = 0; i < text.length; i += 4) {
+        const t = Date.now();
+        await d.page.keyboard.type(text.slice(i, i + 4));
+        const left = ms / n - (Date.now() - t);
+        if (left > 0) await d.wait(left);
+      }
     };
-    await ask(agentCache.prompt, "Claude building");
-    await d.api("aim", { dir: [1, -1, 0.45], ms: 1200, margin: 0.9 });
-    await d.wait(1600);
+    const prompt = async (text, ms) => { await d.clickEl(".agent-input textarea", undefined, { ms: 250 }); await typeIn(text, ms); };
+    // "Or just describe it: Claude builds a twisted vase with the same commands you use": typed under "describe it",
+    // sent by "Claude builds", its commands streaming into the panel under "the same commands you use"
+    await typeIn(agentCache.prompt, 1500);
+    await d.key("Enter");
+    await build("Claude building");
     // the refinements, more prompts in the same conversation: the lamp shade, then its holes as a Voronoi pattern
-    const [shade, ...more] = agentCache.followUps ?? [];
+    const [shade, voronoi] = agentCache.followUps ?? [];
     if (shade) {
-      await ask(shade, "Claude refining");
-      // hold on the shade long enough to see its rows of round windows
-      await d.api("aim", { dir: [1, -1, 0.3], ms: 1200, margin: 0.85 });
-      await d.wait(2000);
+      // the vase turns to three-quarters while the next prompt is typed
+      await Promise.all([d.api("aim", { dir: [1, -1, 0.45], ms: 1200, margin: 0.9 }), prompt(shade, 1000)]);
+      await d.cue(); // "Ask for a lamp shade, and it cuts the windows."
+      await d.key("Enter");
+      await build("Claude cutting windows");
     }
-    for (const f of more) await ask(f, "Claude laying out");
+    if (voronoi) {
+      // in a little lower, its rows of round windows held a moment before the Voronoi prompt is typed
+      await Promise.all([d.api("aim", { dir: [1, -1, 0.3], ms: 1200, margin: 0.85 }), (async () => { await d.wait(900); await prompt(voronoi, 600); })()]);
+      await d.cue(); // "Ask for a Voronoi pattern instead, and it wraps the cells round the shade."
+      await d.key("Enter");
+      await build("Claude laying out the cells");
+    }
     // the Voronoi shade: turn it round so the cells are seen wrapping all the way, leaning with the twist
-    await d.api("aim", { dir: [1, -1, 0.3], ms: 1200, margin: 0.85 });
+    await d.api("aim", { dir: [1, -1, 0.3], ms: 900, margin: 0.85 });
     await d.api("turntable", 14);
-    await d.wait(1600); d.pick("Voronoi lamp shade");
-    await d.wait(4400);
+    d.pick("Voronoi lamp shade");
+    await d.cue(); // "The result is still an ordinary parametric model."
+    // its parameters, and planes placed by expressions of them, in the left panel; the shade framed again between it and
+    // the agent panel (the callout would cover the parameters)
+    await d.lower(null);
+    await Promise.all([d.clickEl(".side-toggle.left", undefined, { ms: 350 }), d.api("turntable", null)]);
+    await d.api("cursor", false);
+    // frame: fractions of the window, the gap between the left panel (to 0.22) and the agent panel (from 0.75)
+    await d.api("aim", { dir: [1, -1, 0.3], frame: [0.26, 0.1, 0.73, 0.95], ms: 800 });
+    await d.api("turntable", 10);
+    await d.wait(1200);
     await d.api("turntable", null);
-  }, { minMs: 26000 });
+  });
 
+  // the call to action: where to get it, said over the card that shows it; then (group 2) the tutorial joins the card as
+  // "watch the phone stand tutorial" is said
+  const getIt = { title: "Get VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Browser or desktop"] };
   await d.beat("outro", async () => {
     await d.lower(null);
     await d.api("cursor", false);
-    await d.api("titleCard", { title: "Get VibeCAD", subtitle: "mikepkes.github.io/CAD   ·   desktop app: GitHub Releases", chips: ["Free", "Open source (MIT)", "Browser or desktop"] });
+    await d.api("titleCard", getIt);
+    await d.cue(); // "To build your first model, watch the phone stand tutorial. Thanks for watching."
+    await d.wait(1200);
+    await d.api("titleCard", { ...getIt, chips: [...getIt.chips, "Next: the phone stand tutorial"] });
   }, { minMs: 6000 });
 }
