@@ -768,11 +768,13 @@ export function buildThread(s: ThreadBuildSpec): Shape3D {
   if (!(len > 0)) throw new Error("thread length must be positive");
 
   const coreVol = Math.PI * rMin * rMin * len, majorVol = Math.PI * rMaj * rMaj * len;
-  // OCC's helical sweep degenerates (silently drops the ribs) for some
-  // profile/size combos, and which sweep config survives varies by form — so we
-  // try a few and keep the first that validates, before the caller falls back to
-  // cosmetic. Orthogonality-to-spine first (keeps the section radial).
-  const configs: SweepConfig[] = [{ forceProfileSpineOthogonality: true }, { frenet: true }, {}];
+  // The section is swept with its binormal locked to the axis first: that keeps it
+  // in its axial plane all the way up. The other modes let it roll slowly about
+  // the helix (a long rod's thread thinned to nothing and back every few turns),
+  // so they're only fallbacks. OCC's helical sweep also degenerates (silently
+  // drops the ribs) for some profile/size combos, so we keep the first config
+  // that validates, before the caller falls back to cosmetic.
+  const configs: SweepConfig[] = [{ binormal: true }, { forceProfileSpineOthogonality: true }, { frenet: true }, {}];
   let lastErr: Error | null = null;
   for (const cfg of configs) {
     try {
@@ -787,16 +789,18 @@ export function buildThread(s: ThreadBuildSpec): Shape3D {
       const embed = Math.min(0.03, sec.depth * 0.08);
       let rod = makeCylinder(rMin + embed, len) as Shape3D;
       for (let k = 0; k < starts; k++) {
-        const rib = sweepThreadSection(sec, rMin, len, lead, !!s.leftHand, k, starts, cfg);
+        // each rib trimmed to the rod's length before it's joined (trimming the
+        // fused rod can lose a binormal-swept rib altogether)
+        const rib = trimRod(sweepThreadSection(sec, rMin, len, lead, !!s.leftHand, k, starts, cfg), rMaj, len);
         const f = fuseShapes(rod, rib); rod.delete(); rib.delete(); rod = f;
       }
-      return validateThread(trimRod(rod, rMaj, len), (v) => v > coreVol * 1.02 && v < majorVol * 1.02);
+      return validateThread(rod, (v) => v > coreVol * 1.02 && v < majorVol * 1.02);
     } catch (e) { lastErr = e as Error; }
   }
   throw lastErr ?? new Error("modeled thread did not form");
 }
 
-type SweepConfig = { frenet?: boolean; forceProfileSpineOthogonality?: boolean };
+type SweepConfig = { frenet?: boolean; forceProfileSpineOthogonality?: boolean; binormal?: boolean };
 
 /** Guard against OCC quietly dropping the thread ribs/grooves (some pitch/size
  *  combos degenerate to a bare cylinder): throw so the feature can fall back. */
@@ -820,12 +824,30 @@ function sweepThreadSection(sec: ThreadSection, rBase: number, len: number, lead
   // Run the helix from below z=0 to above len so the section is established at
   // both ends; the rod is trimmed flat afterwards.
   const helix = makeHelix(lead, len + 2 * lead, rBase, [0, 0, -lead], [0, 0, 1], leftHand);
-  let swept = genericSweep(wire, helix, cfg) as Shape3D;
+  let swept = cfg.binormal ? binormalSweep(wire, helix) : genericSweep(wire, helix, cfg) as Shape3D;
   if (startIndex > 0) {
     const rot = rotateShape(swept, (360 / starts) * startIndex, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
     swept.delete(); swept = rot;
   }
   return swept;
+}
+
+/** Sweep a section along a helix about +Z with its binormal held on the axis, so
+ *  it never rolls about the helix (replicad's genericSweep has no binormal mode). */
+function binormalSweep(wire: Wire, helix: Wire): Shape3D {
+  type Pipe = { SetMode(d: unknown): void; Add(w: unknown, contact: boolean, correct: boolean): void; Build(): void; MakeSolid(): boolean; IsDone(): boolean; Shape(): unknown; delete(): void };
+  const oc = getOC() as unknown as { BRepOffsetAPI_MakePipeShell: new (spine: unknown) => Pipe; gp_Dir: new (x: number, y: number, z: number) => { delete(): void } };
+  const raw = (w: Wire) => (w as unknown as { wrapped: unknown }).wrapped;
+  const pipe = new oc.BRepOffsetAPI_MakePipeShell(raw(helix)), axis = new oc.gp_Dir(0, 0, 1);
+  try {
+    pipe.SetMode(axis);
+    pipe.Add(raw(wire), false, false);
+    pipe.Build();
+    if (!pipe.IsDone() || !pipe.MakeSolid()) throw new Error("the thread sweep did not form");
+    const out = castOwned(pipe.Shape());
+    if (!isShape3D(out as never)) throw new Error("the thread sweep did not form a solid");
+    return out;
+  } finally { pipe.delete(); axis.delete(); }
 }
 
 /** Trim a thread solid to exactly z ∈ [0, len] with flat ends. */
