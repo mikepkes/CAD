@@ -1019,15 +1019,31 @@ export type BooleanKind = "fuse" | "cut" | "intersect";
 
 /** A boolean plus its face provenance: `parents[j]` lists the input faces that
  *  became result face j, as indices into [...faces(a), ...faces(b)] (so b's
- *  faces start at faces(a).length). Consumes neither operand. */
-export function booleanWithHistory(kind: BooleanKind, a: Shape3D, b: Shape3D): { shape: Shape3D; parents: number[][] } {
+ *  faces start at faces(a).length). `b` may be several (disjoint) tools, whose faces follow a's in order.
+ *  Consumes neither operand. */
+export function booleanWithHistory(kind: BooleanKind, a: Shape3D, b: Shape3D | Shape3D[]): { shape: Shape3D; parents: number[][] } {
   type Builder = { Build(): void; IsDone(): boolean; SimplifyResult(u: boolean, v: boolean, tol: number): void; Shape(): unknown; Modified(s: unknown): OcList; IsDeleted(s: unknown): boolean; delete(): void };
   type OcList = { Size(): number; First(): { IsSame(o: unknown): boolean; HashCode?(n: number): number }; RemoveFirst(): void; delete(): void };
-  const oc = getOC() as unknown as Record<string, new (a: unknown, b: unknown) => Builder>;
+  type ShapeList = { Append(s: unknown): void; delete(): void };
+  type ListBuilder = Builder & { SetArguments(l: ShapeList): void; SetTools(l: ShapeList): void; SetUseOBB(v: boolean): void; SetNonDestructive(v: boolean): void };
+  const oc = getOC() as unknown as Record<string, new (a?: unknown, b?: unknown) => Builder> & { NCollection_List_TopoDS_Shape: new () => ShapeList };
   const ctor = kind === "fuse" ? oc.BRepAlgoAPI_Fuse : kind === "cut" ? oc.BRepAlgoAPI_Cut : oc.BRepAlgoAPI_Common;
-  const aw = (a as unknown as { wrapped: unknown }).wrapped, bw = (b as unknown as { wrapped: unknown }).wrapped;
-  const builder = new ctor(aw, bw);
-  const inputs = [...facesOf(a), ...facesOf(b)];
+  const raw = (s: Shape3D) => (s as unknown as { wrapped: unknown }).wrapped;
+  const tools = Array.isArray(b) ? b : [b];
+  let builder: Builder;
+  if (Array.isArray(b)) {
+    // many tools at once (a pattern of cuts): one pass, with oriented bounding boxes to rule out the
+    // tool/face pairs that can't meet (a small tool's box beside a long curved face's box often overlaps it)
+    const args = new oc.NCollection_List_TopoDS_Shape(), list = new oc.NCollection_List_TopoDS_Shape();
+    const lb = new ctor() as ListBuilder;
+    try {
+      args.Append(raw(a));
+      for (const t of b) list.Append(raw(t));
+      lb.SetArguments(args); lb.SetTools(list); lb.SetUseOBB(true); lb.SetNonDestructive(true);
+    } finally { args.delete(); list.delete(); }
+    builder = lb;
+  } else builder = new ctor(raw(a), raw(b));
+  const inputs = [...facesOf(a), ...tools.flatMap((t) => facesOf(t))];
   let outFaces: OcFace[] = [];
   try {
     builder.Build();

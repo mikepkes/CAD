@@ -476,6 +476,43 @@ export interface PatternFeature {
   /** Target body (feature id) to repeat; default the most recent. */
   body?: string;
 }
+/** Voronoi openings through the wall of a hollow body around an axis (a lamp shade, a vase, a basket): the
+ *  Voronoi cells of seeded random points, wrapped all the way round without a seam, each cut through the
+ *  wall inset from its cell's edges so a web of wall at least `web` wide is left between every two openings
+ *  (and between the openings and the band's ends). A `twist` leans the cells with a twisted body. */
+export interface VoronoiFeature {
+  id: string;
+  kind: "voronoi";
+  name: string;
+  /** How many cells (expression). */
+  cellsExpr: string;
+  cellsValue?: number;
+  /** Seed for the random layout: the same seed, the same pattern. */
+  seed: number;
+  /** Lloyd relaxation passes (evener cells); default 8. */
+  relax?: number;
+  /** Least wall left between openings (expression, mm). */
+  webExpr: string;
+  webValue?: number;
+  /** Corner radius of the openings (expression, mm; default 0). */
+  roundExpr?: string;
+  roundValue?: number;
+  /** The band along the axis the openings fill (expressions, mm along the axis from its origin); default
+   *  the body's extent less a tenth of it at each end. */
+  fromExpr?: string;
+  fromValue?: number;
+  toExpr?: string;
+  toValue?: number;
+  /** Degrees the pattern turns over the body's whole extent along the axis (expression; default 0). */
+  twistExpr?: string;
+  twistValue?: number;
+  /** The axis the pattern wraps round (default the Z axis through the origin). */
+  axis?: { origin: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number } };
+  body?: string;
+  requireEffect?: boolean;
+  /** Openings the last build cut (derived). */
+  openingsValue?: number;
+}
 /**
  * Mirror feature: reflects the running bodies across a plane and fuses each
  * reflection into its source body. The first solid transform — the primitive
@@ -628,7 +665,7 @@ export interface InstanceFrame {
   template: string;  // the source (template) component it was cloned from
 }
 
-export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | GearFeature | ImportFeature | MemberFeature | SheetFeature | FlangeFeature | FoldFeature | UnfoldFeature | SurfaceFeature | StitchFeature | ThickenFeature | TrimFeature | UntrimFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | MirrorFeature) & {
+export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | GearFeature | ImportFeature | MemberFeature | SheetFeature | FlangeFeature | FoldFeature | UnfoldFeature | SurfaceFeature | StitchFeature | ThickenFeature | TrimFeature | UntrimFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | VoronoiFeature | MirrorFeature) & {
   instanceFrame?: InstanceFrame;
   /** Switched off by the active configuration (derived; set by rebuild). */
   configSuppressed?: boolean;

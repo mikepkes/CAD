@@ -112,6 +112,7 @@ function ModelInspector() {
               f.kind === "untrim" ? "◍ fill" :
               f.kind === "hole" ? `⌀ ${f.diameterExpr}${f.at.length > 1 ? `×${f.at.length}` : ""}` :
               f.kind === "thread" ? `⇅ ${f.spec.form} ${f.spec.diameter}` :
+              f.kind === "voronoi" ? `⬡ ${f.cellsExpr} · web ${f.webExpr}` :
               `${f.kind === "fillet" ? "r" : "d"}=${f.sizeExpr}`;
             return (
               <div className="dim-row" key={f.id} style={{ gridTemplateColumns: "18px 1fr 1fr 60px 22px" }}>

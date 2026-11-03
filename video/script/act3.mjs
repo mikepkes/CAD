@@ -449,28 +449,30 @@ export async function act3(d) {
       await d.key("Enter");
       await d.fast(label, async () => {
         await d.page.waitForFunction(() => !window.__vibecadDemo.store.getState().agentRunning, null, { timeout: 120000 });
-        // re-cutting the windows rebuilds the shell's three cuts, which can take longer than settle's usual 20 s
-        if (!(await d.api("settle", 400, 60000, true))) d.note("settle timed out");
+        // the window cuts, and then the Voronoi openings (one boolean of ~50 cutters through the twisted shell's
+        // spline walls), take far longer than settle's usual 20 s
+        if (!(await d.api("settle", 400, 150000, true))) d.note("settle timed out");
       });
     };
     await ask(agentCache.prompt, "Claude building");
     await d.api("aim", { dir: [1, -1, 0.45], ms: 1200, margin: 0.9 });
     await d.wait(1600);
-    // the refinements, more prompts in the same conversation: the lamp shade, then windows that don't overlap
+    // the refinements, more prompts in the same conversation: the lamp shade, then its holes as a Voronoi pattern
     const [shade, ...more] = agentCache.followUps ?? [];
     if (shade) {
       await ask(shade, "Claude refining");
-      // hold on the shade long enough to see its windows run into each other near the corners
+      // hold on the shade long enough to see its rows of round windows
       await d.api("aim", { dir: [1, -1, 0.3], ms: 1200, margin: 0.85 });
       await d.wait(2000);
     }
-    for (const f of more) await ask(f, "Claude fixing");
+    for (const f of more) await ask(f, "Claude laying out");
+    // the Voronoi shade: turn it round so the cells are seen wrapping all the way, leaning with the twist
     await d.api("aim", { dir: [1, -1, 0.3], ms: 1200, margin: 0.85 });
-    await d.api("turntable", 8);
-    await d.wait(1200); d.pick("lamp shade");
-    await d.wait(2400);
+    await d.api("turntable", 14);
+    await d.wait(1600); d.pick("Voronoi lamp shade");
+    await d.wait(4400);
     await d.api("turntable", null);
-  }, { minMs: 20000 });
+  }, { minMs: 26000 });
 
   await d.beat("outro", async () => {
     await d.lower(null);
