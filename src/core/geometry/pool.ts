@@ -3,11 +3,11 @@
 // features, the merge turns the workers' rows into the rows a whole evaluation would have
 // given, in the same order. The worker backend (model/worker-backend.ts) does the posting.
 
-import type { CadDocument } from "../document";
+import type { CadDocument, FeatureDef } from "../document";
 import type { Scope } from "../../math/expr";
 import type { WorkPlane } from "../../geometry/plane";
 import type { SolidEval } from "../features";
-import { featureChains, featureOrder } from "./chains";
+import { featureChains, featureOrder, type FeatureChain } from "./chains";
 import { featureActive } from "../features";
 
 export interface EvaluationPart {
@@ -22,34 +22,44 @@ export interface EvaluationPart {
  * evaluation is not worth splitting (one worker, or the model is one chain, or its
  * chains can't be told apart safely): then worker 0 builds it whole, as before.
  *
- * A chain always goes to the same worker (by a hash of its id), so that worker's
- * incremental cache keeps hitting for it; the hash slot is only overridden when it is
- * fuller than its share, so a few chains still spread over the pool.
+ * A chain stays on the worker `placed` (the backend's memory of earlier plans) gives
+ * it, so that worker's incremental cache keeps hitting for it. A chain not placed yet
+ * — every chain, on the first build — goes to the least loaded worker, the heaviest
+ * first (by featureWeight), so a chain that takes seconds (a long modelled thread, a
+ * herringbone gear) gets a worker to itself rather than a share of the others' work
+ * too; the plan is the same for the same model and `placed`.
  */
-export function planEvaluation(doc: CadDocument, scope: Scope, size: number): EvaluationPart[] | null {
+export function planEvaluation(doc: CadDocument, scope: Scope, size: number, placed = new Map<string, number>()): EvaluationPart[] | null {
   if (size < 2) return null;
   const chains = featureChains(doc, scope);
   if (!chains || chains.length < 2) return null;
-  const cap = Math.ceil(chains.length / size);
+  const weight = new Map(chains.map((c) => [c.id, c.features.reduce((a, id) => a + featureWeight(doc.features[id]), 0)]));
   const loads = new Array<number>(size).fill(0);
   const parts: EvaluationPart[] = Array.from({ length: size }, (_, worker) => ({ worker, only: [] }));
-  // by hash order, so the same chains always get the same slots whatever the timeline's order
-  for (const c of [...chains].sort((a, b) => hash(a.id) - hash(b.id) || (a.id < b.id ? -1 : 1))) {
-    let w = hash(c.id) % size;
-    for (let k = 0; k < size && loads[w] >= cap; k++) w = (w + 1) % size;
-    loads[w]++;
-    parts[w].only.push(...c.features);
+  const put = (c: FeatureChain, w: number) => { loads[w] += weight.get(c.id)!; parts[w].only.push(...c.features); placed.set(c.id, w); };
+  const fresh: FeatureChain[] = [];
+  for (const c of chains) {
+    const w = placed.get(c.id);
+    if (w !== undefined && w < size) put(c, w); else fresh.push(c);
   }
+  for (const c of fresh.sort((a, b) => weight.get(b.id)! - weight.get(a.id)! || (a.id < b.id ? -1 : 1))) put(c, loads.indexOf(Math.min(...loads)));
   const order = featureOrder(doc);
   for (const p of parts) p.only.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
   return parts.filter((p) => p.only.length);
 }
 
-/** FNV-1a, so a chain's slot is the same in every session. */
-function hash(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-  return h;
+/** Roughly what a feature costs to build, in plain extrudes (tens of ms): enough to tell the
+ *  chains that take seconds from the rest when they are shared out (measured with
+ *  scripts/bench/profile.ts: a modelled thread ~10 per turn, a gear 20–80, a sweep ~10–30). */
+export function featureWeight(f: FeatureDef | undefined): number {
+  switch (f?.kind) {
+    case "thread": return f.spec.representation === "modeled" ? 10 * Math.max(1, f.spec.length / Math.max(0.1, f.spec.pitch)) : 1;
+    case "gear": return f.gearType === "spur" || f.gearType === "rack" ? 20 : 40;
+    case "sweep": case "loft": return 10;
+    case "voronoi": return 20;
+    case "fillet": case "chamfer": case "shell": return 3;
+    default: return 1;
+  }
 }
 
 export interface PartResult {
@@ -96,7 +106,7 @@ export function hasImplicitTargets(doc: CadDocument, scope: Scope): boolean {
     if (!featureActive(f, scope)) continue;
     if (f.kind === "mirror") return true;
     const op = "operation" in f ? (f.operation ?? "new") : "new";
-    const modifies = ["hole", "fillet", "chamfer", "shell", "pattern", "trim", "thread"].includes(f.kind) || op !== "new";
+    const modifies = ["hole", "fillet", "chamfer", "shell", "pattern", "voronoi", "trim", "thread"].includes(f.kind) || op !== "new";
     if (modifies && !("body" in f && f.body && f.body !== "last")) return true;
   }
   return false;

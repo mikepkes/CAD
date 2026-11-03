@@ -124,9 +124,11 @@ It runs in a Web Worker in the app and inline in tests and the stdio server.
   workers, each with a kernel and a step cache of its own. Before an
   evaluation, `featureChains` predicts — without the kernel — which body each
   active feature reads and makes, and joins the features that share a body
-  into a chain; the chains are built in parallel, a chain always on the same
-  worker (by a hash of its id) so that worker's cache keeps hitting, and the
-  rows are merged back in the order a whole evaluation writes them. A model
+  into a chain; the chains are built in parallel — the heaviest first, each to
+  the least loaded worker (`featureWeight`: a long modelled thread or a
+  herringbone gear gets a worker to itself), and a chain kept on the worker it
+  was given so that worker's cache keeps hitting — and the rows are merged
+  back in the order a whole evaluation writes them. A model
   the split can't predict (a mirror of every body, a sketch on a face, sheet
   metal, weldments, assembly patterns), or one that is one chain anyway, is
   built whole on worker 0 — as is every other job (export, collide, topology).

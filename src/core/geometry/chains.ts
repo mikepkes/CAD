@@ -76,7 +76,7 @@ function featureEffect(doc: CadDocument, f: FeatureDef, any: boolean, named: (re
       // an external thread with nothing to join is a body of its own; an internal one cuts its target
       if (!f.spec.internal && (op === "new" || !any)) return { reads: [], makes: true };
       return { reads: some(target()), makes: false };
-    case "hole": case "fillet": case "chamfer": case "shell": case "pattern":
+    case "hole": case "fillet": case "chamfer": case "shell": case "pattern": case "voronoi":
       return { reads: some(target()), makes: false };
     case "mirror":
       return f.bodies === "last" ? { reads: some(named("last")), makes: false } : null; // else every body

@@ -1,10 +1,10 @@
 // Browser geometry backend: runs the kernel in Web Workers (see geometry.worker.ts) so
 // B-rep evaluation never blocks the main thread. A pool of `size` workers, each with a
 // kernel and an incremental cache of its own: an evaluation is split into independent
-// chains of features (core/geometry/chains.ts) that build in parallel, a chain always on
-// the same worker so its cache keeps hitting; every other job, and a model that can't be
-// split, goes to worker 0 whole, as with a single worker. Pool size 1 is exactly the
-// single-worker backend of before.
+// chains of features (core/geometry/chains.ts) that build in parallel, the heaviest spread
+// over the pool first and every chain kept on its worker so its cache keeps hitting; every
+// other job, and a model that can't be split, goes to worker 0 whole, as with a single
+// worker. Pool size 1 is exactly the single-worker backend of before.
 //
 // This module references `new Worker(new URL(...))`, which only resolves in a
 // bundler/browser realm — it is imported solely from the browser store, never
@@ -43,6 +43,8 @@ export class WorkerGeometryBackend implements GeometryBackend {
   private pending = new Map<number, (r: GeometryResponse) => boolean>();
   private progress = new Map<number, BuildProgressSink>();
   private readyResolvers: (() => void)[] = [];
+  /** Which worker each chain of features was given (see planEvaluation): it stays there, where its cache is. */
+  private placed = new Map<string, number>();
 
   constructor(opts: WorkerBackendOptions = {}) {
     const spawn = opts.spawn ?? spawnWebWorker;
@@ -90,7 +92,7 @@ export class WorkerGeometryBackend implements GeometryBackend {
 
   async evaluate(doc: CadDocument, onProgress?: BuildProgressSink, onMeshes?: (r: EvaluateResult) => void): Promise<EvaluateResult> {
     const scope = resolveParameters(doc.parameters).scope;
-    const plan = planEvaluation(doc, scope, this.workers.length);
+    const plan = planEvaluation(doc, scope, this.workers.length, this.placed);
     if (plan) {
       const r = await this.evaluateParts(doc, plan, onProgress, onMeshes);
       // a split that can't be trusted (a body failed to be made; see needsWholeRebuild) is built whole

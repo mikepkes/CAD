@@ -4,13 +4,13 @@ import { fileURLToPath } from "node:url";
 import { echoSession } from "./helpers";
 import { featureChains } from "../src/core/geometry/chains";
 import { featureActive } from "../src/core/features";
-import { hasImplicitTargets } from "../src/core/geometry/pool";
+import { hasImplicitTargets, planEvaluation, featureWeight } from "../src/core/geometry/pool";
 import { geometryCapabilities, poolSizeFor, MAX_POOL } from "../src/core/geometry/capabilities";
 import { resolveParameters } from "../src/core/parameters";
 import { deserializeDocument } from "../src/core/persistence";
 import { createDefaultRegistry } from "../src/core/command/builtins";
 import { rebuild } from "../src/core/build";
-import type { CadDocument } from "../src/core/document";
+import type { CadDocument, FeatureDef } from "../src/core/document";
 
 // The split of a model into independent chains of features (no kernel needed): every
 // active feature lands in exactly one chain, features that share a body share a chain,
@@ -21,9 +21,11 @@ const example = (name: string): CadDocument => {
   return doc;
 };
 const chainsOf = (doc: CadDocument) => featureChains(doc, resolveParameters(doc.parameters).scope);
+/** The chain (by its id) that holds a feature. */
+const of2 = (chains: { id: string; features: string[] }[], id: string) => chains.find((ch) => ch.features.includes(id))!.id;
 
 describe("feature chains", () => {
-  it.each([["walker", 74], ["gyroscope", 3], ["roubo", 33], ["motor", 10], ["clockwork", 38]])("%s splits into %i chains, every feature in one", (name, n) => {
+  it.each([["walker", 74], ["gyroscope", 3], ["roubo", 34], ["motor", 10], ["clockwork", 45]])("%s splits into %i chains, every feature in one", (name, n) => {
     const doc = example(name as string);
     const chains = chainsOf(doc)!;
     expect(chains).not.toBeNull();
@@ -59,6 +61,12 @@ describe("feature chains", () => {
     expect(of(cutLast)).toBe(c);
     expect(of(b)).toBe(b);
     expect(hasImplicitTargets(s.doc, resolveParameters(s.doc.parameters).scope)).toBe(true);
+    // a Voronoi pattern cuts its body (named, or the most recent)
+    s.doc.features.vor1 = { id: "vor1", kind: "voronoi", name: "Voronoi", cellsExpr: "12", seed: 1, webExpr: "2", body: b } as FeatureDef;
+    s.doc.features.vor2 = { id: "vor2", kind: "voronoi", name: "Voronoi 2", cellsExpr: "12", seed: 1, webExpr: "2" } as FeatureDef;
+    expect(chainsOf(s.doc)!.length).toBe(3);
+    expect(of2(chainsOf(s.doc)!, "vor1")).toBe(b);
+    expect(of2(chainsOf(s.doc)!, "vor2")).toBe(c);
     // a mirror of every body reads them all: no safe split
     await s.dispatch("feature.mirror", { plane: "YZ" });
     expect(chainsOf(s.doc)).toBeNull();
@@ -75,6 +83,49 @@ describe("feature chains", () => {
     expect(chainsOf(s.doc)!.length).toBe(2);
     s.doc.sketches[sid2].faceRef = { body: f, face: `${f}:top` } as never;
     expect(chainsOf(s.doc)).toBeNull();
+  });
+});
+
+describe("sharing the chains out", () => {
+  const scopeOf = (doc: CadDocument) => resolveParameters(doc.parameters).scope;
+
+  it("gives the heaviest chain a worker of its own: the roubo's modelled vise-screw thread", () => {
+    const doc = example("roubo");
+    const thread = Object.values(doc.features).find((f) => f.kind === "thread")!;
+    expect(featureWeight(thread)).toBeGreaterThan(200); // 330 mm at a 12 mm pitch: seconds of sweeping and booleans
+    const plan = planEvaluation(doc, scopeOf(doc), 4)!;
+    const own = plan.find((p) => p.only.includes(thread.id))!;
+    const chain = featureChains(doc, scopeOf(doc))!.find((c) => c.features.includes(thread.id))!;
+    expect(own.only).toEqual(chain.features); // the screw and its thread, nothing else
+    expect(plan.flatMap((p) => p.only).sort()).toEqual(Object.keys(doc.features).sort());
+  });
+
+  it("weighs features by what they cost to build", () => {
+    const f = (x: object) => x as FeatureDef;
+    expect(featureWeight(f({ kind: "extrude" }))).toBe(1);
+    expect(featureWeight(f({ kind: "thread", spec: { pitch: 2, length: 6, representation: "cosmetic" } }))).toBe(1);
+    expect(featureWeight(f({ kind: "thread", spec: { pitch: 2, length: 6, representation: "modeled" } }))).toBe(30);
+    expect(featureWeight(f({ kind: "gear", gearType: "spur" }))).toBeLessThan(featureWeight(f({ kind: "gear", gearType: "herringbone" })));
+    expect(featureWeight(undefined)).toBe(1);
+  });
+
+  it("keeps a chain on the worker it was given, so that worker's cache keeps hitting", () => {
+    const doc = example("clockwork");
+    const placed = new Map<string, number>();
+    const first = planEvaluation(doc, scopeOf(doc), 3, placed)!;
+    expect(placed.size).toBe(45);
+    expect(planEvaluation(doc, scopeOf(doc), 3, placed)).toEqual(first); // the same plan again
+    expect(planEvaluation(doc, scopeOf(doc), 3)).toEqual(first); // and from nothing: it depends only on the model
+    // a chain placed elsewhere (by an earlier model's plan) stays where it is
+    const [moved] = featureChains(doc, scopeOf(doc))!;
+    const to = (placed.get(moved.id)! + 1) % 3;
+    placed.set(moved.id, to);
+    const again = planEvaluation(doc, scopeOf(doc), 3, placed)!;
+    expect(again.find((p) => p.worker === to)!.only).toEqual(expect.arrayContaining(moved.features));
+    // a placement on a worker the pool no longer has is made afresh
+    placed.set(moved.id, 7);
+    expect(planEvaluation(doc, scopeOf(doc), 3, placed)!.flatMap((p) => p.only).sort()).toEqual(first.flatMap((p) => p.only).sort());
+    expect(placed.get(moved.id)).toBeLessThan(3);
   });
 });
 
