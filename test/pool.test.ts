@@ -169,3 +169,34 @@ describe("geometry worker pool", () => {
     expect(Object.keys(merged.solids)).toEqual(["f3", "f4", "f1", "f2"]);
   });
 });
+
+describe("the pool's kernel", () => {
+  /** Workers that only note what they're sent, and answer an init at once. */
+  const recording = () => {
+    const sent: unknown[] = [];
+    const spawn = (): WorkerLike => {
+      const w: WorkerLike = { onmessage: null, terminate() {}, postMessage(m) { sent.push(m); setTimeout(() => w.onmessage?.({ data: { kind: "ready" } }), 0); } };
+      return w;
+    };
+    return { sent, spawn };
+  };
+
+  it("is compiled once and handed to every worker", async () => {
+    const { sent, spawn } = recording();
+    const module = { compiled: true } as unknown as WebAssembly.Module;
+    const urls: string[] = [];
+    const b = new WorkerGeometryBackend({ size: 3, spawn, compile: async (url) => { urls.push(url); return module; } });
+    await b.init({ wasmUrl: "/kernel.wasm" });
+    expect(b.ready()).toBe(true);
+    expect(urls).toEqual(["/kernel.wasm"]);
+    expect(sent).toEqual([0, 1, 2].map(() => ({ kind: "init", wasmUrl: "/kernel.wasm", wasmModule: module })));
+  });
+
+  it("is loaded by each worker itself when it can't be compiled for them", async () => {
+    const { sent, spawn } = recording();
+    const b = new WorkerGeometryBackend({ size: 2, spawn, compile: () => Promise.reject(new Error("no streaming compile here")) });
+    await b.init({ wasmUrl: "/kernel.wasm" });
+    expect(b.ready()).toBe(true);
+    expect(sent).toEqual([{ kind: "init", wasmUrl: "/kernel.wasm" }, { kind: "init", wasmUrl: "/kernel.wasm" }]);
+  });
+});

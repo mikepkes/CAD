@@ -30,9 +30,29 @@ export interface WorkerBackendOptions {
   size?: number;
   /** Makes a worker (default: the geometry Web Worker). */
   spawn?: () => WorkerLike;
+  /** Compiles the kernel's wasm once for every worker (default: compileKernel). */
+  compile?: (wasmUrl: string) => Promise<WebAssembly.Module>;
 }
 
 const spawnWebWorker = (): WorkerLike => new Worker(new URL("./geometry.worker.ts", import.meta.url), { type: "module" }) as unknown as WorkerLike;
+
+const compiled = new Map<string, Promise<WebAssembly.Module>>();
+/**
+ * The kernel's wasm, compiled once per page (off the main thread, as it streams in) and
+ * shared: every worker of a pool — and the motion study's — instantiates the same module
+ * instead of fetching and compiling 23 MB of it again, and the engine's optimised code for
+ * it is shared too, so a worker that starts a chain late doesn't run it unoptimised.
+ */
+export function compileKernel(wasmUrl: string): Promise<WebAssembly.Module> {
+  let p = compiled.get(wasmUrl);
+  if (!p) {
+    p = WebAssembly.compileStreaming(fetch(wasmUrl))
+      .catch(() => fetch(wasmUrl).then((r) => r.arrayBuffer()).then((b) => WebAssembly.compile(b))); // served without the wasm MIME type
+    compiled.set(wasmUrl, p);
+    p.catch(() => compiled.delete(wasmUrl));
+  }
+  return p;
+}
 
 export class WorkerGeometryBackend implements GeometryBackend {
   private workers: WorkerLike[];
@@ -46,8 +66,11 @@ export class WorkerGeometryBackend implements GeometryBackend {
   /** Which worker each chain of features was given (see planEvaluation): it stays there, where its cache is. */
   private placed = new Map<string, number>();
 
+  private compile: (wasmUrl: string) => Promise<WebAssembly.Module>;
+
   constructor(opts: WorkerBackendOptions = {}) {
     const spawn = opts.spawn ?? spawnWebWorker;
+    this.compile = opts.compile ?? compileKernel;
     this.workers = Array.from({ length: Math.max(1, opts.size ?? 1) }, () => spawn());
     for (const w of this.workers) {
       w.onmessage = (e) => {
@@ -66,11 +89,13 @@ export class WorkerGeometryBackend implements GeometryBackend {
 
   init(opts: KernelInitOptions): Promise<void> {
     if (!this.readyPromise) {
-      // every worker loads the kernel at once; ready when the last one is
-      this.readyPromise = Promise.all(this.workers.map((w) => new Promise<void>((res) => {
+      // the wasm compiled once and handed to every worker (each loads it itself if that fails);
+      // ready when the last worker's kernel is
+      const shared = opts.wasmUrl ? this.compile(opts.wasmUrl).catch(() => undefined) : Promise.resolve(undefined);
+      this.readyPromise = shared.then((wasmModule) => Promise.all(this.workers.map((w) => new Promise<void>((res) => {
         this.readyResolvers.push(res);
-        w.postMessage({ kind: "init", wasmUrl: opts.wasmUrl });
-      }))).then(() => { this.isReady = true; });
+        w.postMessage({ kind: "init", wasmUrl: opts.wasmUrl, ...(wasmModule ? { wasmModule } : {}) });
+      })))).then(() => { this.isReady = true; });
     }
     return this.readyPromise;
   }

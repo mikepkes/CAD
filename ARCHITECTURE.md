@@ -135,9 +135,13 @@ It runs in a Web Worker in the app and inline in tests and the stdio server.
   A split answer with a failed body-making feature is rebuilt whole, since
   "the most recent body" then means something else. `core/geometry/
   capabilities.ts` reads the host: the desktop app (Tauri) runs two workers
-  (up to four on request), the web app one unless `?pool=N` or localStorage
-  `vibecad.geometryPool` asks for more — a pool needs no special headers, only
-  memory (each kernel is a 23 MB wasm instance with its own heap). The threaded
+  (up to four on request), the web app four (within half the cores; two when
+  the browser reports under 8 GB or is a phone or tablet, one under 4 GB);
+  `?pool=N` or localStorage `vibecad.geometryPool` overrides. A pool needs no
+  special headers — plain module workers — only memory (each kernel is a 23 MB
+  wasm instance with its own heap). The page compiles the wasm once
+  (`compileKernel`) and hands the module to every worker, the motion study's
+  too, so none fetches and compiles it again. The threaded
   OCC build (`replicad_multi.wasm`, needs cross-origin isolation) was measured
   and not adopted: its parallel booleans gain nothing on these models, its
   parallel meshing ~1.6× on gears only. `scripts/bench/` has the headless

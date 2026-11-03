@@ -43,6 +43,9 @@ export interface KernelInitOptions {
   /** A loaded OCC module to use instead of loading the single-threaded build (a benchmark
    *  trying another build of the same bindings, e.g. the pthreads one). */
   module?: unknown;
+  /** The wasm already compiled (by the page, once for every worker of a pool): instantiated as it
+   *  is, rather than each worker fetching and compiling 23 MB of it again. */
+  wasmModule?: WebAssembly.Module;
 }
 
 /** Text for anything a kernel call threw. OCC failures surface as a bare
@@ -62,10 +65,22 @@ let ready = false;
 export function initKernel(opts: KernelInitOptions): Promise<void> {
   if (!readyPromise) {
     readyPromise = (async () => {
-      const moduleOpts: Record<string, unknown> = { print: () => {}, printErr: () => {} };
-      if (opts.wasmBinary) moduleOpts.wasmBinary = opts.wasmBinary;
-      else if (opts.wasmUrl) moduleOpts.locateFile = () => opts.wasmUrl;
-      const oc = opts.module ?? await (opencascade as unknown as (o: unknown) => Promise<unknown>)(moduleOpts);
+      const load = (compiled?: WebAssembly.Module): Promise<unknown> => {
+        const moduleOpts: Record<string, unknown> = { print: () => {}, printErr: () => {} };
+        if (opts.wasmBinary) moduleOpts.wasmBinary = opts.wasmBinary;
+        else if (opts.wasmUrl) moduleOpts.locateFile = () => opts.wasmUrl;
+        if (!compiled) return (opencascade as unknown as (o: unknown) => Promise<unknown>)(moduleOpts);
+        // emscripten waits for the instance however long it takes: a failed one is told apart here
+        return new Promise((resolve, reject) => {
+          moduleOpts.instantiateWasm = (imports: WebAssembly.Imports, done: (i: WebAssembly.Instance, m: WebAssembly.Module) => void) => {
+            WebAssembly.instantiate(compiled, imports).then((instance) => done(instance, compiled), reject);
+            return {}; // emscripten's sign that the instance comes asynchronously
+          };
+          (opencascade as unknown as (o: unknown) => Promise<unknown>)(moduleOpts).then(resolve, reject);
+        });
+      };
+      // a module compiled elsewhere that won't instantiate here: load the kernel the usual way
+      const oc = opts.module ?? await (opts.wasmModule ? load(opts.wasmModule).catch(() => load()) : load());
       setOC(oc as never);
       ready = true;
     })();
