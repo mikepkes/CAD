@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 
 import { existsSync } from "node:fs";
 
+import { partsOf } from "./lines.mjs";
+
 const agentCache = JSON.parse(readFileSync(new URL("../mock/agent-vase.json", import.meta.url), "utf8"));
 const forcesCache = JSON.parse(readFileSync(new URL("../mock/agent-bistable-forces.json", import.meta.url), "utf8"));
 const hasExample = (name) => existsSync(new URL(`../../public/examples/${name}.json`, import.meta.url));
@@ -50,8 +52,6 @@ async function sweep(d, name, values, ms = 3000) {
   await run();
   if (Date.now() - t0 > ms * 1.6) d.timing.fast.push({ label: `rebuilding ${name}`, start, end: d.now() });
 }
-/** The gyroscope's +X pivot: the middle ring's cone pin, from its root to its point in the frame ring's socket. */
-const GYRO_PIVOT = { min: { x: 36, y: -3, z: -7 }, max: { x: 52, y: 3, z: 7 } };
 const range = (a, b, n) => Array.from({ length: n }, (_, i) => +(a + ((b - a) * i) / (n - 1)).toFixed(3));
 const there = (a, b, n) => [...range(a, b, n), ...range(b, a, n).slice(1)];
 
@@ -69,70 +69,62 @@ export async function act3(d) {
   };
 
   await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a section view, then a motion study", async () => {
-    // the section: tick Section in the toolbar, cut on the vertical XZ plane through the middle
+    // the section: tick Section in the toolbar, cut on the level XY plane through the middle, the rings' pivot plane
     await d.api("cursor", true);
     const at = await d.toolbar("section");
     const sec = await d.rect(`${at} .grid-controls label`, "Section");
+    await d.wait(500); // ticked as "…already assembled" ends, so the cut is just on as "Cut open" is said
     await d.click(sec.x + 10, sec.cy);
-    await d.settle(300);
-    const plane = d.page.locator(`${at} .grid-controls select[title='Section plane']`), pb = await plane.boundingBox();
-    await d.move(pb.x + pb.width / 2, pb.y + pb.height / 2);
-    await plane.selectOption("XZ");
+    await d.wait(150);
+    await d.cue(); // the section is on: "Cut open, each ring hangs on cone pins…"
     await d.settle(300);
     if (at.includes("menu")) { await d.key("Escape"); await d.settle(200); } // close the more menu over the view
     await d.api("cursor", false);
-    // square to the cut face, then in on a pivot: the middle ring's cone pin, pointing into the frame ring's socket
-    await d.api("aim", { dir: [0, 1, 0.0001], ms: 2000, margin: 1.05 });
-    await d.wait(900);
-    await d.api("aim", { dir: [0, 1, 0.0001], box: GYRO_PIVOT, ms: 2200, margin: 1.35 });
-    await d.wait(400); d.pick("gyroscope bearing"); await d.wait(2400);
-    // the camera pulls back as the study starts (on "Then the motion study"). It runs at real speed, not sped up:
-    // with Show motion on, the rings it turns sweep round as see-through ghosts, each through a full circle, while
-    // the check runs behind them
-    const back = d.api("aim", { dir: [0.55, 1, 0.6], ms: 1800, margin: 1.0 });
+    // no turn to the cut: the same oblique angle, pushed in once to fill the frame and held from here on. Both
+    // bearings show cut open at once (the cone pins of the middle ring in the frame ring, and of the inner ring in the
+    // middle one), and the rings turn in full view in the study
+    const kept = (await d.api("bounds")).reduce((a, b) => ({ // what the cut leaves: the model below the XY plane
+      min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y), z: Math.min(a.min.z, b.min.z) },
+      max: { x: Math.max(a.max.x, b.max.x), y: Math.max(a.max.y, b.max.y), z: Math.min(Math.max(a.max.z, b.max.z), 0) },
+    }));
+    await d.api("aim", { dir: [1, -1, 1.2], box: kept, ms: 1600, margin: 0.8 });
+    d.pick("gyroscope bearing");
+    // the motion study, at real speed (not sped up): with Show motion on, the rings it turns sweep round as
+    // see-through ghosts, each through a full circle, while the check runs behind them
+    await d.cue(); // "And the motion study turns every joint a full circle…"
     await d.run(async () => { const st = window.__vibecadDemo.store.getState(); st.setMotionGhost(true); await st.runMotionStudy(); });
     await d.page.waitForFunction(() => !["running", "pending"].includes(window.__vibecadDemo.store.getState().motionStatus), null, { timeout: 180000 });
-    await back;
-    await d.wait(1200);
   });
   if (hasExample("clockwork")) {
-    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm, and a Geneva drive", async () => {
-      // no turntable: the camera holds still between shots and only the gears move (posed from the turn parameter,
-      // not rebuilt). Each shot lands on the word that names its mechanism, from the default voice's word timings
-      // (video/vo/af_heart/act3-clockwork.words.json, made by the sync check) when cached, else these.
-      const fallback = { so: 6.66, planets: 9.74, worm: 12.38, geneva: 16.36, steps: 18.64, flicks: 21.44, end: 25.88 };
-      let words = [];
-      try { words = JSON.parse(readFileSync(new URL("../vo/af_heart/act3-clockwork.words.json", import.meta.url), "utf8")).words ?? []; } catch {}
-      const said = (w) => (w === "end" ? words.at(-1)?.e : words.find((x) => x.w.toLowerCase().replace(/[^a-z]/g, "") === w)?.s) ?? fallback[w];
-      const t0 = d.timing.events.findLast((e) => e.kind === "beat")?.t ?? d.now(); // the line starts with the beat
-      let at = 0, lag = 0; // a sweep overruns its time a little: the next one starts that much sooner
-      const turn = async (to, s) => {
-        await d.api("poseSweep", "turn", at, to, Math.max(150, Math.round((t0 + s - d.now() - lag) * 1000)), { ease: false });
-        at = to; lag = Math.max(0, lag + d.now() - (t0 + s));
-      };
-      const fly = (opts) => { d.api("aim", opts).catch(() => {}); }; // the camera moves while the gears keep turning
-      const GENEVA = ["Geneva crank", "Geneva star"];
-      // the Geneva crank turns at -5/8 of the knob, so the star steps once per 576 deg of turn, mid-step at 288 (mod 576):
-      // one step on "steady motion into steps", the next on "flicks the star", the third on "until the next"
-      const tA = said("steps") - 0.45, tB = said("flicks") + 0.45, v = 576 / (tB - tA);
-      const tP = said("planets") - 1.2, tW = said("worm") - 0.7, tG = said("geneva") - 1.1, tEnd = said("end") + 0.4;
+    // the knob turns at one steady rate through the beat, a third of the last cut's (its average was about 147 deg/s)
+    const RATE = 48; // deg of turn a second
+    const GENEVA = ["Geneva crank", "Geneva star"];
+    // the line's two groups, the gear train then the Geneva drive: the second is cued as the first has been said,
+    // and the beat ends as it has been said in turn, with the tail
+    const [say1, say2] = partsOf(d.lines.clockwork).map((p, k) => d.partMs("clockwork", k, p));
+    const cueAt = (say1 + 150) / 1000, end = cueAt + (say2 + 500) / 1000;
+    // the Geneva crank turns at -5/8 of the knob, so the star steps once per 576 deg of turn, mid-step at 288 (mod
+    // 576), over 144 deg (3 s at this rate). The knob starts where its step comes 1.6 s after the cue: the star
+    // flicks round under "turns steady motion into steps"
+    let from = 288 - RATE * (cueAt + 1.6);
+    while (from < -288) from += 576;
+    const setup = async () => {
+      await d.api("poseSweep", "turn", 0, from, 150, { ease: false });
       // the whole model, pushed in to fill the frame side to side (by the frame and gears: the rack slides as they turn)
-      fly({ dir: [0.2, -0.5, 1], frame: [0.07, 0.04, 0.9, 1.03], except: ["Rack"], ms: 1200 });
-      await turn(360, said("so"));
-      d.pick("clockwork");
-      await turn(540, tP);
-      // the planets in the ring, with the Geneva drive beside them nearer the middle
-      fly({ dir: [0.15, -0.35, 1], frame: [0.46, 0.28, 0.65, 0.7], parts: GENEVA, ms: 1100 });
-      await turn(540 + 100 * (tW - tP), tW);
-      // the worm and its wheel, the knob fast so the wheel visibly creeps
-      fly({ dir: [0.5, -0.6, 0.75], box: await d.api("componentBox", ["Cross shaft", "Wheel"]), ms: 1000, margin: 0.9 });
-      let k = 0;
-      while (288 + 576 * k - v * (tA - tG) < at + 1100) k++;
-      await turn(288 + 576 * k - v * (tA - tG), tG);
-      // the Geneva drive, turning steadily, through the whole of its sentence
-      fly({ dir: [0.1, -0.55, 1], frame: [0.25, 0.12, 0.75, 0.8], parts: GENEVA, ms: 1000 });
-      await turn(at + v * (tEnd - tG), tEnd);
-    });
+      await d.api("aim", { dir: [0.2, -0.5, 1], frame: [0.07, 0.04, 0.9, 1.03], except: ["Rack"], ms: 300 });
+    };
+    await clip("clockwork", "clockwork", "Gears of every kind", "spur, helical, herringbone, ring, rack, bevel, worm, and a Geneva drive", async () => {
+      // two shots: the whole train, held still while every gear turns and the rack runs back and forth on its Scotch
+      // yoke, then in on the Geneva drive. The gears are posed from the turn parameter (not rebuilt) by one sweep
+      // for the whole beat, the camera moving while it runs
+      const t0 = d.now();
+      const sweep = d.api("poseSweep", "turn", from, from + RATE * end, Math.round(end * 1000), { ease: false });
+      await d.wait(2500); d.pick("clockwork");
+      await d.cue(); // "And a Geneva drive turns steady motion into steps."
+      await d.api("aim", { dir: [0.1, -0.55, 1], frame: [0.25, 0.12, 0.75, 0.8], parts: GENEVA, ms: 1000 });
+      await sweep;
+      if (d.now() - t0 > end + 0.3) d.note(`clockwork: the gears ran ${(d.now() - t0 - end).toFixed(1)} s past the line`);
+    }, setup);
   } else d.note("no clockwork example yet: gears clip skipped");
   /**
    * The walker's leg nearest the camera (lowest y: the side its close-up looks from), found by the example's
