@@ -199,7 +199,7 @@ const music = (() => {
   if (sampleRate !== SR) throw new Error(`${video.music}: ${sampleRate} Hz, expected ${SR} (afconvert -f WAVE -d LEI16@${SR} -c 1)`);
   const montage = cues.find((c) => c.id === "montage"), firstLine = cues.find((c) => c.id !== "montage");
   const sec = (f) => Math.round((f / FPS) * SR);
-  const LEVEL = 0.55, UNDER = 0.2, RAMP = Math.round(0.25 * SR), FADE = Math.round(3 * SR);
+  const LEVEL = 0.3, UNDER = 0.12, RAMP = Math.round(0.25 * SR), FADE = Math.round(3 * SR);
   // full under the montage's picks, under the voice while the montage line plays, out over the title before the first line
   const fadeEnd = Math.min(firstLine ? sec(firstLine.from) : sec(outFrame), montage ? sec(montage.to) + FADE : FADE);
   const fadeStart = fadeEnd - FADE;
