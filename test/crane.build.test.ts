@@ -23,7 +23,7 @@ import { initKernel } from "../src/core/occ/kernel";
 import { serializeDocument } from "../src/core/persistence";
 import { evaluateFeatures, SolidEval } from "../src/core/features";
 import { resolveParameters } from "../src/core/parameters";
-import { planSequence, sequenceAngles, poseSequence, sequenceClashes, SheetSequence, SeqFoldDef } from "../src/core/sheetSequence";
+import { planSequence, sequenceAngles, poseSequence, sequenceClashes, sequencePaper, paperOverlayStray, SheetSequence, SeqFoldDef } from "../src/core/sheetSequence";
 import { applyPoint, compose, invert } from "../src/math/transform";
 import type { CadSession } from "../src/core/command/session";
 
@@ -318,6 +318,17 @@ describe("origami: a paper crane folded step by step", () => {
       }
       expect(worst, `fold ${fold}: the built vertex at ${at} is ${worst.toFixed(2)} mm from any posed corner`).toBeLessThan(0.05);
     }
+  }, 120000);
+
+  it("keeps its drawn bends and crease marks on the paper at every end of a step and all through the folds (0.02 of a step at a time)", () => {
+    const seq = evaluate(s)[ids.sheet].sheet!.sequence!, bend = seq.bend ?? 0.4;
+    let worst = 0, at = 0;
+    for (let k = 0; k <= STEPS * 50; k++) {
+      const angles = sequenceAngles(seq.plan, k / 50), p = sequencePaper(seq.plan, angles, seq.frame, { radius: bend });
+      const d = paperOverlayStray(seq.plan, angles, seq.frame, p, bend);
+      if (d > worst) { worst = d; at = k / 50; }
+    }
+    expect(worst, `at fold ${at}`).toBe(0);
   }, 120000);
 
   it("is a bird base after step 4: the petals up, the legs down, all flat", () => {

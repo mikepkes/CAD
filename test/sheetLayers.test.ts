@@ -2,7 +2,7 @@
 // and the fold operations that declare it — an inside reverse fold puts a point between a flap's layers, an outside
 // one wraps it round them (the same shape; a different order).
 import { describe, it, expect } from "vitest";
-import { planSequence, sequenceAngles, poseSequence, sequenceClashes, sequenceFaces, sequencePaper, SeqFoldDef } from "../src/core/sheetSequence";
+import { planSequence, sequenceAngles, poseSequence, sequenceClashes, sequenceFaces, sequencePaper, paperOverlayStray, SeqFoldDef } from "../src/core/sheetSequence";
 import { layerOrderOf, validateLayers, layerRanks } from "../src/core/sheetLayers";
 import { applyPoint, IDENTITY, rotationAbout, translation, compose } from "../src/math/transform";
 
@@ -100,6 +100,18 @@ describe("paper overlay", () => {
     const slight = planSequence(rect(100, 60), [{ id: "half", a: { x: 60, y: 0 }, b: { x: 60, y: 60 }, angle: 5 * PI / 180, step: 1 }], { x: 10, y: 10 }, 0.1);
     const sp = sequencePaper(slight, sequenceAngles(slight, 1), IDENTITY);
     expect(sp.marks.dark.length).toBe(6); expect(sp.bends.indices.length).toBe(0);
+  });
+});
+
+describe("paper overlay stays on the paper", () => {
+  it("a fold swept to flat in fine steps: no bend-strip vertex or crease mark leaves its two facets (the back-off that keeps the bend radius would run away as the facets close)", () => {
+    const seq = planSequence(rect(100, 60), [{ id: "half", a: { x: 60, y: 0 }, b: { x: 60, y: 60 }, angle: PI, step: 1 }], { x: 10, y: 10 }, 0.1);
+    let worst = 0;
+    for (let k = 0; k <= 1000; k++) { // every 0.001 of the step: past 150° the fold closes through the last few hundredths
+      const angles = sequenceAngles(seq, k / 1000), p = sequencePaper(seq, angles, IDENTITY, { radius: 0.4 });
+      worst = Math.max(worst, paperOverlayStray(seq, angles, IDENTITY, p, 0.4));
+    }
+    expect(worst).toBe(0);
   });
 });
 
