@@ -549,19 +549,30 @@ function collapseStep(work: Work[], group: SeqFoldDef[], step: number, fixed: Pt
   group.forEach((d, k) => { if (!only.has(d) && !joins.some((J) => J.def === k)) throw new Error(`fold "${d.id}" (step ${step}): its crease doesn't run between two pieces of paper`); });
   if (group.some((d) => d.bend)) return bendStep(work, group, joins, step, fixed, folds, chords, collapses, gap, scale, tol, first + driverAt);
 
-  // the tree, from the held facet: 0-1 breadth first, rigid joins before creases
+  // the tree, from the held facet: the paper joined rigidly (no crease of the step between) moves as one piece, so
+  // every piece is spanned by its rigid joins first, and the pieces are joined breadth first across the step's
+  // creases — a rigid join is a loop (a constraint) only where a piece has more than it needs
   const n = work.length, links = work.map(() => [] as number[]);
   joins.forEach((J, k) => { links[J.i].push(k); links[J.j].push(k); });
   const root = Math.max(0, work.findIndex((w) => inConvex(fixed, w.poly, tol)));
-  const dist = new Array(n).fill(Infinity), via = new Array(n).fill(-1), done = new Array(n).fill(false), order: number[] = [];
+  const dist = new Array(n).fill(Infinity), via = new Array(n).fill(-1), order: number[] = [];
+  const spread = (f: number) => { // the rigid piece around f, in breadth-first order
+    for (const q = [f]; q.length;) {
+      const g = q.shift()!;
+      order.push(g);
+      for (const k of links[g]) {
+        const J = joins[k], h = J.i === g ? J.j : J.i;
+        if (J.def < 0 && dist[h] === Infinity) { dist[h] = dist[g]; via[h] = k; q.push(h); }
+      }
+    }
+  };
   dist[root] = 0;
-  for (const dq: number[] = [root]; dq.length;) {
-    const f = dq.shift()!;
-    if (done[f]) continue;
-    done[f] = true; order.push(f);
+  spread(root);
+  for (let at = 0; at < order.length; at++) {
+    const f = order[at];
     for (const k of links[f]) {
-      const J = joins[k], g = J.i === f ? J.j : J.i, d = dist[f] + (J.def >= 0 ? 1 : 0);
-      if (d < dist[g]) { dist[g] = d; via[g] = k; if (J.def >= 0) dq.push(g); else dq.unshift(g); }
+      const J = joins[k], g = J.i === f ? J.j : J.i;
+      if (J.def >= 0 && dist[g] === Infinity) { dist[g] = dist[f] + 1; via[g] = k; spread(g); }
     }
   }
   if (order.length !== n) throw new Error(`step ${step}: the paper isn't in one piece`);
@@ -649,24 +660,49 @@ function collapseStep(work: Work[], group: SeqFoldDef[], step: number, fixed: Pt
       x = guess;
       if (free.length && loops.length) {
         const put = (y: number[]) => { const z = [...x]; free.forEach((i, q) => (z[i] = y[q])); return z; };
-        const F = (y: number[]) => [...residual(put(y)), ...y.map((v, q) => Math.sqrt(mu) * (v - guess[free[q]]))];
-        let y = free.map((i) => x[i]), f = F(y), cost = f.reduce((a, v) => a + v * v, 0);
-        for (let it = 0; it < 60; it++) {
-          const h = 1e-7, Jc = y.map((_, c) => { const z = [...y]; z[c] += h; return F(z).map((v, i) => (v - f[i]) / h); });
-          const A = y.map((_, a) => y.map((_, b) => Jc[a].reduce((s2, v, i) => s2 + v * Jc[b][i], 0) + (a === b ? 1e-12 : 0)));
-          const g = y.map((_, a) => -Jc[a].reduce((s2, v, i) => s2 + v * f[i], 0));
-          const dy = solveSmall(A, g);
-          if (!dy) break;
-          const big = Math.max(...dy.map(Math.abs));
-          let t = big > 0.15 ? 0.15 / big : 1, better = false; // a short way at a time: past a singular pose there are other branches
-          for (let tries = 0; tries < 16; tries++, t /= 2) {
-            const z = y.map((v, i) => v + t * dy[i]), fz = F(z), cz = fz.reduce((a, v) => a + v * v, 0);
-            if (cz < cost) { y = z; f = fz; better = cost - cz > 1e-16 * (1 + cost); cost = cz; break; }
+        /** Least squares from a start (the solved angles, also the anchor the regularisation pulls toward). */
+        const solve = (start: number[], maxIt: number) => {
+          const F = (y: number[]) => [...residual(put(y)), ...y.map((v, q) => Math.sqrt(mu) * (v - start[q]))];
+          let y = [...start], f = F(y), cost = f.reduce((a, v) => a + v * v, 0);
+          for (let it = 0; it < maxIt; it++) {
+            const h = 1e-7, Jc = y.map((_, c) => { const z = [...y]; z[c] += h; return F(z).map((v, i) => (v - f[i]) / h); });
+            const A = y.map((_, a) => y.map((_, b) => Jc[a].reduce((s2, v, i) => s2 + v * Jc[b][i], 0) + (a === b ? 1e-12 : 0)));
+            const g = y.map((_, a) => -Jc[a].reduce((s2, v, i) => s2 + v * f[i], 0));
+            const dy = solveSmall(A, g);
+            if (!dy) break;
+            const big = Math.max(...dy.map(Math.abs));
+            let t = big > 0.15 ? 0.15 / big : 1, better = false; // a short way at a time: past a singular pose there are other branches
+            for (let tries = 0; tries < 16; tries++, t /= 2) {
+              const z = y.map((v, i) => v + t * dy[i]), fz = F(z), cz = fz.reduce((a, v) => a + v * v, 0);
+              if (cz < cost) { y = z; f = fz; better = cost - cz > 1e-16 * (1 + cost); cost = cz; break; }
+            }
+            if (!better || Math.max(...dy.map(Math.abs)) * t < 1e-12) break;
           }
-          if (!better || Math.max(...dy.map(Math.abs)) * t < 1e-12) break;
+          // the misfit of the joins alone (the paper apart), not the pull toward the start
+          const r = residual(put(y));
+          return { y, cost, apart: Math.sqrt(Math.max(0, ...r.map((v) => v * v))) };
+        };
+        let best = solve(free.map((i) => x[i]), 60);
+        // the first sample leaves a flat sheet, where every way a solved crease can start looks alike to first order
+        // (a flat-folded mechanism is at a singular pose): when the joins come apart, each solved crease tries starting
+        // the other way, kept where it brings the paper back together — the branch the paper takes
+        if (k === 1 && best.apart > 1e-4 * scale) {
+          const start = free.map((i) => x[i]);
+          for (let sweep = 0; sweep < 3 && best.apart > 1e-4 * scale; sweep++) {
+            let improved = false;
+            for (let q = 0; q < free.length && best.apart > 1e-4 * scale; q++) {
+              for (const sgn of [1, -1]) {
+                if (Math.sign(start[q]) === sgn) continue;
+                const trial = [...start]; trial[q] = sgn * 0.05;
+                const r = solve(trial, 30);
+                if (r.cost < best.cost * (1 - 1e-6)) { best = r; start[q] = trial[q]; improved = true; break; }
+              }
+            }
+            if (!improved) break;
+          }
         }
         // paper folded flat can't fold further: a solved crease stops there (rather than pass the layers through each other)
-        x = put(y).map((v, i) => (solved[i] ? Math.min(Math.PI, Math.max(-Math.PI, now[i] + v)) - now[i] : v));
+        x = put(best.y).map((v, i) => (solved[i] ? Math.min(Math.PI, Math.max(-Math.PI, now[i] + v)) - now[i] : v));
       } else free.forEach((i) => (x[i] = 0));
       table.push(x);
     }
@@ -756,16 +792,22 @@ function reverseOne(work: Work[], def: SeqFoldDef, step: number, fixed: Pt, fold
   if (!stack.length) throw new Error(`${name}: nothing to fold beyond its line`);
   stack.sort((a, b) => a.h - b.h);
   work = next;
-  // the spine: the innermost crease joining two of the point's layers (the halves meet there)
+  // the spine: the crease joining two of the point's layers where the halves meet — a crease of this step first (a
+  // crimp's second fold reverses the first's), else the one nearest the middle of the stack (a point of several
+  // layers, a narrowed leg, has other creases joining its layers in pairs nearer its faces: the flaps folded over it,
+  // which stay nested within their half)
   let p = stack.length - 1, best = Infinity;
+  const middle = (stack.length - 1) / 2, stepFirst = folds.findIndex((f) => f.step === step);
   for (let i = 0; i < stack.length; i++) for (let j = i + 1; j < stack.length; j++) {
     const A = stack[i].tip.poly, B = stack[j].tip.poly;
-    let joined = false;
-    for (let a = 0; a < A.length && !joined; a++) for (let b = 0; b < B.length && !joined; b++) {
+    let joined = false, fresh = false;
+    for (let a = 0; a < A.length; a++) for (let b = 0; b < B.length; b++) {
       const sp = sharedSpan(A[a], A[(a + 1) % A.length], B[b], B[(b + 1) % B.length], wtol);
-      if (sp && len2(sub2(sp[1], sp[0])) > 10 * wtol && chords.some((c) => sharedSpan(c.a, c.b, sp[0], sp[1], wtol))) joined = true;
+      if (!sp || len2(sub2(sp[1], sp[0])) <= 10 * wtol) continue;
+      for (const c of chords) if (sharedSpan(c.a, c.b, sp[0], sp[1], wtol)) { joined = true; if (stepFirst >= 0 && c.fold >= stepFirst) fresh = true; }
     }
-    if (joined && j - i < best) { best = j - i; p = i; }
+    const score = fresh ? (j - i) + i / stack.length : stack.length * stack.length + Math.abs((i + j) / 2 - middle) * stack.length + (j - i);
+    if (joined && score < best) { best = score; p = i; }
   }
   if (def.reverse === "inside" && !Number.isFinite(best)) throw new Error(`${name}: an inside reverse fold needs a point of layers joined at a spine (one layer folds back on itself: use a plain fold)`);
   // each layer's part beyond the line goes toward the inside (its half's inner side) or away from it: its crease
@@ -788,7 +830,8 @@ function reverseOne(work: Work[], def: SeqFoldDef, step: number, fixed: Pt, fold
   work.forEach((w, k) => idx.set(w, k));
   // the order declared, bottom to top along the stack's normal: the still layers as they lie, the point's layers
   // between the halves (inside) or round the outside, each half's in reverse
-  const nn = stack[0].still.T.z, H = (k: number) => dot3(end[k].origin, nn);
+  // (along the drawn layer's normal, the way the stack was sorted: its lowest layer may face the other way)
+  const nn = n, H = (k: number) => dot3(end[k].origin, nn);
   const lower = stack.slice(0, p + 1), upper = stack.slice(p + 1);
   const order: Work[] = def.reverse === "inside"
     ? [...lower.map((s) => s.still), ...[...lower].reverse().map((s) => s.tip), ...[...upper].reverse().map((s) => s.tip), ...upper.map((s) => s.still)]

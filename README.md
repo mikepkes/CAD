@@ -104,9 +104,20 @@ rigid plan can't show paper giving); `bend` on a reverse fold meshes just the
 point and the layers it folds against and bends them from one keyframe to the
 other, the body opening a little for the point to pass (clash-free on a
 two-layer flap; on the crane's eight-layer legs it was 8 s a build and worse,
-so the crane keeps the swing). One simplification remains: as the wings come
-down (step 10) their inner layers come apart from them, in triangles you can
-see — the layer order there is valid, the kinematics approximate.
+so the crane keeps the swing). A point of several layers nests about the
+crease at the middle of its stack (the crane's narrowed legs: four layers each
+side of the leg's folded edge), so the neck and tail show the paper's coloured
+side like the body. One approximation remains, at the wings (step 10). Narrowing
+the legs (steps 5 and 7) creases the corner of each wing's base along with the
+leg's flap, as it does in a real crane, and tucks those corners onto the body:
+the wing's hinge is then straight only between them. So each wing turns about
+that straight middle, the wing's own corner rides up with it and the body's
+stays tucked — in a real crane the tucked corners swivel on the leg's root, and
+paper gives there; a rigid plan can't — and the 16 mm segment between them opens
+by up to 8.7 mm, hidden at the wing's root, while the wing's base passes through
+the tucked corners for the first half of the step (`widestJoin` and the clash
+sweep in `test/crane.build.test.ts` measure both). Nothing else comes apart;
+the finished crane is clash-free.
 
 **Pop-up cards** are the other kind of folding: a card cut along slits
 (`cuts`) and creased, folded all at once as rigid origami on one `open` slider

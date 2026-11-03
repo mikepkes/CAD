@@ -134,6 +134,32 @@ describe("reverse folds", () => {
     expect(sweepClear(seq, 1, 2, 0.03)).toEqual([]);
   });
 
+  it("a point of four layers nests about the crease at the middle of its stack, the flaps folded over its faces staying with their halves", () => {
+    // a strip folded in half (S0 under, S1 on top, joined at the far edge), then each layer's near edge folded over onto
+    // its own face — S0's under S0, S1's on S1 — so at the near edge two flaps lie on the stack's faces, each a taco
+    // with its layer: f0 S0 S1 f1 from the bottom. The creases joining layers are then f0–S0 (a face), S0–S1 (the
+    // middle: the strip's folded edge), S1–f1 (the other face). Reverse-folding the end inside, the point nests about
+    // the middle crease — each half (S0 with its flap, S1 with its) turned inside out: S0 f0 f1 S1 — not about the
+    // first taco found, which would put one flap's layers outermost
+    const gap = 0.1, strip = planSequence(rect(100, 40), [
+      { id: "half", a: { x: 0, y: 20 }, b: { x: 100, y: 20 }, angle: PI, step: 1 },
+      { id: "underFlap", a: { x: 0, y: 5 }, b: { x: 100, y: 5 }, angle: -PI, step: 2 },      // S0's edge, folded under (drawn on S0)
+      { id: "overFlap", a: { x: 0, y: 35 }, b: { x: 100, y: 35 }, angle: -PI, step: 3 },     // S1's edge, folded up over (drawn on S1, which faces down)
+      { id: "rev", a: { x: 70, y: 20 }, b: { x: 85, y: 5 }, angle: PI, step: 4, reverse: "inside" },
+    ], { x: 10, y: 12 }, gap);
+    const T3 = poseSequence(strip, sequenceAngles(strip, 3)), T4 = poseSequence(strip, sequenceAngles(strip, 4));
+    const z = (T: typeof T3, x: number, y: number) => applyPoint(T[facetAt(strip, x, y)], { x, y, z: 0 }).z;
+    // after step 3: f0 S0 S1 f1 at the near edge (flat y 2, 12, 28, 38), four layers a gap apart
+    const near3 = [z(T3, 50, 2), z(T3, 50, 12), z(T3, 50, 28), z(T3, 50, 38)];
+    for (let i = 1; i < 4; i++) expect(near3[i] - near3[i - 1]).toBeCloseTo(gap, 6);
+    // after the reverse fold: the body as it was, the point's layers between S0 and S1 — S0's then f0's, f1's then S1's
+    const body = [z(T4, 50, 2), z(T4, 50, 12), z(T4, 50, 28), z(T4, 50, 38)], point = [z(T4, 95, 12), z(T4, 95, 2), z(T4, 95, 38), z(T4, 95, 28)];
+    expect(body[0]).toBeLessThan(body[1]); expect(body[1]).toBeLessThan(point[0]);
+    for (let i = 1; i < 4; i++) expect(point[i]).toBeGreaterThan(point[i - 1]);
+    expect(point[3]).toBeLessThan(body[2]); expect(body[2]).toBeLessThan(body[3]);
+    expect(strip.layers?.length).toBe(4);
+  });
+
   it("an inside reverse fold needs a spine; a crimp is two reverse folds in one step", () => {
     expect(() => planSequence(rect(100, 60), [{ id: "rev", a: { x: 60, y: 0 }, b: { x: 80, y: 60 }, angle: PI, step: 1, reverse: "inside" }], { x: 10, y: 10 }, 0.1)).toThrow(/spine/);
     const seq = planSequence(diamond, [
