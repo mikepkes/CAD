@@ -64,7 +64,7 @@ export function __setGeometryBackend(g: GeometryBackend, study?: GeometryBackend
 let studyGeometry = createGeometryBackend();
 let studyReady = false;
 let motionToken = 0; // bumped to cancel/supersede an in-flight study
-/** Motion verdicts by parameter values (motionKey): a value checked before answers at once. */
+/** Motion verdicts by design and parameter values (motionKey): a state checked before answers at once. */
 const motionCache = new Map<string, MotionResult>();
 /** How long the last full study of each design took (ms): the first estimate of the next. */
 const motionLastMs = new Map<string, number>();

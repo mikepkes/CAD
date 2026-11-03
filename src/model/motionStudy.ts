@@ -11,11 +11,12 @@
 // there, and fails at once), then the poses between them. A study can take
 // minutes on a big model (a clockwork's gear train), so the viewer shows the
 // coarse result while the rest runs, an estimate of the time left, and keeps
-// verdicts per set of parameter values (motionKey) so a value seen before
+// verdicts per design and set of parameter values (motionKey) so a value seen before
 // answers at once.
 
 import { CadDocument, Joint, JointDof, isAngularDof } from "../core/document";
 import { GeometryBackend } from "../core/geometry/backend";
+import { contentHash, stableJson } from "../core/contentKey";
 
 const BARE_PARAM = /^[a-zA-Z_]\w*$/;
 
@@ -131,11 +132,24 @@ export function studyPoseCount(drives: Drive[], steps: number): number {
   return drives.length * steps - Math.max(0, atRest - 1);
 }
 
-/** The key a verdict is kept under: the design and every parameter's expression
- *  except the swept drives' own (the study poses those itself). */
+/** The key a verdict is kept under: the design's shape (its sketches, features,
+ *  components, joints and the rest) and every parameter's expression except the
+ *  swept drives' own (the study poses those itself). Values evaluated from an
+ *  expression (`…Value`) are left out: they follow the pose, and the expressions
+ *  already say what they come from. Display-only state (names, what is hidden,
+ *  the drawing) doesn't move anything, so it is left out too. */
 export function motionKey(doc: CadDocument): string {
   const drives = new Set(driveParams(doc));
-  return JSON.stringify([doc.id, doc.activeConfiguration ?? null, doc.parameters.filter((p) => !drives.has(p.name)).map((p) => [p.name, p.expr])]);
+  const shape = {
+    components: doc.components, planes: doc.planes, joints: doc.joints, couplings: doc.couplings,
+    componentPatterns: doc.componentPatterns, jointTemplates: doc.jointTemplates,
+    sketches: doc.sketches, features: doc.features, configurations: doc.configurations, rollbackIndex: doc.rollbackIndex,
+  };
+  return contentHash(stableJson([
+    doc.id, doc.activeConfiguration ?? null,
+    doc.parameters.filter((p) => !drives.has(p.name)).map((p) => [p.name, p.expr]),
+    JSON.parse(JSON.stringify(shape, (k, v) => (k.endsWith("Value") ? undefined : v))),
+  ]));
 }
 
 /** A verdict in words, by the kind of motion checked: "Turns a full circle with
