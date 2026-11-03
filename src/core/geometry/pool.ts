@@ -27,7 +27,9 @@ export interface EvaluationPart {
  * — every chain, on the first build — goes to the least loaded worker, the heaviest
  * first (by featureWeight), so a chain that takes seconds (a long modelled thread, a
  * herringbone gear) gets a worker to itself rather than a share of the others' work
- * too; the plan is the same for the same model and `placed`.
+ * too; the plan is the same for the same model and `placed`. The heaviest goes to worker
+ * 0, which runs every other job too: a shop drawing, built through that worker's cache,
+ * replays it rather than building it again (the lighter chains it does build again).
  */
 export function planEvaluation(doc: CadDocument, scope: Scope, size: number, placed = new Map<string, number>()): EvaluationPart[] | null {
   if (size < 2) return null;

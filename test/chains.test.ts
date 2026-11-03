@@ -97,6 +97,7 @@ describe("sharing the chains out", () => {
     const own = plan.find((p) => p.only.includes(thread.id))!;
     const chain = featureChains(doc, scopeOf(doc))!.find((c) => c.features.includes(thread.id))!;
     expect(own.only).toEqual(chain.features); // the screw and its thread, nothing else
+    expect(own.worker).toBe(0); // where the drawing replays it
     expect(plan.flatMap((p) => p.only).sort()).toEqual(Object.keys(doc.features).sort());
   });
 

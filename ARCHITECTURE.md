@@ -119,6 +119,12 @@ It runs in a Web Worker in the app and inline in tests and the stdio server.
   normal + nearest point. Fillet/chamfer selectors accept edge `names`.
 - **Reference values.** `test/oracle.test.ts` checks the exact B-rep volume,
   surface area and centroid of every feature kind against closed-form answers.
+- **Kernel costs.** A boolean is built once: an empty `BRepAlgoAPI_*`
+  builder given its arguments and tools (`booleanBuilder`), never the
+  two-shape constructor, which runs the boolean as it is made — replicad's
+  fuse and cut then build it a second time. What is built once per spec and
+  kept: a gear's local solid (`localGearSolid`) and a modelled thread rod
+  (`threadRod`), both placed as copies.
 - **A pool of workers** (`model/worker-backend.ts`, `core/geometry/pool.ts`,
   `core/geometry/chains.ts`). The browser backend runs `poolSize` geometry
   workers, each with a kernel and a step cache of its own. Before an
