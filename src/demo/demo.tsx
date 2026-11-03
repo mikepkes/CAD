@@ -103,6 +103,21 @@ const worldOf = (doc: CadDocument, scope: Record<string, number>) =>
   resolveComponentWorld(hasAssemblyPatterns(doc) ? expandAssembly(doc, scope, { framesOnly: true }) : doc, scope);
 let pose: { doc: unknown; scope: Record<string, number>; overrides: Record<string, string>; sheets: { id: string; seq: NonNullable<NonNullable<SolidEval["sheet"]>["sequence"]>; progress: string; last?: number }[] } | null = null;
 
+/** What fading `ids` draws see-through: a component's bodies and sketches, and its sub-components'; a body or sketch id
+ *  as it is. */
+export function fadeKeys(ids: string[], doc = useStore.getState().session.doc, solids: Record<string, { featureId: string; sketchId?: string }> = useStore.getState().solids): string[] {
+  const comps = new Set<string>(), keys = new Set<string>();
+  const add = (id: string) => { if (comps.has(id)) return; comps.add(id); for (const c of doc.components[id]?.children ?? []) add(c); };
+  for (const id of ids) { if (doc.components[id]) add(id); else keys.add(id); }
+  if (!comps.size) return [...keys];
+  for (const b of Object.values(solids)) {
+    const cid = (b.sketchId ? doc.sketches[b.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
+    if (comps.has(cid)) keys.add(b.featureId);
+  }
+  for (const sk of Object.values(doc.sketches)) if (comps.has(sk.componentId ?? doc.rootComponentId)) keys.add(sk.id);
+  return [...keys];
+}
+
 const api = {
   // ---- waiting ----
   /** Resolves when the model has finished rebuilding, the camera has stopped, and nothing has changed for `quietMs`, plus two painted frames. */
@@ -284,6 +299,17 @@ const api = {
   },
   /** Put the parts back to the built model after `poseSweep`s. */
   poseEnd() { pose = null; getActiveScene()?.endAnimation(); },
+  /** Fade components (by id: each with its sub-components' bodies and sketches), bodies or sketches (by id) to
+   *  `opacity` over `ms`: 0 to isolate a part without a visual pop, 1 to bring them back. Display only (the document,
+   *  and so their eye toggles, are untouched, and nothing rebuilds), so it runs smoothly while parts are posed.
+   *  Resolves when the fade has finished. Opening another document puts everything back. */
+  async fadeComponents(ids: string[], opacity: number, ms = 800): Promise<void> {
+    await getActiveScene()?.fadeBodies(fadeKeys(ids), opacity, ms);
+    await new Promise((done) => setTimeout(done, ms + 20));
+  },
+  /** Ready a later `fadeComponents` of these (compile their see-through look now, e.g. while a model loads), so the
+   *  fade starts on the frame it's asked for. */
+  async prepareFade(ids: string[]): Promise<void> { await getActiveScene()?.warmFades(fadeKeys(ids)); },
   /** Ease a side panel to `px` wide over `ms` (as dragging its edge would), e.g. to widen Parameters while values are edited. */
   sideWidth(side: "left" | "right", px: number, ms = 600): Promise<void> {
     const from = useUi.getState().sideWidth[side], t0 = performance.now();
@@ -297,8 +323,8 @@ const api = {
     });
   },
   // ---- documents ----
-  async openText(text: string, name = "model.vibecad.json") { api.poseEnd(); await useStore.getState().openFile(new File([text], name)); await api.settle(); },
-  async newDocument() { api.poseEnd(); await useStore.getState().newDocument(); await api.settle(); },
+  async openText(text: string, name = "model.vibecad.json") { api.poseEnd(); getActiveScene()?.clearFades(); await useStore.getState().openFile(new File([text], name)); await api.settle(); },
+  async newDocument() { api.poseEnd(); getActiveScene()?.clearFades(); await useStore.getState().newDocument(); await api.settle(); },
   documentText() { return JSON.stringify(useStore.getState().session.doc); },
   // ---- the agent ----
   mockAgent(cache: AgentCache | null) {
