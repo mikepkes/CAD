@@ -3057,6 +3057,60 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
   {
+    type: "feature.voronoi",
+    title: "Voronoi openings",
+    summary: "Cut a Voronoi pattern of openings through the wall of a hollow body, wrapped all the way round an axis (a lamp shade, a vase, a basket).",
+    description:
+      "Lays `cells` random seeds (from `seed`: the same seed gives the same pattern) on the wall of `body` (default the most recent), round `axis` (default the Z axis through the origin), evens them out with `relax` Lloyd passes (default 8), and cuts each seed's Voronoi cell through the wall as an opening. " +
+      "The pattern wraps all the way round with no seam (the cell that straddles any meridian is one cell), and fills the band from `from` to `to` along the axis (mm from the axis origin; default the body's extent less a tenth at each end). " +
+      "Each opening is inset from its cell's edges so a web of wall at least `web` mm wide is left between every two openings and along the band's ends — measured on the wall's inner face, where it is narrowest — and `round` rounds the openings' corners. Cells too small for an opening once the web is taken off are left solid. " +
+      "`twist` (degrees) turns the pattern with the body as it rises: the turn over the body's whole extent along the axis, so give a twisted loft's or sweep's own turn and the cells lean with it. " +
+      "The openings go straight out from the axis, so the axis must run through the body's hollow inside (shell it first). `cells`, `web`, `round`, `from`, `to` and `twist` take expressions. Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["cells", "web"],
+      additionalProperties: false,
+      properties: {
+        cells: { type: ["integer", "string"], description: "How many cells (≥3), or an expression." },
+        seed: { type: "integer", description: "Seed for the random layout (default 1): change it for another pattern." },
+        relax: { type: "integer", minimum: 0, maximum: 50, description: "Lloyd relaxation passes: more makes the cells more even (default 8; 0 = raw random)." },
+        web: { type: ["number", "string"], description: "Least wall left between openings (mm, expr): make it a printable width (≥ 2 nozzle widths)." },
+        round: { type: ["number", "string"], description: "Corner radius of the openings (mm, expr; default 0 = sharp)." },
+        from: { type: ["number", "string"], description: "Where the band of openings starts along the axis (mm from the axis origin, expr)." },
+        to: { type: ["number", "string"], description: "Where it ends (mm, expr)." },
+        twist: { type: ["number", "string"], description: "Degrees the pattern turns over the body's extent along the axis (expr; + = counter-clockwise looking down the axis). Match the body's own twist." },
+        axis: {
+          type: "object", additionalProperties: false, required: ["origin", "direction"],
+          properties: { origin: { ...V3_SCHEMA, required: ["x", "y", "z"] }, direction: { ...V3_SCHEMA, required: ["x", "y", "z"] } },
+          description: "The axis the pattern wraps round (default origin 0,0,0, direction +Z).",
+        },
+        body: { type: "string", description: "Target body (feature id); default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a pattern that cuts nothing an error." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "A lamp shade: 60 openings round a hollow 160-tall twisted body that turns 90°, 3mm webs, rounded corners", params: { cells: 60, seed: 7, web: "3", round: "1.5", from: "14", to: "150", twist: "90" } },
+      { note: "A basket round the Y axis, cell count from a parameter", params: { cells: "cells", web: "2.5", axis: { origin: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 1, z: 0 } } } },
+    ],
+    apply(draft, p: { cells: number | string; seed?: number; relax?: number; web: number | string; round?: number | string; from?: number | string; to?: number | string; twist?: number | string; axis?: { origin: Vec3; direction: Vec3 }; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      const id = ctx.alloc("vor");
+      draft.features[id] = {
+        id, kind: "voronoi", name: p.name ?? "Voronoi openings",
+        cellsExpr: String(p.cells), seed: Math.round(p.seed ?? 1), ...(p.relax != null ? { relax: Math.round(p.relax) } : {}),
+        webExpr: String(p.web),
+        ...(p.round != null ? { roundExpr: String(p.round) } : {}),
+        ...(p.from != null ? { fromExpr: String(p.from) } : {}),
+        ...(p.to != null ? { toExpr: String(p.to) } : {}),
+        ...(p.twist != null ? { twistExpr: String(p.twist) } : {}),
+        ...(p.axis ? { axis: p.axis } : {}),
+        ...(p.body ? { body: p.body } : {}),
+        ...(p.requireEffect ? { requireEffect: true } : {}),
+      };
+      return { createdIds: [id], message: `Voronoi openings × ${p.cells}` };
+    },
+  },
+  {
     type: "feature.mirror",
     title: "Mirror bodies",
     summary: "Reflect the model across a plane and fuse the reflection in (symmetry).",

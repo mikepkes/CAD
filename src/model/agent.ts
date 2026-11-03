@@ -137,6 +137,7 @@ export function describeFeature(f: FeatureDef): Record<string, unknown> {
     case "chamfer": return { id: f.id, kind: f.kind, name: f.name, size: f.sizeExpr, edges: f.edges };
     case "shell": return { id: f.id, kind: f.kind, name: f.name, thickness: f.thicknessExpr, openFaces: f.openFaces };
     case "pattern": return { id: f.id, kind: f.kind, name: f.name, mode: f.mode, count: f.count, step: f.step, axis: f.axis, angle: f.angle };
+    case "voronoi": return { id: f.id, kind: f.kind, name: f.name, cells: f.cellsExpr, seed: f.seed, web: f.webExpr, ...(f.roundExpr ? { round: f.roundExpr } : {}), ...(f.fromExpr ? { from: f.fromExpr } : {}), ...(f.toExpr ? { to: f.toExpr } : {}), ...(f.twistExpr ? { twist: f.twistExpr } : {}), ...(f.relax != null ? { relax: f.relax } : {}), ...(f.axis ? { axis: f.axis } : {}), ...(f.openingsValue != null ? { openings: f.openingsValue } : {}) };
     case "mirror": return { id: f.id, kind: f.kind, name: f.name, plane: f.plane, bodies: f.bodies ?? "all" };
     case "loft": return { id: f.id, kind: f.kind, name: f.name, sketches: f.sketchIds, ruled: !!f.ruled, operation: f.operation ?? "new" };
     case "sweep": return { id: f.id, kind: f.kind, name: f.name, profile: f.profileSketch, path: f.pathSketch, operation: f.operation ?? "new", ...(f.path3d ? { points: f.path3d.points, ...(f.path3d.through ? { through: true } : {}) } : {}), ...(f.sections ? { sections: f.sections } : {}), ...(f.scale ? { scale: f.scale } : {}) };

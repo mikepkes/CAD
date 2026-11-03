@@ -7,7 +7,7 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, GearFeature, GearDim, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent, isReferenceBody,
+  CadDocument, ExtrudeFeature, FeatureDef, GearFeature, GearDim, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, VoronoiFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent, isReferenceBody,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, extractChains, regionAt, loopPolygon, Region, Profile, Loop } from "./geometry/profile";
@@ -33,6 +33,7 @@ import { buildSheet, SheetBuild } from "./sheetBuild";
 import { flatBlankOf } from "./occ/sheet";
 import { localGearSolid, peekLocalGear, placeShape, gearExtent, Annulus } from "./occ/gear";
 import { gearDefaults } from "./geometry/gear";
+import { RadialProbe, voronoiWall, scaleOutline, VoronoiWall, WallOpening } from "./geometry/voronoi";
 
 export interface SolidEval {
   featureId: string;
@@ -212,7 +213,7 @@ const BOOLEAN: Record<BooleanOp, BooleanKind> = { new: "fuse", join: "fuse", cut
 
 /** Fold `tool` into `target` by a boolean, carrying face names through the
  *  kernel's history. Does not free `tool`. */
-function booleanInto(op: BooleanOp, target: Body, tool: Shape3D, toolNames: string[], featureId: string) {
+function booleanInto(op: BooleanOp, target: Body, tool: Shape3D | Shape3D[], toolNames: string[], featureId: string) {
   const { shape, parents } = booleanWithHistory(BOOLEAN[op], target.shape, tool);
   const names = inheritNames([...target.faceNames, ...toolNames], parents, shape, featureId, "new");
   replaceShape(target, shape);
@@ -1327,6 +1328,86 @@ function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<s
   }
 }
 
+/** The axis frame of a voronoi feature: origin, and unit e1, e2, e3 (e3 along the axis). */
+export function voronoiFrame(f: VoronoiFeature): { o: Vec3; e1: Vec3; e2: Vec3; e3: Vec3 } {
+  const o = f.axis?.origin ?? { x: 0, y: 0, z: 0 };
+  const d = f.axis?.direction ?? { x: 0, y: 0, z: 1 };
+  const L = Math.hypot(d.x, d.y, d.z);
+  if (!(L > 1e-12)) throw new Error("voronoi: the axis direction is zero");
+  const e3 = { x: d.x / L, y: d.y / L, z: d.z / L };
+  const seed = Math.abs(e3.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const k = dot(seed, e3);
+  const t = { x: seed.x - k * e3.x, y: seed.y - k * e3.y, z: seed.z - k * e3.z };
+  const tl = Math.hypot(t.x, t.y, t.z);
+  const e1 = { x: t.x / tl, y: t.y / tl, z: t.z / tl };
+  const e2 = { x: e3.y * e1.z - e3.z * e1.y, y: e3.z * e1.x - e3.x * e1.z, z: e3.x * e1.y - e3.y * e1.x };
+  return { o, e1, e2, e3 };
+}
+
+/** Lay out a voronoi feature's openings on its target body (exported for the tests that measure them). */
+export function voronoiLayout(scope: Scope, f: VoronoiFeature, shape: Shape3D): { wall: VoronoiWall; frame: ReturnType<typeof voronoiFrame> } {
+  const frame = voronoiFrame(f);
+  const { o, e1, e2, e3 } = frame;
+  const mesh = meshShape(shape);
+  const local = new Float64Array(mesh.positions.length);
+  for (let i = 0; i < mesh.positions.length; i += 3) {
+    const p = { x: mesh.positions[i] - o.x, y: mesh.positions[i + 1] - o.y, z: mesh.positions[i + 2] - o.z };
+    local[i] = dot(p, e1); local[i + 1] = dot(p, e2); local[i + 2] = dot(p, e3);
+  }
+  const probe = new RadialProbe(local, mesh.indices);
+  const H = probe.zMax - probe.zMin;
+  const count = Math.round(resolveExpr(f.cellsExpr, f.cellsValue ?? 0, scope)); f.cellsValue = count;
+  if (!(count >= 3)) throw new Error("voronoi: needs at least 3 cells");
+  if (count > 2000) throw new Error("voronoi: at most 2000 cells");
+  const web = resolveExpr(f.webExpr, f.webValue ?? 0, scope); f.webValue = web;
+  const round = f.roundExpr ? resolveExpr(f.roundExpr, f.roundValue ?? 0, scope) : 0; f.roundValue = round;
+  const from = f.fromExpr ? resolveExpr(f.fromExpr, f.fromValue ?? 0, scope) : probe.zMin + H / 10; f.fromValue = from;
+  const to = f.toExpr ? resolveExpr(f.toExpr, f.toValue ?? 0, scope) : probe.zMax - H / 10; f.toValue = to;
+  const twist = f.twistExpr ? resolveExpr(f.twistExpr, f.twistValue ?? 0, scope) : 0; f.twistValue = twist;
+  const wall = voronoiWall({ probe, count, seed: f.seed, relax: f.relax ?? 8, web, round, from, to, twist: (twist * Math.PI) / 180 });
+  return { wall, frame };
+}
+
+/** The cutter for one opening: a ruled loft between the opening on a plane inside the wall and on one
+ *  outside it, every edge running straight out from the axis. */
+export function voronoiCutter(op: WallOpening, frame: ReturnType<typeof voronoiFrame>): Shape3D {
+  const { o, e1, e2, e3 } = frame;
+  const c = Math.cos(op.theta), s = Math.sin(op.theta);
+  const normal = { x: c * e1.x + s * e2.x, y: c * e1.y + s * e2.y, z: c * e1.z + s * e2.z };
+  const u = { x: -s * e1.x + c * e2.x, y: -s * e1.y + c * e2.y, z: -s * e1.z + c * e2.z };
+  const section = (rho: number) => {
+    const wp: WorkPlane = { id: "voronoi", name: "voronoi", origin: { x: o.x + rho * normal.x, y: o.y + rho * normal.y, z: o.z + rho * normal.z }, u, v: e3, normal, color: "" };
+    const loop: Loop = { ...scaleOutline(op.outline, rho), area: 0 };
+    return { wp, region: { outer: loop, holes: [] } };
+  };
+  return buildLoftSolid([section(op.rIn), section(op.rOut)], true);
+}
+
+/** Cut a wrapped Voronoi pattern of openings through the wall of a hollow body. */
+function applyVoronoi(scope: Scope, f: VoronoiFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = pickBody(bodies, f.body, "voronoi");
+    const { wall, frame } = voronoiLayout(scope, f, target.shape);
+    f.openingsValue = wall.openings.length;
+    if (!wall.openings.length) throw new Error("voronoi: no cell is big enough for an opening once the web is taken off (fewer cells, or a narrower web)");
+    const cutters: Shape3D[] = [];
+    try {
+      for (const op of wall.openings) cutters.push(voronoiCutter(op, frame));
+      const before = volumeOfShape(target.shape);
+      booleanInto("cut", target, cutters, genericNames(f.id, cutters.flatMap((c) => faceKinds(c))), f.id);
+      const after = volumeOfShape(target.shape);
+      if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, before)) {
+        const msg = "voronoi changed nothing: the openings miss the wall (check the axis and the band)";
+        if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
+      }
+    } finally { for (const c of cutters) c.delete(); }
+    if (wall.skipped) out[f.id].warning = `${wall.skipped} of ${wall.strip.cells.length} cells too small for an opening once the web is taken off`;
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
 /** Repeat the most recent body (linear vector or circular axis), fusing the copies in. */
 function applyPattern(scope: Scope, f: PatternFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
@@ -1670,6 +1751,7 @@ function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Bod
     case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;
     case "shell": applyShell(scope, f, bodies, out); break;
     case "pattern": applyPattern(scope, f, bodies, out); break;
+    case "voronoi": applyVoronoi(scope, f, bodies, out); break;
   }
 }
 
@@ -1717,7 +1799,7 @@ export function withBuildProgress<T>(sink: BuildProgressSink | undefined, fn: ()
 // building the features is nearly all the work (the star box: 2.8 s of 3); meshing them the rest
 const FEATURE_SHARE = 0.9;
 
-function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): { bodies: Body[]; out: Record<string, SolidEval> } {
+export function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): { bodies: Body[]; out: Record<string, SolidEval> } {
   const out: Record<string, SolidEval> = {};
   const bodies: Body[] = [];
   let worlds: Map<string, Rigid> | undefined; // component frames, resolved only for pattern instances

@@ -361,6 +361,7 @@ export function heuristicName(item: Pick<AssistItem, "targetKind" | "from">, ctx
   if (k === "chamfer") return "Edge chamfers";
   if (k === "shell") return "Shell wall";
   if (k === "hole") return "Hole";
+  if (k === "voronoi") return "Voronoi openings";
   if (k === "pattern") return `${capital(String(f?.mode ?? "linear"))} array`;
   if (k === "mirror") return "Mirrored half";
   return roleOf(f) ?? (cleanName(item.from) || "Feature");

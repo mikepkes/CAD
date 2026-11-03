@@ -150,6 +150,7 @@ export const ICONS = {
   "round-corners": { label: "Round corners", d: "M9 4h6a5 5 0 0 1 5 5v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9a5 5 0 0 1 5-5z", dash: "M15 4h5v5" },
   shell: { label: "Shell", d: `${CUBE_OUTLINE}M4 7.5l8 4.5 8-4.5M12 12v9M12 5.25l4 2.25-4 2.25-4-2.25zM8 7.5v3M12 9.75v3` },
   "pattern-linear": { label: "Linear pattern", d: "M2.5 5.5h5v5h-5zM9.5 5.5h5v5h-5zM16.5 5.5h5v5h-5zM3 16.5h17M17.5 14L20 16.5 17.5 19" },
+  voronoi: { label: "Voronoi openings", d: `${ellipse(12, 5, 7, 2.5)}M5 5v14a7 2.5 0 0 0 14 0V5M8 10l2.5-1.5 2 1.5-.5 2.5H8.5zM14.5 9l2.5.5v3l-2 .5-1-2zM8.5 15.5h3l1 2.5-2.5 1-1.5-1zM14.5 15.5l2.5-.5.5 2.5-2.5 1z` },
   "pattern-circular": { label: "Circular pattern", d: "M10 2.5h4v4h-4zM17.5 10h4v4h-4zM10 17.5h4v4h-4zM2.5 10h4v4h-4z", dots: [[12, 12, 1.5]] },
   mirror: { label: "Mirror", d: "M10.5 5l3-2.5v16l-3 2.5zM8 8L3 17h5zM16 8l5 9h-5z" },
   hole: { label: "Hole", d: `${circle(12, 12, 6.5)}M12 9.5v5M9.5 12h5M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2` },

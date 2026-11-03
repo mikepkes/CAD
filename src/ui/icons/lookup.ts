@@ -94,6 +94,7 @@ const COMMANDS: Record<string, IconName> = {
   "feature.chamfer": "chamfer",
   "feature.shell": "shell",
   "feature.pattern": "pattern-linear",
+  "feature.voronoi": "voronoi",
   "feature.mirror": "mirror",
   "feature.setCondition": "condition",
 };
