@@ -549,30 +549,28 @@ function collapseStep(work: Work[], group: SeqFoldDef[], step: number, fixed: Pt
   group.forEach((d, k) => { if (!only.has(d) && !joins.some((J) => J.def === k)) throw new Error(`fold "${d.id}" (step ${step}): its crease doesn't run between two pieces of paper`); });
   if (group.some((d) => d.bend)) return bendStep(work, group, joins, step, fixed, folds, chords, collapses, gap, scale, tol, first + driverAt);
 
-  // the tree, from the held facet: the paper joined rigidly (no crease of the step between) moves as one piece, so
-  // every piece is spanned by its rigid joins first, and the pieces are joined breadth first across the step's
-  // creases — a rigid join is a loop (a constraint) only where a piece has more than it needs
+  // the tree, from the held facet: 0-1 breadth first, rigid joins before creases — paper joined rigidly (no crease of
+  // the step between) moves as one piece, so a facet reached across a solved crease that a rigid join also reaches,
+  // as far from the root, joins its piece by the rigid join instead (else a piece reached across several solved
+  // creases at once would hang from each, its rigid joins left as loops to tear); a driven crease, or one turning
+  // with it, carries the step's motion exactly and stays the way in
   const n = work.length, links = work.map(() => [] as number[]);
   joins.forEach((J, k) => { links[J.i].push(k); links[J.j].push(k); });
   const root = Math.max(0, work.findIndex((w) => inConvex(fixed, w.poly, tol)));
-  const dist = new Array(n).fill(Infinity), via = new Array(n).fill(-1), order: number[] = [];
-  const spread = (f: number) => { // the rigid piece around f, in breadth-first order
-    for (const q = [f]; q.length;) {
-      const g = q.shift()!;
-      order.push(g);
-      for (const k of links[g]) {
-        const J = joins[k], h = J.i === g ? J.j : J.i;
-        if (J.def < 0 && dist[h] === Infinity) { dist[h] = dist[g]; via[h] = k; q.push(h); }
-      }
-    }
-  };
+  const dist = new Array(n).fill(Infinity), via = new Array(n).fill(-1), done = new Array(n).fill(false), order: number[] = [];
+  const loose = new Array(n).fill(false); // reached across a solved crease (its piece's way in), not a driven one
+  const follows = (q: number) => !!group[q].solve; // a crease solved to follow the driven ones
   dist[root] = 0;
-  spread(root);
-  for (let at = 0; at < order.length; at++) {
-    const f = order[at];
+  for (const dq: number[] = [root]; dq.length;) {
+    const f = dq.shift()!;
+    if (done[f]) continue;
+    done[f] = true; order.push(f);
     for (const k of links[f]) {
-      const J = joins[k], g = J.i === f ? J.j : J.i;
-      if (J.def >= 0 && dist[g] === Infinity) { dist[g] = dist[f] + 1; via[g] = k; spread(g); }
+      const J = joins[k], g = J.i === f ? J.j : J.i, d = dist[f] + (J.def >= 0 ? 1 : 0);
+      const closer = d < dist[g] || (d === dist[g] && J.def < 0 && !done[g] && via[g] >= 0 && joins[via[g]].def >= 0 && follows(joins[via[g]].def) && !loose[f]);
+      if (!closer) continue;
+      dist[g] = d; via[g] = k; loose[g] = J.def >= 0 ? follows(J.def) : loose[f];
+      if (J.def >= 0) dq.push(g); else dq.unshift(g);
     }
   }
   if (order.length !== n) throw new Error(`step ${step}: the paper isn't in one piece`);
@@ -678,29 +676,9 @@ function collapseStep(work: Work[], group: SeqFoldDef[], step: number, fixed: Pt
             }
             if (!better || Math.max(...dy.map(Math.abs)) * t < 1e-12) break;
           }
-          // the misfit of the joins alone (the paper apart), not the pull toward the start
-          const r = residual(put(y));
-          return { y, cost, apart: Math.sqrt(Math.max(0, ...r.map((v) => v * v))) };
+          return { y, cost };
         };
-        let best = solve(free.map((i) => x[i]), 60);
-        // the first sample leaves a flat sheet, where every way a solved crease can start looks alike to first order
-        // (a flat-folded mechanism is at a singular pose): when the joins come apart, each solved crease tries starting
-        // the other way, kept where it brings the paper back together — the branch the paper takes
-        if (k === 1 && best.apart > 1e-4 * scale) {
-          const start = free.map((i) => x[i]);
-          for (let sweep = 0; sweep < 3 && best.apart > 1e-4 * scale; sweep++) {
-            let improved = false;
-            for (let q = 0; q < free.length && best.apart > 1e-4 * scale; q++) {
-              for (const sgn of [1, -1]) {
-                if (Math.sign(start[q]) === sgn) continue;
-                const trial = [...start]; trial[q] = sgn * 0.05;
-                const r = solve(trial, 30);
-                if (r.cost < best.cost * (1 - 1e-6)) { best = r; start[q] = trial[q]; improved = true; break; }
-              }
-            }
-            if (!improved) break;
-          }
-        }
+        const best = solve(free.map((i) => x[i]), 60);
         // paper folded flat can't fold further: a solved crease stops there (rather than pass the layers through each other)
         x = put(best.y).map((v, i) => (solved[i] ? Math.min(Math.PI, Math.max(-Math.PI, now[i] + v)) - now[i] : v));
       } else free.forEach((i) => (x[i] = 0));

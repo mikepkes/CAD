@@ -116,8 +116,12 @@ stays tucked — in a real crane the tucked corners swivel on the leg's root, an
 paper gives there; a rigid plan can't — and the 16 mm segment between them opens
 by up to 8.7 mm, hidden at the wing's root, while the wing's base passes through
 the tucked corners for the first half of the step (`widestJoin` and the clash
-sweep in `test/crane.build.test.ts` measure both). Nothing else comes apart;
-the finished crane is clash-free.
+sweep in `test/crane.build.test.ts` measure both). At one of the four corners
+the collapse's tree still hangs the tucked corner from the body instead of the
+wing, so that corner's own creases open as well (37 mm — the tree is built
+breadth first, and a piece reached across a solved crease before its driven one
+isn't re-hung once settled; doing so in every case upset the masu box). Nothing
+else comes apart; the finished crane is clash-free.
 
 **Pop-up cards** are the other kind of folding: a card cut along slits
 (`cuts`) and creased, folded all at once as rigid origami on one `open` slider
