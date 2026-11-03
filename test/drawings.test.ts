@@ -5,7 +5,9 @@ import { realSession, sessionFromDoc } from "./helpers";
 import { initKernel } from "../src/core/occ/kernel";
 import { deserializeDocument } from "../src/core/persistence";
 import { resolveParameters } from "../src/core/parameters";
-import { cutList, viewSegments, drawingSheetSVG, sheetLayout } from "../src/core/drawings";
+import { cutList, viewSegments, drawingSheetSVG, sheetLayout, drawingModel } from "../src/core/drawings";
+import { evaluateFeatures, GeometryCache } from "../src/core/features";
+import { placeComponentSketches } from "../src/core/recompute";
 import type { CadSession } from "../src/core/command/session";
 
 const OUT = process.env.BUILD_DRAWING || "";
@@ -60,8 +62,12 @@ describe("shop drawings (cut list + orthographic views)", () => {
     await s.recompute();
     const doc = s.doc;
     const scope = resolveParameters(doc.parameters).scope;
+    // built once, through a cache the drawing's model (its dimensions and section) replays
+    const cache = new GeometryCache();
+    placeComponentSketches(doc, scope);
+    const built = evaluateFeatures(doc, scope, cache);
 
-    const rows = cutList(doc, scope);
+    const rows = cutList(doc, scope, built);
     // the main lumber is present and correctly grouped
     const top = rows.find((r) => r.part === "Top");
     const leg = rows.find((r) => r.part === "Leg");
@@ -72,13 +78,19 @@ describe("shop drawings (cut list + orthographic views)", () => {
     expect(rows[0].length).toBeGreaterThan(1000);
 
     // orthographic views produce real geometry
-    const front = viewSegments(doc, scope, "front");
+    const front = viewSegments(doc, scope, "front", built);
     expect(front.length).toBeGreaterThan(50);
 
-    const svg = drawingSheetSVG(doc, scope, { title: "Roubo Workbench", units: "mm" });
+    const svg = drawingSheetSVG(doc, scope, { title: "Roubo Workbench", units: "mm" }, built, drawingModel(doc, scope, cache));
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain("Cut list");
     expect(svg).toContain("Front");
+    // the example's placed dimensions, its section across the vise leg and the detail of the tenon, none broken
+    expect(svg.match(/<g class="dim" data-dim=/g)?.length).toBe(10);
+    expect(svg).not.toContain("dim-broken");
+    expect(svg).toContain("SECTION A–A");
+    expect(svg).toContain('<g class="hatch"');
+    expect(svg).toContain("DETAIL B (2.5×)");
     // the sheet is used across its width, not only its left half: the views from the left margin, the long cut
     // list in a column at the right
     const views = [...svg.matchAll(/<line x1="([\d.]+)" y1="[\d.]+" x2="([\d.]+)"[^>]*stroke-width="0.6"/g)].flatMap((m) => [Number(m[1]), Number(m[2])]);

@@ -15,7 +15,7 @@ import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
 import { expandAssembly, hasAssemblyPatterns, instanceSolids } from "../assembly";
 import { Scope } from "../../math/expr";
-import { cutList, drawingSheetSVG, type CutPart, type SheetOptions } from "../drawings";
+import { cutList, drawingModel, drawingSheet, type ShopDrawing, type SheetOptions } from "../drawings";
 
 /** "3mf" is the whole model as one object with a part per material, for a
  *  multi-material print. */
@@ -68,8 +68,9 @@ export interface GeometryBackend {
   distance(doc: CadDocument, a: string, b: string): Promise<number>;
   /** Curvature per display-mesh vertex, edge continuity and curvature combs (all bodies, or one). */
   analyze(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): Promise<BodyAnalysisResult[]>;
-  /** A shop drawing of the model: the third-angle sheet (SVG) and the builder's cut list. */
-  drawing(doc: CadDocument, opts?: SheetOptions): Promise<{ svg: string; parts: CutPart[] }>;
+  /** A shop drawing of the model: the third-angle sheet (SVG), the builder's cut list, and where the sheet's
+   *  views are and what can be dimensioned on them. */
+  drawing(doc: CadDocument, opts?: SheetOptions): Promise<ShopDrawing>;
   /** Release workers / native resources. */
   dispose(): void;
 }
@@ -77,14 +78,16 @@ export interface GeometryBackend {
 const scopeOf = (doc: CadDocument) => resolveParameters(doc.parameters).scope;
 
 /** The drawing sheet and cut list of a document (placed as the recompute places components). */
-function drawingOf(doc: CadDocument, opts?: SheetOptions, cache?: GeometryCache): { svg: string; parts: CutPart[] } {
+function drawingOf(doc: CadDocument, opts?: SheetOptions, cache?: GeometryCache): ShopDrawing {
   const scope = scopeOf(doc);
   const d = geometryDoc(structuredClone(doc), scope);
   placeComponentSketches(d, scope);
   // the views and the cut list read the same bodies: built once, through the render's cache when there is one (the
   // model on screen is the one drawn, so it replays rather than rebuilds: a modelled thread takes seconds)
   const built = evaluateFeatures(d, scope, cache);
-  return { svg: drawingSheetSVG(d, scope, opts, built), parts: cutList(d, scope, built) };
+  // the edges and vertices by name (what dimensions measure and the app picks) and the sections' cuts, replayed too
+  const model = drawingModel(d, scope, cache);
+  return { ...drawingSheet(d, scope, opts, built, model), parts: cutList(d, scope, built) };
 }
 
 /** Expand component patterns into concrete instances and place every sketch in
@@ -214,7 +217,7 @@ export type GeometryResponse =
   | { id: number; kind: "topology"; bodies: BodyTopology[] }
   | { id: number; kind: "distance"; distance: number }
   | { id: number; kind: "analyze"; bodies: BodyAnalysisResult[] }
-  | { id: number; kind: "drawing"; svg: string; parts: CutPart[] }
+  | ({ id: number; kind: "drawing" } & ShopDrawing)
   | { id: number; kind: "error"; message: string }
   /** Not an answer: how far a running job has got (0…1), sent while it works. */
   | { id: number; kind: "progress"; fraction: number; step?: BuildStep };
@@ -356,7 +359,7 @@ export class InlineGeometryBackend implements GeometryBackend {
   async analyze(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): Promise<BodyAnalysisResult[]> {
     return analyzeOf(doc, opts);
   }
-  async drawing(doc: CadDocument, opts?: SheetOptions): Promise<{ svg: string; parts: CutPart[] }> {
+  async drawing(doc: CadDocument, opts?: SheetOptions): Promise<ShopDrawing> {
     return drawingOf(doc, opts, this.cache);
   }
   async distance(doc: CadDocument, a: string, b: string): Promise<number> {

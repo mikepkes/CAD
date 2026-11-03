@@ -42,6 +42,7 @@ import { prefersReducedMotion } from "./motion";
 import { LensPass, type LensSpec } from "./lensPass";
 import { onViewportTheme, viewportColors } from "./palette";
 import { WORLD_VERT, curvatureColors, draftFrag, zebraFrag } from "./analysisShaders";
+import { HATCH_ANGLES } from "../core/drawingAnnotations"; // the shop drawing's section hatching, part by part
 
 /** Options for an offscreen still (render_view). A free camera — `azimuthDeg` /
  *  `elevationDeg`, see orbitDirection — overrides the named `view`. */
@@ -2790,8 +2791,6 @@ function paperEdgeMaterial(faded: boolean): THREE.LineBasicMaterial {
   return new THREE.LineBasicMaterial({ color: 0x55534f, transparent: true, opacity: faded ? 0.2 : 0.5 });
 }
 
-/** Section hatch angles (degrees), body by body: the drafting 45° and 135° first, then 60°/120° and 30°/150°. */
-const HATCH_ANGLES = [45, 135, 60, 120, 30, 150];
 
 /** Section hatching on a cap material: lines `spacing` mm apart across the cap's own plane (they stay put on the
  *  cut as the view turns), at `angleDeg`, darkening the fill; antialiased over a pixel. */

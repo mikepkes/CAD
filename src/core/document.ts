@@ -961,6 +961,74 @@ export interface Intent {
   unit?: string;
 }
 
+// ---- the shop drawing's annotations ----
+
+/** A piece of model geometry a drawing dimension measures, by its topological name (core/naming.ts), so it
+ *  follows the model through rebuilds: an edge ("A|B", the faces it separates, as body_topology lists it) or a
+ *  vertex (the faces that meet there, sorted, "A|B|C"). `body` is the id of the feature that made the body. */
+export type DrawingRef = { body: string; edge: string } | { body: string; vertex: string };
+
+/** horizontal / vertical / aligned: a distance between two vertices or edges (a circle counts as its centre);
+ *  radius / diameter: a circle or an arc; angle: between two straight edges. */
+export type DimensionKind = "horizontal" | "vertical" | "aligned" | "radius" | "diameter" | "angle";
+
+/** The views a dimension, section or detail can be placed in: the three orthographic views, or a section or
+ *  detail view's id. */
+export type DrawingViewId = "front" | "top" | "right" | string;
+
+/** A view coordinate: model mm in the view's plane, u to the right and v up. */
+export interface ViewPoint { u: number; v: number }
+
+export interface DrawingDimension {
+  id: string;
+  view: DrawingViewId;
+  kind: DimensionKind;
+  /** What it measures: two refs for a linear dimension or an angle, one circle or arc for a radius or diameter. */
+  refs: DrawingRef[];
+  /** Where the dimension line (a linear one), the text (a radius or diameter) or the arc (an angle) goes,
+   *  relative to the middle of what it measures (the midpoint between the two, the circle's centre, the
+   *  angle's vertex), in view mm. Relative, so it moves with the geometry; absent = placed automatically. */
+  offset?: ViewPoint;
+  /** Written before the value ("4×"). */
+  prefix?: string;
+}
+
+/** A section: the model cut along a line drawn on a base view, looked at square to the cut, with the cut faces
+ *  cross-hatched. The line and its letters (A–A) are drawn on the base view. */
+export interface SectionView {
+  id: string;
+  /** "A": the section line's letters, and the view's name (SECTION A–A). */
+  label: string;
+  /** The view the line is drawn on (front, top or right). */
+  base: "front" | "top" | "right";
+  /** The cutting line, in the base view's coordinates. */
+  from: ViewPoint;
+  to: ViewPoint;
+  /** Looking the other way. Unflipped, the view looks to the left of the line from `from` to `to` (the arrows
+   *  point that way, at what is kept). */
+  flip?: boolean;
+}
+
+/** A detail: a circle on a view drawn again, larger. */
+export interface DetailView {
+  id: string;
+  /** "B": the circle's letter, and the view's name (DETAIL B). */
+  label: string;
+  /** The view the circle is on (an orthographic or a section view). */
+  base: DrawingViewId;
+  center: ViewPoint;
+  /** The circle's radius, view mm. */
+  radius: number;
+  /** How much larger than the base view it is drawn (2 = twice). */
+  scale: number;
+}
+
+export interface Drafting {
+  dimensions: DrawingDimension[];
+  sections: SectionView[];
+  details: DetailView[];
+}
+
 export interface CadDocument {
   schema: 1;
   id: string;
@@ -990,6 +1058,9 @@ export interface CadDocument {
   /** The design publishes its shop drawing (drawing.publish): the customize
    *  viewer then offers it, with a PDF download. */
   drawing?: { title: string };
+  /** What has been added to the shop drawing by hand (drawing.addDimension, drawing.addSection,
+   *  drawing.addDetail): placed dimensions, section and detail views. */
+  drafting?: Drafting;
   /** The design's own title and a sentence or two about it (document.describe): the viewer's heading,
    *  intro and page title. */
   about?: { title?: string; description?: string };

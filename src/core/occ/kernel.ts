@@ -478,6 +478,12 @@ function smoothSeamNormals(vertices: ArrayLike<number>, normals: ArrayLike<numbe
   return out;
 }
 
+/** A shape's B-rep edges as line segment pairs (flat xyz), seams dropped: a display mesh's `edges`, without
+ *  shading it (a drawing's section view draws only the lines). Does NOT free the shape. */
+export function edgeLines(solid: Shape3D): Float32Array {
+  return withoutSeams(solid, solid.meshEdges(EDGE_MESH) as { lines: number[]; edgeGroups?: { start: number; count: number }[] });
+}
+
 /** Tessellate a solid into a display mesh. Does NOT free the shape. */
 export function meshShape(solid: Shape3D): SolidMesh {
   const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 }) as ReturnType<Shape3D["mesh"]> & { faceGroups?: { start: number; count: number }[] };

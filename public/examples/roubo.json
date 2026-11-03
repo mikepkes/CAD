@@ -3,8 +3,8 @@
   "version": 1,
   "id": "doc1",
   "units": "mm",
-  "nextId": 1129,
-  "rollbackIndex": 480,
+  "nextId": 1153,
+  "rollbackIndex": 492,
   "operations": [
     {
       "opId": "op1",
@@ -7977,6 +7977,310 @@
       "createdIds": [],
       "label": "Describe the design",
       "at": 1793672990487
+    },
+    {
+      "opId": "op1129",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "front",
+        "kind": "horizontal",
+        "refs": [
+          {
+            "body": "ext202",
+            "edge": "ext202:side:ln194|ext202:side:ln200"
+          },
+          {
+            "body": "ext202",
+            "edge": "ext202:side:ln194|ext202:side:ln196"
+          }
+        ],
+        "offset": {
+          "u": 0,
+          "v": -415
+        }
+      },
+      "createdIds": [
+        "dim1130"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842902
+    },
+    {
+      "opId": "op1131",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "front",
+        "kind": "horizontal",
+        "refs": [
+          {
+            "body": "ext43",
+            "edge": "ext43:side:ln35|ext43:side:ln37"
+          },
+          {
+            "body": "ext202",
+            "edge": "ext202:side:ln194|ext202:side:ln196"
+          }
+        ],
+        "offset": {
+          "u": 0,
+          "v": 300
+        }
+      },
+      "createdIds": [
+        "dim1132"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842907
+    },
+    {
+      "opId": "op1133",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "front",
+        "kind": "vertical",
+        "refs": [
+          {
+            "body": "ext43",
+            "edge": "ext43:end|ext43:side:ln35"
+          },
+          {
+            "body": "ext43",
+            "edge": "ext43:side:ln35|ext43:start"
+          }
+        ],
+        "offset": {
+          "u": 900,
+          "v": 0
+        }
+      },
+      "createdIds": [
+        "dim1134"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842913
+    },
+    {
+      "opId": "op1135",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "front",
+        "kind": "vertical",
+        "refs": [
+          {
+            "body": "ext202",
+            "edge": "ext202:side:ln194|ext202:start"
+          },
+          {
+            "body": "ext403",
+            "edge": "ext403:side:ln395|ext403:start"
+          }
+        ],
+        "offset": {
+          "u": 455,
+          "v": 0
+        }
+      },
+      "createdIds": [
+        "dim1136"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842918
+    },
+    {
+      "opId": "op1137",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "front",
+        "kind": "vertical",
+        "refs": [
+          {
+            "body": "ext135",
+            "vertex": "ext135:side:ln127|ext135:side:ln133|ext135:start"
+          },
+          {
+            "body": "ext663",
+            "edge": "ext663:side:ln655|ext836:side:ci834#1"
+          }
+        ],
+        "offset": {
+          "u": -240,
+          "v": 0
+        }
+      },
+      "createdIds": [
+        "dim1138"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842924
+    },
+    {
+      "opId": "op1139",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "front",
+        "kind": "diameter",
+        "refs": [
+          {
+            "body": "ext923",
+            "edge": "rev949:rev:ln942|rev949:start#1"
+          }
+        ],
+        "offset": {
+          "u": 150,
+          "v": -110
+        }
+      },
+      "createdIds": [
+        "dim1140"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842929
+    },
+    {
+      "opId": "op1141",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "right",
+        "kind": "angle",
+        "refs": [
+          {
+            "body": "ext744",
+            "edge": "ext744:side:ln727|ext744:start"
+          },
+          {
+            "body": "ext805",
+            "edge": "ext805:side:ln788|ext805:start"
+          }
+        ],
+        "offset": {
+          "u": 0,
+          "v": -150
+        }
+      },
+      "createdIds": [
+        "dim1142"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842934
+    },
+    {
+      "opId": "op1143",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "right",
+        "kind": "horizontal",
+        "refs": [
+          {
+            "body": "ext43",
+            "edge": "ext43:side:ln35|ext43:side:ln37"
+          },
+          {
+            "body": "ext112",
+            "edge": "ext112:side:ln106|ext112:side:ln108"
+          }
+        ],
+        "offset": {
+          "u": 0,
+          "v": 100
+        }
+      },
+      "createdIds": [
+        "dim1144"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842938
+    },
+    {
+      "opId": "op1145",
+      "type": "drawing.addSection",
+      "params": {
+        "base": "front",
+        "from": {
+          "u": -670,
+          "v": -470
+        },
+        "to": {
+          "u": -670,
+          "v": 470
+        }
+      },
+      "createdIds": [
+        "sec1146"
+      ],
+      "label": "Add section view",
+      "at": 1793694842942
+    },
+    {
+      "opId": "op1147",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "sec1146",
+        "kind": "horizontal",
+        "refs": [
+          {
+            "body": "ext135",
+            "edge": "ext135:side:ln127|ext135:side:ln133"
+          },
+          {
+            "body": "ext135",
+            "edge": "ext135:side:ln131|ext135:side:ln133"
+          }
+        ],
+        "offset": {
+          "u": 0,
+          "v": -420
+        }
+      },
+      "createdIds": [
+        "dim1148"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842947
+    },
+    {
+      "opId": "op1149",
+      "type": "drawing.addDetail",
+      "params": {
+        "base": "sec1146",
+        "center": {
+          "u": -200,
+          "v": 375
+        },
+        "radius": 70,
+        "scale": 2.5
+      },
+      "createdIds": [
+        "det1150"
+      ],
+      "label": "Add detail view",
+      "at": 1793694842951
+    },
+    {
+      "opId": "op1151",
+      "type": "drawing.addDimension",
+      "params": {
+        "view": "det1150",
+        "kind": "horizontal",
+        "refs": [
+          {
+            "body": "ext158",
+            "edge": "ext158:side:ln150|ext158:side:ln156"
+          },
+          {
+            "body": "ext158",
+            "edge": "ext158:side:ln154|ext158:side:ln156"
+          }
+        ],
+        "offset": {
+          "u": 0,
+          "v": 85
+        }
+      },
+      "createdIds": [
+        "dim1152"
+      ],
+      "label": "Add drawing dimension",
+      "at": 1793694842956
     }
   ],
   "timelineGroups": []

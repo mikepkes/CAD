@@ -12,6 +12,8 @@ import { serializeDocument } from "../src/core/persistence";
 import { collideFeatures, evaluateFeatures, GeometryCache } from "../src/core/features";
 import { placeComponentSketches } from "../src/core/recompute";
 import { resolveParameters } from "../src/core/parameters";
+import { drawingModel, drawingSheet } from "../src/core/drawings";
+import type { Vec3 } from "../src/math/vec";
 import type { CadSession } from "../src/core/command/session";
 
 const OUT = process.env.BUILD_ROUBO || "";
@@ -342,6 +344,56 @@ async function buildRoubo(s: CadSession): Promise<{ chop: string; armIds: string
   return { chop, armIds };
 }
 
+/** The shop drawing's annotations: dimensions a builder needs, placed on the views by the names of the edges and
+ *  corners they measure (looked up by where they are, as an agent reads them off the drawing), a section across
+ *  the front-left leg, and a detail of its through-tenon. Default sizes: legs at x ±(620..720), the front faces at
+ *  y −250, the floor at z −425, the slab 325..425. */
+async function annotateRoubo(s: CadSession): Promise<void> {
+  const scope = resolveParameters(s.doc.parameters).scope;
+  placeComponentSketches(s.doc, scope);
+  const model = drawingModel(s.doc, scope, cache);
+  const bodyOf = (name: string) => model.bodies.find((b) => s.doc.features[b.id]?.name === name)!;
+  const near = (p: Vec3, q: Vec3) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) < 0.5;
+  const P = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
+  /** The straight edge of a body from `a` to `b` (either way round). */
+  const edge = (name: string, a: Vec3, b: Vec3) => {
+    const body = bodyOf(name);
+    const e = body.edges.find((x) => x.type === "line" && ((near(x.pts[0], a) && near(x.pts[1], b)) || (near(x.pts[0], b) && near(x.pts[1], a))));
+    if (!e) throw new Error(`no edge of ${name} from ${JSON.stringify(a)} to ${JSON.stringify(b)}`);
+    return { body: body.id, edge: e.name };
+  };
+  const circle = (name: string, c: Vec3, r: number) => {
+    const body = bodyOf(name);
+    const e = body.edges.find((x) => x.circle && near(x.circle.center, c) && Math.abs(x.circle.radius - r) < 0.01);
+    if (!e) throw new Error(`no circle of ${name} at ${JSON.stringify(c)}`);
+    return { body: body.id, edge: e.name };
+  };
+  const corner = (name: string, p: Vec3) => {
+    const body = bodyOf(name);
+    const v = body.vertices.find((x) => near(x.at, p));
+    if (!v) throw new Error(`no corner of ${name} at ${JSON.stringify(p)}`);
+    return { body: body.id, vertex: v.name };
+  };
+  const dim = (view: string, kind: string, refs: unknown[], offset: { u: number; v: number }) => dis(s, "drawing.addDimension", { view, kind, refs, offset });
+
+  // front view (x across, z up)
+  await dim("front", "horizontal", [edge("Leg FR", P(620, -250, -425), P(620, -250, 325)), edge("Leg FR", P(720, -250, -425), P(720, -250, 325))], { u: 0, v: -415 });
+  await dim("front", "horizontal", [edge("Top 1", P(850, -250, 325), P(850, -250, 425)), edge("Leg FR", P(720, -250, -425), P(720, -250, 325))], { u: 0, v: 300 });
+  await dim("front", "vertical", [edge("Top 1", P(-850, -250, 425), P(850, -250, 425)), edge("Top 1", P(-850, -250, 325), P(850, -250, 325))], { u: 900, v: 0 });
+  await dim("front", "vertical", [edge("Leg FR", P(620, -250, -425), P(720, -250, -425)), edge("Front rail", P(-648, -216, -255), P(648, -216, -255))], { u: 455, v: 0 });
+  await dim("front", "vertical", [corner("Leg FL", P(-720, -250, -425)), circle("Vise chop", P(-670, -352, 275), 17)], { u: -240, v: 0 });
+  await dim("front", "diameter", [circle("Wheel", P(-670, -374, 275), 100)], { u: 150, v: -110 });
+  // right view (y across, z up): the criss-cross arms' angle and the depth of the top
+  await dim("right", "angle", [edge("Crisscross arm 1", P(-670, -309, -173), P(-670, -222, 176)), edge("Crisscross arm 2", P(-670, -222, -166), P(-670, -309, 183))], { u: 0, v: -150 });
+  await dim("right", "horizontal", [edge("Top 1", P(850, -250, 325), P(850, -250, 425)), edge("Top 4", P(850, 249.2, 325), P(850, 249.2, 425))], { u: 0, v: 100 });
+  // section A–A down through the front-left leg's middle, looking at the vise end; the leg's depth on it, and a
+  // detail of the through-tenon in the slab with its width
+  const [sec] = await dis(s, "drawing.addSection", { base: "front", from: { u: -670, v: -470 }, to: { u: -670, v: 470 } });
+  await dim(sec, "horizontal", [edge("Leg FL", P(-720, -250, -425), P(-720, -250, 325)), edge("Leg FL", P(-720, -150, -425), P(-720, -150, 325))], { u: 0, v: -420 });
+  const [det] = await dis(s, "drawing.addDetail", { base: sec, center: { u: -200, v: 375 }, radius: 70, scale: 2.5 });
+  await dim(det, "horizontal", [edge("Tenon FL", P(-697.5, -227.5, 325), P(-697.5, -227.5, 425)), edge("Tenon FL", P(-697.5, -172.5, 325), P(-697.5, -172.5, 425))], { u: 0, v: 85 });
+}
+
 describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
   beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
 
@@ -349,8 +401,21 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     const s = realSession();
     const { chop } = await buildRoubo(s);
     await s.recompute();
+    await annotateRoubo(s);
     if (OUT) writeFileSync(`${OUT}/roubo.vibecad.json`, serializeDocument(s.doc));
     expectCommittedExample(s, "roubo");
+    // the drawing's dimensions read the model by name: these, at the default sizes, and below after a resize
+    const drawn = () => {
+      const sc = resolveParameters(s.doc.parameters).scope; placeComponentSketches(s.doc, sc);
+      const built = evaluateFeatures(s.doc, sc, cache);
+      const { svg, sheet } = drawingSheet(s.doc, sc, { title: "Roubo workbench" }, built, drawingModel(s.doc, sc, cache));
+      return { svg, values: sheet.dimensions.map((d) => d.broken ?? d.text) };
+    };
+    const at0 = drawn();
+    expect(at0.values).toEqual(["100", "130", "100", "170", "700", "Ø200", "28.1°", "499.2", "100", "55"]);
+    expect(at0.svg).toContain("SECTION A–A");
+    expect(at0.svg).toContain("DETAIL B (2.5×)");
+    if (OUT) writeFileSync(`${OUT}/roubo.drawing.svg`, at0.svg);
 
     const b0 = bodies(s);
     // top(4)+legs(4)+tenons(4)+rails(4)+chop+screw+garter+nut + 2 arms + 5 pins + wheel + 3 landings + 3 handles = 34
@@ -397,6 +462,9 @@ describe("parametric Roubo workbench (joinery + criss-cross vise)", () => {
     expect(sl.z1).toBeCloseTo(450, 0);                                   // the top surface at H/2
     const l = leg(b1);
     expect(l.hi[0] - l.lo[0]).toBeCloseTo(120, 0);                       // leg section follows LS
+    // the same dimensions, now reading the new sizes: legs 120, the slab 80 thick, the top 599.2 deep, the
+    // tenon 0.55 of the leg; the inset and the rail's height off the floor stay put
+    expect(drawn().values).toEqual(["120", "130", "80", "170", "750", "Ø200", "28.1°", "599.2", "120", "66"]);
     expect(l.lo[2]).toBeCloseTo(-450, 0);                                // on the floor at −H/2
     expect(l.lo[0]).toBeCloseTo(-1050 + N.INSET, 0);                     // inset from the end, which moved with L
     expect(b1.byName[chopName].hi[2]).toBeCloseTo(450, 0);              // the chop still rises to the top surface
