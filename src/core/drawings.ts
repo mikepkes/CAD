@@ -7,7 +7,7 @@
 // local frame), so a rotated part — a canted handle, a tilted brace — still
 // reports true stock sizes. The views use the finished body edges in world space.
 import { CadDocument, materialForComponent } from "./document";
-import { evaluateFeatures } from "./features";
+import { evaluateFeatures, type SolidEval } from "./features";
 import { placeComponentSketches, resolveComponentWorld } from "./recompute";
 import { invert, applyPoint, Rigid } from "../math/transform";
 import type { Scope } from "../math/expr";
@@ -31,10 +31,10 @@ function partName(n: string): string {
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /** A builder's cut list: each distinct part with finished dimensions (mm),
- *  material and quantity. The doc should already be recomputed/placed. */
-export function cutList(doc: CadDocument, scope: Scope): CutPart[] {
+ *  material and quantity. The doc should already be recomputed/placed. `built`: its bodies, when already evaluated. */
+export function cutList(doc: CadDocument, scope: Scope, built?: Record<string, SolidEval>): CutPart[] {
   placeComponentSketches(doc, scope);
-  const solids = Object.values(evaluateFeatures(doc, scope)).filter((b) => b.mesh && b.bounds);
+  const solids = Object.values(built ?? evaluateFeatures(doc, scope)).filter((b) => b.mesh && b.bounds);
   const worlds = resolveComponentWorld(doc, scope);
 
   // Union each component's solids into one box, measured in its own local frame.
@@ -86,9 +86,9 @@ function project(x: number, y: number, z: number, view: ViewDir): [number, numbe
 }
 
 /** Orthographic line segments for one view, from the finished body edges. */
-export function viewSegments(doc: CadDocument, scope: Scope, view: ViewDir): Seg[] {
+export function viewSegments(doc: CadDocument, scope: Scope, view: ViewDir, built?: Record<string, SolidEval>): Seg[] {
   placeComponentSketches(doc, scope);
-  const solids = Object.values(evaluateFeatures(doc, scope)).filter((b) => b.mesh);
+  const solids = Object.values(built ?? evaluateFeatures(doc, scope)).filter((b) => b.mesh);
   const segs: Seg[] = [];
   for (const b of solids) {
     const e = b.mesh!.edges;
@@ -178,19 +178,22 @@ export function sheetLayout(o: { sheet: { w: number; h: number }; margin: number
 
 /** A full third-angle drawing sheet (SVG): front / top / right views, each with
  *  overall dimensions, a title block, and the cut list as a table. Pure string
- *  output — no DOM, no kernel beyond the geometry already evaluated. */
-export function drawingSheetSVG(doc: CadDocument, scope: Scope, opts: SheetOptions = {}): string {
+ *  output — no DOM, no kernel beyond the geometry already evaluated. The bodies are built once (or passed in,
+ *  `built`) and read by every view and the cut list. */
+export function drawingSheetSVG(doc: CadDocument, scope: Scope, opts: SheetOptions = {}, built?: Record<string, SolidEval>): string {
+  if (!built) placeComponentSketches(doc, scope);
+  const solids = built ?? evaluateFeatures(doc, scope);
   const title = opts.title ?? "Drawing";
   const units = opts.units ?? "mm";
   const views: { dir: ViewDir; label: string; segs: Seg[]; box: Box2 }[] = (["front", "top", "right"] as ViewDir[])
-    .map((dir) => { const segs = viewSegments(doc, scope, dir); return { dir, label: dir[0].toUpperCase() + dir.slice(1), segs, box: boundsOf(segs) }; })
+    .map((dir) => { const segs = viewSegments(doc, scope, dir, solids); return { dir, label: dir[0].toUpperCase() + dir.slice(1), segs, box: boundsOf(segs) }; })
     .filter((v) => v.segs.length > 0 && Number.isFinite(v.box.minU));
 
   // sheet layout (mm of paper). A4 landscape-ish; the views are scaled to fit the drawing area and centred in
   // it. The cut list goes under the views or, when that leaves them bigger (a long list, a wide model), in a
   // column on the right: whichever uses the sheet better.
   const SHEET_W = 1120, SHEET_H = 790, M = 30, GAP = 40, TITLE_H = 44, ROW = 18;
-  const cutRows = cutList(doc, scope);
+  const cutRows = cutList(doc, scope, solids);
   const tableH = 18 + 24 + (cutRows.length + 1) * ROW + 10; // its heading, the header row, the rows
   // two columns (front+right side by side, top above front) → need ~ (frontW+rightW) x (frontH+topH)
   const front = views.find((v) => v.dir === "front")!;
