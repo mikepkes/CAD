@@ -13,6 +13,7 @@
   color-scheme: dark;
 }
 html, body { height: 100%; }
+[hidden] { display: none !important; } /* .btn and .composer set a display that would otherwise win over hidden */
 body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.45; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
 .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 32px; max-width: 1400px; margin: 0 auto; display: grid; gap: 14px; }
@@ -25,6 +26,9 @@ h1 b { color: var(--accent); font-weight: 600; }
 .cuts small { font-family: var(--mono); font-size: 11px; opacity: .75; margin-left: 6px; }
 .version { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
 .version select { font: 500 14px var(--mono); color: var(--fg); background: var(--raise); border: 1px solid var(--line); border-radius: 8px; min-height: 36px; padding: 0 8px; }
+.save { display: flex; align-items: center; gap: 8px; }
+.save .btn { min-height: 36px; text-decoration: none; }
+.save .hint { font-variant-numeric: tabular-nums; }
 .note .pass { font: 500 11px var(--mono); color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
 main { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 1000px) { main { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; } }
@@ -86,6 +90,11 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
     <h1><b>VibeCAD</b> cut review</h1>
     <div class="cuts" id="cuts" role="group" aria-label="Videos"></div>
     <label class="version" for="version">Version <select id="version"></select></label>
+    <div class="save">
+      <button class="btn" id="download" type="button" hidden>Download</button>
+      <a class="btn" id="openVideo" target="_blank" rel="noopener" hidden>Open video</a>
+      <span class="hint" id="downloadMsg" role="status"></span>
+    </div>
   </header>
   <main>
     <section class="player" aria-label="Player">
@@ -156,7 +165,7 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
   const $ = (id) => document.getElementById(id);
   const video = $("video"), canvas = $("ink"), stage = $("stage"), ctx = canvas.getContext("2d");
   const state = { videos: [], notes: [], current: null, filter: "open", drawing: false, strokes: [], ink: "amber", active: null, canWrite: true, me: null, rate: 1 };
-  let db = null, user = null;
+  let db = null, user = null, downloads = null;
 
   const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
   const tc = (t) => { t = Math.max(0, t || 0); const m = Math.floor(t / 60), s = Math.floor(t % 60), f = Math.floor((t % 1) * FPS + 1e-6); return `${m}:${String(s).padStart(2, "0")}<span>.${String(f).padStart(2, "0")}</span>`; };
@@ -288,8 +297,44 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
     if (changed && at) video.addEventListener("loadedmetadata", () => seek(at), { once: true });
     if (changed) { video.src = v.src; video.load(); }
     $("empty").hidden = true;
+    $("openVideo").href = v.src; $("openVideo").hidden = !noSave; $("downloadMsg").textContent = "";
     endDraw(); renderCuts(); renderNotes(); renderMarks(); tick();
   }
+
+  // ---- download ----
+  // saves the version on screen (the 720p review copy) through the viewer's save surface: a browser download, or the
+  // share sheet in the Claude app. Where this view can't save, the video opens in its own tab to be saved from there.
+  const fileName = (v) => `vibecad-${groupOf(v)}-${String(v.pass || v.id).trim().replace(/\s+/g, "-")}.mp4`.toLowerCase();
+  const saveMsg = (t) => { $("downloadMsg").textContent = t; };
+  let noSave = false;
+  function offerOpen() { noSave = true; $("download").hidden = true; $("openVideo").hidden = !state.current; }
+  $("download").onclick = async () => {
+    const v = state.current, btn = $("download");
+    if (!v || !downloads) return;
+    btn.disabled = true;
+    try {
+      const res = await fetch(v.src);
+      if (!res.ok || !res.body) throw new Error(String(res.status));
+      const total = Number(res.headers.get("content-length")) || 0, parts = [];
+      let got = 0;
+      for (const reader = res.body.getReader();;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value); got += value.length;
+        saveMsg(total ? `Fetching ${Math.round((got / total) * 100)}%` : `Fetching ${(got / 1048576).toFixed(1)} MB`);
+      }
+      saveMsg("");
+      await downloads.save({ filename: fileName(v), data: new Blob(parts, { type: "video/mp4" }) });
+      saveMsg("Saved");
+    } catch (e) {
+      const code = e && e.code;
+      if (code === "declined") saveMsg("");
+      else if (code === "rate_limited") saveMsg("A save is already waiting. Try again in a moment.");
+      else if (code === "too_large") saveMsg("Too large to save here.");
+      else if (code) { saveMsg(""); offerOpen(); } // saves don't work in this view: open it instead
+      else saveMsg("Couldn't fetch the video. Try again.");
+    } finally { btn.disabled = false; }
+  };
 
   // ---- notes ----
   // the notes on this version and the ones before it: a note stays with the video until it's closed, so an open note
@@ -383,6 +428,7 @@ aside h2 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-it
 
   // ---- data ----
   (async () => {
+    (window.claude ? window.claude.use("downloads") : Promise.resolve(null)).then((d) => { downloads = d; if (d) $("download").hidden = false; else offerOpen(); }, offerOpen);
     [db, user] = await Promise.all([window.claude?.use("db") ?? null, window.claude?.use("user") ?? null]);
     if (!db) { $("empty").textContent = "Sign in to claude.ai to see the cuts and notes."; $("addNote").disabled = true; return; }
     state.me = user ? await user.id() : null;
