@@ -20,6 +20,7 @@ import { blendCorner, copyEntities, extendCurve, offsetCurve, trimCurve, Vec } f
 import { gearOutline, GearType } from "../geometry/gear";
 import { GEAR_DIMS, GEAR_LABEL, checkGear, checkMesh, gearMeshExprs } from "../gears";
 import { expressionProblem } from "../expressionCheck";
+import { DRAWING_COMMANDS } from "./drawing";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 /** A material's appearance fields, as material.create and material.update take them. */
@@ -1192,6 +1193,7 @@ export const BUILTINS: CommandDef<any>[] = [
       return { message: `Drawing published: ${draft.drawing.title}` };
     },
   },
+  ...DRAWING_COMMANDS,
   {
     type: "material.update",
     title: "Edit material",

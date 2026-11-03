@@ -71,7 +71,7 @@ const EDIT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, ide
 const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
 /** Meta tools by how they touch the document (registry commands carry their own flag). */
 const META_ANNOTATIONS: Record<string, ToolAnnotations> = {
-  get_document: READ_ONLY, get_assist_inbox: READ_ONLY, resolve_assist: EDIT, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, cut_list: READ_ONLY, flat_pattern: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY,
+  get_document: READ_ONLY, get_assist_inbox: READ_ONLY, resolve_assist: EDIT, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, cut_list: READ_ONLY, flat_pattern: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY, shop_drawing: READ_ONLY,
   export_model: READ_ONLY, export_document: READ_ONLY,
   delete_operation: DESTRUCTIVE, import_document: DESTRUCTIVE, batch: DESTRUCTIVE,
 };
@@ -446,6 +446,53 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
         const solids = evaluateFeatures(session.doc, resolveParameters(session.doc.parameters).scope);
         const rows = groupCutList(Object.values(solids).filter((b) => b.member).map((b) => ({ body: b.featureId, ...b.member! })));
         return { ok: true, rows, csv: cutListCsv(rows) };
+      },
+    },
+    {
+      name: "shop_drawing",
+      description:
+        "The shop drawing as it stands: its views (front, top, right, and any section or detail views, with their ids), each placed dimension's value and text, or why it is broken (its geometry gone), and the sections and details. " +
+        "With `view`, also what can be dimensioned there: the model's edges and corners by topological name, each with where it sits in that view (view mm: u right, v up; a straight edge as its two ends, a circle as its centre and radius) — `near` {u,v} lists the closest first (default 40 of them). " +
+        "Pass those refs to drawing.addDimension. `svg` true returns the sheet's SVG too.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          view: { type: "string", description: "front, top, right, or a section or detail id: list what can be picked there." },
+          near: { type: "object", properties: { u: { type: "number" }, v: { type: "number" } }, description: "List the refs nearest this view point first." },
+          limit: { type: "number", description: "How many refs (default 40)." },
+          svg: { type: "boolean" },
+        },
+      },
+      handler: async (args: { view?: string; near?: { u: number; v: number }; limit?: number; svg?: boolean }) => {
+        await ensureKernel();
+        const doc = session.doc;
+        const d = await geometry.drawing(doc, { title: doc.drawing?.title ?? "Shop drawing", units: "mm" });
+        const r1 = (v: number) => Math.round(v * 10) / 10;
+        const out: Record<string, unknown> = {
+          ok: true,
+          views: d.sheet.views.map((v) => ({ id: v.id, label: v.label, kind: v.kind, ...(v.base ? { base: v.base } : {}), scale: round6(v.scale) })),
+          dimensions: d.sheet.dimensions,
+          sections: doc.drafting?.sections ?? [],
+          details: doc.drafting?.details ?? [],
+        };
+        if (args.view) {
+          const picks = d.sheet.picks[args.view];
+          if (!picks) return { ok: false, error: `no view "${args.view}" (${d.sheet.views.map((v) => v.id).join(", ")})` };
+          const where = (f: (typeof picks)[number]["f"]) => f.kind === "point" ? { point: f.p.map(r1) } : f.kind === "segment" ? { from: f.a.map(r1), to: f.b.map(r1) }
+            : f.circle ? { centre: f.circle.c.map(r1), radius: r1(f.circle.r), ...(f.circle.faceOn ? {} : { seenEdgeOn: true }) } : { curveFrom: f.pts[0].map(r1), curveTo: f.pts[f.pts.length - 1].map(r1) };
+          const at = args.near;
+          const dist = (f: (typeof picks)[number]["f"]) => {
+            if (!at) return 0;
+            const pts = f.kind === "point" ? [f.p] : f.kind === "segment" ? [f.a, f.b, [(f.a[0] + f.b[0]) / 2, (f.a[1] + f.b[1]) / 2]] : f.circle ? [f.circle.c] : f.pts;
+            return Math.min(...pts.map((p) => Math.hypot(p[0] - at.u, p[1] - at.v)));
+          };
+          // nearest first; at the same distance a corner before the edges that end there
+          const list = picks.map((p) => ({ ref: p.ref, ...where(p.f), d: dist(p.f) + ("vertex" in p.ref ? 0 : 1e-9) })).sort((a, b) => a.d - b.d).slice(0, args.limit ?? 40);
+          out.refs = list.map(({ d: _d, ...rest }) => rest);
+          out.refCount = picks.length;
+        }
+        if (args.svg) out.svg = d.svg;
+        return out;
       },
     },
     {

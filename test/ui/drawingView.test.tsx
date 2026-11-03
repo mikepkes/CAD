@@ -47,6 +47,50 @@ describe("shop drawing view", () => {
   });
 });
 
+describe("annotating the shop drawing", () => {
+  const sheet = {
+    views: [{ id: "front", label: "Front", kind: "ortho" as const, x: 0, y: 0, w: 100, h: 100, scale: 1, minU: 0, maxV: 100 }],
+    picks: { front: [] },
+    dimensions: [{ id: "dim1", view: "front", kind: "horizontal" as const, value: 40, text: "40" }, { id: "dim2", view: "front", kind: "radius" as const, broken: "b3 has no edge x|y" }],
+  };
+  const { dispatch: realDispatch, openDrawing: realOpen } = useStore.getState();
+  afterEach(() => { act(() => { useStore.getState().session.doc.drafting = undefined; useStore.setState({ dispatch: realDispatch, openDrawing: realOpen }); }); vi.restoreAllMocks(); });
+
+  it("lists the dimensions with their values (or broken), and removes one by the drawing.remove command", async () => {
+    const dispatch = vi.spyOn(useStore.getState(), "dispatch").mockResolvedValue({ ok: true } as never);
+    useStore.setState({ dispatch, openDrawing: vi.fn(async () => {}) });
+    useStore.getState().session.doc.drafting = {
+      dimensions: [{ id: "dim1", view: "front", kind: "horizontal", refs: [] }, { id: "dim2", view: "front", kind: "radius", refs: [] }],
+      sections: [{ id: "sec3", label: "A", base: "front", from: { u: 0, v: 0 }, to: { u: 0, v: 1 } }], details: [],
+    };
+    useStore.setState({ drawing: { svg: "<svg></svg>", parts, title: "Bench", sheet } });
+    render(<DrawingView />);
+    expect(screen.getByRole("toolbar", { name: "Annotate the drawing" })).toBeTruthy();
+    expect(screen.getByText("40")).toBeTruthy();
+    expect(screen.getByText("broken").closest("li")?.getAttribute("title")).toBe("b3 has no edge x|y");
+    expect(screen.getByText("section A–A · front")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove dim2" }));
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith("drawing.remove", { id: "dim2" }));
+    await waitFor(() => expect(useStore.getState().openDrawing).toHaveBeenCalledWith({ refresh: true })); // redrawn after
+  });
+  it("takes Escape for the tool before the dialog, and has no tools in the viewer", () => {
+    useStore.setState({ drawing: { svg: "<svg></svg>", parts, title: "Bench", sheet } });
+    const { unmount } = render(<DrawingView />);
+    fireEvent.click(screen.getByRole("button", { name: "Section" }));
+    expect(screen.getByRole("button", { name: "Section" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText(/click two points on the cutting line/)).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(useStore.getState().drawing).not.toBeNull(); // the tool went, the dialog stayed
+    expect(screen.getByRole("button", { name: "Section" }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(useStore.getState().drawing).toBeNull();
+    unmount();
+    useStore.setState({ drawing: { svg: "<svg></svg>", parts, title: "Bench", sheet } });
+    render(<DrawingView viewer />);
+    expect(screen.queryByRole("toolbar", { name: "Annotate the drawing" })).toBeNull();
+  });
+});
+
 // V3: on a phone the dialog fills the screen, ✕ stays on the title row, the
 // actions wrap, and the sheet stacks above the cut list (jsdom has no layout, so
 // this reads the stylesheet's phone rules).

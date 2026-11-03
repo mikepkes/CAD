@@ -142,6 +142,25 @@ describe("headless MCP server", () => {
     expect(m.bodies[0].volume).toBe(8000);
   });
 
+  it("dimensions the shop drawing: refs listed by where they sit in a view, placed by command, values read back", async () => {
+    const { client } = await connect();
+    await client.callTool({ name: "feature__primitive", arguments: { shape: "box", x: 40, y: 20, z: 10 } });
+    // the box's corners in the front view (x across, z up), nearest the bottom-left first
+    const listed = text(await client.callTool({ name: "shop_drawing", arguments: { view: "front", near: { u: -20, v: -5 }, limit: 5 } }));
+    expect(listed.views.map((v: { id: string }) => v.id)).toEqual(["front", "top", "right"]);
+    const corner = listed.refs[0];
+    expect(corner.point).toEqual([-20, -5]);
+    expect(corner.ref.vertex.split("|")).toHaveLength(3);
+    const far = text(await client.callTool({ name: "shop_drawing", arguments: { view: "front", near: { u: 20, v: -5 }, limit: 1 } })).refs[0];
+    const r = text(await client.callTool({ name: "drawing__addDimension", arguments: { view: "front", kind: "horizontal", refs: [corner.ref, far.ref], offset: { u: 0, v: -15 } } }));
+    expect(r.ok).toBe(true);
+    const [sec] = text(await client.callTool({ name: "drawing__addSection", arguments: { base: "front", from: { u: 0, v: -20 }, to: { u: 0, v: 20 } } })).createdIds;
+    const after = text(await client.callTool({ name: "shop_drawing", arguments: { svg: true } }));
+    expect(after.dimensions).toEqual([{ id: r.createdIds[0], view: "front", kind: "horizontal", value: 40, text: "40" }]);
+    expect(after.views.find((v: { id: string }) => v.id === sec)).toMatchObject({ label: "SECTION A–A", kind: "section", base: "front" });
+    expect(after.svg).toContain('<g class="hatch"');
+  });
+
   it("design intents are document state the server edits and reports pass/fail, metrics from the built bodies", async () => {
     const { client, getSession } = await connect();
     await client.callTool({ name: "feature__primitive", arguments: { shape: "box", x: 20, y: 20, z: 20 } });

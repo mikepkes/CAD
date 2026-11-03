@@ -52,6 +52,7 @@ export function rebuild(doc: CadDocument, registry: CommandRegistry): RebuildRes
   doc.configurations = [];
   doc.intents = [];
   doc.drawing = undefined;
+  doc.drafting = undefined;
   doc.about = undefined;
 
   const infos: Record<string, CommandApplyInfo> = {};

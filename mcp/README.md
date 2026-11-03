@@ -92,6 +92,15 @@ Plus timeline / query / history tools:
   (`solid: true` closes a watertight set), `feature__thicken`
 - `feature__member` (weldment members along a layout sketch) and `cut_list`
   (grouped members, plus CSV)
+- the shop drawing: `shop_drawing { view?, near?, svg? }` reports its views,
+  each placed dimension's value (or why it is broken) and its sections and
+  details; with `view` it lists the edges and corners there by topological
+  name, with where each sits in the view (`near` sorts the closest first).
+  `drawing__addDimension` (horizontal, vertical, aligned, radius, diameter,
+  angle) takes those refs and an `offset` from what it measures;
+  `drawing__addSection` cuts along a line on the front, top or right view
+  (cross-hatched, labelled A–A); `drawing__addDetail` enlarges a circle of a
+  view; `drawing__edit` and `drawing__remove` change or remove one
 - `surface_analysis` — curvature ranges and per-edge G0/G1/G2 continuity, from
   the exact B-rep
 - `batch` — run `steps: [{tool, arguments}]` as one transaction. The first

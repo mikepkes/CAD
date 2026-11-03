@@ -33,6 +33,11 @@ const COMMANDS: Record<string, IconName> = {
   "material.update": "material-edit",
   "material.assign": "material-assign",
   "drawing.publish": "drawing",
+  "drawing.addDimension": "dimension",
+  "drawing.addSection": "section",
+  "drawing.addDetail": "drawing",
+  "drawing.edit": "drawing",
+  "drawing.remove": "drawing",
   "document.describe": "parameter-edit",
   // sketches and planes
   "sketch.create": "sketch",

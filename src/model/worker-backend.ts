@@ -11,7 +11,7 @@ import { GeometryBackend, GeometryRequest, GeometryRequestInit, GeometryResponse
 import { CadDocument } from "../core/document";
 import { CollisionResult, BodyTopology, BodyAnalysisResult, type BuildProgressSink } from "../core/features";
 import { KernelInitOptions, Edge3D } from "../core/occ/kernel";
-import type { CutPart, SheetOptions } from "../core/drawings";
+import type { ShopDrawing, SheetOptions } from "../core/drawings";
 
 export class WorkerGeometryBackend implements GeometryBackend {
   private worker: Worker;
@@ -95,9 +95,9 @@ export class WorkerGeometryBackend implements GeometryBackend {
     if (r.kind === "analyze") return r.bodies;
     throw new Error(r.kind === "error" ? r.message : "analyze failed");
   }
-  async drawing(doc: CadDocument, opts?: SheetOptions): Promise<{ svg: string; parts: CutPart[] }> {
+  async drawing(doc: CadDocument, opts?: SheetOptions): Promise<ShopDrawing> {
     const r = await this.send({ kind: "drawing", doc, opts });
-    if (r.kind === "drawing") return { svg: r.svg, parts: r.parts };
+    if (r.kind === "drawing") return { svg: r.svg, parts: r.parts, sheet: r.sheet };
     throw new Error(r.kind === "error" ? r.message : "drawing failed");
   }
   async distance(doc: CadDocument, a: string, b: string): Promise<number> {
