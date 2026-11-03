@@ -489,7 +489,10 @@ export function drawingSheet(doc: CadDocument, scope: Scope, opts: SheetOptions 
       const feet: [P2, P2] = [P([bx.minU, bx.minV]), P([bx.minU, bx.maxV])];
       g.push(`<g class="dim dim-overall">${linearDimSvg(feet, [[x, feet[0][1]], [x, feet[1][1]]], dimensionText("vertical", bx.maxV - bx.minV))}</g>`);
     }
-    g.push(`<text x="${r1(at.x)}" y="${r1(at.y + at.h + (v.id === "front" ? 38 : 16))}" font-size="13" fill="#111" font-weight="bold">${esc(v.label)}</text>`);
+    // the name under the view: under its overall dimension (the front), or clear of the extension lines of one
+    // placed below it
+    const below = v.id === "front" ? 38 : fb.minV < bx.minV - 1e-9 ? 16 + DIM.over + 6 : 16;
+    g.push(`<text x="${r1(at.x)}" y="${r1(at.y + at.h + below)}" font-size="13" fill="#111" font-weight="bold">${esc(v.label)}</text>`);
     // the section lines and detail circles drawn on this view
     for (const sec of drafting?.sections ?? []) {
       if (sec.base !== v.id || v.kind !== "ortho" || !byId(sec.id)) continue;
