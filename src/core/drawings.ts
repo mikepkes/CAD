@@ -18,8 +18,8 @@ import { placeComponentSketches, resolveComponentWorld } from "./recompute";
 import { boundsOfShape, edgeLines, isKernelReady } from "./occ/kernel";
 import { namedTopology, sectionOfShape, type NamedEdge, type NamedVertex } from "./occ/drawing";
 import {
-  ORTHO_FRAMES, DIM, HATCH_ANGLES, PAPER_PER_MM, angleArc, angleDimSvg, brokenDimSvg, clipToCircle, dimensionAnchor, dimensionText, edgeFeature,
-  hatchSegments, linearDimSvg, measureDimension, projectTo, radialDimSvg, sectionFrame, sectionLineSvg,
+  ORTHO_FRAMES, DIM, HATCH_ANGLES, PAPER_PER_MM, angleArc, brokenDimSvg, clipToCircle, dimensionAnchor, dimensionSvg, dimensionText, edgeFeature,
+  hatchSegments, linearDimSvg, measureDimension, projectTo, sectionFrame, sectionLineSvg,
   type Feature2, type Measured, type P2, type Seg, type ViewFrame,
 } from "./drawingAnnotations";
 import { invert, applyPoint, Rigid } from "../math/transform";
@@ -523,23 +523,7 @@ export function drawingSheet(doc: CadDocument, scope: Scope, opts: SheetOptions 
       continue;
     }
     statuses.push({ id: dim.id, view: dim.view, kind: dim.kind, value: measured.geom.value, text: p.text });
-    const P = toPaper(p.view!.id), g = measured.geom;
-    let body: string;
-    if (g.kind === "linear") body = linearDimSvg([P(g.feet[0]), P(g.feet[1])], [P(g.ends[0]), P(g.ends[1])], p.text!);
-    else if (g.kind === "angle") {
-      const exts: Seg[] = [];
-      [g.a, g.b].forEach((dir, i) => {
-        const [s0, s1] = g.spans[i], s = g.R > s1 ? s1 : g.R < s0 ? s0 : undefined;
-        if (s === undefined) return;
-        const from = P([g.vertex[0] + dir[0] * s, g.vertex[1] + dir[1] * s]), to = P([g.vertex[0] + dir[0] * g.R, g.vertex[1] + dir[1] * g.R]);
-        const L = Math.hypot(to[0] - from[0], to[1] - from[1]);
-        if (L <= DIM.gap) return;
-        const u: P2 = [(to[0] - from[0]) / L, (to[1] - from[1]) / L];
-        exts.push([[from[0] + u[0] * DIM.gap, from[1] + u[1] * DIM.gap], [to[0] + u[0] * DIM.over, to[1] + u[1] * DIM.over]]);
-      });
-      body = angleDimSvg(P(g.vertex), angleArc(g.vertex, g.a, g.b, g.R).map(P), exts, p.text!);
-    } else body = radialDimSvg(P(g.c), P(g.tip), g.tip2 && P(g.tip2), P(g.at), p.text!);
-    parts.push(`<g class="dim" data-dim="${esc(dim.id)}">${body}</g>`);
+    parts.push(`<g class="dim" data-dim="${esc(dim.id)}">${dimensionSvg(measured.geom, toPaper(p.view!.id), p.text!)}</g>`);
   }
 
   // ---- cut list table ----

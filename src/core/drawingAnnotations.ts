@@ -384,6 +384,24 @@ export function sectionLineSvg(from: P2, to: P2, look: P2, label: string, id = "
   return out.join("");
 }
 
+/** A measured dimension drawn: its geometry mapped to paper by `P`, with `text`. */
+export function dimensionSvg(g: DimGeom, P: (p: P2) => P2, text: string, color = DIM.color): string {
+  if (g.kind === "linear") return linearDimSvg([P(g.feet[0]), P(g.feet[1])], [P(g.ends[0]), P(g.ends[1])], text, color);
+  if (g.kind !== "angle") return radialDimSvg(P(g.c), P(g.tip), g.tip2 && P(g.tip2), P(g.at), text, color);
+  // extension lines out from each edge to the arc, when the arc passes its end
+  const exts: Seg[] = [];
+  [g.a, g.b].forEach((dir, i) => {
+    const [s0, s1] = g.spans[i], s = g.R > s1 ? s1 : g.R < s0 ? s0 : undefined;
+    if (s === undefined) return;
+    const from = P(add2(g.vertex, mul2(dir, s))), to = P(add2(g.vertex, mul2(dir, g.R)));
+    const L = len2(sub2(to, from));
+    if (L <= DIM.gap) return;
+    const u = mul2(sub2(to, from), 1 / L);
+    exts.push([add2(from, mul2(u, DIM.gap)), add2(to, mul2(u, DIM.over))]);
+  });
+  return angleDimSvg(P(g.vertex), angleArc(g.vertex, g.a, g.b, g.R).map(P), exts, text, color);
+}
+
 /** The arc of an angle dimension sampled in view coordinates, from ray `a` to ray `b` about `vertex` at `R`. */
 export function angleArc(vertex: P2, a: P2, b: P2, R: number, n = 32): P2[] {
   const t0 = Math.atan2(a[1], a[0]);

@@ -1908,6 +1908,23 @@ body.side-resizing { cursor: col-resize; user-select: none; }
 .drawing-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 300px; gap: 14px; padding: 14px; }
 .drawing-sheet { min-height: 0; background: var(--paper); box-shadow: 0 0 0 1px var(--paper-edge); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .drawing-sheet svg { width: 100%; height: 100%; }
+/* the sheet and its annotation layer: one box, one viewBox, so the layer's coordinates are the sheet's */
+.drawing-main { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.drawing-main > .drawing-sheet { flex: 1; position: relative; }
+.drawing-paper, .drawing-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+.drawing-paper svg { display: block; }
+.drawing-overlay { pointer-events: none; }
+.drawing-sheet.picking { cursor: crosshair; }
+.drawing-sheet:not(.picking) [data-dim], .drawing-sheet:not(.picking) [data-section], .drawing-sheet:not(.picking) [data-detail] { cursor: pointer; }
+.drawing-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.drawing-hint { font-size: 12px; flex: 1 1 240px; min-width: 0; }
+.drawing-annotations { list-style: none; margin: 0 0 8px; padding: 0; }
+.drawing-annotations li { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+.drawing-annotations li.on { background: rgba(232, 89, 12, 0.12); }
+.drawing-annotations li.broken .k-mono { color: #c0158f; }
+.drawing-annotation { flex: 1; text-align: left; background: none; border: none; color: inherit; font: inherit; padding: 5px 6px; cursor: pointer; }
+.drawing-annotation-remove { background: none; border: none; color: var(--text-dim); font-size: 16px; width: 28px; height: 28px; cursor: pointer; }
+.drawing-annotation-remove:hover { color: var(--text); }
 /* A phone: the dialog fills the screen, ✕ stays on the title row, the actions wrap
    onto their own row, and the sheet sits above the cut list (both scroll as one). */
 @media (max-width: 720px) {

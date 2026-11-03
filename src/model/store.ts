@@ -37,7 +37,7 @@ import { projectEdges } from "../core/geometry/project";
 import { resolveSketchPlane, makePlaneFromNormal, to2d } from "../geometry/plane";
 import { CadDocument } from "../core/document";
 import { serializeDocument, deserializeDocument } from "../core/persistence";
-import type { CutPart } from "../core/drawings";
+import type { CutPart, SheetInfo } from "../core/drawings";
 import { pickItems, sketchPickItems, type PickItem } from "./pickMenu";
 import { exampleTitle, exampleUrl } from "./examples";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
@@ -72,6 +72,7 @@ const MOTION_GHOST_KEY = "vibecad.motionGhost.v1";
 let rebuildInFlight: Promise<void> | null = null; // the running preview evaluate (its whole coalesced loop)
 let rebuildDirty = false;    // a newer rebuild was requested while one ran
 let buildToken = 0;          // the latest build started: measurements of an older one are stale
+let drawingSeq = 0;          // the latest shop drawing asked for: an older one arriving late is dropped
 let rebuildRequested: Promise<void> | null = null; // the latest rebuildSolids call, from the moment it's made
 /** Resolves once no solid rebuild is running or asked for — including one requested a
  *  moment ago that hasn't started yet (it first waits for the kernel). The video
@@ -424,8 +425,9 @@ export interface AppState {
   deleteJointTemplate: (templateId: string) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
   exportSolid: (format: "stl" | "step" | "3mf") => Promise<void>;
-  /** The open shop drawing (third-angle sheet + cut list), null when closed; `loading` while it is made. */
-  drawing: { svg: string; parts: CutPart[]; title: string } | { loading: true } | null;
+  /** The open shop drawing (third-angle sheet + cut list, and where its views are and what can be dimensioned
+   *  on them), null when closed; `loading` while it is made. */
+  drawing: { svg: string; parts: CutPart[]; title: string; sheet?: SheetInfo } | { loading: true } | null;
   /** The long-press selection picker: everything under the cursor, nearest first; null when closed. */
   pickMenu: { screen: { x: number; y: number }; items: PickItem[] } | null;
   openPickMenu: (screen: { x: number; y: number }, hits: Parameters<typeof pickItems>[0]) => void;
@@ -434,7 +436,8 @@ export interface AppState {
   closePickMenu: () => void;
   /** Act on a picker entry exactly as clicking that face (or plane) would, in whatever session is open. */
   choosePick: (item: PickItem) => void;
-  openDrawing: () => Promise<void>;
+  /** Open the shop drawing; `refresh` redraws the open one in place (after a dimension or a section is placed). */
+  openDrawing: (opts?: { refresh?: boolean }) => Promise<void>;
   closeDrawing: () => void;
   /** The whole model as one print file, offered through the native share sheet
    *  on phones (Save to Files / AirDrop / another app) and downloaded elsewhere:
@@ -1582,17 +1585,21 @@ export const useStore = create<AppState>((set, get) => {
       else s.selectFace(item.point, item.normal, s.pickMenu?.screen ?? { x: 0, y: 0 }, item.bodyId);
     },
     drawing: null,
-    openDrawing: async () => {
+    openDrawing: async (opts) => {
       await get().ensureKernel();
       const doc = get().session.doc;
       if (!Object.keys(doc.features).length) { set({ toast: { kind: "info", text: "Nothing to draw yet: make a body first." } }); return; }
       const title = doc.drawing?.title ?? (doc.components[doc.rootComponentId]?.name && doc.components[doc.rootComponentId].name !== "Root Component" ? doc.components[doc.rootComponentId].name : "Shop drawing");
-      set({ drawing: { loading: true } });
+      // a refresh keeps the sheet on screen until the new one is drawn; only the latest request lands
+      const open = get().drawing;
+      if (opts?.refresh && !open) return;
+      const seq = ++drawingSeq;
+      if (!(opts?.refresh && open && "svg" in open)) set({ drawing: { loading: true } });
       try {
         const r = await geometry.drawing(doc, { title, units: "mm" });
-        if (get().drawing) set({ drawing: { ...r, title } }); // still open
+        if (get().drawing && seq === drawingSeq) set({ drawing: { ...r, title } }); // still open, and still the latest
       } catch (e) {
-        set({ drawing: null, toast: { kind: "error", text: `Drawing failed: ${(e as Error).message}` } });
+        if (seq === drawingSeq) set({ drawing: null, toast: { kind: "error", text: `Drawing failed: ${(e as Error).message}` } });
       }
     },
     closeDrawing: () => set({ drawing: null }),
