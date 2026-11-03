@@ -2693,9 +2693,8 @@ function paperOverlay(p: PaperOverlay, resolution: THREE.Vector2, faded: boolean
   const sm = new THREE.MeshBasicMaterial({ color: 0x000000, vertexColors: true, transparent: true, depthWrite: false, opacity: faded ? 0.3 : 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, side: THREE.DoubleSide });
   const shadow = new THREE.Mesh(shadowGeometry(p), sm);
   shadow.renderOrder = 1;
-  const bm = material.clone();
-  bm.polygonOffset = true; bm.polygonOffsetFactor = -4; bm.polygonOffsetUnits = -4; // over the sharp hinge it rounds
-  const bends = new THREE.Mesh(bendGeometry(p), bm);
+  // the paper's own material (a clone would lose its shader: a plain white one), the strip drawn after the facets
+  const bends = new THREE.Mesh(bendGeometry(p), material);
   bends.renderOrder = 2;
   const dark = line(p.marks.dark, 0x000000, 1.0, 0.18, 3), light = line(p.marks.light, 0xffffff, 0.9, 0.09, 3);
   const out: THREE.Object3D[] = [outline, shadow, bends, dark, light];
