@@ -1,5 +1,5 @@
-// Act 0 · The demo's opening, after the montage: the title, and what VibeCAD is (said over the title, a model turning
-// slowly behind it). Then the demo goes straight to the showcase (Act 3); where to get it is the outro's. The phone stand is the
+// Act 0 · The demo's opening, after the montage: the title, and what VibeCAD is (its first sentence said over the title,
+// the second over a model turning slowly, one of its numbers changed). Then the demo goes straight to the showcase (Act 3); where to get it is the outro's. The phone stand is the
 // tutorial's; the demo doesn't show it.
 // Narration: lines.mjs, by beat id.
 
@@ -26,9 +26,21 @@ export async function preroll(d) {
 }
 
 export async function act0(d) {
+  // the title while "VibeCAD is parametric CAD that runs in your browser"; then (group 2) the title lifts off the
+  // gyroscope, its parameters on the left, and on "change one, and the whole design follows" its ring height steps
+  // up and every ring grows with it (PUPPET: set by command, as dragging its slider would)
   await d.beat("what-it-is", async () => {
     await d.api("titleCard", TITLE);
     await d.api("turntable", 10);
-  }, { minMs: 6000 });
+    await d.cue(); // "Every model is a recipe of named numbers: change one, and the whole design follows."
+    await d.api("titleCard", null);
+    await d.wait(2300);
+    for (const h of [15, 18, 21]) {
+      const t = Date.now();
+      await d.run(async (x) => { await window.__vibecadDemo.store.getState().setParameterExpr("ringH", String(x)); }, h);
+      await d.settle(60, { camera: false }); // the turntable is running
+      if (Date.now() - t < 400) await d.wait(400 - (Date.now() - t));
+    }
+  });
   await d.api("turntable", null);
 }
