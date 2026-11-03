@@ -68,32 +68,36 @@ export async function act3(d) {
     await d.beat(id, async () => { await d.lower(title, sub); await act(); }, { minMs: 6500 });
   };
 
-  await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a section view, then a motion study", async () => {
+  await clip("gyroscope", "gyroscope", "Print-in-place gyroscope", "a motion study, then a section view", async () => {
+    // the motion study first, on the whole gyroscope, at real speed (not sped up): with Show motion on, the rings it
+    // turns sweep round as see-through ghosts, each through a full circle, while the check runs behind them. Then the
+    // section, so it goes on once and never has to come off again for the study
+    await d.wait(500);
+    d.pick("gyroscope bearing");
+    await d.cue(); // "The motion study turns every joint a full circle…"
+    await d.run(async () => { const st = window.__vibecadDemo.store.getState(); st.setMotionGhost(true); await st.runMotionStudy(); });
+    await d.page.waitForFunction(() => !["running", "pending"].includes(window.__vibecadDemo.store.getState().motionStatus), null, { timeout: 180000 });
     // the section: tick Section in the toolbar, cut on the level XY plane through the middle, the rings' pivot plane
     await d.api("cursor", true);
     const at = await d.toolbar("section");
     const sec = await d.rect(`${at} .grid-controls label`, "Section");
-    await d.wait(500); // ticked as "…already assembled" ends, so the cut is just on as "Cut open" is said
     await d.click(sec.x + 10, sec.cy);
     await d.wait(150);
-    await d.cue(); // the section is on: "Cut open, each ring hangs on cone pins…"
+    await d.cue(); // the section is on: "And cut open, each ring hangs on cone pins…"
     await d.settle(300);
     if (at.includes("menu")) { await d.key("Escape"); await d.settle(200); } // close the more menu over the view
     await d.api("cursor", false);
-    // no turn to the cut: the same oblique angle, pushed in once to fill the frame and held from here on. Both
-    // bearings show cut open at once (the cone pins of the middle ring in the frame ring, and of the inner ring in the
-    // middle one), and the rings turn in full view in the study
+    // no turn to the cut: the same oblique angle as the study, pushed in once to fill the frame with what the cut
+    // leaves. Both bearings show cut open at once (the cone pins of the middle ring in the frame ring, and of the
+    // inner ring in the middle one)
     const kept = (await d.api("bounds")).reduce((a, b) => ({ // what the cut leaves: the model below the XY plane
       min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y), z: Math.min(a.min.z, b.min.z) },
       max: { x: Math.max(a.max.x, b.max.x), y: Math.max(a.max.y, b.max.y), z: Math.min(Math.max(a.max.z, b.max.z), 0) },
     }));
     await d.api("aim", { dir: [1, -1, 1.2], box: kept, ms: 1600, margin: 0.8 });
-    d.pick("gyroscope bearing");
-    // the motion study, at real speed (not sped up): with Show motion on, the rings it turns sweep round as
-    // see-through ghosts, each through a full circle, while the check runs behind them
-    await d.cue(); // "And the motion study turns every joint a full circle…"
-    await d.run(async () => { const st = window.__vibecadDemo.store.getState(); st.setMotionGhost(true); await st.runMotionStudy(); });
-    await d.page.waitForFunction(() => !["running", "pending"].includes(window.__vibecadDemo.store.getState().motionStatus), null, { timeout: 180000 });
+  }, async () => {
+    // the angle the whole beat holds, the whole gyroscope filling the frame from the first frame
+    await d.api("aim", { dir: [1, -1, 1.2], ms: 300, margin: 0.85 });
   });
   if (hasExample("clockwork")) {
     // the knob turns at one steady rate through the beat, a third of the last cut's (its average was about 147 deg/s)

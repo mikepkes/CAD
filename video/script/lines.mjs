@@ -84,7 +84,7 @@ export const LINES = {
   // Act 3 · The demo's showcase, rapid fire: the bundled examples, then the agent.
   3: {
     gyroscope:
-      "A gyroscope that prints in one piece, already assembled. | Cut open, each ring hangs on cone pins with just enough clearance to spin. | And the motion study turns every joint a full circle to check that nothing collides.",
+      "A gyroscope that prints in one piece, already assembled. | The motion study turns every joint a full circle to check that nothing collides. | And cut open, each ring hangs on cone pins with just enough clearance to spin.",
     clockwork:
       "Gears from a module and a tooth count, linked by expressions, so one number turns the whole train. | And a Geneva drive turns steady motion into steps.",
     walker:
