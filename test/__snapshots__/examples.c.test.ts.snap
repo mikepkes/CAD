@@ -512,17 +512,17 @@ exports[`bundled examples > public/examples/roubo.json > replays, builds on both
   {
     "body": "ext677",
     "max": [
-      -653.6,
+      -654,
       20,
-      291.3,
+      291,
     ],
     "min": [
-      -686.4,
+      -686,
       -352,
-      258.6,
+      259,
     ],
     "name": "Vise screw",
-    "volume": 175867.8,
+    "volume": 216872.7,
   },
   {
     "body": "ext694",

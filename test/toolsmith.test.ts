@@ -4,7 +4,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { realSession, sessionFromDoc } from "./helpers";
-import { initKernel } from "../src/core/occ/kernel";
+import { initKernel, buildThread, meshShape } from "../src/core/occ/kernel";
 import { evaluateFeatures, SolidEval } from "../src/core/features";
 import { resolveParameters } from "../src/core/parameters";
 import { placeComponentSketches } from "../src/core/recompute";
@@ -185,6 +185,21 @@ describe("proposal 6 — feature.thread", () => {
       expect(b.volume!).toBeGreaterThan(PI * minorR * minorR * 6); // real ribs: more than the core
       expect(b.volume!).toBeLessThan(PI * 36 * 6 * 1.02);         // less than the full Ø12
     }
+  }, 40000);
+
+  // A long rod: the section used to roll slowly about the helix, so the thread
+  // thinned to almost nothing and back every five turns (the Roubo's vise screw).
+  it("a long modelled thread keeps its full height the whole way along", () => {
+    const rod = buildThread({ form: "trapezoidal", pitch: 12, majorDiameter: 32, length: 120 });
+    const m = meshShape(rod);
+    rod.delete();
+    const crest = new Map<number, number>(); // the outermost radius in each 1 mm slice along the rod
+    for (let i = 0; i < m.positions.length; i += 3) {
+      const z = Math.round(m.positions[i + 2]);
+      crest.set(z, Math.max(crest.get(z) ?? 0, Math.hypot(m.positions[i], m.positions[i + 1])));
+    }
+    expect(crest.size).toBeGreaterThan(100);
+    for (const r of crest.values()) expect(r).toBeCloseTo(16, 0);
   }, 40000);
 
   it("a modelled internal thread cuts a tap into a bored block", async () => {
