@@ -28,7 +28,7 @@ import { Vec3 } from "../math/vec";
 import { Rigid, IDENTITY, axisAngle, compose, invert, applyPoint, applyVec } from "../math/transform";
 import { resolveComponentWorld } from "./recompute";
 import { SheetState, SheetFold, SheetRow, blankEdges, contourBlank, addFlange, jogFolds, flatPointOf, chordAcross, isSequenced } from "./sheet";
-import { sequenceAngles, sequenceUVs } from "./sheetSequence";
+import { sequenceAngles, sequenceUVs, sequencePaper } from "./sheetSequence";
 import { buildSheet, SheetBuild } from "./sheetBuild";
 import { flatBlankOf } from "./occ/sheet";
 import { localGearSolid, peekLocalGear, placeShape, gearExtent, Annulus } from "./occ/gear";
@@ -1492,7 +1492,7 @@ export class GeometryCache {
 }
 
 function cloneMesh(m: SolidMesh): SolidMesh {
-  return { positions: m.positions.slice(), normals: m.normals.slice(), indices: m.indices.slice(), edges: m.edges.slice(), triangleCount: m.triangleCount, faceRanges: m.faceRanges?.slice(), faceNames: m.faceNames?.slice(), ...(m.uvs ? { uvs: m.uvs.slice() } : {}) };
+  return { positions: m.positions.slice(), normals: m.normals.slice(), indices: m.indices.slice(), edges: m.edges.slice(), triangleCount: m.triangleCount, faceRanges: m.faceRanges?.slice(), faceNames: m.faceNames?.slice(), ...(m.uvs ? { uvs: m.uvs.slice() } : {}), ...(m.paper ? { paper: m.paper } : {}) };
 }
 
 /** Sketches a feature reads. */
@@ -1865,6 +1865,7 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
             row.sheet.sequence = { plan: sh.seq, ...(progress != null ? { progress } : {}), frame: sh.frame };
             // the paper's own coordinates on its mesh, so a material drawn on it stays put as it folds
             row.mesh.uvs = sequenceUVs(sh.seq, sequenceAngles(sh.seq, progress), sh.frame, row.mesh.positions);
+            row.mesh.paper = sequencePaper(sh.seq, sequenceAngles(sh.seq, progress), sh.frame);
           }
         }
         if (later) { pending.push(later); keep = true; }

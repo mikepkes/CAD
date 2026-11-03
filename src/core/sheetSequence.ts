@@ -29,7 +29,7 @@
 import type { Pt } from "./geometry/profile";
 import { Rigid, IDENTITY, compose, invert, rotationAbout, applyPoint, applyVec, translation } from "../math/transform";
 import { meshFacets, meshHinges, dihedral, bendPath, hingeStiffness, fitPanel, type BendHinge } from "./sheetBend";
-import { polyArea, clipConvexPoly, inset, layerOrderOf, layerRanks, validateLayers, panelPieces, type LayerOrder, type LayerCrease } from "./sheetLayers";
+import { polyArea, clipConvexPoly, inset, layerOrderOf, layerRanks, layerFamilies, validateLayers, panelPieces, type LayerOrder, type LayerCrease } from "./sheetLayers";
 export { polyArea } from "./sheetLayers";
 
 type V3 = { x: number; y: number; z: number };
@@ -1320,7 +1320,7 @@ export const creaseMade = (c: SeqCrease, angles: number[], seq?: Pick<SheetSeque
 /** A triangle mesh of the sheet posed at `angles` (world = frame ∘ facet placement): the
  *  facets fanned (front faces on the paper's top), their flat coordinates as uvs, and as
  *  edges the outline plus every crease made so far. */
-export function sequenceMesh(seq: SheetSequence, angles: number[], frame: Rigid): { positions: Float32Array; normals: Float32Array; indices: Uint32Array; uvs: Float32Array; edges: Float32Array } {
+export function sequenceMesh(seq: SheetSequence, angles: number[], frame: Rigid): { positions: Float32Array; normals: Float32Array; indices: Uint32Array; uvs: Float32Array; edges: Float32Array; paper: PaperOverlay } {
   const T = poseSequence(seq, angles).map((t) => compose(frame, t));
   const nv = seq.facets.reduce((s, f) => s + f.poly.length, 0), nt = seq.facets.reduce((s, f) => s + f.poly.length - 2, 0);
   const positions = new Float32Array(3 * nv), normals = new Float32Array(3 * nv), uvs = new Float32Array(2 * nv), indices = new Uint32Array(3 * nt);
@@ -1336,7 +1336,63 @@ export function sequenceMesh(seq: SheetSequence, angles: number[], frame: Rigid)
   const segs: [Rigid, Pt, Pt][] = [...seq.outline.map((o) => [T[o.facet], o.a, o.b] as [Rigid, Pt, Pt]), ...seq.creases.filter((c) => !c.bend && creaseMade(c, angles, seq)).map((c) => [T[c.facets[0]], c.a, c.b] as [Rigid, Pt, Pt])];
   const edges = new Float32Array(6 * segs.length);
   segs.forEach(([M, a, b], i) => { const p = applyPoint(M, at3(a)), q = applyPoint(M, at3(b)); edges.set([p.x, p.y, p.z, q.x, q.y, q.z], 6 * i); });
-  return { positions, normals, indices, uvs, edges };
+  return { positions, normals, indices, uvs, edges, paper: sequencePaper(seq, angles, frame) };
+}
+
+/** What makes folded paper readable on screen, besides its surface: its raw cut edges (the outline, not the
+ *  creases: a flap folded back onto a layer is the same colour, with the same normal, so its edge would vanish),
+ *  and the soft shadow a flap casts on the layer it lies on along that edge, as real paper does. */
+export interface PaperOverlay {
+  /** The outline's segments, world (xyz pairs). */
+  outline: Float32Array;
+  /** Contact shadows: triangles on the layers under (or over) a flap's edge, just off the layer, darkest at the
+   *  edge and fading `width` away from it — positions (world), colours (rgba, the alpha the fade), indices. */
+  shadow: { positions: Float32Array; colors: Float32Array; indices: Uint32Array };
+}
+
+/** The paper overlay (PaperOverlay) of the sheet posed at `angles`: read from the layer stack — for every raw edge
+ *  of a facet, the facets lying with it within a few gaps that the strip `width` beyond the edge falls on. */
+export function sequencePaper(seq: SheetSequence, angles: number[], frame: Rigid, width?: number): PaperOverlay {
+  const T = poseSequence(seq, angles), W = T.map((t) => compose(frame, t));
+  const outline = new Float32Array(6 * seq.outline.length);
+  seq.outline.forEach((o, i) => { const p = applyPoint(W[o.facet], at3(o.a)), q = applyPoint(W[o.facet], at3(o.b)); outline.set([p.x, p.y, p.z, q.x, q.y, q.z], 6 * i); });
+  const scale = Math.max(1, ...seq.facets.flatMap((f) => f.poly.map((p) => Math.max(Math.abs(p.x), Math.abs(p.y)))));
+  const w = width ?? Math.max(10 * seq.gap, 0.012 * scale), DARK = 0.32, NEAR = 3.5 * seq.gap;
+  const pos: number[] = [], col: number[] = [], idx: number[] = [];
+  const fams = layerFamilies(T);
+  for (const fam of fams) {
+    if (fam.facets.length < 2) continue;
+    const inFam = new Set(fam.facets);
+    const to2 = (k: number, p: Pt) => { const q = applyPoint(T[k], at3(p)); return { x: dot3(q, fam.u), y: dot3(q, fam.v) }; };
+    const shape = new Map<number, Pt[]>(), h = new Map<number, number>();
+    for (const k of fam.facets) { shape.set(k, seq.facets[k].poly.map((p) => to2(k, p))); h.set(k, dot3(T[k].origin, fam.n)); }
+    for (const o of seq.outline) {
+      const f = o.facet;
+      if (!inFam.has(f)) continue;
+      const a = to2(f, o.a), b = to2(f, o.b), e = sub2(b, a), L = len2(e);
+      if (L < 1e-9) continue;
+      const c = centroid(shape.get(f)!);
+      let m = { x: -e.y / L, y: e.x / L };
+      if (dot2(sub2(c, a), m) > 0) m = mul2(m, -1); // outward: away from the facet
+      const strip = [a, b, add2(b, mul2(m, w)), add2(a, mul2(m, w))];
+      for (const g of fam.facets) {
+        if (g === f) continue;
+        const dh = h.get(f)! - h.get(g)!;
+        if (Math.abs(dh) < 1e-9 || Math.abs(dh) > NEAR) continue;
+        const poly = clipConvexPoly(strip, shape.get(g)!);
+        if (poly.length < 3 || Math.abs(polyArea(poly)) < 1e-6 * w * w) continue;
+        const z = h.get(g)! + Math.sign(dh) * 0.15 * seq.gap; // a hair off the layer, toward the flap
+        const base = pos.length / 3;
+        for (const q of poly) {
+          const P = add3(add3(mul3(fam.u, q.x), mul3(fam.v, q.y)), mul3(fam.n, z)), Wp = applyPoint(frame, P);
+          const d = Math.max(0, Math.min(w, dot2(sub2(q, a), m)));
+          pos.push(Wp.x, Wp.y, Wp.z); col.push(0, 0, 0, DARK * (1 - d / w));
+        }
+        for (let i = 1; i + 1 < poly.length; i++) idx.push(base, base + i, base + i + 1);
+      }
+    }
+  }
+  return { outline, shadow: { positions: new Float32Array(pos), colors: new Float32Array(col), indices: new Uint32Array(idx) } };
 }
 
 /** Flat coordinates (mm) for each vertex of a mesh of the posed sheet (world coords): the facet it lies on, unfolded. */

@@ -123,6 +123,13 @@ breadth first, and a piece reached across a solved crease before its driven one
 isn't re-hung once settled; doing so in every case upset the masu box). Nothing
 else comes apart; the finished crane is clash-free.
 
+On screen, paper folded in steps is drawn as its zero-thickness surface, the
+layers a gap apart and every crease a sharp hinge; to keep a flap folded back
+onto a layer of the same colour readable, the viewport adds (display only,
+`sequencePaper` in `src/core/sheetSequence.ts`) the sheet's raw cut edges as a
+crisp dark line and, read from the layer stack, the soft contact shadow each
+flap casts along its edge on the layer it lies on.
+
 **Pop-up cards** are the other kind of folding: a card cut along slits
 (`cuts`) and creased, folded all at once as rigid origami on one `open` slider
 (0 closed flat … 180 open flat).

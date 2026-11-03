@@ -2,7 +2,7 @@
 // and the fold operations that declare it — an inside reverse fold puts a point between a flap's layers, an outside
 // one wraps it round them (the same shape; a different order).
 import { describe, it, expect } from "vitest";
-import { planSequence, sequenceAngles, poseSequence, sequenceClashes, sequenceFaces, SeqFoldDef } from "../src/core/sheetSequence";
+import { planSequence, sequenceAngles, poseSequence, sequenceClashes, sequenceFaces, sequencePaper, SeqFoldDef } from "../src/core/sheetSequence";
 import { layerOrderOf, validateLayers, layerRanks } from "../src/core/sheetLayers";
 import { applyPoint, IDENTITY, rotationAbout, translation, compose } from "../src/math/transform";
 
@@ -68,6 +68,27 @@ const flap = (reverse: "inside" | "outside", bend = false): SeqFoldDef[] => [
   // the reverse crease, drawn on the right half (the top layer once folded): from the spine at y = 0.4 to the edge
   { id: "rev", a: { x: 0, y: 0.4 }, b: { x: 0.3, y: 0.7 }, angle: PI, step: 2, reverse, ...(bend ? { bend: true } : {}) },
 ];
+
+describe("paper overlay", () => {
+  it("a flap folded onto a layer: the raw edges as segments, and a contact shadow on the layer beneath along the flap's edge, fading away from it", () => {
+    const seq = planSequence(rect(100, 60), [{ id: "half", a: { x: 60, y: 0 }, b: { x: 60, y: 60 }, angle: PI, step: 1 }], { x: 10, y: 10 }, 0.1);
+    const flat = sequencePaper(seq, sequenceAngles(seq, 0), IDENTITY), folded = sequencePaper(seq, sequenceAngles(seq, 1), IDENTITY);
+    expect(flat.outline.length).toBe(6 * seq.outline.length);
+    expect(flat.shadow.indices.length).toBe(0); // one layer: nothing lies on anything
+    // the flap (x > 60, 40 wide) lands on the base at x in [20, 60]; its raw edge at x = 20 casts a strip on the base, x from 20 outward (toward 0)
+    const P = folded.shadow.positions, C = folded.shadow.colors;
+    expect(folded.shadow.indices.length).toBeGreaterThan(0);
+    const xs = [...Array(P.length / 3)].map((_, i) => P[3 * i]), zs = [...Array(P.length / 3)].map((_, i) => P[3 * i + 2]);
+    expect(Math.max(...xs)).toBeLessThan(20.01); // nothing under the flap, nothing beyond the sheet's own edges
+    expect(Math.min(...xs)).toBeGreaterThan(20 - 2); // a strip a couple of mm wide
+    for (const z of zs) expect(z).toBeGreaterThan(0);
+    expect(Math.max(...zs)).toBeLessThan(0.05); // just off the base layer, toward the flap
+    // darkest at the edge, clear at the strip's far side
+    const alphaAt = (x: number) => Math.max(...[...Array(P.length / 3)].map((_, i) => (Math.abs(P[3 * i] - x) < 1e-6 ? C[4 * i + 3] : -1)));
+    expect(alphaAt(20)).toBeGreaterThan(0.2);
+    expect(alphaAt(Math.min(...xs))).toBeLessThan(1e-6);
+  });
+});
 
 describe("reverse folds", () => {
   it("an inside reverse fold: the point between the flap's layers, its spine reversed", () => {
