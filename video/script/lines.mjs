@@ -28,12 +28,11 @@ export const VIDEOS = {
 export const MONTAGE = "Sections, gears, mechanisms, forces, and parts built just by asking.";
 
 export const LINES = {
-  // Act 0 · The demo's opening: what VibeCAD is, said over the title, and where to get it. Then straight to the showcase.
+  // Act 0 · The demo's opening: what VibeCAD is, said over the title. Then straight to the showcase; where to get it
+  // is the outro's (a call to action belongs at the end).
   0: {
     "what-it-is":
-      "VibeCAD is parametric CAD that runs in your browser. Every model is a recipe of steps and named numbers: change one, and the whole design follows.",
-    "get-vibecad":
-      "It's free and open source, at mikepkes dot github dot io slash CAD, or as a desktop app. Here's what it can do.",
+      "VibeCAD is parametric CAD that runs in your browser. | Every model is a recipe of named numbers: change one, and the whole design follows.",
   },
 
   // Act 1 · The tutorial: blank page to a parametric phone stand, by hand first.
@@ -85,33 +84,33 @@ export const LINES = {
   // Act 3 · The demo's showcase, rapid fire: the bundled examples, then the agent.
   3: {
     gyroscope:
-      "A gyroscope that prints in one piece, already assembled. Cut it open and turn square to the cut: each ring hangs on cone pins that come to a point inside a socket, with just enough clearance to spin. Then the motion study turns every joint through a full circle and checks that nothing collides.",
+      "A gyroscope that prints in one piece, already assembled. | Cut open, each ring hangs on cone pins with just enough clearance to spin. | And the motion study turns every joint a full circle to check that nothing collides.",
     clockwork:
-      "Gears of every kind, generated from a module and a tooth count, and geared together by expressions, so one number turns the whole train. The planets roll inside the ring gear, and the worm creeps its wheel round at a fraction of the speed. And a Geneva drive turns steady motion into steps: the pin catches a slot, flicks the star a quarter turn, and the locking disc holds it still until the next.",
+      "Gears from a module and a tooth count, linked by expressions, so one number turns the whole train. | And a Geneva drive turns steady motion into steps.",
     walker:
-      "A wind walker in the spirit of Theo Jansen's beach animals. One crank turns twelve legs of eleven bars each, sixty degrees apart, so some feet are always gliding along the ground while the rest lift and swing forward.",
+      "A Jansen wind walker: one crank drives twelve legs. | Each foot glides along the ground, then lifts and swings forward.",
     skadis:
-      "A pegboard holder that grips by weight. Set something in it, and its weight pushes a rack down between two pinions, swinging the side pads in to clamp it. The heavier it is, the harder it holds, and every part prints, pins included.",
+      "A pegboard holder that grips by weight: | the load pushes a rack down between two pinions, swinging the pads in to clamp it. | Every part prints, pins included.",
     handlebar:
-      "Organic surfaces: a mountain-bike cockpit. The bar is one sweep along a 3D curve, tapering from the stem clamp to the grips, and the rubber grips wear a hex pattern wrapped round their wings.",
+      "A bike cockpit, in organic surfaces. | The bar sweeps a tapering section along a 3D curve, | and the grips wear a hex pattern wrapped round them.",
     origami:
-      "And paper. One slider takes a flat sheet through every fold to a finished dart, each layer kept a paper's thickness from the next, white on one side and red on the other.",
+      "And paper: one slider folds a flat sheet into a dart.",
     "scissor-jointed":
-      "A scissor lift where even the number of stages is a slider, patterned as a jointed assembly that still moves.",
+      "A scissor lift where even the stage count is a slider.",
     starbox:
-      "A box that snaps together, with every snap sized for the material you print it in.",
+      "A box whose snaps are sized for the material you print it in.",
     "bistable-forces":
-      "Ask about a design, and Claude can drive the interface for you: here it opens the force analysis on a bistable switch, sweeps it through its travel, and turns the lens to strain. Both rest positions and the snap force are marked on the curve.",
+      "Ask about a design, and Claude drives the interface: | it runs the force analysis on a bistable switch, | and marks both rest positions and the snap force.",
     "print-direction":
-      "It's a print, and prints are weakest across their layers. Flat on the bed, the blades bend along their layers. Stand it on its end, and every blade is pulled across them: the same strain is now a bigger share of a lower limit.",
+      "Prints are weakest across their layers. | Stand it on end, and the same strain becomes a bigger share of a lower limit.",
     gimbal:
-      "A two-axis flexure gimbal, the kind satellites use to steer a mirror.",
+      "A flexure gimbal, the kind satellites use to steer a mirror.",
     roubo:
-      "A full-size woodworking bench, resized from one number. Its leg vise opens on a slider joint, and the shop drawing and cut list come straight from the model.",
+      "A full-size workbench, resized from one number, | with its shop drawing and cut list straight from the model.",
     agent:
-      "Or just describe it. Claude builds it with the same commands you use: a twisted vase, every section sized from a parameter. Then refine it in plain words. Turn it into a lamp shade, and Claude cuts the windows and sets the material. Ask for the holes as a Voronoi pattern instead, and it wraps the cells all the way round, leaning with the twist, with a printable web between every opening. The result is an ordinary parametric model you can keep editing.",
+      "Or just describe it: Claude builds a twisted vase with the same commands you use. | Ask for a lamp shade, and it cuts the windows. | Ask for a Voronoi pattern instead, and it wraps the cells round the shade. | The result is still an ordinary parametric model.",
     outro:
-      "That's VibeCAD. Free, open source, in your browser or on your desktop. To build your first model, watch the phone stand tutorial. Thanks for watching.",
+      "VibeCAD is free and open source, at mikepkes dot github dot io slash CAD, or as a desktop app. | To build your first model, watch the phone stand tutorial. Thanks for watching.",
   },
 };
 
@@ -122,7 +121,6 @@ export const CHAPTERS = {
   0: {
     montage: "Intro",
     "what-it-is": "What VibeCAD is",
-    "get-vibecad": "Getting VibeCAD",
   },
   1: {
     "cold-open": "What you'll build",
@@ -160,7 +158,7 @@ export const CHAPTERS = {
     gimbal: "Flexure gimbal",
     roubo: "Roubo workbench and shop drawing",
     agent: "Ask Claude to build it",
-    outro: "Thanks for watching",
+    outro: "Get VibeCAD",
   },
 };
 
