@@ -229,16 +229,43 @@ export async function act3(d) {
     });
   } else d.note("no walker example yet: walker clip skipped");
   await clip("skadis", "skadis", "SKÅDIS gravity holder", "the load's own weight closes the grip", async () => {
+    // timed to the line's words (seconds into the beat, Heart's clip): the whole holder while "grips by weight"; the
+    // cover goes see-through as the camera closes in on "Set something in it" (2.8 s), so the rack drops between the
+    // pinions behind it on "pushes a rack down between two pinions" (4.7–6.9 s) and the pads shut on "clamp it" (9.1 s);
+    // then out to a three-quarter view, and on "every part prints, pins included" (12.8–14.5 s) the parts slide
+    // apart along the way they go together, out from the board, all apart by "pins": the pins that go in from
+    // behind, the rack and arms, the cover, foot and pads, and the shouldered pins through the cover in front
+    const t0 = d.timing.events.findLast((e) => e.kind === "beat")?.t ?? d.now();
+    const at = (s) => d.wait(Math.max(0, (t0 + s - d.now()) * 1000));
+    const works = await d.api("componentBox", ["Back plate", "Lower arm*", "Upper arm*"]);
+    const out = -1; // -y: out from the board, toward the viewer
+    const explode = {
+      "Foot pin*": [0, 20 * out, 0], "Pad pin*": [0, 20 * out, 0],
+      Linkage: [0, 45 * out, 0],
+      Cover: [0, 95 * out, 0], Foot: [0, 95 * out, 0],
+      "Pad, right": [70, 95 * out, 0], "Pad, left": [-70, 95 * out, 0], // and aside, so they don't hide the middle
+      "Pivot pin*": [0, 135 * out, 0], "Guide pin*": [0, 135 * out, 0],
+      "Stand-in item*": [0, 95 * out, 250], // lifted up out of the frame: not a part
+    };
     await d.api("aim", { dir: [0.25, -1, 0.35], ms: 1000, margin: 0.9 });
-    await d.api("poseSweep", "drop", 0, 6.4, 2600);
+    await at(2.5);
+    await Promise.all([d.api("poseGhost", ["Cover"], 0, 1, 1000), d.api("aim", { dir: [0.1, -1, 0.2], box: works, ms: 1500, margin: 1.15 })]);
+    await at(4.4);
+    d.event("view", "cover see-through: the rack and pinions");
+    const drop = d.api("poseSweep", "drop", 0, 6.4, 4700);
+    await at(6.0);
     d.pick("skadis holder");
-    await d.wait(900);
-    await d.api("poseSweep", "drop", 6.4, 0, 1800);
-    // closer, from below the front: the pinions and parallelogram arms on the cheeks
-    await d.api("aim", { dir: [0.6, -1, -0.35], box: await d.api("componentBox", ["Lower arm, right", "Upper arm, right", "Pad, right", "Lower arm, left", "Upper arm, left", "Pad, left", "Rack"]), ms: 1400, margin: 1.15 });
-    await d.api("poseSweep", "drop", 0, 6.4, 2400);
-    await d.wait(700);
-    await d.api("poseEnd");
+    await drop;
+    await at(9.8);
+    // the printed parts' box, as far apart as they'll go (about: the pads go aside as well as out)
+    const parts = await d.api("componentBox", ["Back plate", "Lower arm*", "Upper arm*", "Foot"]); // the item stands clear
+    const apart = { min: { ...parts.min, x: parts.min.x - 70, y: parts.min.y + 95 * out }, max: { ...parts.max, x: parts.max.x + 70 } };
+    await Promise.all([d.api("poseGhost", ["Cover"], 1, 0, 900), d.api("aim", { dir: [0.75, -1, 0.4], box: apart, ms: 1800, margin: 0.85 })]);
+    await at(12.3);
+    d.event("view", "exploded along the assembly");
+    await d.api("poseExplode", explode, 1, 1500);
+    await at(15.2);
+    // held apart to the end: the next clip's load puts the parts back (openText ends the pose)
   });
   await clip("handlebar", "handlebar", "Bike handlebar", "a 3D sweep with a tapering section, a wrapped hex grip", async () => {
     // timed to the line's words (seconds into the beat, Heart's clip): the whole bar while "one sweep along a 3D curve",
