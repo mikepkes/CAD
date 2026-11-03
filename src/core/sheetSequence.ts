@@ -1458,7 +1458,8 @@ export function sequencePaper(seq: SheetSequence, angles: number[], frame: Rigid
     }
     for (let j = 0; j < ARC_SEGS; j++) {
       const a0 = base + j, a1 = base + j + 1, b0 = base + ARC_SEGS + 1 + j, b1 = base + ARC_SEGS + 2 + j;
-      if (flip) bi.push(a0, b0, a1, a1, b0, b1); else bi.push(a0, a1, b0, a1, b1, b0);
+      // wound so the front face is the side the normals point to (the paper's top, continuing facet A's)
+      if (flip) bi.push(a0, a1, b0, a1, b1, b0); else bi.push(a0, b0, a1, a1, b0, b1);
     }
   }
   return {

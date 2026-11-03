@@ -2697,7 +2697,7 @@ function paperOverlay(p: PaperOverlay, resolution: THREE.Vector2, faded: boolean
   bm.polygonOffset = true; bm.polygonOffsetFactor = -4; bm.polygonOffsetUnits = -4; // over the sharp hinge it rounds
   const bends = new THREE.Mesh(bendGeometry(p), bm);
   bends.renderOrder = 2;
-  const dark = line(p.marks.dark, 0x000000, 1.1, 0.22, 3), light = line(p.marks.light, 0xffffff, 1.0, 0.18, 3);
+  const dark = line(p.marks.dark, 0x000000, 1.0, 0.18, 3), light = line(p.marks.light, 0xffffff, 0.9, 0.09, 3);
   const out: THREE.Object3D[] = [outline, shadow, bends, dark, light];
   for (const o of out) { o.userData.paper = true; o.raycast = () => {}; }
   return out;
