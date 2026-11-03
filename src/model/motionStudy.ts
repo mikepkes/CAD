@@ -57,7 +57,7 @@ export interface MotionStudyOptions {
   onCoarseClear?: (checked: number, total: number) => void;
   cancelled?: () => boolean;
   /** A pose is about to be checked: the parameter overrides that pose it (the swept joint at its angle, the
-   *  other drives at 0), so a viewer can draw the motion as it is checked (the viewport's motion ghosts). */
+   *  other drives at 0), for a caller that follows the check pose by pose. */
   onPose?: (overrides: Record<string, string>) => void;
 }
 
@@ -68,6 +68,12 @@ export function sampleOrder(steps: number, coarse: number): { first: number[]; r
   const first = [...new Set(Array.from({ length: n }, (_, i) => Math.round((i * steps) / n) % steps))];
   const rest = Array.from({ length: steps }, (_, k) => k).filter((k) => !first.includes(k));
   return { first, rest };
+}
+
+/** How many poses a study checks: `steps` round each drive's turn, the one with every drive at 0 (where each
+ *  turn starts) only once. */
+export function poseCount(drives: number, steps: number): number {
+  return drives > 0 ? drives * steps - (drives - 1) : 0;
 }
 
 /** The key a verdict is kept under: the design and every parameter's expression
@@ -106,7 +112,7 @@ export async function runMotionStudy(
   const joints = driveParams(doc);
   if (!joints.length) return { status: "pass", worstOverlap: 0 }; // nothing to move
   const called = (n: string) => doc.parameters.find((p) => p.name === n)?.label || n;
-  const total = joints.length * steps;
+  const total = poseCount(joints.length, steps);
   const { first, rest } = sampleOrder(steps, opts.coarse ?? 4);
   let done = 0;
   let worst = 0;
@@ -135,8 +141,9 @@ export async function runMotionStudy(
     return undefined; // clear
   };
   for (const pass of [first, rest]) {
-    for (const j of joints) {
+    for (const [i, j] of joints.entries()) {
       for (const k of pass) {
+        if (k === 0 && i > 0) continue; // every drive at 0: checked once, on the first drive's turn
         const r = await pose(j, k);
         if (r !== undefined) return r;
       }

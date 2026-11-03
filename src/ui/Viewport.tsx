@@ -16,7 +16,8 @@ import { ContextMenu } from "./ContextMenu";
 import { sketchIsEmpty } from "./sketchStatus";
 import { onViewportTheme, viewportColors } from "../viewport/palette";
 import { buildBodies } from "../viewport/buildBodies";
-import { motionGhostPoses } from "../viewport/motionGhosts";
+import { motionGhostPoses, sweepTrail, SweepPace, SWEEP_TRAIL } from "../viewport/motionGhosts";
+import { driveParams } from "../model/motionStudy";
 
 function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
   let inside = false;
@@ -208,17 +209,26 @@ function ViewportInner({ overlays, label }: { overlays?: ReactNode; label?: stri
     const unsubGhost = useGhost.subscribe(() => controller.setBase(buildView(useStore.getState())));
     // The scene repaints itself on a theme switch; the extrude handle takes its colour from here.
     const unsubTheme = onViewportTheme(() => updateExtrudeHandle(scene, useStore.getState()));
-    // The motion study's ghosts: redrawn when a new pose is checked, gone when the study ends or they're switched off.
-    let ghostKey: unknown[] = [];
+    // The motion study's ghosts: while it runs, the parts it turns sweep round frame by frame, paced by the check
+    // running behind them (motionGhosts.ts); gone when the study ends or they're switched off.
+    type Sweep = { run: NonNullable<AppState["motionRun"]>; drives: string[]; pace: SweepPace; frame: number; bodies?: { solids: unknown; doc: unknown; list: ReturnType<typeof buildBodies> } };
+    let sweep: Sweep | null = null;
+    const drawSweep = (now: number) => {
+      if (!sweep) return;
+      const s = useStore.getState(), doc = s.session.doc;
+      const at = sweep.pace.advance(now, s.motionProgress);
+      if (sweep.bodies?.solids !== s.solids || sweep.bodies?.doc !== doc) sweep.bodies = { solids: s.solids, doc, list: buildBodies(doc, s.solids as never) };
+      const { build, poses } = motionGhostPoses(doc, sweepTrail(sweep.drives, at), SWEEP_TRAIL);
+      scene.setMotionGhosts(sweep.bodies.list, build, poses);
+      sweep.frame = requestAnimationFrame(drawSweep);
+    };
     const syncMotionGhosts = (s: AppState) => {
-      const on = s.motionGhost && s.motionStatus === "running" && s.motionPoses.length > 0;
-      const key = on ? [s.motionPoses, s.solids, s.session.doc] : [];
-      if (key.length === ghostKey.length && key.every((k, i) => k === ghostKey[i])) return;
-      ghostKey = key;
-      if (!on) { scene.clearMotionGhosts(); return; }
-      const doc = s.session.doc;
-      const { build, poses } = motionGhostPoses(doc, s.motionPoses);
-      scene.setMotionGhosts(buildBodies(doc, s.solids as never), build, poses);
+      const run = s.motionGhost && s.motionStatus === "running" ? s.motionRun : null;
+      if (run === (sweep?.run ?? null)) return;
+      if (sweep) cancelAnimationFrame(sweep.frame);
+      sweep = null;
+      if (!run) { scene.clearMotionGhosts(); return; }
+      sweep = { run, drives: driveParams(s.session.doc), pace: new SweepPace(run.started, run.poses, run.lastMs ?? undefined), frame: requestAnimationFrame(drawSweep) };
     };
     const unsub = useStore.subscribe((s) => {
       controller.setBase(buildView(s));
@@ -238,6 +248,7 @@ function ViewportInner({ overlays, label }: { overlays?: ReactNode; label?: stri
 
     return () => {
       unsub();
+      if (sweep) cancelAnimationFrame(sweep.frame);
       unsubGhost();
       unsubTheme();
       setActiveScene(null);

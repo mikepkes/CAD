@@ -86,12 +86,13 @@ export async function act3(d) {
     await d.wait(900);
     await d.api("aim", { dir: [0, 1, 0.0001], box: GYRO_PIVOT, ms: 2200, margin: 1.35 });
     await d.wait(400); d.pick("gyroscope bearing"); await d.wait(2400);
-    await d.api("aim", { dir: [0.55, 1, 0.6], ms: 1800, margin: 1.0 });
-    await d.fast("motion study", async () => {
-      // with Show motion on, the rings it turns sweep round as see-through ghosts while each pose is checked
-      await d.run(async () => { const st = window.__vibecadDemo.store.getState(); st.setMotionGhost(true); await st.runMotionStudy(); });
-      await d.page.waitForFunction(() => !["running", "pending"].includes(window.__vibecadDemo.store.getState().motionStatus), null, { timeout: 180000 });
-    });
+    // the camera pulls back as the study starts (on "Then the motion study"). It runs at real speed, not sped up:
+    // with Show motion on, the rings it turns sweep round as see-through ghosts, each through a full circle, while
+    // the check runs behind them
+    const back = d.api("aim", { dir: [0.55, 1, 0.6], ms: 1800, margin: 1.0 });
+    await d.run(async () => { const st = window.__vibecadDemo.store.getState(); st.setMotionGhost(true); await st.runMotionStudy(); });
+    await d.page.waitForFunction(() => !["running", "pending"].includes(window.__vibecadDemo.store.getState().motionStatus), null, { timeout: 180000 });
+    await back;
     await d.wait(1200);
   });
   if (hasExample("clockwork")) {

@@ -241,6 +241,20 @@ export interface JobChannel {
   stale?: () => boolean;
 }
 
+/** The motion study's build cache: a pose replays the bodies it only moves rather than rebuilding them (see
+ *  collideFeatures). Two evaluations kept, the pose before and this one: a body the drive reshapes is rebuilt
+ *  at each pose and its old builds freed. */
+export const studyCache = () => new GeometryCache({ generations: 2, keepShapeHints: true });
+let workerStudyCache: GeometryCache | undefined;
+
+/** The collision check at one pose: `doc` with `overrides` (parameter expressions) applied, built — with the
+ *  study's cache, its moved bodies replayed rather than rebuilt — and its bodies checked pairwise. */
+export function collidePose(doc: CadDocument, overrides?: Record<string, string>, cache?: GeometryCache): CollisionResult {
+  const posed = poseDoc(doc, overrides);
+  const d = geometryDoc(posed, scopeOf(posed));
+  return collideFeatures(d, scopeOf(d), cache);
+}
+
 /**
  * The pure, environment-agnostic job handler both workers run. No `self`, no
  * `parentPort` — just a request in, a response plus its transfer list out. The
@@ -286,9 +300,7 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       return { res: { id: req.id, kind: "distance", distance: bodyDistance(doc, scopeOf(doc), req.a, req.b) }, transfer: [] };
     }
     if (req.kind === "collide") {
-      const posed = poseDoc(req.doc, req.overrides);
-      const doc = geometryDoc(posed, scopeOf(posed));
-      const result = collideFeatures(doc, scopeOf(doc));
+      const result = collidePose(req.doc, req.overrides, (workerStudyCache ??= studyCache()));
       return { res: { id: req.id, kind: "collide", result }, transfer: [] };
     }
     const bytes = req.featureId === null || req.format === "3mf" // a 3MF is always the whole model
@@ -307,6 +319,7 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
 export class InlineGeometryBackend implements GeometryBackend {
   private isReady = false;
   private cache = new GeometryCache({ generations: 6 });
+  private studyCache?: GeometryCache;
   async init(opts: KernelInitOptions): Promise<void> {
     await initKernel(opts);
     this.isReady = isKernelReady();
@@ -332,9 +345,7 @@ export class InlineGeometryBackend implements GeometryBackend {
     return exportFeatureBytes(geometryDoc(doc, scope), scope, featureId, format);
   }
   async collide(doc: CadDocument, overrides?: Record<string, string>): Promise<CollisionResult> {
-    const posed = poseDoc(doc, overrides);
-    const d = geometryDoc(posed, scopeOf(posed));
-    return collideFeatures(d, scopeOf(d));
+    return collidePose(doc, overrides, (this.studyCache ??= studyCache()));
   }
   async topology(doc: CadDocument, opts?: TopologyOpts): Promise<BodyTopology[]> {
     return topologyOf(doc, opts);
