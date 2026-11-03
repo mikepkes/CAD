@@ -119,6 +119,41 @@ It runs in a Web Worker in the app and inline in tests and the stdio server.
   normal + nearest point. Fillet/chamfer selectors accept edge `names`.
 - **Reference values.** `test/oracle.test.ts` checks the exact B-rep volume,
   surface area and centroid of every feature kind against closed-form answers.
+- **Kernel costs.** A boolean is built once: an empty `BRepAlgoAPI_*`
+  builder given its arguments and tools (`booleanBuilder`), never the
+  two-shape constructor, which runs the boolean as it is made — replicad's
+  fuse and cut then build it a second time. What is built once per spec and
+  kept: a gear's local solid (`localGearSolid`) and a modelled thread rod
+  (`threadRod`), both placed as copies.
+- **A pool of workers** (`model/worker-backend.ts`, `core/geometry/pool.ts`,
+  `core/geometry/chains.ts`). The browser backend runs `poolSize` geometry
+  workers, each with a kernel and a step cache of its own. Before an
+  evaluation, `featureChains` predicts — without the kernel — which body each
+  active feature reads and makes, and joins the features that share a body
+  into a chain; the chains are built in parallel — the heaviest first, each to
+  the least loaded worker (`featureWeight`: a long modelled thread or a
+  herringbone gear gets a worker to itself), and a chain kept on the worker it
+  was given so that worker's cache keeps hitting — and the rows are merged
+  back in the order a whole evaluation writes them. A model
+  the split can't predict (a mirror of every body, a sketch on a face, sheet
+  metal, weldments, assembly patterns), or one that is one chain anyway, is
+  built whole on worker 0 — as is every other job (export, collide, topology).
+  A split answer with a failed body-making feature is rebuilt whole, since
+  "the most recent body" then means something else. `core/geometry/
+  capabilities.ts` reads the host: the desktop app (Tauri) runs two workers
+  (up to four on request), the web app four (within half the cores; two when
+  the browser reports under 8 GB or is a phone or tablet, one under 4 GB);
+  `?pool=N` or localStorage `vibecad.geometryPool` overrides. A pool needs no
+  special headers — plain module workers — only memory (each kernel is a 23 MB
+  wasm instance with its own heap). The page compiles the wasm once
+  (`compileKernel`) and hands the module to every worker, the motion study's
+  too, so none fetches and compiles it again. The threaded
+  OCC build (`replicad_multi.wasm`, needs cross-origin isolation) was measured
+  and not adopted: its parallel booleans gain nothing on these models, its
+  parallel meshing ~1.6× on gears only. `scripts/bench/` has the headless
+  profile (`profile.ts`: where a rebuild's time goes), the log-replay profile
+  (`rebuild-ops.ts`) and the in-app benchmark (`app.mjs` driving `inpage.mjs`
+  in Chromium or the desktop app).
 
 ## Constraint solving & diagnosis
 

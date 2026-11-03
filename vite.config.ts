@@ -15,6 +15,9 @@ export default defineConfig(({ command }) => ({
     // Not the desktop shell, agent worktrees (a removed one forces a full reload), or the video's takes and renders
     // (thousands of frames written during a take), or the voiceover clips.
     watch: { ignored: ["**/src-tauri/**", "**/.claude/**", "**/video/takes/**", "**/video/out/**", "**/video/vo/**"] },
+    // The in-page benchmark (scripts/bench/inpage.mjs) reports to its driver (scripts/bench/app.mjs)
+    // through the dev server, so the page talks to its own origin whatever webview hosts it.
+    proxy: { "/__bench": { target: `http://127.0.0.1:${process.env.VIBECAD_BENCH_PORT ?? 4674}` } },
   },
   // The OpenCASCADE emscripten glue has a `new URL('…wasm', import.meta.url)`
   // fallback that Vite's dep-scanner can't resolve (the package's exports map

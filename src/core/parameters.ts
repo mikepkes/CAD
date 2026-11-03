@@ -44,6 +44,25 @@ export function resolveParameters(params: Parameter[]): {
   scope: Scope;
   resolved: Parameter[];
 } {
+  // Memoized on everything the evaluation reads: replaying a long operation log calls this
+  // once per parametric sketch point and joint (hundreds of times for the same parameters),
+  // and at a few ms a call that was most of a slider change on a large model.
+  const key = params.map((p) => `${p.name}=${p.expr}\u0001${p.value}\u0001${p.min ?? ""}\u0001${p.max ?? ""}\u0001${p.step ?? ""}\u0001${p.values?.join(",") ?? ""}`).join("\u0002");
+  const hit = memo.get(key);
+  if (hit) {
+    memo.delete(key); memo.set(key, hit); // most recently used last
+    return { scope: { ...hit.scope }, resolved: params.map((p, i) => ({ ...p, value: hit.out[i].value, error: hit.out[i].error, warning: hit.out[i].warning })) };
+  }
+  const r = evaluateParameters(params);
+  memo.set(key, { scope: { ...r.scope }, out: r.resolved.map((p) => ({ value: p.value, error: p.error, warning: p.warning })) });
+  if (memo.size > MEMO_SIZE) memo.delete(memo.keys().next().value!);
+  return r;
+}
+
+const MEMO_SIZE = 8;
+const memo = new Map<string, { scope: Scope; out: { value: number; error?: string; warning?: string }[] }>();
+
+function evaluateParameters(params: Parameter[]): { scope: Scope; resolved: Parameter[] } {
   const scope: Scope = {};
   const resolved: Parameter[] = params.map((p) => ({ ...p, error: undefined }));
   const resolvedByName = new Map<string, Parameter>();

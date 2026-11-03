@@ -22,3 +22,6 @@ createRoot(document.getElementById("root")!).render(customize ? <CustomizeApp />
 
 // Demo mode for the tutorial video (?demo): a presenter layer and the director's API, loaded only when asked for.
 if (q.has("demo")) void import("./demo/demo").then((m) => m.installDemo());
+
+// DEV-only: the in-page rebuild benchmark (?bench=<port>; scripts/bench/app.mjs drives it), served as is by the dev server.
+if (import.meta.env?.DEV && q.has("bench")) { const bench = "/scripts/bench/inpage.mjs"; void import(/* @vite-ignore */ bench); }

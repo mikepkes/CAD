@@ -18,9 +18,9 @@ const cache = new GeometryCache({ generations: 6 });
 let latestEvaluate = 0;
 
 ctx.onmessage = async (e: MessageEvent) => {
-  const msg = e.data as { kind: "init"; wasmUrl?: string } | GeometryRequest;
+  const msg = e.data as { kind: "init"; wasmUrl?: string; wasmModule?: WebAssembly.Module } | GeometryRequest;
   if (msg.kind === "init") {
-    initPromise ??= initKernel({ wasmUrl: msg.wasmUrl });
+    initPromise ??= initKernel({ wasmUrl: msg.wasmUrl, wasmModule: msg.wasmModule });
     await initPromise;
     ctx.postMessage({ kind: "ready" });
     return;
