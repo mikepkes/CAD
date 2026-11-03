@@ -71,8 +71,9 @@ and the holder slides down onto it on a half-dovetail. There are 23 printed
 parts, including printed slotted pins, and each prints without supports. Untick
 `board` to hide the board and the stand-in before you save it for printing. The
 viewer also offers the drawing.
-And **https://mikepkes.github.io/CAD/?mode=customize&example=origami** — a
-**paper airplane folded from a flat sheet**, step by step, on one `fold`
+And **https://mikepkes.github.io/CAD/?mode=customize&example=origami** (paper
+folding is experimental: see the known gaps at the top of
+`src/core/sheetSequence.ts`) — a **paper airplane folded from a flat sheet**, step by step, on one `fold`
 slider: 0 is a sheet of A4, 1 folds the top corners in, 2 the new edges in
 again, 3 turns it over, 4 folds it in half, 5 stands it on its keel and 6
 folds the wings out level. It's one `feature.sheet` folded *in steps*: each
@@ -92,15 +93,83 @@ the head, the wings down). Their hard steps are **collapses**: every crease of
 the step moves at once, some driven and the rest solved each moment so the
 paper stays joined across every crease, a crease can be carried through a whole
 stack of layers, and layers that land on each other are spaced in the order
-they come in. A collapse can also let the paper **bend** (`bend`): its paper
-is meshed into small panels that move by least energy, a bar-and-hinge model
-with the flexure joints' pseudo-rigid-body stiffness (faces bend a little, old
-creases ease open), for folds paper only makes by giving. Two simplifications
-remain in the crane: its neck and tail turn over outside the body (an inside
-reverse fold), and as the wings come down their inner layers come apart from
-them, in triangles you can see. Bending keeps those layers joined but doesn't
-yet keep them from passing through each other, so the crane doesn't use it
-yet.
+they come in. The **order of the layers** — which lies on which — is kept as
+data after every step and checked (`src/core/sheetLayers.ts`: Flat-Folder's
+conditions, that two folds flat at one crease nest and never interleave, that
+no layer lies between the two sides of a crease it crosses), so a fold that
+would push paper through paper is an error naming the fold and the crease,
+not a silently misplaced layer (the masu's corners were one, now fixed). The
+crane's neck and tail are **inside reverse folds** (`reverse: inside`, also
+`outside`; two in a step make a crimp): the point beyond the crease folds back
+on itself through every layer, its creases reversed, and lands *between* the
+body's layers — that order is declared by the operation and checked, never
+searched for. Between the keyframes the point swings over as one and settles
+through its own layers by a few paper thicknesses at the end of the step (a
+rigid plan can't show paper giving); `bend` on a reverse fold meshes just the
+point and the layers it folds against and bends them from one keyframe to the
+other, the body opening a little for the point to pass (clash-free on a
+two-layer flap; on the crane's eight-layer legs it was 8 s a build and worse,
+so the crane keeps the swing). A point of several layers nests about the
+crease at the middle of its stack (the crane's narrowed legs: four layers each
+side of the leg's folded edge), so the neck and tail show the paper's coloured
+side like the body. One approximation remains, at the wings (step 10). Narrowing
+the legs (steps 5 and 7) creases the corner of each wing's base along with the
+leg's flap, as it does in a real crane, and tucks those corners onto the body:
+the wing's hinge is then straight only between them. So each wing turns about
+that straight middle, the wing's own corner rides up with it and the body's
+stays tucked — in a real crane the tucked corners swivel on the leg's root, and
+paper gives there; a rigid plan can't — and the 16 mm segment between them opens
+by up to 8.7 mm, hidden at the wing's root, while the wing's base passes through
+the tucked corners for the first half of the step (`widestJoin` and the clash
+sweep in `test/crane.build.test.ts` measure both). At one of the four corners
+the collapse's tree still hangs the tucked corner from the body instead of the
+wing, so that corner's own creases open as well (37 mm — the tree is built
+breadth first, and a piece reached across a solved crease before its driven one
+isn't re-hung once settled; doing so in every case upset the masu box). Nothing
+else comes apart; the finished crane is clash-free.
+
+On screen, paper folded in steps is drawn as its zero-thickness surface, the
+layers a gap apart and every crease a sharp hinge; to keep a flap folded back
+onto a layer of the same colour readable, the viewport adds (display only,
+`sequencePaper` in `src/core/sheetSequence.ts`) the sheet's raw cut edges as a
+fine line in a deeper shade of its colour and, read from the layer stack, the
+soft contact shadow each flap casts along its edge on the layer it lies on; the
+bends, a rounded strip over every crease folded past a few degrees — an arc of
+the sheet's bend radius (its `radius`, else four thicknesses: 0.4 mm on
+150 mm paper, about three pixels across at 1080p, enough for a highlight and a
+shadow) between the two facets, or, where a flap folded flat sits a gap or more
+off its layer, the arc that joins the two edges, so a nested fold's outer layers
+wrap the inner ones — shaded with the paper's own material; and crease marks,
+a soft dark line along a valley lying flat (a pre-crease, a shallow fold), a
+faint light one along a flat mountain and along the crest of a sharp fold. The
+plan underneath keeps its sharp hinges and its layer spacing: real bend
+geometry would have to run through the collapse and reverse-fold machinery
+(every facet cut back by its bend allowance, the hinge axes offset by the
+radius), which is a larger change than its look is worth yet. The paper shader
+also carries a gentle cockle in its relief (formation scale, in the sheet's own
+coordinates, faded before it is finer than the pixels, like its fibres).
+
+**Pop-up cards** are the other kind of folding: a card cut along slits
+(`cuts`) and creased, folded all at once as rigid origami on one `open` slider
+(0 closed flat … 180 open flat).
+**https://mikepkes.github.io/CAD/?mode=customize&example=popup-box** is a
+parallel (box) fold stepping up as the card opens;
+**https://mikepkes.github.io/CAD/?mode=customize&example=popup-card** a
+greeting card with three mechanisms on one sheet — a box with a figure standing
+on its top, a two-stage box (a step within a step), a box at the foot. Both are
+checked as they open and close (no panel through another, nothing past the
+card's edge, flat at both ends, and the closed card a stack paper can make). A
+v-fold mouth round a slit was tried and left out: rigidly it has a trivial
+branch (lips flat, the spine inside folding with the card) that the solver
+takes. The **crease pattern** — the flat sheet with valley (dashed) and
+mountain (dash-dot) lines, cut lines and fold-step numbers — prints at true
+size as SVG or vector PDF (the Crease pattern button in the viewer; the
+Inspector in the editor), and the editor's **Folds** panel authors a model by
+hand: draw a construction line on the sheet's sketch, add it as a fold with its
+step, angle, valley/mountain and operation (plain, turn, collapse, through the
+stack, reverse inside/outside, bend) or mark it as a cut, reorder steps, and
+read the layer checker's errors next to the step they name
+(`feature.sheet.edit` is the command behind it).
 And **https://mikepkes.github.io/CAD/?mode=customize&example=handlebar** — a
 **mountain-bike cockpit** built from organic surfaces. The riser bar is one
 sweep along a 3D B-spline spine (straight through the clamp, a rise bend, a
@@ -380,6 +449,7 @@ npm run mcp          # build + run the MCP server over stdio
 ```bash
 npm test             # the default run: a few minutes
 npm run test:full    # the extended run: every sweep (much longer)
+npm run test:origami # the paper-folding tests only (experimental; not in npm test or CI)
 npx vitest run test/gripper.build.test.ts             # one file, default checks
 npx vitest run --mode full test/gripper.build.test.ts # one file, everything
 ```
@@ -404,6 +474,13 @@ half-a-tooth-out checks on whole models (the spur pair in
 worm gear pairs; and building the video's mock agent caches. Run it before
 merging a change to geometry, the flexure solver or an example. CI runs the
 default run.
+
+The **origami run** (`--mode origami`) is the paper-folding tests, kept in
+`test/origami/` and out of both runs above while folding is experimental: the
+folding geometry, the paper models' generators, the Folds panel, and the paper
+examples (`PAPER` in `test/exampleSuite.ts`) through the usual example checks.
+Run it before merging a change to paper folding (`src/core/sheet*.ts`, the Folds
+panel or a paper example).
 
 ### Desktop app (optional)
 
@@ -517,7 +594,9 @@ straight from a URL:
 ?mode=customize&example=skadis         # SKÅDIS gravity holder: the item's weight drives a rack and two pinion parallelograms that clamp it; drop, item width, hook spacing, arm and slide-on sliders
 ?mode=customize&example=origami        # a paper airplane folded step by step from a flat sheet on one `fold` slider (0 flat … 6 done); width + length size the paper
 ?mode=customize&example=masu           # a masu box from one square (0 flat … 5 done): its ends rise as the corners fold in; paper size slider
-?mode=customize&example=crane          # a paper crane from one square (0 flat … 11 done): square base, petal folds, neck, tail, head, wings; paper size slider
+?mode=customize&example=crane          # a paper crane from one square (0 flat … 11 done): square base, petal folds, neck and tail (inside reverse folds), head, wings; paper size slider
+?mode=customize&example=popup-box      # a pop-up card with a box fold cut into it, on one `open` slider (0 closed … 180 open flat); card and box size sliders
+?mode=customize&example=popup-card     # a pop-up greeting card: a figure on a box, a step within a step, a box at the foot, all rising on `open`
 ?mode=customize&example=handlebar      # a riser-bar cockpit from organic surfaces: a bar swept on a 3D spline with a tapering section, winged grips with a wrapped hex pattern; width, rise, sweep, grip and stem sliders
 ?mode=customize&example=walker         # a Jansen wind-walker: one crank, a six-throw crankshaft, twelve eleven-bar legs 60° apart; `t` turns the crank, `s` scales it
 ?mode=customize&example=motor          # a motor to design a mount round: NEMA 8–42 steppers, micro to ¼-scale hobby servos, 40–130 mm servo motors; length, shaft (D-cut, double-D, keyed, double-ended) and wiring (connector or cable, side or back)

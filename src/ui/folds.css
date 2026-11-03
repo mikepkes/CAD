@@ -1,0 +1,24 @@
+/* The Folds panel (FoldsPanel.tsx): a paper model's steps and folds, in the Inspector. */
+.folds-panel .section-title { display: flex; align-items: center; gap: 6px; }
+.folds-pick { margin-left: auto; max-width: 50%; }
+.folds-head, .folds-progress, .folds-actions, .folds-new, .folds-cuts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+.folds-thick { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); }
+.folds-progress-label { white-space: nowrap; }
+.folds-progress input[type="range"] { flex: 1 1 120px; min-width: 0; }
+.folds-step { border-top: 1px solid var(--line); padding: 4px 0; }
+.folds-step-head { display: flex; align-items: center; justify-content: space-between; color: var(--text-dim); font-size: 12px; }
+.folds-step-actions { display: inline-flex; gap: 2px; }
+.folds-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 0; }
+.folds-row select { max-width: 120px; }
+.folds-row-end { margin-left: auto; display: inline-flex; gap: 2px; }
+.folds-line { background: none; border: 1px solid var(--line); border-radius: 4px; color: var(--text); padding: 1px 5px; cursor: pointer; }
+.folds-line:disabled { cursor: default; opacity: 1; }
+.folds-angle { width: 56px; }
+.folds-vm { min-width: 26px; }
+.folds-vm.mountain { color: var(--warn); }
+.folds-vm.valley { color: var(--accent); }
+.folds-flip { display: inline-flex; align-items: center; gap: 2px; color: var(--text-dim); font-size: 12px; }
+.folds-error { color: var(--bad); background: var(--bad-tint); border-radius: 4px; padding: 3px 6px; margin: 2px 0; font-size: 12px; overflow-wrap: anywhere; }
+.folds-hint { font-size: 12px; }
+.folds-wh { display: inline-flex; align-items: center; gap: 3px; }
+.folds-wh input { width: 56px; }

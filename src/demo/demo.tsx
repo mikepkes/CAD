@@ -312,7 +312,7 @@ const api = {
         try { k = compileExpr(sh.progress).eval(p.scope); } catch { continue; }
         if (!Number.isFinite(k) || k === sh.last) continue;
         sh.last = k;
-        scene.setAnimationMesh(sh.id, sequenceMesh(sh.seq.plan, sequenceAngles(sh.seq.plan, k), sh.seq.frame));
+        scene.setAnimationMesh(sh.id, sequenceMesh(sh.seq.plan, sequenceAngles(sh.seq.plan, k), sh.seq.frame, sh.seq.bend));
       }
     };
     // `at(from)` runs before the next frame draws, so a chained sweep never shows the built pose

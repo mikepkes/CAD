@@ -62,6 +62,9 @@ export const shardOf = (name: string, shards: number) => createHash("sha256").up
 
 /** Examples checked in a kernel (a test file) of their own — see above; the handlebar too, whose
  *  freeform collision checks are slow enough to want running beside the others, not after them. */
+/** The paper examples (folding a sheet: core/sheetSequence.ts). Paper folding is experimental, so these are
+ *  checked only in the origami run (`npm run test:origami`, test/origami/examples.test.ts), not by `npm test`. */
+export const PAPER = ["public/examples/crane.json", "public/examples/masu.json", "public/examples/origami.json", "public/examples/popup-box.json", "public/examples/popup-card.json"];
 export const OWN_KERNEL = ["public/examples/clockwork.json", "public/examples/skadis.json", "public/examples/handlebar.json", "public/examples/walker.json"];
 
 /** Examples whose bodies interpenetrate BY CONSTRUCTION, with why. Their overlap
@@ -146,7 +149,7 @@ export function defineExampleSuite(which: (name: string) => boolean): void {
 
     it("finds the examples", () => {
       expect(EXAMPLES.length).toBeGreaterThanOrEqual(6);
-      for (const k of [...Object.keys(KNOWN_OVERLAPS), ...OWN_KERNEL]) expect(EXAMPLES.map((e) => e.name), `stale entry ${k}`).toContain(k);
+      for (const k of [...Object.keys(KNOWN_OVERLAPS), ...OWN_KERNEL, ...PAPER]) expect(EXAMPLES.map((e) => e.name), `stale entry ${k}`).toContain(k);
     });
 
     for (const ex of EXAMPLES.filter((e) => which(e.name))) {

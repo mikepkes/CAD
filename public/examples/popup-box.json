@@ -1,0 +1,542 @@
+{
+  "format": "vibecad",
+  "version": 1,
+  "id": "doc1",
+  "units": "mm",
+  "nextId": 69,
+  "rollbackIndex": 30,
+  "operations": [
+    {
+      "opId": "op1",
+      "type": "parameter.add",
+      "params": {
+        "name": "open",
+        "expression": "90",
+        "min": 0,
+        "max": 180,
+        "step": 1
+      },
+      "createdIds": [
+        "param2"
+      ],
+      "label": "Add parameter",
+      "at": 1793654157857
+    },
+    {
+      "opId": "op3",
+      "type": "parameter.add",
+      "params": {
+        "name": "width",
+        "expression": "150",
+        "min": 100,
+        "max": 300,
+        "step": 1
+      },
+      "createdIds": [
+        "param4"
+      ],
+      "label": "Add parameter",
+      "at": 1793654157858
+    },
+    {
+      "opId": "op5",
+      "type": "parameter.add",
+      "params": {
+        "name": "height",
+        "expression": "100",
+        "min": 60,
+        "max": 200,
+        "step": 1
+      },
+      "createdIds": [
+        "param6"
+      ],
+      "label": "Add parameter",
+      "at": 1793654157858
+    },
+    {
+      "opId": "op7",
+      "type": "parameter.add",
+      "params": {
+        "name": "reach",
+        "expression": "15",
+        "min": 5,
+        "max": 40,
+        "step": 1
+      },
+      "createdIds": [
+        "param8"
+      ],
+      "label": "Add parameter",
+      "at": 1793654157858
+    },
+    {
+      "opId": "op9",
+      "type": "parameter.add",
+      "params": {
+        "name": "span",
+        "expression": "20",
+        "min": 10,
+        "max": 60,
+        "step": 1
+      },
+      "createdIds": [
+        "param10"
+      ],
+      "label": "Add parameter",
+      "at": 1793654157859
+    },
+    {
+      "opId": "op11",
+      "type": "sketch.create",
+      "params": {
+        "plane": "XY",
+        "name": "Card"
+      },
+      "createdIds": [
+        "sketch12",
+        "pt13"
+      ],
+      "label": "Create sketch",
+      "at": 1793654157859
+    },
+    {
+      "opId": "op14",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch12",
+        "x": "0",
+        "y": "0"
+      },
+      "createdIds": [
+        "pt15"
+      ],
+      "label": "Add point",
+      "at": 1793654157873
+    },
+    {
+      "opId": "op16",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch12",
+        "x": "width",
+        "y": "0"
+      },
+      "createdIds": [
+        "pt17"
+      ],
+      "label": "Add point",
+      "at": 1793654157874
+    },
+    {
+      "opId": "op18",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch12",
+        "x": "width",
+        "y": "height"
+      },
+      "createdIds": [
+        "pt19"
+      ],
+      "label": "Add point",
+      "at": 1793654157874
+    },
+    {
+      "opId": "op20",
+      "type": "sketch.addPoint",
+      "params": {
+        "sketch": "sketch12",
+        "x": "0",
+        "y": "height"
+      },
+      "createdIds": [
+        "pt21"
+      ],
+      "label": "Add point",
+      "at": 1793654157875
+    },
+    {
+      "opId": "op22",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "ref": "pt15"
+        },
+        "end": {
+          "ref": "pt17"
+        }
+      },
+      "createdIds": [
+        "ln23"
+      ],
+      "label": "Add line",
+      "at": 1793654157875
+    },
+    {
+      "opId": "op24",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "ref": "pt17"
+        },
+        "end": {
+          "ref": "pt19"
+        }
+      },
+      "createdIds": [
+        "ln25"
+      ],
+      "label": "Add line",
+      "at": 1793654157876
+    },
+    {
+      "opId": "op26",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "ref": "pt19"
+        },
+        "end": {
+          "ref": "pt21"
+        }
+      },
+      "createdIds": [
+        "ln27"
+      ],
+      "label": "Add line",
+      "at": 1793654157876
+    },
+    {
+      "opId": "op28",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "ref": "pt21"
+        },
+        "end": {
+          "ref": "pt15"
+        }
+      },
+      "createdIds": [
+        "ln29"
+      ],
+      "label": "Add line",
+      "at": 1793654157876
+    },
+    {
+      "opId": "op30",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "x": "width/2-reach",
+          "y": "height/2-span/2"
+        },
+        "end": {
+          "x": "width/2+reach",
+          "y": "height/2-span/2"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt31",
+        "pt32",
+        "ln33"
+      ],
+      "label": "Add line",
+      "at": 1793654157876
+    },
+    {
+      "opId": "op34",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "x": "width/2-reach",
+          "y": "height/2+span/2"
+        },
+        "end": {
+          "x": "width/2+reach",
+          "y": "height/2+span/2"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt35",
+        "pt36",
+        "ln37"
+      ],
+      "label": "Add line",
+      "at": 1793654157877
+    },
+    {
+      "opId": "op38",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "x": "width/2",
+          "y": "0"
+        },
+        "end": {
+          "x": "width/2",
+          "y": "height/2-span/2"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt39",
+        "pt40",
+        "ln41"
+      ],
+      "label": "Add line",
+      "at": 1793654157877
+    },
+    {
+      "opId": "op42",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "x": "width/2",
+          "y": "height/2+span/2"
+        },
+        "end": {
+          "x": "width/2",
+          "y": "height"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt43",
+        "pt44",
+        "ln45"
+      ],
+      "label": "Add line",
+      "at": 1793654157877
+    },
+    {
+      "opId": "op46",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "x": "width/2-reach",
+          "y": "height/2-span/2"
+        },
+        "end": {
+          "x": "width/2-reach",
+          "y": "height/2+span/2"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt47",
+        "pt48",
+        "ln49"
+      ],
+      "label": "Add line",
+      "at": 1793654157878
+    },
+    {
+      "opId": "op50",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "x": "width/2",
+          "y": "height/2-span/2"
+        },
+        "end": {
+          "x": "width/2",
+          "y": "height/2+span/2"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt51",
+        "pt52",
+        "ln53"
+      ],
+      "label": "Add line",
+      "at": 1793654157878
+    },
+    {
+      "opId": "op54",
+      "type": "sketch.addLine",
+      "params": {
+        "sketch": "sketch12",
+        "start": {
+          "x": "width/2+reach",
+          "y": "height/2-span/2"
+        },
+        "end": {
+          "x": "width/2+reach",
+          "y": "height/2+span/2"
+        },
+        "construction": true
+      },
+      "createdIds": [
+        "pt55",
+        "pt56",
+        "ln57"
+      ],
+      "label": "Add line",
+      "at": 1793654157878
+    },
+    {
+      "opId": "op58",
+      "type": "feature.sheet",
+      "params": {
+        "sketch": "sketch12",
+        "name": "Card",
+        "thickness": 0,
+        "radius": 0,
+        "fixed": {
+          "x": 30,
+          "y": 20
+        },
+        "cuts": [
+          "ln33",
+          "ln37"
+        ],
+        "folds": [
+          {
+            "line": "ln41",
+            "angle": "180-open"
+          },
+          {
+            "line": "ln45",
+            "angle": "180-open"
+          },
+          {
+            "line": "ln49",
+            "direction": "valley"
+          },
+          {
+            "line": "ln53",
+            "direction": "mountain"
+          },
+          {
+            "line": "ln57",
+            "direction": "valley"
+          }
+        ]
+      },
+      "createdIds": [
+        "sheet59"
+      ],
+      "label": "Sheet metal / paper",
+      "at": 1793654157879
+    },
+    {
+      "opId": "op60",
+      "type": "material.create",
+      "params": {
+        "name": "Card stock",
+        "kind": "paper",
+        "color": "#f7f3e8",
+        "backColor": "#2f6fb3"
+      },
+      "createdIds": [
+        "mat61"
+      ],
+      "label": "Create material",
+      "at": 1793654157880
+    },
+    {
+      "opId": "op62",
+      "type": "material.assign",
+      "params": {
+        "material": "mat61"
+      },
+      "createdIds": [],
+      "label": "Assign material",
+      "at": 1793654157880
+    },
+    {
+      "opId": "op63",
+      "type": "parameter.describe",
+      "params": {
+        "name": "open",
+        "label": "Open",
+        "unit": "°",
+        "description": "0 is the card closed flat; 180 fully open"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793654157881
+    },
+    {
+      "opId": "op64",
+      "type": "parameter.describe",
+      "params": {
+        "name": "width",
+        "label": "Card width",
+        "unit": "mm",
+        "description": "The card open flat; the spine is at half"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793654157882
+    },
+    {
+      "opId": "op65",
+      "type": "parameter.describe",
+      "params": {
+        "name": "height",
+        "label": "Card height",
+        "unit": "mm"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793654157882
+    },
+    {
+      "opId": "op66",
+      "type": "parameter.describe",
+      "params": {
+        "name": "reach",
+        "label": "Box reach",
+        "unit": "mm",
+        "description": "How far the box's slits reach either side of the spine"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793654157883
+    },
+    {
+      "opId": "op67",
+      "type": "parameter.describe",
+      "params": {
+        "name": "span",
+        "label": "Box span",
+        "unit": "mm",
+        "description": "The box's height along the spine (between the slits)"
+      },
+      "createdIds": [],
+      "label": "Describe parameter",
+      "at": 1793654157887
+    },
+    {
+      "opId": "op68",
+      "type": "document.describe",
+      "params": {
+        "title": "Pop-up card: box fold",
+        "description": "A card folded in half with a parallel (box) fold cut into it: two slits across the spine, the strip between creased so it steps up as the card opens, and folds flat inside when it closes."
+      },
+      "createdIds": [],
+      "label": "Describe the design",
+      "at": 1793654157887
+    }
+  ],
+  "timelineGroups": [],
+  "hidden": [
+    "sketch12"
+  ]
+}

@@ -14,17 +14,17 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample, expectCommittedExample } from "./helpers";
-import { initKernel } from "../src/core/occ/kernel";
-import { serializeDocument } from "../src/core/persistence";
-import { evaluateFeatures, SolidEval } from "../src/core/features";
-import { resolveParameters } from "../src/core/parameters";
-import { sequenceAngles, poseSequence, sequenceClashes, SheetSequence } from "../src/core/sheetSequence";
-import { applyPoint, applyVec, compose } from "../src/math/transform";
-import type { CadSession } from "../src/core/command/session";
+import { realSession, describeExample, expectCommittedExample } from "../helpers";
+import { initKernel } from "../../src/core/occ/kernel";
+import { serializeDocument } from "../../src/core/persistence";
+import { evaluateFeatures, SolidEval } from "../../src/core/features";
+import { resolveParameters } from "../../src/core/parameters";
+import { sequenceAngles, poseSequence, sequenceClashes, sequencePaper, paperOverlayStray, SheetSequence } from "../../src/core/sheetSequence";
+import { applyPoint, applyVec, compose } from "../../src/math/transform";
+import type { CadSession } from "../../src/core/command/session";
 
 const OUT = process.env.BUILD_ORIGAMI || "";
-const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
+const wasm = readFileSync(fileURLToPath(new URL("../../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
 
 async function dis(s: CadSession, type: string, params: Record<string, unknown>): Promise<string[]> {
   const r = await s.dispatch(type, params);
@@ -202,6 +202,17 @@ describe("origami: a masu box folded step by step", () => {
     // outside the colour (the paper's underside), inside the white
     expect(P.normal(1.5 * q, 0).x).toBeLessThan(-0.99); // the right wall's top faces in
   });
+
+  it("keeps its drawn bends and crease marks on the paper at every end of a step and all through the folds (0.02 of a step at a time)", () => {
+    const seq = evaluate(s)[ids.sheet].sheet!.sequence!, bend = seq.bend ?? 0.4;
+    let worst = 0, at = 0;
+    for (let k = 0; k <= STEPS * 50; k++) {
+      const angles = sequenceAngles(seq.plan, k / 50), p = sequencePaper(seq.plan, angles, seq.frame, { radius: bend });
+      const d = paperOverlayStray(seq.plan, angles, seq.frame, p, bend);
+      if (d > worst) { worst = d; at = k / 50; }
+    }
+    expect(worst, `at fold ${at}`).toBe(0);
+  }, 120000);
 
   it("never passes through itself, and its creases stay joined, from flat to finished", () => {
     const seq = evaluate(s)[ids.sheet].sheet!.sequence!.plan;

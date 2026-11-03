@@ -15,17 +15,17 @@
 import { describe, it, beforeAll, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { realSession, describeExample, expectCommittedExample } from "./helpers";
-import { initKernel } from "../src/core/occ/kernel";
-import { serializeDocument } from "../src/core/persistence";
-import { evaluateFeatures, SolidEval } from "../src/core/features";
-import { resolveParameters } from "../src/core/parameters";
-import { sequenceAngles, poseSequence, sequenceClashes, SheetSequence } from "../src/core/sheetSequence";
-import { applyPoint, applyVec, compose } from "../src/math/transform";
-import type { CadSession } from "../src/core/command/session";
+import { realSession, describeExample, expectCommittedExample } from "../helpers";
+import { initKernel } from "../../src/core/occ/kernel";
+import { serializeDocument } from "../../src/core/persistence";
+import { evaluateFeatures, SolidEval } from "../../src/core/features";
+import { resolveParameters } from "../../src/core/parameters";
+import { sequenceAngles, poseSequence, sequenceClashes, SheetSequence } from "../../src/core/sheetSequence";
+import { applyPoint, applyVec, compose } from "../../src/math/transform";
+import type { CadSession } from "../../src/core/command/session";
 
 const OUT = process.env.BUILD_ORIGAMI || "";
-const wasm = readFileSync(fileURLToPath(new URL("../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
+const wasm = readFileSync(fileURLToPath(new URL("../../node_modules/replicad-opencascadejs/dist/replicad_single.wasm", import.meta.url)));
 
 async function dis(s: CadSession, type: string, params: Record<string, unknown>): Promise<string[]> {
   const r = await s.dispatch(type, params);

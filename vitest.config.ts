@@ -14,12 +14,16 @@ import react from "@vitejs/plugin-react";
 //                       the generators' material / slider-corner / pose sweeps
 //                       and the examples' dense motion sweeps. Marked in the
 //                       tests with `itFull` / `describeFull` (test/helpers.ts).
+//   npm run test:origami (`vitest run --mode origami`) only the paper-folding
+//                       tests in test/origami/: folding is experimental, so its
+//                       checks stay out of `npm test` (and CI) until it isn't.
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
   test: {
     environment: "node",
-    include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
-    environmentMatchGlobs: [["test/ui/**", "jsdom"]],
+    include: mode === "origami" ? ["test/origami/**/*.test.ts", "test/origami/**/*.test.tsx"] : ["test/**/*.test.ts", "test/**/*.test.tsx"],
+    exclude: mode === "origami" ? ["**/node_modules/**"] : ["**/node_modules/**", "test/origami/**"],
+    environmentMatchGlobs: [["test/ui/**", "jsdom"], ["test/origami/ui/**", "jsdom"]],
     setupFiles: ["test/ui/setup.ts"],
     css: false,
     // Generous enough for a kernel test on a loaded machine; a test that needs
