@@ -50,6 +50,8 @@ export interface ViewportPalette {
   regionSelected: number;
   /** Datum (reference) planes. */
   datum: number;
+  /** A 3D sweep's spine and sections, drawn with its shown path sketch. */
+  sweepGuide: number;
   /** Opacity of the origin planes' fill and outline. */
   planeFill: number;
   planeLine: number;
@@ -89,6 +91,7 @@ export const DARK_VIEWPORT: ViewportPalette = {
   regionIdle: 0x4a7bd6,
   regionSelected: 0x5bbf84,
   datum: 0xc9a227,
+  sweepGuide: 0xffc24a,
   planeFill: 0.08,
   planeLine: 0.5,
   xrayEdge: 0xeceae6,
@@ -126,6 +129,7 @@ export const LIGHT_VIEWPORT: ViewportPalette = {
   regionIdle: 0x2f6fe4,
   regionSelected: 0x23a05d,
   datum: 0xb08a10,
+  sweepGuide: 0xb86e00,
   planeFill: 0.07,
   planeLine: 0.6,
   xrayEdge: 0x2a303a,

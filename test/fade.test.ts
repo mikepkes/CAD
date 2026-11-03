@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { Fades, fadeMaterial } from "../src/viewport/fade";
 
 /** A body as the viewport draws it: a mesh and its edges, both tagged with the body's id; the materials are shared. */
@@ -73,5 +76,23 @@ describe("display fades", () => {
     expect(c.userData.cached).toBe(false); // disposed with its object, unlike the cached original
     const s = new THREE.ShaderMaterial({ uniforms: { k: { value: 1 } } });
     expect((fadeMaterial(s) as THREE.ShaderMaterial).uniforms).toBe(s.uniforms);
+  });
+
+  it("fades a fat line (a sweep's guide) without fading its shared material", () => {
+    const mat = new LineMaterial({ color: 0xffc24a, linewidth: 2.5, transparent: true, opacity: 0.9 });
+    const line = new LineSegments2(new LineSegmentsGeometry().setPositions([0, 0, 0, 1, 0, 0]), mat);
+    line.userData.fadeKey = "sketch1";
+    const root = new THREE.Group(); root.add(line);
+    const f = new Fades();
+    f.set(["sketch1"], 0.5, 0, 0);
+    f.apply([root], 0);
+    expect(line.material).not.toBe(mat);
+    expect((line.material as LineMaterial).opacity).toBeCloseTo(0.45);
+    expect((line.material as LineMaterial).linewidth).toBe(2.5);
+    expect(mat.opacity).toBeCloseTo(0.9); // the original keeps its own
+    f.set(["sketch1"], 1, 0, 1);
+    f.apply([root], 1);
+    expect(line.material).toBe(mat);
+    expect(mat.opacity).toBeCloseTo(0.9);
   });
 });

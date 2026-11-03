@@ -9,6 +9,7 @@ import { extractRegions, loopPolygon, Region } from "../core/geometry/profile";
 import { resolveParameters } from "../core/parameters";
 import { hiddenIds, bodyVisible, sketchVisible, sketchesOfOffFeatures } from "../core/visibility";
 import { featureActive } from "../core/features";
+import { sweepGuides } from "../core/sweepGuides";
 import { compileExpr } from "../math/expr";
 import { materialForComponent, referenceOf } from "../core/document";
 import { materialSpec, woodFrameFromBounds } from "../viewport/material";
@@ -81,6 +82,8 @@ function buildView(s: AppState): ViewData {
   const ghostSketches = Object.values(doc.sketches)
     .filter((sk) => sk.id !== s.activeSketchId && !offSketches.has(sk.id) && sketchVisible(doc, sk.id, hidden))
     .map((sk) => ({ sketch: sk, plane: resolveSketchPlane(sk) }));
+  // a shown 3D path sketch draws the path it frames, with the sweep's sections on it
+  const guides = sweepGuides(doc, scope, new Set(ghostSketches.map((g) => g.sketch.id)), (f) => featureActive(f, scope));
   const datumPlanes = Object.values(doc.planes)
     .filter((d) => d.plane && !hidden.has(d.id))
     .map((d) => ({ id: d.id, name: d.name, plane: d.plane! }));
@@ -134,6 +137,7 @@ function buildView(s: AppState): ViewData {
           : "under",
     solids,
     ghostSketches,
+    sweepGuides: guides,
     datumPlanes,
     extrudeRegions: buildExtrudeRegions(s),
     extrudePreview: buildExtrudePreview(s),

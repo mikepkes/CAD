@@ -35,6 +35,8 @@ function addWrapCoords(geo: THREE.BufferGeometry, positions: Float32Array, norma
   geo.setAttribute("aWrap", new THREE.BufferAttribute(w, 4));
 }
 import type { ThreadDecal } from "../core/document";
+import type { SweepGuide } from "../core/sweepGuides";
+import type { Vec3 } from "../math/vec";
 import { fitDistance, fitTangent, orbitDirection } from "./orbitCamera";
 import { prefersReducedMotion } from "./motion";
 import { LensPass, type LensSpec } from "./lensPass";
@@ -129,6 +131,8 @@ export interface ViewData {
   datumPlanes?: { id: string; name: string; plane: WorkPlane }[];
   /** Other sketches to show dimmed on their planes (every sketch but the active one). */
   ghostSketches?: { sketch: Sketch; plane: WorkPlane }[];
+  /** 3D sweeps' construction (core/sweepGuides): the spine and the sections on it, drawn with their shown path sketch. */
+  sweepGuides?: SweepGuide[];
   /** Pickable region fills for the active extrude session (click to choose a region). */
   extrudeRegions?: { plane: WorkPlane; regions: { interior: { x: number; y: number }; outer: { x: number; y: number }[]; holes: { x: number; y: number }[][]; selected: boolean }[] };
   /** Live translucent preview of the pending extrude. */
@@ -1418,6 +1422,7 @@ export class SceneManager {
 
     // Other sketches stay visible on their planes, dimmed (Fusion-style); posed with their components while animating.
     for (const g of data.ghostSketches ?? []) this.renderGhostSketch(g.sketch, g.plane);
+    for (const g of data.sweepGuides ?? []) this.renderSweepGuide(g);
     if (this.animating) this.poseGhostSketches();
 
     // Extrude session: pickable, highlightable region fills.
@@ -2049,6 +2054,27 @@ export class SceneManager {
       }
     }
     if (plain.length) group.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(plain), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.65 })));
+  }
+
+  /** A 3D sweep's spine and its sections on it (its path sketch's ghost: faded, hidden and posed with that sketch). */
+  private renderSweepGuide(g: SweepGuide) {
+    const group = new THREE.Group();
+    group.matrixAutoUpdate = false;
+    group.userData.componentId = g.componentId ?? null;
+    group.userData.fadeKey = g.sketchId; // fadeBodies: the path sketch's
+    this.ghostGroup.add(group);
+    // screen-space thick lines (a plain line is one pixel wide, lost on a curved part): the spine bolder than the sections
+    const color = COLORS().sweepGuide;
+    const fat = (polylines: Vec3[][], linewidth: number, opacity: number) => {
+      const pos: number[] = [];
+      for (const pl of polylines) for (let i = 0; i + 1 < pl.length; i++) pos.push(pl[i].x, pl[i].y, pl[i].z, pl[i + 1].x, pl[i + 1].y, pl[i + 1].z);
+      if (!pos.length) return;
+      const lines = new LineSegments2(new LineSegmentsGeometry().setPositions(pos), new LineMaterial({ color, linewidth, transparent: true, opacity }));
+      lines.renderOrder = 2; // over the see-through bodies they run through
+      group.add(lines);
+    };
+    fat([g.spine], 2.5, 0.95);
+    fat(g.sections.flat(), 1.6, 0.85);
   }
 
   /** Translucent extruded-prism preview of a pending extrude (built in JS, no kernel). */
