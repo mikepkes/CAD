@@ -24,6 +24,7 @@ function rigidMat(R: Rigid): THREE.Matrix4 {
   );
 }
 import { createMaterial, MaterialSpec, WoodFrame, wrapsTexture, wrapCoords } from "./material";
+import { Fades, fadeMaterial } from "./fade";
 
 /** Wrapped-texture coordinates per body mesh (see wrapCoords), computed once per mesh. */
 const WRAP = new WeakMap<Float32Array, Float32Array>();
@@ -225,6 +226,12 @@ export class SceneManager {
   private animBuildInv = new Map<string, THREE.Matrix4>();     // inverse of each component's build-pose world
   private animWood: { mat: THREE.Material; axis: THREE.Vector3; pith: THREE.Vector3; cid: string }[] = [];
   private animDeltas = new Map<string, THREE.Matrix4>();       // componentId -> current pose delta (Wpose · inv(Wbuild))
+  /** Display-only fades (fadeBodies): bodies and sketches drawn see-through or not at all, eased, without a rebuild. */
+  private fades = new Fades();
+  private fading = false;
+  /** See-through materials compiled ahead of a fade (warmFades), kept so their shader programs stay compiled; by the
+   *  uuids of the materials they copy. */
+  private fadeWarm = { of: new Set<string>(), mats: [] as THREE.Material[] };
   private raycaster = new THREE.Raycaster();
   private rayHelper = new THREE.Raycaster();
   readonly handles = new HandleManager(this);
@@ -627,6 +634,7 @@ export class SceneManager {
     if (this.recording) return; // the turntable recorder drives render() itself
     const dt = this.clock.getDelta();
     let moving = false;
+    if (this.fading) { this.applyFades(); moving = true; } // the frame a fade ends on is drawn at its final opacity too
     if (this.tween) { this.stepTween(dt); moving = true; }
     else {
       if (this.controls.update()) moving = true;
@@ -849,7 +857,7 @@ export class SceneManager {
         }
       }
       // Prefer a solid face (for sketch-on-face / face extrude), else an origin plane.
-      const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh && !c.userData.ghost);
+      const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh && !c.userData.ghost && c.visible); // a body faded out is not there to pick
       const faceHits = this.raycaster.intersectObjects(solidMeshes, false);
       const planeHits = this.raycaster.intersectObjects(
         [...this.planeMeshes.values(), ...this.datumMeshes.values()],
@@ -885,7 +893,7 @@ export class SceneManager {
    *  face behind the model is reachable) and every origin/datum plane. The long-press selection picker lists these. */
   pickAll(clientX: number, clientY: number): { faces: { bodyId: string; world: P3; normal: P3; distance: number }[]; planes: { planeId: string; world: P3; distance: number }[] } {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
-    const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh && !c.userData.ghost && c.userData.bodyId);
+    const solidMeshes = this.solidsGroup.children.filter((c) => (c as THREE.Mesh).isMesh && !c.userData.ghost && c.userData.bodyId && c.visible);
     const faces = this.raycaster.intersectObjects(solidMeshes, false).filter((h) => h.face).map((h) => {
       const n = h.face!.normal.clone().transformDirection(h.object.matrixWorld).normalize();
       return { bodyId: h.object.userData.bodyId as string, world: { x: h.point.x, y: h.point.y, z: h.point.z }, normal: { x: n.x, y: n.y, z: n.z }, distance: h.distance };
@@ -1430,6 +1438,7 @@ export class SceneManager {
       this.renderSketch(data.sketch, data.plane, data);
       if (data.preview) this.renderPreview(data.preview, data.plane);
     }
+    if (this.fades.size) this.applyFades(); // what was just redrawn keeps its fade
     this.invalidate();
   }
 
@@ -1552,6 +1561,7 @@ export class SceneManager {
     if (s.ghost || s.variant) mesh.userData.ghost = true; // drawn, but never picked
     if (s.reference) mesh.userData.reference = true; // see-through: a pick goes past it to a part behind
     if (s.id) mesh.userData.bodyId = s.id; // so a face pick names its body
+    if (s.id) mesh.userData.fadeKey = s.id; // fadeBodies
     this.solidsGroup.add(mesh);
     if (analysis?.combs && s.combs?.length && !faded) {
       const cg = new THREE.BufferGeometry();
@@ -1592,15 +1602,19 @@ export class SceneManager {
       if (s.variant) { eseg.computeLineDistances(); eseg.userData.ghost = true; } // dashes need distances; the lens skips ghosts
       if (s.reference) eseg.userData.reference = true; // the lens skips a reference part too
       eseg.userData.edges = true; // the body's B-rep edges (the lens redraws these)
+      if (s.id) eseg.userData.fadeKey = s.id;
       this.solidsGroup.add(eseg);
     }
 
-    for (const d of s.threadDecals ?? []) this.renderThreadSleeve(d, color, faded);
+    for (const d of s.threadDecals ?? []) {
+      const sleeve = this.renderThreadSleeve(d, color, faded);
+      if (sleeve && s.id) sleeve.userData.fadeKey = s.id;
+    }
   }
 
   /** Draw a cosmetic thread: a cylindrical sleeve on the body's surface shaded by
    *  a procedural thread normal map (so the solid itself stays a plain cylinder). */
-  private renderThreadSleeve(d: ThreadDecal, color: number, faded: boolean) {
+  private renderThreadSleeve(d: ThreadDecal, color: number, faded: boolean): THREE.Mesh | undefined {
     const axis = new THREE.Vector3(d.axis.x, d.axis.y, d.axis.z);
     if (axis.lengthSq() < 1e-9) return;
     axis.normalize();
@@ -1625,6 +1639,7 @@ export class SceneManager {
     mesh.position.set(d.at.x, d.at.y, d.at.z);
     mesh.renderOrder = 1;
     this.solidsGroup.add(mesh);
+    return mesh;
   }
 
   /** A filled quad over one body's cut, visible only where that body's stencil
@@ -1668,6 +1683,8 @@ export class SceneManager {
         const m = (o as any).material;
         if (Array.isArray(m)) m.forEach((x) => { if (!keep(x)) x.dispose(); });
         else if (m && !keep(m)) m.dispose?.();
+        const orig = o.userData?.fadeOrig as THREE.Material | undefined; // a faded object's own material: what it's put back to
+        if (orig && !keep(orig)) orig.dispose();
       });
     }
   }
@@ -1710,11 +1727,12 @@ export class SceneManager {
       const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(solid.edges, 3));
       const lines = new THREE.LineSegments(eg, solid.reference ? referenceEdgeMaterial(solid, false, null) : solid.material?.kind === "paper" ? paperEdgeMaterial(false) : new THREE.LineBasicMaterial({ color: 0x20242e }));
       g.add(lines);
-      if (solid.id) this.animMeshes.set(solid.id, { mesh, lines });
+      if (solid.id) { this.animMeshes.set(solid.id, { mesh, lines }); mesh.userData.fadeKey = solid.id; lines.userData.fadeKey = solid.id; }
       if (solid.material?.kind === "wood" && solid.woodFrame) {
         this.animWood.push({ mat, axis: new THREE.Vector3(...solid.woodFrame.axis), pith: new THREE.Vector3(...solid.woodFrame.pith), cid: componentId });
       }
     }
+    if (this.fades.size) this.applyFades(); // the posed parts keep their fades
   }
 
   /** Move every component to the given world pose (applied as a delta from its
@@ -1787,7 +1805,7 @@ export class SceneManager {
   }
 
   /** Render one frame now (recorder-driven; the RAF loop is paused while recording). */
-  renderFrame() { this.fitNear(); this.renderer.render(this.scene, this.camera); }
+  renderFrame() { if (this.fading) this.applyFades(); this.fitNear(); this.renderer.render(this.scene, this.camera); }
 
   /** Keep the perspective camera's near plane in step with how far it stands off: a fixed 0.1 mm near
    *  plane leaves the depth buffer a fraction of a millimetre to tell surfaces apart 700 mm away, so
@@ -1856,6 +1874,51 @@ export class SceneManager {
   get motionGhostCount(): number { return this.motionGroup.children.filter((o) => (o as THREE.Mesh).isMesh).length; }
 
   /** End animation and restore the normal solids view. */
+  /** Fade bodies (by body id) and sketches (by sketch id) to `opacity` (0 hides, 1 is as normal) over `ms`, eased:
+   *  display only, so nothing re-evaluates. Posed parts (beginAnimation) fade as they move; what update() redraws
+   *  keeps its fade until fadeBodies sets it back to 1 or clearFades. A body faded to 0 is not pickable. */
+  async fadeBodies(ids: string[], opacity: number, ms = 0): Promise<void> {
+    if (opacity < 1) await this.warmFades(ids);
+    this.fades.set(ids, opacity, ms, performance.now());
+    this.applyFades();
+  }
+  /** Compile the see-through look of these bodies and sketches off the frame (the first transparent draw of a
+   *  material would otherwise compile its shaders in the middle of a frame: a visible stall as a fade starts).
+   *  fadeBodies does this itself; calling it ahead (while loading) takes even that wait out of the fade. */
+  async warmFades(ids: string[]): Promise<void> {
+    const want = new Set(ids), proxies = new THREE.Group(), warm = this.fadeWarm;
+    const walk = (o: THREE.Object3D, key: string | undefined) => {
+      key = (o.userData.fadeKey as string | undefined) ?? key;
+      const m = (o as THREE.Mesh).material;
+      if (key != null && want.has(key) && m && !Array.isArray(m) && !o.userData.fadeOrig && !warm.of.has(m.uuid)) {
+        warm.of.add(m.uuid);
+        const c = fadeMaterial(m);
+        warm.mats.push(c);
+        // a stand-in of the same kind on the same geometry, so the compiled program is the one the object will use
+        const Kind = o.constructor as new (g: THREE.BufferGeometry, m: THREE.Material) => THREE.Object3D;
+        proxies.add(new Kind((o as THREE.Mesh).geometry, c));
+      }
+      for (const ch of o.children) walk(ch, key);
+    };
+    walk(this.solidsGroup, undefined); walk(this.ghostGroup, undefined);
+    if (!proxies.children.length) return;
+    try { await this.renderer.compileAsync(proxies, this.camera, this.scene); } catch { /* compiled on first draw instead */ }
+  }
+  /** Put every faded body and sketch back at once (a new document: its ids mean other things). */
+  clearFades() {
+    for (const m of this.fadeWarm.mats) m.dispose();
+    this.fadeWarm = { of: new Set(), mats: [] };
+    if (!this.fades.size && !this.fading) return;
+    this.fades.clear();
+    this.applyFades();
+  }
+  private applyFades() {
+    const now = performance.now();
+    this.fades.apply([this.solidsGroup, this.ghostGroup], now);
+    this.fading = this.fades.running(now);
+    this.invalidate();
+  }
+
   endAnimation() {
     if (!this.animating) return;
     this.animating = false;
@@ -1903,6 +1966,7 @@ export class SceneManager {
     const group = new THREE.Group();
     group.matrixAutoUpdate = false;
     group.userData.componentId = sk.componentId ?? null;
+    group.userData.fadeKey = sk.id; // fadeBodies
     this.ghostGroup.add(group);
     // Every plain curve of the sketch goes into one LineSegments (one draw call per
     // sketch, not one per curve); construction curves keep a dashed line each, since
