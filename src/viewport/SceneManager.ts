@@ -1421,7 +1421,7 @@ export class SceneManager {
     const list = data.solids.filter((s) => !s.variant && !s.reference);
     const key = `${a.pull.x},${a.pull.y},${a.pull.z}|${a.draftDeg}|${list.map((s) => s.id ?? "").join(",")}`;
     if (key === this.mouldKey && list.every((s) => this.mouldVerdicts.has(s.positions))) return;
-    const flags = mouldFlags(list.map((s) => ({ positions: s.positions, indices: s.indices })), a.pull, a.draftDeg);
+    const flags = mouldFlags(list.map((s) => ({ positions: s.positions, indices: s.indices, normals: s.normals })), a.pull, a.draftDeg);
     this.mouldVerdicts = new Map(list.map((s, i) => [s.positions, flags[i]]));
     this.mouldKey = key;
   }

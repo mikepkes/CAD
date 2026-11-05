@@ -90,3 +90,22 @@ describe("mouldFlags on a drafted round", () => {
     expect(s.ok).toBeGreaterThanOrEqual(2 * N); // the ends, and the drafted side where its facets clear the threshold
   });
 });
+
+describe("mouldFlags with smooth normals", () => {
+  it("classifies a 1° cone's facets by their smooth normals: none is steep at a 0.5° threshold", () => {
+    const N = 48, h = 4, r0 = 14, r1 = 14 - h * Math.tan(Math.PI / 180);
+    const P: number[] = [], I: number[] = [], NN: number[] = [];
+    const tilt = Math.atan((r0 - r1) / h); // the cone's true slope: its smooth normal leans up by it
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * 2 * Math.PI, c = Math.cos(a), s = Math.sin(a);
+      P.push(r0 * c, r0 * s, 0, r1 * c, r1 * s, h);
+      NN.push(c * Math.cos(tilt), s * Math.cos(tilt), Math.sin(tilt), c * Math.cos(tilt), s * Math.cos(tilt), Math.sin(tilt));
+    }
+    for (let i = 0; i < N; i++) { const j = (i + 1) % N; I.push(2 * i, 2 * j, 2 * j + 1, 2 * i, 2 * j + 1, 2 * i + 1); }
+    const m = { positions: new Float32Array(P), indices: new Uint32Array(I), normals: new Float32Array(NN) };
+    const s = mouldSummary([m], mouldFlags([m], Z, 0.5));
+    expect(s.steep).toBe(0);
+    expect(s.undercut).toBe(0);
+    expect(s.ok).toBe(2 * N);
+  });
+});

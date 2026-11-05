@@ -13,7 +13,10 @@
 // and each ray tests only the bucket it falls in.
 import type { Vec3 } from "../math/vec";
 
-export interface MouldMesh { positions: Float32Array; indices: Uint32Array }
+/** A display mesh. With `normals` (the smooth vertex normals the renderer shades with), a triangle is classified by
+ *  the mean of its corners' normals, not its own facet: the facets of a 1° cone jitter either side of the draft
+ *  threshold, the smooth normal does not. The facet still decides what the triangle blocks. */
+export interface MouldMesh { positions: Float32Array; indices: Uint32Array; normals?: Float32Array }
 
 /** Per-triangle verdicts, as the shader reads them off a vertex attribute. */
 export const MOULD = { ok: 0, steep: 1, undercut: 2 } as const;
@@ -39,7 +42,7 @@ export function mouldFlags(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
   const sinDraft = Math.sin((draftDeg * Math.PI) / 180);
 
   // every triangle projected: (u, v) of its corners, its height along the pull at each corner, its normal's pull component
-  type Tri = { au: number; av: number; bu: number; bv: number; cu: number; cv: number; ah: number; bh: number; ch: number; d: number; mesh: number; tri: number };
+  type Tri = { au: number; av: number; bu: number; bv: number; cu: number; cv: number; ah: number; bh: number; ch: number; d: number; facet: number; mesh: number; tri: number };
   const tris: Tri[] = [];
   let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
   meshes.forEach((m, mi) => {
@@ -50,12 +53,18 @@ export function mouldFlags(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
       const nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay), ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az), nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
       const nl = Math.hypot(nx, ny, nz);
       if (nl < 1e-12) continue;
-      const d = (nx * p.x + ny * p.y + nz * p.z) / nl;
+      let d = (nx * p.x + ny * p.y + nz * p.z) / nl;
+      const N = m.normals;
+      if (N && N.length === P.length) {
+        const sx = N[A] + N[B] + N[C], sy = N[A + 1] + N[B + 1] + N[C + 1], sz = N[A + 2] + N[B + 2] + N[C + 2];
+        const sl = Math.hypot(sx, sy, sz);
+        if (sl > 1e-9) d = (sx * p.x + sy * p.y + sz * p.z) / sl;
+      }
       const tr: Tri = {
         au: ax * u.x + ay * u.y + az * u.z, av: ax * v.x + ay * v.y + az * v.z, ah: ax * p.x + ay * p.y + az * p.z,
         bu: bx * u.x + by * u.y + bz * u.z, bv: bx * v.x + by * v.y + bz * v.z, bh: bx * p.x + by * p.y + bz * p.z,
         cu: cx * u.x + cy * u.y + cz * u.z, cv: cx * v.x + cy * v.y + cz * v.z, ch: cx * p.x + cy * p.y + cz * p.z,
-        d, mesh: mi, tri: t,
+        d, facet: (nx * p.x + ny * p.y + nz * p.z) / nl, mesh: mi, tri: t,
       };
       tris.push(tr);
       minU = Math.min(minU, tr.au, tr.bu, tr.cu); maxU = Math.max(maxU, tr.au, tr.bu, tr.cu);
@@ -70,7 +79,7 @@ export function mouldFlags(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
   const cellV = (y: number) => Math.min(GRID - 1, Math.max(0, Math.floor(((y - minV) / sv) * GRID)));
   const buckets: Tri[][] = Array.from({ length: GRID * GRID }, () => []);
   for (const tr of tris) {
-    if (Math.abs(tr.d) < BLOCK_MIN) continue; // a wall (or a wall's facet jitter): it blocks nothing
+    if (Math.abs(tr.facet) < BLOCK_MIN) continue; // a wall (or a wall's facet jitter): it blocks nothing
     const u0 = cellU(Math.min(tr.au, tr.bu, tr.cu)), u1 = cellU(Math.max(tr.au, tr.bu, tr.cu));
     const v0 = cellV(Math.min(tr.av, tr.bv, tr.cv)), v1 = cellV(Math.max(tr.av, tr.bv, tr.cv));
     for (let i = u0; i <= u1; i++) for (let j = v0; j <= v1; j++) buckets[i * GRID + j].push(tr);
@@ -89,7 +98,7 @@ export function mouldFlags(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
       if (l1 < -1e-6 || l2 < -1e-6 || l1 + l2 > 1 + 1e-6) continue;
       const th = tr.ah + l1 * (tr.bh - tr.ah) + l2 * (tr.ch - tr.ah);
       // material lies on the far side of a face that looks back at the ray
-      if ((th - h) * dir > EPS && tr.d * dir < 0) return true;
+      if ((th - h) * dir > EPS && tr.facet * dir < 0) return true;
     }
     return false;
   };
