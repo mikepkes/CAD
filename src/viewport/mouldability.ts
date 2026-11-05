@@ -20,6 +20,10 @@ export const MOULD = { ok: 0, steep: 1, undercut: 2 } as const;
 
 const GRID = 96;
 const EPS = 1e-4;
+// A blocker is a face with real extent across the pull. A display mesh triangulates a shallow cone or a
+// drafted wall with facets whose normals jitter a few degrees either side of the true one, so a facet
+// that looks slightly down must not count as material over its neighbour that looks slightly up.
+const BLOCK_MIN = Math.sin((5 * Math.PI) / 180);
 
 /** Per mesh, one flag per vertex (MOULD.*): the verdict of the triangle that wrote it last. Meshes over
  *  `maxTriangles` in all are given up on (every flag `ok`), so a huge model doesn't stall the view. */
@@ -66,7 +70,7 @@ export function mouldFlags(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
   const cellV = (y: number) => Math.min(GRID - 1, Math.max(0, Math.floor(((y - minV) / sv) * GRID)));
   const buckets: Tri[][] = Array.from({ length: GRID * GRID }, () => []);
   for (const tr of tris) {
-    if (Math.abs(tr.d) < 1e-6) continue; // edge-on to the pull: it blocks nothing
+    if (Math.abs(tr.d) < BLOCK_MIN) continue; // a wall (or a wall's facet jitter): it blocks nothing
     const u0 = cellU(Math.min(tr.au, tr.bu, tr.cu)), u1 = cellU(Math.max(tr.au, tr.bu, tr.cu));
     const v0 = cellV(Math.min(tr.av, tr.bv, tr.cv)), v1 = cellV(Math.max(tr.av, tr.bv, tr.cv));
     for (let i = u0; i <= u1; i++) for (let j = v0; j <= v1; j++) buckets[i * GRID + j].push(tr);

@@ -46,3 +46,35 @@ describe("worker pool resilience", () => {
     b.dispose();
   });
 });
+
+describe("worker pool routing", () => {
+  /** A worker that answers every job at once, noting which worker got it. */
+  function countingWorker(log: number[], index: number): WorkerLike {
+    const w: WorkerLike = {
+      onmessage: null, onerror: null,
+      postMessage(msg: unknown) {
+        const m = msg as { kind: string; id: number; only?: string[] };
+        if (m.kind === "init") { setTimeout(() => w.onmessage?.({ data: { kind: "ready" } }), 0); return; }
+        log.push(index);
+        const res = m.kind === "evaluate" ? { id: m.id, kind: "evaluate", solids: {}, facePlanes: {}, applied: m.only ?? [] } : { id: m.id, kind: "distance", distance: 1 };
+        setTimeout(() => w.onmessage?.({ data: res }), 0);
+      },
+      terminate() {},
+    };
+    return w;
+  }
+  it("a job that builds the whole model goes to the worker holding the most of it", async () => {
+    const log: number[] = [];
+    let n = 0;
+    const b = new WorkerGeometryBackend({ size: 2, spawn: () => countingWorker(log, n++), compile: () => Promise.reject(new Error("none")), silenceMs: 0 });
+    await b.init({ wasmUrl: "x.wasm" });
+    // no chains placed yet: worker 0
+    await b.distance(createDocument(), "a", "b");
+    expect(log).toEqual([0]);
+    // pretend the planner put three chains on worker 1 and one on worker 0
+    (b as unknown as { placed: Map<string, number> }).placed = new Map([["c1", 1], ["c2", 1], ["c3", 1], ["c4", 0]]);
+    await b.distance(createDocument(), "a", "b");
+    expect(log).toEqual([0, 1]);
+    b.dispose();
+  });
+});

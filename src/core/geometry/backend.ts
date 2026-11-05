@@ -306,29 +306,32 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       }
       return { res: { id: req.id, kind: "measured", solids: measuredRows(complete ? staged.render() : shown), complete }, transfer: [] };
     }
+    // every other job builds the model again (or the part of it its worker's cache doesn't hold), so it
+    // reports its progress too: the pool's watchdog takes a long silence for a hung worker
     if (req.kind === "edges") {
-      const edges = featureEdges(geometryDoc(req.doc, scope), scope, req.featureId);
+      const edges = withBuildProgress(onProgress, () => featureEdges(geometryDoc(req.doc, scope), scope, req.featureId));
       return { res: { id: req.id, kind: "edges", edges }, transfer: [] };
     }
     if (req.kind === "topology") {
-      return { res: { id: req.id, kind: "topology", bodies: topologyOf(req.doc, req.opts) }, transfer: [] };
+      return { res: { id: req.id, kind: "topology", bodies: withBuildProgress(onProgress, () => topologyOf(req.doc, req.opts)) }, transfer: [] };
     }
     if (req.kind === "analyze") {
-      const bodies = analyzeOf(req.doc, req.opts);
+      const bodies = withBuildProgress(onProgress, () => analyzeOf(req.doc, req.opts));
       return { res: { id: req.id, kind: "analyze", bodies }, transfer: bodies.flatMap((b) => [b.curvature.buffer as ArrayBuffer, b.combs.buffer as ArrayBuffer]) };
     }
-    if (req.kind === "drawing") return { res: { id: req.id, kind: "drawing", ...drawingOf(req.doc, req.opts, cache) }, transfer: [] };
+    if (req.kind === "drawing") return { res: { id: req.id, kind: "drawing", ...withBuildProgress(onProgress, () => drawingOf(req.doc, req.opts, cache)) }, transfer: [] };
     if (req.kind === "distance") {
       const doc = geometryDoc(req.doc, scope);
-      return { res: { id: req.id, kind: "distance", distance: bodyDistance(doc, scopeOf(doc), req.a, req.b) }, transfer: [] };
+      return { res: { id: req.id, kind: "distance", distance: withBuildProgress(onProgress, () => bodyDistance(doc, scopeOf(doc), req.a, req.b)) }, transfer: [] };
     }
     if (req.kind === "collide") {
-      const result = collidePose(req.doc, req.overrides, (workerStudyCache ??= studyCache()));
+      const result = withBuildProgress(onProgress, () => collidePose(req.doc, req.overrides, (workerStudyCache ??= studyCache())));
       return { res: { id: req.id, kind: "collide", result }, transfer: [] };
     }
-    const bytes = req.featureId === null || req.format === "3mf" // a 3MF is always the whole model
-      ? await exportModelBytes(req.doc, req.format)
-      : await exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format);
+    // the kernel work of an export is synchronous (only the blob's bytes are awaited), so the sink is set for it
+    const bytes = await withBuildProgress(onProgress, () => req.featureId === null || req.format === "3mf" // a 3MF is always the whole model
+      ? exportModelBytes(req.doc, req.format)
+      : exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format));
     return { res: { id: req.id, kind: "export", bytes }, transfer: bytes ? [bytes.buffer as ArrayBuffer] : [] };
   } catch (e) {
     return { res: { id: req.id, kind: "error", message: kernelErrorMessage(e) }, transfer: [] };

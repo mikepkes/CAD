@@ -170,7 +170,15 @@ export class WorkerGeometryBackend implements GeometryBackend {
   }
   ready(): boolean { return this.isReady; }
 
-  private send(req: GeometryRequestInit, onProgress?: BuildProgressSink, onEarly?: (r: GeometryResponse) => void, worker = 0): Promise<GeometryResponse> {
+  /** The worker whose cache holds the most of the model: where a job that builds the whole model (an export, the
+   *  topology, a distance) replays the most and rebuilds the least. */
+  private homeWorker(): number {
+    const load = this.workers.map(() => 0);
+    for (const at of this.placed.values()) if (at < load.length) load[at]++;
+    return load.indexOf(Math.max(...load));
+  }
+
+  private send(req: GeometryRequestInit, onProgress?: BuildProgressSink, onEarly?: (r: GeometryResponse) => void, worker = this.homeWorker()): Promise<GeometryResponse> {
     const id = this.seq++;
     if (onProgress) this.progress.set(id, onProgress);
     return new Promise((resolve) => {

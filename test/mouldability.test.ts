@@ -64,3 +64,29 @@ describe("mouldFlags", () => {
     expect(at(m, f, 0, 0, 10)).toBe(MOULD.steep); // the top is now a wall along the pull
   });
 });
+
+describe("mouldFlags on a drafted round", () => {
+  it("a 1° cone's facets never shut each other off: the rim is formed, not undercut", () => {
+    // a frustum, r 14 at the bottom to 14 − 4·tan 1° at the top, as a 64-sided display mesh with
+    // triangles whose normals jitter about the true cone normal
+    const N = 64, h = 4, r0 = 14, r1 = 14 - h * Math.tan(Math.PI / 180);
+    const P: number[] = [], I: number[] = [];
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * 2 * Math.PI;
+      P.push(r0 * Math.cos(a), r0 * Math.sin(a), 0, r1 * Math.cos(a), r1 * Math.sin(a), h);
+    }
+    P.push(0, 0, 0, 0, 0, h);
+    const bc = 2 * N, tc = 2 * N + 1;
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N, b0 = 2 * i, t0 = 2 * i + 1, b1 = 2 * j, t1 = 2 * j + 1;
+      I.push(b0, b1, t1, b0, t1, t0);   // the side, outward
+      I.push(bc, b1, b0);                // the bottom, facing −z
+      I.push(tc, t0, t1);                // the top, facing +z
+    }
+    const m = { positions: new Float32Array(P), indices: new Uint32Array(I) };
+    const [f] = mouldFlags([m], Z, 0.5);
+    const s = mouldSummary([m], [f]);
+    expect(s.undercut).toBe(0);
+    expect(s.ok).toBeGreaterThanOrEqual(2 * N); // the ends, and the drafted side where its facets clear the threshold
+  });
+});
