@@ -99,7 +99,10 @@ export class WorkerGeometryBackend implements GeometryBackend {
   constructor(opts: WorkerBackendOptions = {}) {
     this.spawn = opts.spawn ?? spawnWebWorker;
     this.compile = opts.compile ?? compileKernel;
-    this.silenceMs = opts.silenceMs ?? 90_000;
+    // every job reports its progress step by step, so a long silence is a hang — or a worker starved of
+    // CPU by something else on the machine, which a restart (the kernel loaded again, the model rebuilt)
+    // only makes worse: the threshold is generous
+    this.silenceMs = opts.silenceMs ?? 300_000;
     this.workers = Array.from({ length: Math.max(1, opts.size ?? 1) }, () => this.spawn());
     this.heard = this.workers.map(() => Date.now());
     this.trace = this.workers.map(() => []);
