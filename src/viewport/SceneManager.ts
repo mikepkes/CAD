@@ -57,6 +57,9 @@ export interface RenderViewOpts {
   rollDeg?: number;
   /** Also hide the grid and axes (a product shot rather than a modelling view). */
   clean?: boolean;
+  /** Look through the live camera instead of framing a named view (what the person sees, at this
+   *  size: a narrower aspect crops the sides). A note's "capture view" uses it. */
+  fromCamera?: boolean;
 }
 
 export interface PreviewGeom {
@@ -1060,12 +1063,23 @@ export class SceneManager {
       : new THREE.Vector3(...DIRS[view]).normalize();
     const fov = Math.max(1, Math.min(opts.fovDeg ?? 45, 120));
     const dist = fitDistance(radius, fov, width / height);
-    const cam = new THREE.PerspectiveCamera(fov, width / height, Math.max(0.1, Math.min(dist - radius, dist / 200)), 1e6);
-    cam.up.set(0, 0, 1);
-    if (view === "top" || view === "bottom") cam.up.set(0, 1, 0);
-    cam.position.copy(center).addScaledVector(dir, dist);
-    cam.lookAt(center);
-    if (opts.rollDeg) cam.rotateZ((opts.rollDeg * Math.PI) / 180); // about the view axis
+    let cam: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+    if (opts.fromCamera) {
+      cam = this.camera.clone() as THREE.PerspectiveCamera | THREE.OrthographicCamera;
+      if ((cam as THREE.PerspectiveCamera).isPerspectiveCamera) (cam as THREE.PerspectiveCamera).aspect = width / height;
+      else {
+        const o = cam as THREE.OrthographicCamera, cx = (o.left + o.right) / 2, half = ((o.top - o.bottom) * width) / height / 2;
+        o.left = cx - half; o.right = cx + half;
+      }
+    } else {
+      const p = new THREE.PerspectiveCamera(fov, width / height, Math.max(0.1, Math.min(dist - radius, dist / 200)), 1e6);
+      p.up.set(0, 0, 1);
+      if (view === "top" || view === "bottom") p.up.set(0, 1, 0);
+      p.position.copy(center).addScaledVector(dir, dist);
+      p.lookAt(center);
+      if (opts.rollDeg) p.rotateZ((opts.rollDeg * Math.PI) / 180); // about the view axis
+      cam = p;
+    }
     cam.updateProjectionMatrix();
 
     const rt = new THREE.WebGLRenderTarget(width, height);
@@ -1104,7 +1118,27 @@ export class SceneManager {
       img.data.set(buf.subarray(src, src + width * 4), y * width * 4);
     }
     ctx.putImageData(img, 0, 0);
-    return { base64: canvas.toDataURL("image/png").split(",")[1], width, height, view };
+    return { base64: canvas.toDataURL("image/png").split(",")[1], width, height, view: opts.fromCamera ? "current" : view };
+  }
+
+  /** Where the camera is and what it looks at, to come back to (a note's view). */
+  cameraView(): { position: P3; target: P3; up: P3 } {
+    const p = this.camera.position, t = this.controls.target, u = this.camera.up;
+    return { position: { x: p.x, y: p.y, z: p.z }, target: { x: t.x, y: t.y, z: t.z }, up: { x: u.x, y: u.y, z: u.z } };
+  }
+
+  /** Turn (animated) to a camera saved with cameraView. Model mode only, like the named views. */
+  restoreView(v: { position: P3; target: P3; up?: P3 }) {
+    if (this.lastData?.mode === "sketch") return;
+    const target = new THREE.Vector3(v.target.x, v.target.y, v.target.z);
+    const off = new THREE.Vector3(v.position.x, v.position.y, v.position.z).sub(target);
+    if (off.lengthSq() < 1e-12) return;
+    const up = v.up ? new THREE.Vector3(v.up.x, v.up.y, v.up.z).normalize() : this.camera.up.clone();
+    const zoom = (this.camera as THREE.OrthographicCamera).zoom ?? 1;
+    this.beginTween({
+      from: { off: this.camOff(), target: this.controls.target.clone(), up: this.camera.up.clone(), zoom },
+      to: { off, target, up, zoom },
+    });
   }
 
   /** Project a world point to client (screen) coordinates. */

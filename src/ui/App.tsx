@@ -19,6 +19,7 @@ import { installContextActions } from "./concepts/contextActions";
 import { useUi, fitSides, NARROW_PX } from "../model/concepts/uiState";
 import { WorkbenchOverlay, HistoryStrip } from "./concepts/workbench";
 import { LensOverlay } from "./concepts/lens";
+import { NotesOverlay } from "./concepts/notes";
 import { IntentLine } from "./concepts/intent";
 import { PanelToggles, RightPanel, ViewChips } from "./ConceptShell";
 import { Dialog } from "./kit/Dialog";
@@ -84,7 +85,7 @@ export function App() {
 
         <main className="center">
           <div className="center-view">
-            <Viewport overlays={<>{workbench && <WorkbenchOverlay />}<LensOverlay /></>} />
+            <Viewport overlays={<>{workbench && <WorkbenchOverlay />}<LensOverlay /><NotesOverlay /></>} />
             <PanelToggles />
             <ViewChips />
             <FirstRun />

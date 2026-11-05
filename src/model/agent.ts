@@ -14,6 +14,9 @@ import { hotkeys } from "./hotkeys";
 import { CONTEXTS } from "./contexts";
 import { applyRingSlot, describeRing, GET_RING_DESCRIPTION, SET_RING_SLOT_DESCRIPTION } from "./ringConfig";
 import { describeIntent, evaluateIntents } from "./concepts/intents";
+import { dataUrlParts, noteDetail, noteSummary } from "../core/notes";
+import type { Note } from "../core/document";
+import { NOTES_GET_DESCRIPTION, NOTES_ID_SCHEMA, NOTES_LIST_DESCRIPTION, NOTES_RENDER_DESCRIPTION, notesNewestFirst } from "./webmcp";
 import { assistInboxTool, resolveAssistTool, GET_ASSIST_INBOX_DESCRIPTION, GET_ASSIST_INBOX_SCHEMA, RESOLVE_ASSIST_DESCRIPTION, RESOLVE_ASSIST_SCHEMA } from "./assist";
 import { runActionTool, setPanel, RUN_ACTION_DESCRIPTION, RUN_ACTION_SCHEMA, SET_PANEL_DESCRIPTION, SET_PANEL_SCHEMA } from "./uiControl";
 
@@ -27,6 +30,9 @@ export interface AgentContext {
   describe: () => unknown;
   runCommand: (type: string, params: Record<string, unknown>) => Promise<{ ok: boolean; createdIds?: string[]; message?: string; error?: string }>;
   render: (opts: { view?: string; width?: number; height?: number }) => Promise<{ base64: string; width: number; height: number; view: string }>;
+  /** The document's notes, and a note's drawing as PNG base64 (the notes_* tools; absent: not offered). */
+  notes?: () => Note[];
+  renderNote?: (id: string, size: number) => Promise<string>;
 }
 
 const SYSTEM = `You are the embedded assistant inside VibeCAD, a browser-based parametric 2D sketch CAD app (an OpenCASCADE/PlaneGCS modeler). You build and edit sketches for the user by calling tools, which are the app's own commands — the user watches the geometry appear as you work.
@@ -37,6 +43,7 @@ Core rules:
 - To begin, call sketch__create with a plane ("XY", "XZ", or "YZ"); its createdIds[0] is the new sketch id, createdIds[1] is the fixed origin point. Pass that sketch id to subsequent commands.
 - Points are {x, y} to create a new point, or {ref: "<pointId>"} to reuse one (reusing a point id makes endpoints coincident). Chain lines by passing the previous end point's ref as the next start.
 - Prefer making shapes fully constrained when asked: add horizontal/vertical/parallel/perpendicular/coincident constraints and parametric dimensions (expressions may reference named parameters).
+- Notes: people leave notes and sketches on the design (notes_list, notes_get; notes_render shows a drawing as they see it). Answer or leave one with note__add / note__update / note__stroke__add — strokes are SVG path data in a 1000×1000 canvas.
 - The app itself: set_panel shows or hides a panel; run_action runs any action a key can (drawing tools, views, lens modes) by an id from get_hotkeys.
 - Work in millimetres. Keep going until the request is complete, then give a brief one- or two-sentence summary of what you built. Do not ask for confirmation on routine steps.`;
 
@@ -106,6 +113,9 @@ export function buildTools(registry: CommandRegistry): Anthropic.Tool[] {
       },
     },
   });
+  tools.push({ name: "notes_list", description: NOTES_LIST_DESCRIPTION, input_schema: { type: "object", properties: {} } });
+  tools.push({ name: "notes_get", description: NOTES_GET_DESCRIPTION, input_schema: { type: "object", required: ["id"], properties: { ...NOTES_ID_SCHEMA.properties, background: { type: "boolean" } } } });
+  tools.push({ name: "notes_render", description: NOTES_RENDER_DESCRIPTION, input_schema: { type: "object", required: ["id"], properties: { ...NOTES_ID_SCHEMA.properties, size: { type: "number" } } } });
   tools.push({ name: "set_panel", description: SET_PANEL_DESCRIPTION, input_schema: SET_PANEL_SCHEMA as Anthropic.Tool.InputSchema });
   tools.push({ name: "run_action", description: RUN_ACTION_DESCRIPTION, input_schema: RUN_ACTION_SCHEMA as Anthropic.Tool.InputSchema });
   tools.push({ name: "get_assist_inbox", description: GET_ASSIST_INBOX_DESCRIPTION, input_schema: GET_ASSIST_INBOX_SCHEMA as Anthropic.Tool.InputSchema });
@@ -210,6 +220,8 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
     // Intents: the checks the design must keep passing, each pass/fail against the current parameters and bodies
     // (metrics such as mass need built solids: when the host passes none, a metric intent is "unchecked", not a pass at 0).
     ...(doc.intents?.length ? { intents: evaluateIntents(doc, solids).results.map(describeIntent) } : {}),
+    // Notes people and agents left on the design (notes_list / notes_get read them in full).
+    ...(doc.notes?.length ? { notes: doc.notes.map(noteSummary) } : {}),
     // Evaluation results per feature (when the host has them): bodies with bounds/volume, modifier status, warnings.
     ...(solids ? {
       bodies: Object.values(solids).filter((s) => s.mesh).map((s) => ({
@@ -279,10 +291,35 @@ export async function runAgent(opts: {
         }
         continue;
       }
+      // notes_get / notes_render can answer with images (a captured view, a person's sketch)
+      if (b.name === "notes_get" || b.name === "notes_render") {
+        try {
+          const a = b.input as { id?: string; background?: boolean; size?: number };
+          const n = opts.ctx.notes?.().find((x) => x.id === a.id);
+          if (!n) throw new Error(`No note "${String(a.id)}" — notes_list gives the ids`);
+          const content: Anthropic.ToolResultBlockParam["content"] = [];
+          if (b.name === "notes_get") {
+            content.push({ type: "text", text: JSON.stringify(noteDetail(n)) });
+            const img = a.background !== false && n.drawing?.background ? dataUrlParts(n.drawing.background) : null;
+            if (img) content.push({ type: "image", source: { type: "base64", media_type: img.mimeType as "image/png", data: img.data } });
+          } else {
+            if (!opts.ctx.renderNote) throw new Error("no canvas to draw the note on");
+            const size = Math.max(64, Math.min(1600, Number.isFinite(a.size) ? Number(a.size) : 768));
+            content.push({ type: "image", source: { type: "base64", media_type: "image/png", data: await opts.ctx.renderNote(n.id, size) } });
+          }
+          opts.onTool(b.name, true, `read note ${n.title}`);
+          results.push({ type: "tool_result", tool_use_id: b.id, content });
+        } catch (e) {
+          opts.onTool(b.name, false, (e as Error).message);
+          results.push({ type: "tool_result", tool_use_id: b.id, content: JSON.stringify({ ok: false, error: (e as Error).message }), is_error: true });
+        }
+        continue;
+      }
       let result: { ok: boolean; createdIds?: string[]; message?: string; error?: string } | unknown;
-      const readOnly = b.name === "get_state" || b.name === "get_hotkeys" || b.name === "get_ring" || b.name === "get_assist_inbox";
+      const readOnly = b.name === "notes_list" || b.name === "get_state" || b.name === "get_hotkeys" || b.name === "get_ring" || b.name === "get_assist_inbox";
       try {
         if (b.name === "get_state") result = opts.ctx.describe();
+        else if (b.name === "notes_list") result = { notes: notesNewestFirst(opts.ctx.notes?.() ?? []).map(noteSummary) };
         else if (b.name === "get_hotkeys") result = hotkeys.describe();
         else if (b.name === "set_hotkey") {
           const a = b.input as { action?: string; key?: string | null; slot?: "primary" | "secondary" };
@@ -302,7 +339,7 @@ export async function runAgent(opts: {
       }
       const ok = readOnly ? true : !!(result as { ok?: boolean }).ok;
       const detail = readOnly
-        ? (b.name === "get_hotkeys" ? "read hotkeys" : b.name === "get_ring" ? "read ring" : b.name === "get_assist_inbox" ? "read assist inbox" : "read state")
+        ? (b.name === "notes_list" ? "read notes" : b.name === "get_hotkeys" ? "read hotkeys" : b.name === "get_ring" ? "read ring" : b.name === "get_assist_inbox" ? "read assist inbox" : "read state")
         : (result as { message?: string; error?: string }).error ?? (result as { message?: string }).message ?? "ok";
       opts.onTool(b.name, ok, detail);
       results.push({ type: "tool_result", tool_use_id: b.id, content: JSON.stringify(result) });

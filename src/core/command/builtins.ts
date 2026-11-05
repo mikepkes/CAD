@@ -21,6 +21,7 @@ import { gearOutline, GearType } from "../geometry/gear";
 import { GEAR_DIMS, GEAR_LABEL, checkGear, checkMesh, gearMeshExprs } from "../gears";
 import { expressionProblem } from "../expressionCheck";
 import { DRAWING_COMMANDS } from "./drawing";
+import { NOTE_COMMANDS } from "./notes";
 
 const PLANE_ENUM = ["XY", "XZ", "YZ"];
 /** A material's appearance fields, as material.create and material.update take them. */
@@ -1209,6 +1210,7 @@ export const BUILTINS: CommandDef<any>[] = [
     },
   },
   ...DRAWING_COMMANDS,
+  ...NOTE_COMMANDS,
   {
     type: "material.update",
     title: "Edit material",

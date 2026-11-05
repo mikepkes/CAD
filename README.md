@@ -501,7 +501,9 @@ status bar shows `● MCP :4673` and Settings shows the URL. It speaks MCP’s
 Streamable HTTP transport, bound to 127.0.0.1 only, and the tools are exactly
 the WebMCP set applied to the open document. That set is every command, plus
 `get_state`, `render_view`, `measure`, `body_topology` and `batch` (an atomic
-transaction that rolls back on the first failing step), plus hotkeys. Every
+transaction that rolls back on the first failing step), plus hotkeys and the
+notes readers (`notes_list`, `notes_get`, `notes_render`: notes and sketches a
+person left in the Notes tab, strokes as SVG path data). Every
 tool carries MCP annotations (read-only / destructive):
 
 ```bash

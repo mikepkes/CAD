@@ -38,6 +38,8 @@ import { importRequests } from "../src/core/importers";
 import { groupCutList, cutListCsv } from "../src/core/weldment";
 import { flatPatternSvg, flatPatternDxf, sheetSummary } from "../src/core/sheet";
 import type { Vec3 } from "../src/math/vec";
+import { noteDetail, noteSummary, withAgentAuthor } from "../src/core/notes";
+import { NOTES_LIST_DESCRIPTION, NOTES_ID_SCHEMA, notesNewestFirst } from "../src/model/webmcp";
 
 /** Topology / distance queries share the backend's assembly-aware evaluation (the kernel is loaded by ensureKernel). */
 const geometry = new InlineGeometryBackend();
@@ -71,7 +73,7 @@ const EDIT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, ide
 const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
 /** Meta tools by how they touch the document (registry commands carry their own flag). */
 const META_ANNOTATIONS: Record<string, ToolAnnotations> = {
-  get_document: READ_ONLY, get_assist_inbox: READ_ONLY, resolve_assist: EDIT, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, cut_list: READ_ONLY, flat_pattern: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY, shop_drawing: READ_ONLY,
+  get_document: READ_ONLY, notes_list: READ_ONLY, notes_get: READ_ONLY, get_assist_inbox: READ_ONLY, resolve_assist: EDIT, describe_sketch: READ_ONLY, surface_analysis: READ_ONLY, cut_list: READ_ONLY, flat_pattern: READ_ONLY, list_timeline: READ_ONLY, get_solids: READ_ONLY, measure: READ_ONLY, body_topology: READ_ONLY, shop_drawing: READ_ONLY,
   export_model: READ_ONLY, export_document: READ_ONLY,
   delete_operation: DESTRUCTIVE, import_document: DESTRUCTIVE, batch: DESTRUCTIVE,
 };
@@ -144,6 +146,7 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
     configurations: session.doc.configurations.map((c) => ({ id: c.id, name: c.name, values: c.values, suppress: c.suppress, warnings: c.warnings })),
     activeConfiguration: session.doc.configurations.find((c) => c.id === session.doc.activeConfiguration)?.name ?? null,
     hidden: session.doc.hidden ?? [],
+    ...(session.doc.notes?.length ? { notes: session.doc.notes.map(noteSummary) } : {}),
     sketches: Object.values(session.doc.sketches).map((s) => ({
       id: s.id,
       name: s.name,
@@ -204,7 +207,7 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
       description: mcp.description,
       inputSchema: mcp.inputSchema,
       annotations: { ...(mcp.destructive ? DESTRUCTIVE : EDIT), title: mcp.title },
-      handler: async (args) => shapeDispatch(await session.dispatch(def.type, args)),
+      handler: async (args) => shapeDispatch(await session.dispatch(def.type, withAgentAuthor(def.type, args))),
     });
   }
 
@@ -220,6 +223,24 @@ export function createCadMcpServer(opts: PlaneGCSOptions = {}) {
       description: "Return a sketch in full: every entity with solved coordinates, every constraint, and the DoF/conflict diagnosis. Use this to reason about what to constrain next.",
       inputSchema: { type: "object", required: ["sketch"], properties: { sketch: { type: "string" } } },
       handler: async (a) => describeSketch(String(a.sketch)),
+    },
+    {
+      name: "notes_list",
+      description: NOTES_LIST_DESCRIPTION,
+      inputSchema: { type: "object", properties: {} },
+      handler: async () => ({ notes: notesNewestFirst(session.doc.notes ?? []).map(noteSummary) }),
+    },
+    {
+      name: "notes_get",
+      description:
+        "Read one note in full: markdown body, anchor, and each stroke of its drawing as SVG path data in a 1000×1000 canvas (origin top-left, y down). " +
+        "This server has no canvas to show images: `background: true` adds the background image as a data URL (it can be large).",
+      inputSchema: { type: "object", required: ["id"], properties: { ...NOTES_ID_SCHEMA.properties, background: { type: "boolean" } } },
+      handler: async (a) => {
+        const n = (session.doc.notes ?? []).find((x) => x.id === a.id);
+        if (!n) return { ok: false, error: `No note "${String(a.id)}" — notes_list gives the ids` };
+        return { ...noteDetail(n), ...(a.background === true && n.drawing?.background ? { backgroundDataUrl: n.drawing.background } : {}) };
+      },
     },
     {
       name: "list_timeline",

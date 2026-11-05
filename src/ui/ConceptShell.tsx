@@ -17,6 +17,7 @@ import { MechanismPanel } from "./concepts/mechanism";
 import { useStore } from "../model/store";
 import { hasFlexures } from "../sim/flexure";
 import { MaterialsPanel } from "./concepts/materials";
+import { NotesPanel } from "./concepts/notes";
 import { useMechanism } from "../model/concepts/mechanismStore";
 
 /** Switches for the concept surfaces, at the top-right of the viewport: one line, whatever does not fit goes
@@ -41,6 +42,7 @@ export function PanelToggles() {
     { ...sw("ledger", "Ledger: the model read back as sentences, with design intents"), priority: 3 },
     { ...sw("space", "Space: two parameters on a map, intents as frontiers"), priority: 2 },
     { ...sw("materials", "Materials: metals, plastics, prints, rubber, wood; apply them to parts"), priority: 1 },
+    { ...sw("notes", "Notes: notes and sketches on the design, by you and the agent, pinned to what they are about"), priority: 1 },
     ...(compliant || panels.mechanism ? [{ ...sw("mechanism", "Mechanism: force against travel, its rest positions, the strain in each flexure"), priority: 1 }] : []),
     { key: "intent", node: <IntentButton size="sm" />, pin: true },
   ];
@@ -67,14 +69,14 @@ function useCrumbClearance(crumb: boolean): number | null {
   return left;
 }
 
-/** The right side panel: the inspector, with Ledger, Space, Mechanism and Materials as tabs while their panels are on. */
+/** The right side panel: the inspector, with Ledger, Space, Mechanism, Materials and Notes as tabs while their panels are on. */
 export function RightPanel() {
   const panels = useUi((s) => s.panels);
   const tab = useUi((s) => s.rightTab);
   const setTab = useUi((s) => s.setRightTab);
   const options: { key: RightTab; label: string }[] = [
     { key: "inspector", label: "Inspector" },
-    ...(["ledger", "space", "mechanism", "materials"] as const).filter((k) => panels[k]).map((k) => ({ key: k, label: PANEL_NAMES[k] })),
+    ...(["ledger", "space", "mechanism", "materials", "notes"] as const).filter((k) => panels[k]).map((k) => ({ key: k, label: PANEL_NAMES[k] })),
   ];
   return (
     <>
@@ -83,7 +85,7 @@ export function RightPanel() {
           <Pills ariaLabel="Right panel" value={tab} options={options} onChange={setTab} />
         </div>
       )}
-      {tab === "ledger" && panels.ledger ? <LedgerPanel /> : tab === "space" && panels.space ? <DesignSpacePanel /> : tab === "mechanism" && panels.mechanism ? <MechanismPanel /> : tab === "materials" && panels.materials ? <MaterialsPanel /> : <InspectorPanel />}
+      {tab === "ledger" && panels.ledger ? <LedgerPanel /> : tab === "space" && panels.space ? <DesignSpacePanel /> : tab === "mechanism" && panels.mechanism ? <MechanismPanel /> : tab === "materials" && panels.materials ? <MaterialsPanel /> : tab === "notes" && panels.notes ? <NotesPanel /> : <InspectorPanel />}
     </>
   );
 }

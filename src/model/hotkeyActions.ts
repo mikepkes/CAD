@@ -62,6 +62,7 @@ const ACTIONS: HotkeyAction[] = [
   { id: "view.space", label: `Toggle ${PANEL_NAMES.space}`, context: "global", run: () => useUi.getState().togglePanel("space") },
   { id: "view.materials", label: `Toggle ${PANEL_NAMES.materials}`, context: "global", run: () => useUi.getState().togglePanel("materials") },
   { id: "view.mechanism", label: `Toggle ${PANEL_NAMES.mechanism}`, context: "global", run: () => useUi.getState().togglePanel("mechanism") },
+  { id: "view.notes", label: `Toggle ${PANEL_NAMES.notes}`, context: "global", run: () => useUi.getState().togglePanel("notes") },
   {
     id: "mechanism.sweep", label: "Sweep the mechanism's drive", context: "model",
     when: () => hasFlexures(st().session.doc) && drivesOf(st().session.doc).length > 0,

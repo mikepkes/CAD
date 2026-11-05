@@ -5,12 +5,12 @@
 
 import { create } from "zustand";
 
-export type ConceptPanel = "workbench" | "ledger" | "space" | "lens" | "intent" | "mechanism" | "materials";
+export type ConceptPanel = "workbench" | "ledger" | "space" | "lens" | "intent" | "mechanism" | "materials" | "notes";
 /** One name per panel, the same on its switch, its tab, its hotkey and in ⌘K. */
-export const PANEL_NAMES: Record<ConceptPanel, string> = { workbench: "Pins", lens: "Lens", ledger: "Ledger", space: "Space", materials: "Materials", mechanism: "Mechanism", intent: "Intent line" };
-/** Which tab the right side panel shows. Ledger, Space, Mechanism and Materials exist only while their panel is on. */
-export type RightTab = "inspector" | "ledger" | "space" | "mechanism" | "materials";
-const TABS: RightTab[] = ["ledger", "space", "mechanism", "materials"];
+export const PANEL_NAMES: Record<ConceptPanel, string> = { workbench: "Pins", lens: "Lens", ledger: "Ledger", space: "Space", materials: "Materials", mechanism: "Mechanism", notes: "Notes", intent: "Intent line" };
+/** Which tab the right side panel shows. Ledger, Space, Mechanism, Materials and Notes exist only while their panel is on. */
+export type RightTab = "inspector" | "ledger" | "space" | "mechanism" | "materials" | "notes";
+const TABS: RightTab[] = ["ledger", "space", "mechanism", "materials", "notes"];
 
 export interface UiState {
   /** Feature whose card is open on the part (the pin / chip / sentence in focus). */
@@ -82,7 +82,7 @@ const isNarrow = () => typeof window !== "undefined" && typeof window.innerWidth
 const KEY = "vibecad.ui.panels.v1";
 const TAB_KEY = "vibecad.ui.rightTab.v1";
 const WIDTH_KEY = "vibecad.ui.sideWidth.v1";
-const DEFAULT_PANELS: Record<ConceptPanel, boolean> = { workbench: true, ledger: false, space: false, lens: false, intent: true, mechanism: false, materials: false };
+const DEFAULT_PANELS: Record<ConceptPanel, boolean> = { workbench: true, ledger: false, space: false, lens: false, intent: true, mechanism: false, materials: false, notes: false };
 
 function loadPanels(): Record<ConceptPanel, boolean> {
   try {

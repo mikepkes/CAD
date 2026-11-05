@@ -42,9 +42,13 @@ export function renameValue(v: unknown, key: string | null, from: string, to: st
   return v;
 }
 
+/** A note is prose and drawing data throughout: "width" in its body is a word, not the parameter. */
+const isProseOp = (op: OperationRecord) => op.type.startsWith("note.");
+
 /** An operation's params with the parameter `from` renamed to `to` (the same object if nothing changed). */
 export function renameInOperation(op: OperationRecord, from: string, to: string): Record<string, unknown> {
   const p = op.params as Record<string, unknown>;
+  if (isProseOp(op)) return p;
   let out = renameValue(p, null, from, to) as Record<string, unknown>;
   for (const k of NAMES_A_PARAMETER[op.type] ?? []) if (out[k] === from) out = { ...out, [k]: to };
   // a configuration's cells are keyed by parameter name
@@ -88,6 +92,7 @@ function describeUse(doc: Parameters<typeof parameterUses>[0], op: OperationReco
  *  dropped): what deleting a parameter "and keep its value" does to its users. Same object when nothing changes. */
 export function inlineInOperation(op: OperationRecord, name: string, value: number): Record<string, unknown> {
   const p = op.params as Record<string, unknown>;
+  if (isProseOp(op)) return p;
   const rounded = Math.round(value * 1e6) / 1e6;
   const literal = rounded < 0 ? `(${rounded})` : String(rounded);
   let out = renameValue(p, null, name, literal) as Record<string, unknown>;

@@ -9,7 +9,7 @@
 // silently misread. Register the next migration under MIGRATIONS[CURRENT_VERSION]
 // and bump CURRENT_VERSION when the stored shape changes incompatibly.
 
-import { CadDocument, createDocument, Intent, TimelineGroup } from "./document";
+import { CadDocument, createDocument, Intent, Note, TimelineGroup } from "./document";
 import { OperationRecord } from "./command/types";
 
 export const CURRENT_VERSION = 1;
@@ -33,6 +33,10 @@ export interface SerializedDocument {
    *  `parameters` they are derived from the intent.* operations, so replay
    *  rebuilds them — the copy here lets a reader see them without replaying. */
   intents?: Intent[];
+  /** The notes when saved (optional; absent = none), for a reader that doesn't replay. Built by the note.*
+   *  operations like intents; a drawing's background image is left out here (it is in the operation that
+   *  set it), so a captured view isn't stored twice. */
+  notes?: Note[];
 }
 
 /** A parsed-but-not-yet-validated document; migrations work on this loose shape. */
@@ -83,6 +87,12 @@ export function runMigrations(
   return out;
 }
 
+function withoutBackground(n: Note): Note {
+  if (!n.drawing?.background) return n;
+  const { background: _bg, ...drawing } = n.drawing; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return { ...n, drawing };
+}
+
 export function serializeDocument(doc: CadDocument): string {
   const out: SerializedDocument = {
     format: "vibecad",
@@ -97,6 +107,7 @@ export function serializeDocument(doc: CadDocument): string {
     ...(doc.hidden?.length ? { hidden: doc.hidden } : {}),
     ...(doc.name ? { name: doc.name } : {}),
     ...(doc.intents?.length ? { intents: doc.intents } : {}),
+    ...(doc.notes?.length ? { notes: doc.notes.map(withoutBackground) } : {}),
   };
   return JSON.stringify(out, null, 2);
 }
@@ -117,6 +128,8 @@ export function deserializeDocument(json: string): CadDocument {
   if (Array.isArray(d.hidden)) doc.hidden = d.hidden.filter((x): x is string => typeof x === "string");
   // Files from before intents were part of the document have none: default [].
   doc.intents = Array.isArray(d.intents) ? d.intents.filter((i) => i && typeof i === "object" && typeof (i as Intent).id === "string") : [];
+  // Files from before notes have none; replay rebuilds them (with their backgrounds) from the operations.
+  doc.notes = Array.isArray(d.notes) ? d.notes.filter((n) => n && typeof n === "object" && typeof (n as Note).id === "string") : [];
   // Derived state (parameters/sketches/features) is reconstructed by recompute.
   return doc;
 }
