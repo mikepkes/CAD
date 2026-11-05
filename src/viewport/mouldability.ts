@@ -13,10 +13,11 @@
 // and each ray tests only the bucket it falls in.
 import type { Vec3 } from "../math/vec";
 
-/** A display mesh. With `normals` (the smooth vertex normals the renderer shades with), a triangle is classified by
- *  the mean of its corners' normals, not its own facet: the facets of a 1° cone jitter either side of the draft
- *  threshold, the smooth normal does not. The facet still decides what the triangle blocks. */
-export interface MouldMesh { positions: Float32Array; indices: Uint32Array; normals?: Float32Array }
+/** A display mesh. With `faceRanges` (the B-rep face each run of triangles came from: [start, count] pairs into
+ *  `indices`), a triangle on a face whose facets all lean alike — a plane, a cone — is classified by the face's
+ *  mean lean, not its own facet: the facets of a 1° cone jitter either side of the draft threshold, the face does
+ *  not. A face whose lean varies (a round) keeps its facets. The facet always decides what a triangle blocks. */
+export interface MouldMesh { positions: Float32Array; indices: Uint32Array; faceRanges?: number[] }
 
 /** Per-triangle verdicts, as the shader reads them off a vertex attribute. */
 export const MOULD = { ok: 0, steep: 1, undercut: 2 } as const;
@@ -57,19 +58,39 @@ export function mouldCheck(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
   let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
   meshes.forEach((m, mi) => {
     const P = m.positions, I = m.indices;
+    // each triangle's B-rep face, and the face's mean lean when its facets agree
+    const faceOf = new Int32Array(I.length / 3).fill(-1);
+    const R = m.faceRanges ?? [];
+    for (let fi = 0; 2 * fi + 1 < R.length; fi++) for (let k = R[2 * fi]; k < R[2 * fi] + R[2 * fi + 1]; k += 3) if (k / 3 < faceOf.length) faceOf[k / 3] = fi;
+    const faceD = new Float64Array(R.length / 2), faceDD = new Float64Array(R.length / 2), faceN = new Int32Array(R.length / 2);
+    const facetD = new Float64Array(I.length / 3);
+    for (let t = 0; t < I.length; t += 3) {
+      const [A, B, C] = [I[t] * 3, I[t + 1] * 3, I[t + 2] * 3];
+      const nx = (P[B + 1] - P[A + 1]) * (P[C + 2] - P[A + 2]) - (P[B + 2] - P[A + 2]) * (P[C + 1] - P[A + 1]);
+      const ny = (P[B + 2] - P[A + 2]) * (P[C] - P[A]) - (P[B] - P[A]) * (P[C + 2] - P[A + 2]);
+      const nz = (P[B] - P[A]) * (P[C + 1] - P[A + 1]) - (P[B + 1] - P[A + 1]) * (P[C] - P[A]);
+      const nl = Math.hypot(nx, ny, nz);
+      const d = nl < 1e-12 ? 0 : (nx * p.x + ny * p.y + nz * p.z) / nl;
+      facetD[t / 3] = d;
+      const fi = faceOf[t / 3];
+      if (fi >= 0 && nl >= 1e-12) { faceD[fi] += d; faceDD[fi] += d * d; faceN[fi]++; }
+    }
+    const SPREAD = Math.sin((1.5 * Math.PI) / 180); // facets within this of their face's mean lean: the face is one surface
+    const agree = new Uint8Array(faceN.length);
+    for (let fi = 0; fi < faceN.length; fi++) {
+      if (faceN[fi] < 2) continue;
+      const mean = faceD[fi] / faceN[fi], sd = Math.sqrt(Math.max(0, faceDD[fi] / faceN[fi] - mean * mean));
+      agree[fi] = sd < SPREAD ? 1 : 0;
+      faceD[fi] = mean;
+    }
     for (let t = 0; t < I.length; t += 3) {
       const [A, B, C] = [I[t] * 3, I[t + 1] * 3, I[t + 2] * 3];
       const ax = P[A], ay = P[A + 1], az = P[A + 2], bx = P[B], by = P[B + 1], bz = P[B + 2], cx = P[C], cy = P[C + 1], cz = P[C + 2];
       const nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay), ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az), nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
       const nl = Math.hypot(nx, ny, nz);
       if (nl < 1e-12) continue;
-      let d = (nx * p.x + ny * p.y + nz * p.z) / nl;
-      const N = m.normals;
-      if (N && N.length === P.length) {
-        const sx = N[A] + N[B] + N[C], sy = N[A + 1] + N[B + 1] + N[C + 1], sz = N[A + 2] + N[B + 2] + N[C + 2];
-        const sl = Math.hypot(sx, sy, sz);
-        if (sl > 1e-9) d = (sx * p.x + sy * p.y + sz * p.z) / sl;
-      }
+      const fi = faceOf[t / 3];
+      const d = fi >= 0 && agree[fi] ? faceD[fi] : facetD[t / 3];
       const tr: Tri = {
         au: ax * u.x + ay * u.y + az * u.z, av: ax * v.x + ay * v.y + az * v.z, ah: ax * p.x + ay * p.y + az * p.z,
         bu: bx * u.x + by * u.y + bz * u.z, bv: bx * v.x + by * v.y + bz * v.z, bh: bx * p.x + by * p.y + bz * p.z,

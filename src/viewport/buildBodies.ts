@@ -8,7 +8,7 @@ import type { SolidView } from "./SceneManager";
 
 export interface SolidEvalLike {
   featureId: string; sketchId: string;
-  mesh?: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; edges: Float32Array; uvs?: Float32Array; paper?: PaperOverlay };
+  mesh?: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; edges: Float32Array; faceRanges?: number[]; uvs?: Float32Array; paper?: PaperOverlay };
   bounds?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
   threadDecals?: SolidView["threadDecals"];
   componentId?: string;
@@ -35,7 +35,7 @@ export function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEva
     const mat = materialForComponent(doc, owner);
     const material = mat ? materialSpec(mat) : undefined;
     const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;
-    out.push({ solid: { id: sol.featureId, positions: sol.mesh.positions, normals: sol.mesh.normals, indices: sol.mesh.indices, edges: sol.mesh.edges, ...(sol.mesh.uvs ? { uvs: sol.mesh.uvs } : {}), ...(sol.mesh.paper ? { paper: sol.mesh.paper } : {}), threadDecals: sol.threadDecals, material, woodFrame, ...(referenceOf(doc, owner) === "ghost" ? { reference: true } : {}) }, componentId });
+    out.push({ solid: { id: sol.featureId, positions: sol.mesh.positions, normals: sol.mesh.normals, indices: sol.mesh.indices, edges: sol.mesh.edges, ...(sol.mesh.faceRanges ? { faceRanges: sol.mesh.faceRanges } : {}), ...(sol.mesh.uvs ? { uvs: sol.mesh.uvs } : {}), ...(sol.mesh.paper ? { paper: sol.mesh.paper } : {}), threadDecals: sol.threadDecals, material, woodFrame, ...(referenceOf(doc, owner) === "ghost" ? { reference: true } : {}) }, componentId });
   }
   return out;
 }

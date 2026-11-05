@@ -91,18 +91,13 @@ describe("mouldFlags on a drafted round", () => {
   });
 });
 
-describe("mouldFlags with smooth normals", () => {
-  it("classifies a 1° cone's facets by their smooth normals: none is steep at a 0.5° threshold", () => {
+describe("mouldFlags with face ranges", () => {
+  it("classifies a 1° cone's facets by their face: none is steep at a 0.5° threshold", () => {
     const N = 48, h = 4, r0 = 14, r1 = 14 - h * Math.tan(Math.PI / 180);
-    const P: number[] = [], I: number[] = [], NN: number[] = [];
-    const tilt = Math.atan((r0 - r1) / h); // the cone's true slope: its smooth normal leans up by it
-    for (let i = 0; i < N; i++) {
-      const a = (i / N) * 2 * Math.PI, c = Math.cos(a), s = Math.sin(a);
-      P.push(r0 * c, r0 * s, 0, r1 * c, r1 * s, h);
-      NN.push(c * Math.cos(tilt), s * Math.cos(tilt), Math.sin(tilt), c * Math.cos(tilt), s * Math.cos(tilt), Math.sin(tilt));
-    }
+    const P: number[] = [], I: number[] = [];
+    for (let i = 0; i < N; i++) { const a = (i / N) * 2 * Math.PI; P.push(r0 * Math.cos(a), r0 * Math.sin(a), 0, r1 * Math.cos(a), r1 * Math.sin(a), h); }
     for (let i = 0; i < N; i++) { const j = (i + 1) % N; I.push(2 * i, 2 * j, 2 * j + 1, 2 * i, 2 * j + 1, 2 * i + 1); }
-    const m = { positions: new Float32Array(P), indices: new Uint32Array(I), normals: new Float32Array(NN) };
+    const m = { positions: new Float32Array(P), indices: new Uint32Array(I), faceRanges: [0, I.length] };
     const s = mouldSummary([m], mouldFlags([m], Z, 0.5));
     expect(s.steep).toBe(0);
     expect(s.undercut).toBe(0);
@@ -112,21 +107,22 @@ describe("mouldFlags with smooth normals", () => {
 
 describe("the parting line", () => {
   it("runs round a barrel where its upper cone meets its lower one, and a plain block has none", () => {
-    // a barrel: r 14 at mid-height, 1° in to each face, as two cones sharing their vertices at the ridge
+    // a barrel: r 14 at mid-height, 1° in to each face, as two cones (two faces) sharing their vertices at the ridge
     const N = 32, h = 4, r1 = 14 - (h / 2) * Math.tan(Math.PI / 180), r0 = 14;
-    const P: number[] = [], I: number[] = [];
+    const P: number[] = [], lower: number[] = [], upper: number[] = [], caps: number[] = [];
     for (let i = 0; i < N; i++) { const a = (i / N) * 2 * Math.PI, c = Math.cos(a), s = Math.sin(a); P.push(r1 * c, r1 * s, 0, r0 * c, r0 * s, h / 2, r1 * c, r1 * s, h); }
     P.push(0, 0, 0, 0, 0, h);
     const bc = 3 * N, tc = 3 * N + 1;
     for (let i = 0; i < N; i++) {
       const j = (i + 1) % N;
-      I.push(3 * i, 3 * j, 3 * j + 1, 3 * i, 3 * j + 1, 3 * i + 1);             // lower cone, outward
-      I.push(3 * i + 1, 3 * j + 1, 3 * j + 2, 3 * i + 1, 3 * j + 2, 3 * i + 2); // upper cone
-      I.push(bc, 3 * j, 3 * i);                                                 // bottom
-      I.push(tc, 3 * i + 2, 3 * j + 2);                                         // top
+      lower.push(3 * i, 3 * j, 3 * j + 1, 3 * i, 3 * j + 1, 3 * i + 1);
+      upper.push(3 * i + 1, 3 * j + 1, 3 * j + 2, 3 * i + 1, 3 * j + 2, 3 * i + 2);
+      caps.push(bc, 3 * j, 3 * i, tc, 3 * i + 2, 3 * j + 2);
     }
-    const m = { positions: new Float32Array(P), indices: new Uint32Array(I) };
-    const { sides } = mouldCheck([m], Z, 0.5);
+    const I = [...lower, ...upper, ...caps];
+    const m = { positions: new Float32Array(P), indices: new Uint32Array(I), faceRanges: [0, lower.length, lower.length, upper.length] };
+    const { flags, sides } = mouldCheck([m], Z, 0.5);
+    expect(mouldSummary([m], flags).steep).toBe(0); // the ridge's triangles read as their cones, not as a seam
     const seg = partingSegments([m], sides);
     expect(seg.length / 6).toBe(N); // one segment per ridge edge
     for (let k = 0; k < seg.length; k += 3) expect(seg[k + 2]).toBeCloseTo(h / 2, 6); // all at the ridge

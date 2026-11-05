@@ -79,6 +79,8 @@ export interface SolidView {
   normals: Float32Array;
   indices: Uint32Array;
   edges: Float32Array;
+  /** The B-rep face each run of triangles came from ([start, count] pairs into `indices`): the mould check reads faces, not facets. */
+  faceRanges?: number[];
   /** Cosmetic thread regions drawn as a shaded normal-mapped sleeve. */
   threadDecals?: ThreadDecal[];
   /** Assigned appearance (resolved from the owning component). */
@@ -1424,7 +1426,7 @@ export class SceneManager {
     const list = data.solids.filter((s) => !s.variant && !s.reference);
     const key = `${a.pull.x},${a.pull.y},${a.pull.z}|${a.draftDeg}|${list.map((s) => s.id ?? "").join(",")}`;
     if (key === this.mouldKey && list.every((s) => this.mouldVerdicts.has(s.positions))) return;
-    const meshes = list.map((s) => ({ positions: s.positions, indices: s.indices, normals: s.normals }));
+    const meshes = list.map((s) => ({ positions: s.positions, indices: s.indices, faceRanges: s.faceRanges }));
     const { flags, sides } = mouldCheck(meshes, a.pull, a.draftDeg);
     this.mouldVerdicts = new Map(list.map((s, i) => [s.positions, flags[i]]));
     this.mouldKey = key;
