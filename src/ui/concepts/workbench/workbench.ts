@@ -426,11 +426,11 @@ export function paramNameProblem(name: string, taken: string[]): string | null {
 }
 
 /** What a face selection was made against: when any of it changes, the face the verbs card shows may no
- *  longer exist, so the card closes. Counted in shape-changing ops only: adding or editing a parameter, an intent
- *  or a configuration (naming a number from the card, say) leaves every face where it was. */
+ *  longer exist, so the card closes. Counted in shape-changing ops only: adding or editing a parameter, an intent,
+ *  a configuration or a note (naming a number from the card, say) leaves every face where it was. */
 export interface SelectionContext { timelineLength: number; rollbackIndex: number; activeComponentId: string; mode: string }
 
-const keepsFaces = (op: { type: string }) => /^(parameter|intent|configuration)\./.test(op.type);
+const keepsFaces = (op: { type: string }) => /^(parameter|intent|configuration|note)\./.test(op.type);
 
 /** The context of a store state (the session is mutable, so take a snapshot to compare later). */
 export function selectionContext(st: { session: { timeline: { type: string }[]; rollbackIndex: number }; activeComponentId: string; mode: string }): SelectionContext {

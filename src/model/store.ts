@@ -1220,7 +1220,7 @@ export const useStore = create<AppState>((set, get) => {
     editOperation: async (opId, params) => {
       // a changed value that should be an expression must read and name only real parameters
       const was = get().session.timeline.find((o) => o.opId === opId)?.params as Record<string, unknown> | undefined;
-      if (was && !String(get().session.timeline.find((o) => o.opId === opId)?.type).startsWith("intent.")) {
+      if (was && !String(get().session.timeline.find((o) => o.opId === opId)?.type).match(/^(intent|note)\./)) {
         for (const [k, v] of Object.entries(params)) {
           if (typeof v !== "string" || v === was[k] || PROSE_KEYS.has(k)) continue;
           const problem = expressionProblem(v, get().session.doc.parameters.map((p) => p.name));

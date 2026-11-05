@@ -1046,6 +1046,60 @@ export interface Intent {
   unit?: string;
 }
 
+// ---- notes ----
+
+/** A camera to come back to: where it stood, what it looked at, which way was up (world mm). */
+export interface NoteView {
+  position: { x: number; y: number; z: number };
+  target: { x: number; y: number; z: number };
+  up: { x: number; y: number; z: number };
+}
+
+/** What a note is about: a feature (its body), a sketch, or a point in the model. A feature or sketch
+ *  with a point marks that spot on it; a point alone marks the spot. `view` is the camera to restore. */
+export interface NoteAnchor {
+  feature?: string;
+  sketch?: string;
+  point?: { x: number; y: number; z: number };
+  view?: NoteView;
+}
+
+/** One pen stroke on a note's drawing. Points are in a square canvas, 0..1 across (x right) and down
+ *  (y down); `width` is in thousandths of the canvas side (the 1000×1000 space notes_get uses). */
+export interface NoteStroke {
+  color: string;
+  width: number;
+  points: { x: number; y: number }[];
+}
+
+/** A note's freehand drawing: vector strokes, over a captured image of the model or a blank canvas. */
+export interface NoteDrawing {
+  strokes: NoteStroke[];
+  /** A data URL (image/png or image/jpeg) the strokes are drawn over; absent = blank. */
+  background?: string;
+}
+
+/**
+ * A note on the design, by a person or an agent: a title, a markdown body, an optional sketch drawn
+ * over a view of the model, optionally pinned to what it is about. Notes are derived state like
+ * intents: `note.*` timeline operations build them, so they undo and travel with the file.
+ */
+export interface Note {
+  id: string;
+  title: string;
+  /** Markdown (line breaks, **bold**, - lists). */
+  body: string;
+  /** "human", "agent", or a name. */
+  author: string;
+  /** Epoch ms. */
+  createdAt: number;
+  updatedAt: number;
+  /** Who made the last change, when it was not the author. */
+  updatedBy?: string;
+  anchor?: NoteAnchor;
+  drawing?: NoteDrawing;
+}
+
 // ---- the shop drawing's annotations ----
 
 /** A piece of model geometry a drawing dimension measures, by its topological name (core/naming.ts), so it
@@ -1168,6 +1222,8 @@ export interface CadDocument {
   configurations: Configuration[];
   /** The design intents (built by intent.* operations). */
   intents: Intent[];
+  /** Notes on the design (built by note.* operations); absent on documents made before notes existed. */
+  notes?: Note[];
 }
 
 /** The material that applies to `componentId`: its own, else the nearest ancestor's
@@ -1243,6 +1299,7 @@ export function createDocument(id = "doc1"): CadDocument {
     features: {},
     configurations: [],
     intents: [],
+    notes: [],
   };
 }
 

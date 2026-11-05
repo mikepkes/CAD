@@ -51,6 +51,7 @@ export function rebuild(doc: CadDocument, registry: CommandRegistry): RebuildRes
   doc.features = {};
   doc.configurations = [];
   doc.intents = [];
+  doc.notes = [];
   doc.drawing = undefined;
   doc.drafting = undefined;
   doc.about = undefined;

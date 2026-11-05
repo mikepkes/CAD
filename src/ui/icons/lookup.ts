@@ -38,6 +38,12 @@ const COMMANDS: Record<string, IconName> = {
   "drawing.addDetail": "drawing",
   "drawing.edit": "drawing",
   "drawing.remove": "drawing",
+  // notes
+  "note.add": "note-add",
+  "note.update": "note-edit",
+  "note.delete": "note-delete",
+  "note.stroke.add": "note-draw",
+  "note.stroke.clear": "note-edit",
   "document.describe": "parameter-edit",
   // sketches and planes
   "sketch.create": "sketch",
@@ -185,6 +191,7 @@ const ACTIONS: Record<string, IconName> = {
   "view.ledger": "ledger",
   "view.space": "space",
   "view.materials": "material",
+  "view.notes": "note",
   "view.mechanism": "mechanism",
   "mechanism.sweep": "play",
   "motion.study": "play",
@@ -278,6 +285,7 @@ export function iconForView(view: string): IconName {
 /** The icon for a concept panel (the intent line's "toggle …"). */
 export function iconForPanel(panel: string): IconName {
   if (panel === "materials") return "material";
+  if (panel === "notes") return "note";
   if (panel === "workbench") return "pins";
   return iconForAction(`view.${panel}`);
 }

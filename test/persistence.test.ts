@@ -53,3 +53,27 @@ describe("persistence round-trip", () => {
     expect(json).toHaveProperty("operations");
   });
 });
+
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+describe("notes in a saved file", () => {
+  it("round-trip through save and load (the background comes back from the operations)", async () => {
+    const s = realSession();
+    await s.dispatch("note.add", { title: "Sketch", strokes: [{ path: "M10 10 L990 990" }], drawing: { background: PNG } });
+    const json = serializeDocument(s.doc);
+    const saved = JSON.parse(json);
+    expect(saved.notes[0].title).toBe("Sketch");
+    expect(saved.notes[0].drawing.background).toBeUndefined(); // not stored twice
+    const loaded = deserializeDocument(json);
+    expect(loaded.notes![0].title).toBe("Sketch");
+    const session = sessionFromDoc(loaded);
+    await session.recompute();
+    expect(session.doc.notes).toEqual(s.doc.notes);
+  });
+
+  it("a file from before notes loads with none", async () => {
+    const old = JSON.stringify({ format: "vibecad", version: 1, id: "d", units: "mm", nextId: 1, rollbackIndex: 0, operations: [] });
+    const doc = deserializeDocument(old);
+    expect(doc.notes).toEqual([]);
+  });
+});

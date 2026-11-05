@@ -205,6 +205,11 @@ export const ICONS = {
   "material-edit": { label: "Edit material", base: "material", mod: "edit" },
   "material-assign": { label: "Assign material", d: "M12.5 15.5l8-8a2.12 2.12 0 0 0-3-3l-8 8M9.5 12.5l3 3c-.5 3.5-3.5 5.5-8 5.5 1-1.5 1-3 1.5-4.5.7-2.3 2-3.5 3.5-4z" },
   drawing: { label: "Drawing", d: "M3 4h18v16H3zM13 20v-4h8M6 7h7v6H6zM6 16h4" },
+  note: { label: "Note", d: "M5 4h14v11l-5 5H5zM14 20v-5h5M8 8.5h8M8 12h5" },
+  "note-add": { label: "Add note", base: "note", mod: "add" },
+  "note-edit": { label: "Edit note", base: "note", mod: "edit" },
+  "note-delete": { label: "Delete note", base: "note", mod: "delete" },
+  "note-draw": { label: "Draw on note", d: "M3 20c2.5-2 4.5-2 6 0s3.5 2 6 0M14 3.5l4 4-7.5 7.5H6.5v-4z" },
 
   // ---------------------------------------------------------------- views
   "view-iso": { label: "View: Iso", d: CUBE, dots: [[12, 12, 2.2]] },
