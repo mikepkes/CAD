@@ -1285,7 +1285,24 @@ function applyLoft(doc: CadDocument, f: LoftFeature, bodies: Body[], out: Record
 const bodyEdgeNames = (b: Body): string[] => edgeNamesOf(edgeGeoms(b.shape), b.faceNames);
 
 /** Fillet or chamfer the selected edges of the most recent body. */
-function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: Record<string, SolidEval>) {
+/** The pose a body's component stands in (identity for the root, or a part placed by no joint): a step whose
+ *  selector is in as-modelled coordinates works in this frame, so it picks the same faces at every pose. */
+function componentPose(doc: CadDocument, scope: Scope, target: Body): Rigid {
+  const componentId = doc.sketches[target.sketchId]?.componentId;
+  return (componentId && resolveComponentWorld(doc, scope).get(componentId)) || IDENTITY;
+}
+
+/** Run `op` on the body as modelled (its component's pose taken off) and put the result back in the world. */
+function inModelFrame(shape: Shape3D, frame: Rigid, op: (local: Shape3D) => Shape3D): Shape3D {
+  if (samePose(frame, IDENTITY)) return op(shape);
+  const local = transformShape(shape, invert(frame));
+  try {
+    const done = op(local);
+    try { return transformShape(done, frame); } finally { done.delete(); }
+  } finally { local.delete(); }
+}
+
+function applyEdgeBlend(doc: CadDocument, scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
     const target = pickBody(bodies, f.body, f.kind);
@@ -1293,7 +1310,9 @@ function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: 
     f.sizeValue = size;
     if (!(size > 0)) throw new Error(`${f.kind} size must be positive`);
     const before = volumeOfShape(target.shape);
-    const blended = blendEdges(target.shape, f.kind, size, f.edges, f.edges.names?.length ? bodyEdgeNames(target) : undefined);
+    // a selector in world terms (a plane, a point, a box, an axis) is read as modelled: in the component's frame
+    const frame = byNameOnly(f.edges) ? IDENTITY : componentPose(doc, scope, target);
+    const blended = inModelFrame(target.shape, frame, (local) => blendEdges(local, f.kind, size, f.edges, f.edges.names?.length ? bodyEdgeNames(target) : undefined));
     const after = volumeOfShape(blended);
     const dim = f.kind === "fillet" ? "radius" : "setback";
     // An un-measurable result means OCC produced an invalid solid (usually the
@@ -1328,16 +1347,7 @@ function applyDraft(doc: CadDocument, scope: Scope, f: DraftFeature, bodies: Bod
     // A moved component's body is built where its joints put it, but the draft is defined as modelled: its
     // parting plane and face box in the component's own frame. So the body is drafted in that frame and put
     // back — the same faces, the same tilt, at every pose (a motion study's, a folded lid's).
-    const componentId = doc.sketches[target.sketchId]?.componentId;
-    const frame = (componentId && resolveComponentWorld(doc, scope).get(componentId)) || IDENTITY;
-    const posed = !samePose(frame, IDENTITY);
-    const local = posed ? transformShape(target.shape, invert(frame)) : target.shape;
-    let drafted: Shape3D;
-    try {
-      const d = draftFaces(local, a, f.plane, f.offset, f.faces, f.faces.names?.length ? target.faceNames : undefined);
-      if (!posed) drafted = d;
-      else { try { drafted = transformShape(d, frame); } finally { d.delete(); } }
-    } finally { if (posed) local.delete(); }
+    const drafted = inModelFrame(target.shape, componentPose(doc, scope, target), (local) => draftFaces(local, a, f.plane, f.offset, f.faces, f.faces.names?.length ? target.faceNames : undefined));
     const after = volumeOfShape(drafted);
     if (Number.isFinite(before) && !Number.isFinite(after)) {
       drafted.delete();
@@ -1825,7 +1835,7 @@ function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Bod
     case "sweep": applySweep(doc, scope, f, bodies, out); break;
     case "mirror": applyMirror(doc, f, bodies, out); break;
     case "fillet":
-    case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;
+    case "chamfer": applyEdgeBlend(doc, scope, f, bodies, out); break;
     case "shell": applyShell(scope, f, bodies, out); break;
     case "draft": applyDraft(doc, scope, f, bodies, out); break;
     case "pattern": applyPattern(scope, f, bodies, out); break;

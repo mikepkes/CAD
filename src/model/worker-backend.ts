@@ -30,10 +30,11 @@ export interface WorkerLike {
 /** What the pool is waiting on, for a status readout (`geometryWorkerStatus`). */
 export interface PendingRequest { id: number; kind: string; worker: number; ms: number }
 
-let current: WorkerGeometryBackend | null = null;
-/** The live pool's pending requests and how long each has waited — what to look at when the model stops updating. */
-export function geometryWorkerStatus(): { workers: number; pending: PendingRequest[]; restarts: number } | null {
-  return current?.status() ?? null;
+const pools = new Set<WorkerGeometryBackend>();
+/** Every live pool's pending requests and how long each has waited (the render pool, the motion study's) —
+ *  what to look at when the model stops updating. */
+export function geometryWorkerStatus(): { pools: { workers: number; pending: PendingRequest[]; restarts: number }[] } | null {
+  return pools.size ? { pools: [...pools].map((p) => p.status()) } : null;
 }
 
 export interface WorkerBackendOptions {
@@ -93,11 +94,11 @@ export class WorkerGeometryBackend implements GeometryBackend {
   constructor(opts: WorkerBackendOptions = {}) {
     this.spawn = opts.spawn ?? spawnWebWorker;
     this.compile = opts.compile ?? compileKernel;
-    this.silenceMs = opts.silenceMs ?? 120_000;
+    this.silenceMs = opts.silenceMs ?? 90_000;
     this.workers = Array.from({ length: Math.max(1, opts.size ?? 1) }, () => this.spawn());
     this.heard = this.workers.map(() => Date.now());
     this.workers.forEach((w, i) => this.listen(w, i));
-    current = this;
+    pools.add(this);
     // A worker that has gone quiet for too long with a request outstanding is taken as hung (the kernel never
     // returns from some operations): its requests are failed and it is restarted, so the app stays usable.
     if (this.silenceMs > 0 && typeof setInterval === "function") {
@@ -272,7 +273,7 @@ export class WorkerGeometryBackend implements GeometryBackend {
   }
   dispose(): void {
     if (this.watchdog) { clearInterval(this.watchdog); this.watchdog = null; }
-    if (current === this) current = null; for (const w of this.workers) w.terminate(); this.pending.clear(); }
+    pools.delete(this); for (const w of this.workers) w.terminate(); this.pending.clear(); }
 }
 
 /** One progress sink per part, reporting the pool's progress as a whole: the parts' fractions

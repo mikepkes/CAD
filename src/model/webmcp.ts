@@ -270,7 +270,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
     description: "What the geometry workers are doing: the requests still pending (kind, worker, how long), and how many workers were restarted after going quiet. Call it when the model stops updating or a geometry tool does not answer.",
     inputSchema: { type: "object", properties: {} },
     annotations: READ_ONLY,
-    execute: async () => ok({ ok: true, ...(geometryWorkerStatus() ?? { workers: 0, pending: [], restarts: 0, note: "no worker pool (the inline kernel)" }) }),
+    execute: async () => ok({ ok: true, ...(geometryWorkerStatus() ?? { pools: [], note: "no worker pool (the inline kernel)" }) }),
   });
   if (host.deleteOperation) {
     tools.push({

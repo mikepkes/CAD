@@ -26,7 +26,7 @@ describe("worker pool resilience", () => {
     await expect(b.topology(createDocument())).rejects.toThrow(/crashed.*OOM/);
     expect(spawned.length).toBe(2);
     expect(spawned[0].killed).toBe(true);
-    expect(geometryWorkerStatus()?.restarts).toBe(1);
+    expect(geometryWorkerStatus()?.pools.some((p) => p.restarts === 1)).toBe(true);
     b.dispose();
   });
 
@@ -37,12 +37,12 @@ describe("worker pool resilience", () => {
     const t0 = Date.now();
     const pendingBefore = b.distance(createDocument(), "a", "b").catch((e: Error) => e.message);
     await new Promise((r) => setTimeout(r, 120));
-    expect(geometryWorkerStatus()?.pending.map((p) => p.kind)).toEqual(["distance"]);
+    expect(geometryWorkerStatus()?.pools.flatMap((p) => p.pending.map((q) => q.kind))).toEqual(["distance"]);
     const msg = await pendingBefore;
     expect(msg).toMatch(/did not answer/);
     expect(Date.now() - t0).toBeLessThan(2000);
     expect(spawned.length).toBe(2);
-    expect(geometryWorkerStatus()?.pending).toEqual([]);
+    expect(geometryWorkerStatus()?.pools.flatMap((p) => p.pending)).toEqual([]);
     b.dispose();
   });
 });
