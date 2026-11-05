@@ -368,7 +368,7 @@ export interface AppState {
   endGesture: (mark: number, how: { label: string } | "drop") => void;
   editOperation: (opId: string, params: Record<string, unknown>) => Promise<void>;
   suppressOperation: (opId: string, suppressed: boolean) => Promise<void>;
-  deleteOperation: (opId: string) => Promise<void>;
+  deleteOperation: (opId: string) => Promise<{ ok: boolean; error?: string }>;
   moveRollback: (index: number) => Promise<void>;
 
   // features (3D)
@@ -1235,7 +1235,7 @@ export const useStore = create<AppState>((set, get) => {
       afterMutate();
     },
     suppressOperation: async (opId, suppressed) => { await get().session.setSuppressed(opId, suppressed); bump(); afterMutate(); },
-    deleteOperation: async (opId) => { await get().session.deleteOperation(opId); bump(); afterMutate(); },
+    deleteOperation: async (opId) => { const r = await get().session.deleteOperation(opId); bump(); afterMutate(); return { ok: r.ok, ...(r.error ? { error: r.error } : {}) }; },
     moveRollback: async (index) => { await get().session.moveRollback(index); bump(); afterMutate(); },
 
     ensureKernel: async () => {

@@ -191,12 +191,14 @@ export class CadSession {
     return this.finish(before, evalsBefore, draft, undefined, false, {}, stepLabel(op, suppressed ? "Suppress" : "Unsuppress"));
   }
 
-  /** Delete an operation. Downstream operations that referenced it will error. */
+  /** Delete an operation, by its id or by the id of something it created (a feature, a joint, a sketch).
+   *  Downstream operations that referenced it will error. */
   async deleteOperation(opId: string): Promise<DispatchResult> {
     const before = this.doc;
     const evalsBefore = this.evaluations;
     const draft = clone(before);
-    const idx = draft.operations.findIndex((o) => o.opId === opId);
+    let idx = draft.operations.findIndex((o) => o.opId === opId);
+    if (idx < 0) idx = draft.operations.findIndex((o) => o.createdIds.includes(opId));
     if (idx < 0) return this.fail(`No operation "${opId}"`);
     const [gone] = draft.operations.splice(idx, 1);
     if (draft.rollbackIndex > idx) draft.rollbackIndex--;

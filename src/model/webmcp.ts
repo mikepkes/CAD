@@ -94,7 +94,7 @@ export interface WebMcpHost {
   newDocument?: () => Promise<void>;
   undo?: () => void;
   redo?: () => void;
-  deleteOperation?: (opId: string) => Promise<void>;
+  deleteOperation?: (opId: string) => Promise<{ ok: boolean; error?: string } | void>;
 }
 
 export const WEBMCP_INFO = {
@@ -271,7 +271,11 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
       inputSchema: { type: "object", required: ["opId"], properties: { opId: { type: "string" } } },
       annotations: DESTRUCTIVE,
     execute: async (args) => {
-        try { await host.deleteOperation!(String((args as { opId?: string }).opId)); return ok({ ok: true, state: host.describe() }); }
+        try {
+          const r = await host.deleteOperation!(String((args as { opId?: string }).opId));
+          if (r && r.ok === false) return { ...ok({ ok: false, error: r.error ?? "delete failed" }), isError: true };
+          return ok({ ok: true, state: host.describe() });
+        }
         catch (e) { return { ...ok({ ok: false, error: errorText(e) }), isError: true }; }
       },
     });

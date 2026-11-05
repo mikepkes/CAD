@@ -307,12 +307,15 @@ export const useMechanism = create<MechanismState>((set, get) => {
       set({ sweepValue: v });
     };
     const live = () => token === sweepToken && posedIn === scene;
+    // an edit while posing (the document replaced) ends the preview: what is built must show
+    const unsub = useStore.subscribe((s) => { if (s.session.doc !== d && live()) get().stopSweep(); });
     try {
       for (const [from, to] of legs) {
         if (!live()) break;
         await tween(from, to, (ms * Math.abs(to - from)) / Math.max(1e-9, span), (v) => { if (live()) at(v); }, live);
       }
     } finally {
+      unsub();
       if (live()) { endPosed(); set({ sweeping: null, sweepValue: null }); }
     }
   }
