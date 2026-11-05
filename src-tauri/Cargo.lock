@@ -3773,6 +3773,7 @@ dependencies = [
  "hidapi",
  "http-body-util",
  "libc",
+ "objc2",
  "serde",
  "serde_json",
  "tauri",

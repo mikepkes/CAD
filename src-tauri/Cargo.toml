@@ -28,6 +28,8 @@ hidapi = { version = "2.6", default-features = false, features = ["macos-shared-
 [target.'cfg(target_os = "macos")'.dependencies]
 # Loads 3Dconnexion's driver framework (3DxWare) at run time, when installed.
 libc = "0.2"
+# To tell WebKit not to suppress its content process while the page is hidden (see keep_awake).
+objc2 = "0.6"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # hidapi needs exactly one Linux backend: hidraw through a pure-Rust udev, so the

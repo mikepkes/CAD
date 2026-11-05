@@ -165,6 +165,27 @@ fn fresh_start() -> bool {
     std::env::var_os("VIBECAD_FRESH").is_some()
 }
 
+/// WebKit puts its content process to sleep (App Nap, "process suppression") whenever the page is not
+/// visible, and a geometry worker in the middle of a kernel call then creeps along in the brief wakes
+/// the sleeping process gets: a 40 ms mesh took two minutes with the window behind the terminal. The
+/// kernel's work is the point of this app whether or not the window is in front, so the page's
+/// visibility is not allowed to suppress the process.
+#[cfg(target_os = "macos")]
+fn keep_awake(webview: *mut objc2::runtime::AnyObject) {
+    use objc2::{msg_send, sel};
+    if webview.is_null() {
+        return;
+    }
+    unsafe {
+        let config: *mut objc2::runtime::AnyObject = msg_send![&*webview, configuration];
+        let prefs: *mut objc2::runtime::AnyObject = msg_send![&*config, preferences];
+        let responds: bool = msg_send![&*prefs, respondsToSelector: sel!(_setPageVisibilityBasedProcessSuppressionEnabled:)];
+        if responds {
+            let _: () = msg_send![&*prefs, _setPageVisibilityBasedProcessSuppressionEnabled: false];
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -172,6 +193,10 @@ pub fn run() {
         .manage(spacemouse::SpaceMouse::default())
         .invoke_handler(tauri::generate_handler![mcp_start, mcp_stop, mcp_status, mcp_respond, mcp_notify, save_render, spacemouse_status, fresh_start])
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            if let Some(w) = tauri::Manager::get_webview_window(app, "main") {
+                let _ = w.with_webview(|wv| keep_awake(wv.inner().cast()));
+            }
             // a 3D mouse: through 3Dconnexion's driver when it's installed (it
             // holds the device), else read directly, for the life of the app
             let shared: State<'_, spacemouse::SpaceMouse> = app.state();

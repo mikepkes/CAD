@@ -18,6 +18,7 @@ import {
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, threadRod,
   faceGeoms, faceKinds, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape, keepHalfSpace,
   readNurbsBrep, chainWire, surfaceExtrude, surfaceRevolve, surfaceLoft, surfaceSweep, planarPatch, sewShapes, thickenShape, offsetSurface, untrimFaces, hasSolid, buildSpineSweep, SpineSweepSpec,
+  lastMeshTimingText,
 } from "./occ/kernel";
 import { controlSpine, throughSpine, spineTable, paramAtLength, sectionPlane, easedLaw, curveDerivs } from "./geometry/spine";
 import { genericNames, extrudeNames, revolveNames, holeCutterNames, inheritNames, copyNames, edgeNamesOf } from "./naming";
@@ -2014,7 +2015,8 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
     done.applied = Object.keys(out);
     let meshed = 0;
     for (const body of bodies) {
-      buildProgress?.(FEATURE_SHARE + ((1 - FEATURE_SHARE) * meshed) / bodies.length, { phase: "meshing", done: meshed, total: bodies.length, id: body.id });
+      // the tick before each body carries how long the one before it took to mesh (a readout for the worker trace)
+      buildProgress?.(FEATURE_SHARE + ((1 - FEATURE_SHARE) * meshed) / bodies.length, { phase: "meshing", done: meshed, total: bodies.length, id: meshed ? `${body.id} (last: ${lastMeshTimingText()})` : body.id });
       meshed++;
       const row: SolidEval = { ...(out[body.id] ?? {}), featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance };
       if (body.decals?.length) row.threadDecals = body.decals;

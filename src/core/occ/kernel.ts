@@ -66,7 +66,7 @@ let ready = false;
 
 /** The kernel's wasm heap size in bytes (0 before it is loaded): a readout for the worker status. */
 export function kernelHeapBytes(): number {
-  try { return ((getOC() as unknown as { HEAPU8?: Uint8Array }).HEAPU8?.buffer.byteLength) ?? 0; } catch { return 0; }
+  try { return ((getOC() as unknown as { wasmMemory?: WebAssembly.Memory }).wasmMemory?.buffer.byteLength) ?? 0; } catch { return 0; }
 }
 
 export function initKernel(opts: KernelInitOptions): Promise<void> {
@@ -542,14 +542,26 @@ export function edgeLines(solid: Shape3D): Float32Array {
 }
 
 /** Tessellate a solid into a display mesh. Does NOT free the shape. */
+/** How long the last display mesh took, by stage (ms): a readout for the worker status. */
+let lastMeshTiming = "";
+export function lastMeshTimingText(): string { return lastMeshTiming; }
+
 export function meshShape(solid: Shape3D): SolidMesh {
+  const t0 = performance.now();
   const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 }) as ReturnType<Shape3D["mesh"]> & { faceGroups?: { start: number; count: number }[] };
+  const t1 = performance.now();
   const e = solid.meshEdges(EDGE_MESH) as { lines: number[]; edgeGroups?: { start: number; count: number }[] };
+  const t2 = performance.now();
+  const normals = smoothSeamNormals(m.vertices, m.normals);
+  const t3 = performance.now();
+  const edges = withoutSeams(solid, e);
+  const t4 = performance.now();
+  lastMeshTiming = `mesh ${Math.round(t1 - t0)} edges ${Math.round(t2 - t1)} normals ${Math.round(t3 - t2)} seams ${Math.round(t4 - t3)} ms, ${m.triangles.length / 3} tris`;
   return {
     positions: Float32Array.from(m.vertices),
-    normals: smoothSeamNormals(m.vertices, m.normals),
+    normals,
     indices: Uint32Array.from(m.triangles),
-    edges: withoutSeams(solid, e),
+    edges,
     triangleCount: m.triangles.length / 3,
     faceRanges: (m.faceGroups ?? []).flatMap((g) => [g.start, g.count]),
   };
