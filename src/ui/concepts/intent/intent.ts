@@ -25,7 +25,7 @@ import { quantize, formatValue } from "../../kit/numberMath";
 
 export const VIEWS = ["iso", "front", "top", "right", "back", "left", "bottom"] as const;
 export type ViewName = (typeof VIEWS)[number];
-export const PANELS: ConceptPanel[] = ["workbench", "ledger", "space", "lens", "materials", "mechanism"];
+export const PANELS: ConceptPanel[] = ["workbench", "ledger", "space", "lens", "materials", "mechanism", "notes"];
 
 /** The words people use for each panel: its switch's name first, then what else it is called or shows. */
 export const PANEL_ALIASES: Record<ConceptPanel, string[]> = {
@@ -35,6 +35,7 @@ export const PANEL_ALIASES: Record<ConceptPanel, string[]> = {
   space: ["space", "design space", "map", "trade-off"],
   materials: ["materials", "material", "finish", "colour", "color"],
   mechanism: ["mechanism", "flexure", "force", "travel"],
+  notes: ["notes", "note", "comments", "markup"],
   intent: [],
 };
 

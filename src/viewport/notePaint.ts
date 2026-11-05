@@ -52,3 +52,22 @@ export async function rasterizeNote(drawing: NoteDrawing | undefined, size = 768
   paintStrokes(ctx, drawing?.strokes ?? [], px);
   return canvas.toDataURL("image/png").split(",")[1];
 }
+
+/** A captured view as small as it reads well: the PNG, or a JPEG of it when that is smaller (a shaded
+ *  render usually is, by several times). Falls back to the PNG where there is no canvas. */
+export async function compactImage(pngDataUrl: string, quality = 0.85): Promise<string> {
+  try {
+    const img = await loadImage(pngDataUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width; canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return pngDataUrl;
+    ctx.fillStyle = "#ffffff"; // JPEG has no alpha
+    ctx.fillRect(0, 0, img.width, img.height);
+    ctx.drawImage(img, 0, 0);
+    const jpeg = canvas.toDataURL("image/jpeg", quality);
+    return jpeg.startsWith("data:image/jpeg") && jpeg.length < pngDataUrl.length ? jpeg : pngDataUrl;
+  } catch {
+    return pngDataUrl;
+  }
+}
