@@ -1,7 +1,9 @@
 // The agent's side of notes: draw a diagram with note.add (path data), list and
 // read notes back (strokes as path data, the background as an image block), look
 // at a drawing with notes_render — on the in-app surface and the headless server.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
+import type Anthropic from "@anthropic-ai/sdk";
+import { buildTools as buildAgentTools, runAgent, setAgentClientFactory, type MessagesClient } from "../src/model/agent";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { realSession } from "./helpers";
@@ -93,6 +95,36 @@ describe("notes over WebMCP", () => {
     const { tools } = appHost();
     for (const n of ["notes_list", "notes_get", "notes_render"]) expect(tools.find((t) => t.name === n)!.annotations).toMatchObject({ readOnlyHint: true });
     expect(tools.find((t) => t.name === "note.delete")!.annotations).toMatchObject({ destructiveHint: true });
+  });
+});
+
+describe("notes for the in-app agent", () => {
+  afterEach(() => setAgentClientFactory(null));
+
+  it("lists notes, and sees a drawing and its captured view as images", async () => {
+    const session = realSession();
+    await session.dispatch("note.add", { title: "Look", author: "human", drawing: { background: PNG, strokes: [{ path: "M0 0 L10 10" }] } });
+    const id = session.doc.notes![0].id;
+    let n = 0;
+    const sent: Anthropic.MessageParam[][] = [];
+    const turns = [
+      { content: [{ type: "tool_use", id: "t1", name: "notes_list", input: {} }, { type: "tool_use", id: "t2", name: "notes_get", input: { id } }, { type: "tool_use", id: "t3", name: "notes_render", input: { id } }], stop_reason: "tool_use" },
+      { content: [{ type: "text", text: "seen" }], stop_reason: "end_turn" },
+    ] as unknown as Anthropic.Message[];
+    const fake: MessagesClient = { messages: { create: async (body) => { sent.push(structuredClone(body.messages)); return turns[n++]; } } };
+    setAgentClientFactory(() => fake);
+    const tools: { name: string; ok: boolean }[] = [];
+    await runAgent({
+      apiKey: "k", model: "m", history: [{ role: "user", content: "what did I draw?" }], registry: createDefaultRegistry(),
+      ctx: { describe: () => ({}), runCommand: async () => ({ ok: true }), render: async () => { throw new Error("no"); }, notes: () => session.doc.notes ?? [], renderNote: async () => PNG_B64 },
+      onText: () => {}, onTool: (name, ok) => tools.push({ name, ok }),
+    });
+    expect(tools).toEqual([{ name: "notes_list", ok: true }, { name: "notes_get", ok: true }, { name: "notes_render", ok: true }]);
+    const results = (sent[1].at(-1)!.content as Anthropic.ToolResultBlockParam[]);
+    expect(JSON.parse(results[0].content as string).notes[0]).toMatchObject({ id, hasBackground: true });
+    expect((results[1].content as { type: string }[]).map((c) => c.type)).toEqual(["text", "image"]);
+    expect((results[2].content as { type: string; source: { data: string } }[])[0].source.data).toBe(PNG_B64);
+    expect(buildAgentTools(createDefaultRegistry()).some((t) => t.name === "note__add")).toBe(true);
   });
 });
 

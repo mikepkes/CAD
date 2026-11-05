@@ -69,6 +69,10 @@ the agent has everything it needs to call it. Command tools:
 Plus timeline / query / history tools:
 
 - `get_document` — parameters, sketches (with DoF/status), and the timeline
+- notes: `note__add` / `note__update` / `note__stroke__add` / `note__stroke__clear`
+  / `note__delete` write notes (strokes as SVG path data in a 1000×1000 canvas,
+  or points in 0..1); `notes_list` and `notes_get` read them back, strokes as
+  path data (signed `agent` unless the call names an `author`)
 - `describe_sketch` — every entity with **solved coordinates**, constraints, and
   the DoF/conflict diagnosis (use this to decide what to constrain next)
 - `list_timeline`, `edit_operation`, `suppress_operation`, `delete_operation`,
