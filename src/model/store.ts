@@ -1067,7 +1067,11 @@ export const useStore = create<AppState>((set, get) => {
         await runDispatch("configuration.update", { configuration: get().session.doc.activeConfiguration, values: { [name]: expr } });
         return;
       }
-      const op = get().session.timeline.find((o) => o.type === "parameter.add" && o.params.name === name);
+      // The latest operation that gives this parameter its value is the one to edit: its `parameter.add`, or a
+      // `parameter.set` since (an agent's, a sweep's). Editing the add alone would be undone on replay by every
+      // set after it, and the slider would seem to do nothing.
+      const ops = get().session.timeline.filter((o) => (o.type === "parameter.add" || o.type === "parameter.set") && o.params.name === name);
+      const op = ops[ops.length - 1];
       if (op) await get().editOperation(op.opId, { ...op.params, name, expression: expr });
       else await runDispatch("parameter.set", { name, expression: expr });
     },

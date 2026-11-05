@@ -1718,7 +1718,10 @@ function stepFrame(doc: CadDocument, f: FeatureDef, reads: Body[]): Rigid {
       if (f.kind === "extrude" && f.extent === "toFace") return IDENTITY;
       return rigidOfPlane(resolveSketchPlane(sk));
     }
-    case "fillet": case "chamfer": return reads[0] && byNameOnly(f.edges) ? reads[0].frame ?? IDENTITY : IDENTITY;
+    // a blend or a draft works in its body's component frame whatever selects its edges or faces (see
+    // componentPose), so its result moves rigidly with the body: keyed in the body's frame, it replays as
+    // the component poses instead of running again at every pose (and every step after it with it)
+    case "fillet": case "chamfer": case "draft": return reads[0]?.frame ?? IDENTITY;
     case "thicken": case "untrim": case "stitch": return reads[0]?.frame ?? IDENTITY;
     default: return IDENTITY;
   }

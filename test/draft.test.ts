@@ -112,4 +112,35 @@ describe("feature.draft on a moved component", () => {
     expect(Math.abs(posed.solids[ext].volume! - restVolume)).toBeLessThan(1e-3); // the same body, turned
     expect(posed.solids[ext].bounds!.max.z).toBeGreaterThan(10); // and it really is posed
   });
+
+  it("replays from cache as the lid turns: a pose runs no kernel step again", async () => {
+    const { InlineGeometryBackend } = await import("../src/core/geometry/backend");
+    const s = realSession();
+    await s.dispatch("parameter.add", { name: "turn", expression: "0", min: 0, max: 180 });
+    const cmp = (await s.dispatch("component.create", { name: "lid" })).createdIds[0];
+    const sk = (await s.dispatch("sketch.create", { plane: "XY", component: cmp })).createdIds[0];
+    await s.dispatch("sketch.addRectangle", { sketch: sk, corner: { x: 10, y: -10 }, opposite: { x: 30, y: 10 } });
+    await s.dispatch("feature.extrude", { sketch: sk, distance: "4" });
+    const hole = (await s.dispatch("sketch.create", { plane: "XY", component: cmp })).createdIds[0];
+    await s.dispatch("sketch.addRectangle", { sketch: hole, corner: { x: 17, y: -3 }, opposite: { x: 23, y: 3 } });
+    await s.dispatch("feature.extrude", { sketch: hole, distance: "4", operation: "cut" });
+    await s.dispatch("feature.draft", { angle: "-2", faces: { inBox: { min: { x: 16, y: -4, z: -1 }, max: { x: 24, y: 4, z: 5 } } }, requireEffect: true });
+    await s.dispatch("feature.fillet", { radius: "0.5", edges: { inPlane: { plane: "XY", offset: 4 }, parallelTo: "X" }, requireEffect: true });
+    const boss = (await s.dispatch("sketch.create", { plane: "XY", offset: 4, component: cmp })).createdIds[0];
+    await s.dispatch("sketch.addRectangle", { sketch: boss, corner: { x: 12, y: -2 }, opposite: { x: 15, y: 2 } });
+    await s.dispatch("feature.extrude", { sketch: boss, distance: "2", operation: "join" }); // a step after the blends: it must replay too
+    await s.dispatch("joint.create", { kind: "revolute", moved: cmp, baseOrigin: { x: 0, y: 0, z: 4 }, movedOrigin: { x: 0, y: 0, z: 4 }, axis: { x: 0, y: 1, z: 0 }, value: "-turn" });
+    const backend = new InlineGeometryBackend();
+    const cache = (backend as unknown as { cache: { hits: number; misses: number } }).cache;
+    await backend.evaluate(s.doc);
+    await s.dispatch("parameter.set", { name: "turn", expression: "60" });
+    await backend.evaluate(s.doc); // the first pose away from rest is keyed in the lid's own frame: built once
+    const misses = cache.misses;
+    for (const turn of [90, 135, 180, 45]) {
+      await s.dispatch("parameter.set", { name: "turn", expression: String(turn) });
+      const r = await backend.evaluate(s.doc);
+      expect(Object.values(r.solids).find((x) => x.error)).toBeUndefined();
+    }
+    expect(cache.misses).toBe(misses); // every later pose replayed every step
+  });
 });
