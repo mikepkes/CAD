@@ -303,7 +303,7 @@ export const useMechanism = create<MechanismState>((set, get) => {
       const scope = resolveParameters(d.parameters.map((q) => (q.name === drive.name ? { ...q, expr: fmt(v, 6) } : q))).scope;
       const worlds = worldOf(d, scope);
       scene.setAnimationPose(worlds);
-      poseHingeStrips(scene, d, worlds);
+      poseHingeStrips(scene, d, worlds, scope);
       set({ sweepValue: v });
     };
     const live = () => token === sweepToken && posedIn === scene;

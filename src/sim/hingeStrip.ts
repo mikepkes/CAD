@@ -53,6 +53,20 @@ export function bentStripPath(e: StripEnds, n = 24): { points: Vec3[]; tangents:
  *  faces, four long edges and both end outlines. */
 export function bentStripMesh(e: StripEnds, across: Vec3, width: number, thickness: number, n = 24): SolidMesh {
   const { points, tangents } = bentStripPath(e, n);
+  return stripMeshAlong(points, tangents, across, width, thickness);
+}
+
+/** A strip through a polyline (a solved beam's nodes): the tangent at a corner
+ *  is the mean of its two segments', so the section is mitred there. */
+export function polylineStripMesh(points: Vec3[], across: Vec3, width: number, thickness: number): SolidMesh {
+  const n = points.length - 1;
+  const seg = (i: number) => unit(sub(points[Math.min(n, i + 1)], points[Math.max(0, i)]));
+  const tangents = points.map((_, i) => (i === 0 ? seg(0) : i === n ? seg(n - 1) : unit(add(seg(i - 1), seg(i)))));
+  return stripMeshAlong(points, tangents, across, width, thickness);
+}
+
+function stripMeshAlong(points: Vec3[], tangents: Vec3[], across: Vec3, width: number, thickness: number): SolidMesh {
+  const n = points.length - 1;
   const W = unit(across);
   const rings = points.map((p, i) => {
     const N = unit(cross(W, tangents[i]));

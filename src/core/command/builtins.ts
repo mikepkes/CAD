@@ -787,6 +787,7 @@ export const BUILTINS: CommandDef<any>[] = [
             width: { type: ["number", "string"] }, thickness: { type: ["number", "string"] }, profile: { type: "string", enum: ["straight", "cosine"] }, material: { type: "string", description: "Strip material id (default: the base component's)." },
             via: { type: "array", description: "Corners the strip runs through between its ends (base frame, as modelled): it is straight from point to point. Each coordinate a number or an expression.", items: { type: "object", required: ["x", "y"], properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] } } } },
             when: { type: "string", description: "The strip is there only while this expression is non-zero (an optional spring); switched off, it carries nothing." },
+            draw: { type: "boolean", description: "Draw the strip from its solve (thickness in the base's XY plane, width along Z, through its deformed shape at every pose) instead of sketching it: a spring seen stretching, a beam seen bending." },
           },
         },
         solve: { type: "boolean", description: "The value is solved so every closing joint's connectors meet (closed loops); `value` only seeds it." },
@@ -821,7 +822,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A shaft that turns and slides in its bearing, 0–40 mm of travel", params: { kind: "cylindrical", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "spin", slide: "travel", limits: { slide: { min: 0, max: 40 } } } },
       { note: "A ball joint leaning 20° toward +Y, in a 30° cone", params: { kind: "ball", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 50 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, ball: { tilt: 20, heading: 90 }, limits: { tilt: { max: 30 } } } },
     ],
-    apply(draft, p: { kind?: JointKind; slide?: number | string; ball?: Partial<Record<"tilt" | "heading" | "spin", number | string>>; limits?: Partial<Record<JointDof, JointLimit>>; planar?: Partial<Record<"x" | "y" | "angle", number | string>>; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string; via?: { x: number | string; y: number | string }[]; when?: string }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string; from?: ExprVec3; to?: ExprVec3 }; name?: string }, ctx) {
+    apply(draft, p: { kind?: JointKind; slide?: number | string; ball?: Partial<Record<"tilt" | "heading" | "spin", number | string>>; limits?: Partial<Record<JointDof, JointLimit>>; planar?: Partial<Record<"x" | "y" | "angle", number | string>>; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string; via?: { x: number | string; y: number | string }[]; when?: string; draw?: boolean }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string; from?: ExprVec3; to?: ExprVec3 }; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
@@ -859,7 +860,7 @@ export const BUILTINS: CommandDef<any>[] = [
       }
       // so may a connector point
       const baseO = exprPoint(p.baseOrigin, scope, "baseOrigin"), movedO = exprPoint(p.movedOrigin, scope, "movedOrigin");
-      let beam: { width: number; thickness: number; profile: "straight" | "cosine"; material?: string; exprs?: Partial<Record<"width" | "thickness", string>>; via?: { x: number; y: number }[]; viaExprs?: { x: string; y: string }[]; when?: string } | undefined;
+      let beam: { width: number; thickness: number; profile: "straight" | "cosine"; material?: string; exprs?: Partial<Record<"width" | "thickness", string>>; via?: { x: number; y: number }[]; viaExprs?: { x: string; y: string }[]; when?: string; draw?: boolean } | undefined;
       if (kind === "beam") {
         const sec = flexureSection({ length: 1, width: p.beam!.width, thickness: p.beam!.thickness }, scope);
         const exprs = sec.exprs ? { ...(sec.exprs.width ? { width: sec.exprs.width } : {}), ...(sec.exprs.thickness ? { thickness: sec.exprs.thickness } : {}) } : undefined;
@@ -873,6 +874,7 @@ export const BUILTINS: CommandDef<any>[] = [
           ...(via ? { via: via.map((q) => ({ x: q.value.x, y: q.value.y })) } : {}),
           ...(via?.some((q) => q.exprs) ? { viaExprs: via.map((q, i) => ({ x: q.exprs?.x ?? String(p.beam!.via![i].x), y: q.exprs?.y ?? String(p.beam!.via![i].y) })) } : {}),
           ...(when ? { when } : {}),
+          ...(p.beam!.draw ? { draw: true } : {}),
         };
       }
       if (p.closes && p.solve) throw new Error("a closing joint is the constraint; give `solve` to the joints it determines");

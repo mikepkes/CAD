@@ -147,7 +147,7 @@ function placePosed(p: NonNullable<typeof pose>) {
   if (!scene) return;
   const doc = useStore.getState().session.doc, worlds = worldOf(doc, p.scope);
   scene.setAnimationPose(exploded(worlds, p.explode.by, p.explode.k));
-  poseHingeStrips(scene, doc, worlds); // a living hinge bends with the pose
+  poseHingeStrips(scene, doc, worlds, p.scope); // a living hinge bends, a drawn spring stretches, with the pose
 }
 
 /** What fading `ids` draws see-through: a component's bodies and sketches, and its sub-components'; a body or sketch id

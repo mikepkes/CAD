@@ -27,7 +27,8 @@ import type { Shape3D } from "replicad";
 import { Vec3 } from "../math/vec";
 import { Rigid, IDENTITY, axisAngle, compose, invert, applyPoint, applyVec } from "../math/transform";
 import { resolveComponentWorld } from "./recompute";
-import { flexureStripMeshes } from "../sim/hingeStrip";
+import { flexureStripMeshes, polylineStripMesh } from "../sim/hingeStrip";
+import { drawnBeamShapes } from "../sim/flexure";
 import { SheetState, SheetFold, SheetRow, blankEdges, contourBlank, addFlange, jogFolds, flatPointOf, chordAcross, isSequenced } from "./sheet";
 import { sequenceAngles, sequenceUVs, sequencePaper } from "./sheetSequence";
 import { buildSheet, SheetBuild } from "./sheetBuild";
@@ -63,8 +64,8 @@ export interface SolidEval {
   sheet?: SheetRow;
   /** The component this row belongs to when no sketch says (a drawn hinge strip: the moved part's). */
   componentId?: string;
-  /** A drawn element, not a built body: a flexure joint's strip, bent with the pose (src/sim/hingeStrip.ts). */
-  drawn?: "hinge";
+  /** A drawn element, not a built body: a flexure joint's strip bent with the pose, or a beam element drawn from its solve (src/sim/hingeStrip.ts). */
+  drawn?: "hinge" | "beam";
 }
 
 /** Evaluate a parametric expression, writing the value back onto `holder[key]Value`. */
@@ -2016,9 +2017,16 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
       out[body.id] = row;
     }
     // the living hinges, drawn bent between the parts they join
-    for (const s of flexureStripMeshes(doc, resolveComponentWorld(doc, scope), IDENTITY)) {
+    const world = resolveComponentWorld(doc, scope);
+    for (const s of flexureStripMeshes(doc, world, IDENTITY)) {
       const id = `${s.joint.id}:strip`;
       out[id] = { featureId: id, name: `${s.joint.name} strip`, sketchId: "", distance: 0, mesh: s.mesh, bounds: s.bounds, componentId: s.joint.moved, drawn: "hinge" };
+    }
+    // ...and the beams drawn from their solve, bent as they stand
+    for (const b of drawnBeamShapes(doc, scope, world)) {
+      const id = `${b.joint.id}:beam`;
+      const mesh = polylineStripMesh(b.points, b.across, b.joint.beam!.width, b.joint.beam!.thickness);
+      out[id] = { featureId: id, name: b.joint.name, sketchId: "", distance: 0, mesh, bounds: meshBounds(mesh.positions), componentId: b.joint.base, drawn: "beam" };
     }
     done.solids = out;
   } finally {
@@ -2295,6 +2303,37 @@ export function exportFusedBlob(doc: CadDocument, scope: Scope, format: "stl" | 
     for (const s of partials) s.delete();
     for (const b of bodies) b.shape.delete();
   }
+}
+
+/** The whole model fused, as a display mesh (every body but the reference parts). */
+export function exportFusedMesh(doc: CadDocument, scope: Scope): SolidMesh | null {
+  if (!isKernelReady()) return null;
+  const { bodies } = evaluateBodies(doc, scope);
+  const partials: Shape3D[] = [];
+  try {
+    let fused: Shape3D | null = null;
+    for (const b of bodies) {
+      if (isReferenceBody(doc, b)) continue;
+      fused = fused ? fuseShapes(fused, b.shape) : b.shape;
+      if (fused !== b.shape) partials.push(fused);
+    }
+    return fused ? meshShape(fused) : null;
+  } catch {
+    return null;
+  } finally {
+    for (const s of partials) s.delete();
+    for (const b of bodies) b.shape.delete();
+  }
+}
+
+/** The drawn elements of a model at a placement — the living hinges' strips and the beams drawn from
+ *  their solve — as meshes, each with the component it belongs to. */
+export function drawnElementMeshes(doc: CadDocument, scope: Scope): { name: string; componentId: string; mesh: SolidMesh }[] {
+  const world = resolveComponentWorld(doc, scope);
+  return [
+    ...flexureStripMeshes(doc, world, IDENTITY).map((s) => ({ name: `${s.joint.name} strip`, componentId: s.joint.moved, mesh: s.mesh })),
+    ...drawnBeamShapes(doc, scope, world).map((b) => ({ name: b.joint.name, componentId: b.joint.base, mesh: polylineStripMesh(b.points, b.across, b.joint.beam!.width, b.joint.beam!.thickness) })),
+  ];
 }
 
 /**

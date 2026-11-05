@@ -188,6 +188,23 @@ export function solveBeamElement(j: Joint, E: number, end: { dx: number; dy: num
   return flip > 0 ? sol : { ...sol, reaction: { fx: -sol.reaction.fx, fy: sol.reaction.fy, m: -sol.reaction.m }, nodes: sol.nodes.map((q) => ({ x: -q.x, y: q.y })) };
 }
 
+/** Every drawn beam (`beam.draw`) solved at a placement: its deformed strip's
+ *  nodes in the world, and its width direction (the base part's Z). */
+export function drawnBeamShapes(doc: CadDocument, scope: Scope, world: Map<string, Rigid>): { joint: Joint; points: { x: number; y: number; z: number }[]; across: { x: number; y: number; z: number } }[] {
+  const out: { joint: Joint; points: { x: number; y: number; z: number }[]; across: { x: number; y: number; z: number } }[] = [];
+  for (const j of activeBeams(doc, scope)) {
+    if (!j.beam!.draw || j.error) continue;
+    const props = propsOf(doc, j, scope);
+    if (!props) continue;
+    const Wb = world.get(j.base) ?? IDENTITY;
+    let nodes: { x: number; y: number }[];
+    try { nodes = solveBeamElement(j, props.E, beamEnd(j, world)).nodes; } catch { continue; }
+    const a = j.baseOrigin;
+    out.push({ joint: j, points: nodes.map((q) => applyPoint(Wb, { x: a.x + q.x, y: a.y + q.y, z: a.z })), across: applyVec(Wb, { x: 0, y: 0, z: 1 }) });
+  }
+  return out;
+}
+
 function materialOf(doc: CadDocument, j: Joint, scope: Record<string, number>): Material | undefined {
   if (j.beam) return j.beam.material ? doc.materials[j.beam.material] : materialForComponent(doc, j.base, scope);
   return j.flexure!.material ? doc.materials[j.flexure!.material] : materialForComponent(doc, j.moved, scope);

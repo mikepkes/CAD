@@ -9,8 +9,10 @@ import { CadDocument } from "../document";
 import { resolveParameters } from "../parameters";
 import { WorkPlane } from "../../geometry/plane";
 import { initKernel, isKernelReady, KernelInitOptions, Edge3D, kernelErrorMessage } from "../occ/kernel";
-import { evaluateFeatures, evaluateFeaturesStaged, StagedEvaluation, withBuildProgress, type BuildProgressSink, type BuildStep, featureEdges, exportFeatureBytes, exportFusedBlob, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
+import { evaluateFeatures, evaluateFeaturesStaged, StagedEvaluation, withBuildProgress, type BuildProgressSink, type BuildStep, featureEdges, exportFeatureBytes, exportFusedBlob, exportFusedMesh, drawnElementMeshes, printPartsByMaterial, collideFeatures, CollisionResult, GeometryCache, SolidEval, bodyTopology, BodyTopology, bodyDistance, analyzeBodies, BodyAnalysisResult } from "../features";
 import { meshesTo3mf } from "../export/threemf";
+import { meshesToStlBinary } from "../export/stl";
+import { materialForComponent } from "../document";
 import { hasFlexures } from "../../sim/flexure";
 import { placeComponentSketches, placeParametricPoints } from "../recompute";
 import { expandAssembly, hasAssemblyPatterns, instanceSolids } from "../assembly";
@@ -161,6 +163,9 @@ function poseDoc(doc: CadDocument, overrides?: Record<string, string>): CadDocum
  *  prints as it stands. */
 async function exportModelBytes(doc: CadDocument, format: ExportFormat): Promise<Uint8Array | null> {
   let printed = doc;
+  // the drawn elements (hinge strips, beams drawn from their solve) at rest, in the world: they are part of the
+  // print, but not kernel bodies, so an STL or 3MF carries their meshes (a STEP cannot)
+  let drawn: { name: string; componentId: string; mesh: { positions: Float32Array; indices: Uint32Array } }[] = [];
   if (hasFlexures(doc)) {
     // at rest: every joint drive at 0, so geometry drawn to follow one (a bent
     // beam) is unbent too. A drive is a slider (a bounded parameter) a joint's
@@ -168,14 +173,21 @@ async function exportModelBytes(doc: CadDocument, format: ExportFormat): Promise
     // where the pivots are) keeps its value, or the hinges would print at zero.
     const drives = Object.fromEntries(Object.values(doc.joints).filter((j) => !j.solve && !j.closes && j.kind !== "beam")
       .flatMap((j) => doc.parameters.filter((p) => p.min !== undefined && p.max !== undefined && new RegExp(`\\b${p.name}\\b`).test([j.valueExpr, ...Object.values(j.planar ?? {})].join(" "))).map((p) => [p.name, "0"])));
-    printed = { ...poseDoc(doc, drives), joints: {} };
+    const rest = poseDoc(doc, drives);
+    try { drawn = drawnElementMeshes(rest, scopeOf(rest)); } catch { drawn = []; }
+    printed = { ...rest, joints: {} };
     placeComponentSketches(printed, scopeOf(printed));
   }
   const scope = scopeOf(printed);
   const geo = geometryDoc(printed, scope);
   if (format === "3mf") {
     const parts = printPartsByMaterial(geo, scopeOf(geo));
-    return parts.length ? meshesTo3mf(parts.map((p) => ({ name: p.name, color: p.color, positions: p.mesh.positions, indices: p.mesh.indices })), "model") : null;
+    const extra = drawn.map((d) => ({ name: d.name, color: materialForComponent(doc, d.componentId)?.color, positions: d.mesh.positions, indices: d.mesh.indices }));
+    return parts.length || extra.length ? meshesTo3mf([...parts.map((p) => ({ name: p.name, color: p.color, positions: p.mesh.positions, indices: p.mesh.indices })), ...extra], "model") : null;
+  }
+  if (format === "stl" && drawn.length) {
+    const fused = exportFusedMesh(geo, scopeOf(geo));
+    return new Uint8Array(meshesToStlBinary([...(fused ? [fused] : []), ...drawn.map((d) => d.mesh)]));
   }
   const blob = exportFusedBlob(geo, scopeOf(geo), format);
   return blob ? new Uint8Array(await blob.arrayBuffer()) : null;

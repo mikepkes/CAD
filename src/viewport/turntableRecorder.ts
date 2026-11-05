@@ -115,7 +115,7 @@ export async function recordTurntable(scene: SceneManager, doc: CadDocument, sol
         worlds = resolveComponentWorld(doc, scope);
       }
       scene.setAnimationPose(worlds);
-      if (opts.param) poseHingeStrips(scene, doc, worlds); // a living hinge bends with the pose
+      if (opts.param) poseHingeStrips(scene, doc, worlds, scope); // a living hinge bends, a drawn spring stretches, with the pose
       const [dx, dy, dz] = orbitDirection(az0 + 360 * rev * u, elevation);
       cam.position.set(center.x + R * dx, center.y + R * dy, center.z + R * dz);
       cam.up.set(0, 0, 1); cam.lookAt(center); cam.updateMatrixWorld();

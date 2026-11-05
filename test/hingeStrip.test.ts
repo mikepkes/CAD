@@ -91,3 +91,68 @@ describe("flexureStripEnds", () => {
     expect(flexureStripEnds(joint(undefined), new Map(), IDENTITY)).toBeUndefined();
   });
 });
+
+describe("drawn beams", async () => {
+  const { polylineStripMesh } = await import("../src/sim/hingeStrip");
+  const { drawnBeamShapes } = await import("../src/sim/flexure");
+  const { translation } = await import("../src/math/transform");
+  const { realSession } = await import("./helpers");
+
+  it("a strip through a polyline mitres its corners and keeps its section", () => {
+    const m = polylineStripMesh([{ x: 0, y: 0, z: 0 }, { x: 10, y: 0, z: 0 }, { x: 10, y: 10, z: 0 }], { x: 0, y: 0, z: 1 }, 6, 1);
+    expect(m.triangleCount).toBe(2 * 4 * 2 + 4);
+    const zs: number[] = [];
+    for (let i = 2; i < m.positions.length; i += 3) zs.push(m.positions[i]);
+    expect(near(Math.max(...zs) - Math.min(...zs), 6)).toBe(true);
+  });
+
+  it("is solved at the parts' placement: straight at rest, bent when the moved part is displaced", async () => {
+    const s = realSession();
+    await s.dispatch("material.create", { name: "PP", kind: "plastic", youngsModulus: 1200, allowableStrain: 0.1 });
+    const mat = Object.keys(s.doc.materials)[0];
+    await s.dispatch("material.assign", { material: mat });
+    const cmp = (await s.dispatch("component.create", { name: "slider" })).createdIds[0];
+    await s.dispatch("parameter.add", { name: "pull", expression: "0", min: 0, max: 3 });
+    await s.dispatch("joint.create", { kind: "slider", moved: cmp, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, value: "pull" });
+    await s.dispatch("joint.create", { kind: "beam", moved: cmp, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 20, y: 0, z: 0 }, beam: { width: 6, thickness: 1, draw: true }, name: "spring" });
+    const { resolveParameters } = await import("../src/core/parameters");
+    const { resolveComponentWorld } = await import("../src/core/recompute");
+    const at = (pull: number) => {
+      const scope = { ...resolveParameters(s.doc.parameters).scope, pull };
+      const world = resolveComponentWorld(s.doc, scope);
+      return drawnBeamShapes(s.doc, scope, world);
+    };
+    const rest = at(0);
+    expect(rest.length).toBe(1);
+    expect(rest[0].points[0]).toEqual({ x: 0, y: 0, z: 0 });
+    const end = rest[0].points[rest[0].points.length - 1];
+    expect(near(end.x, 20, 1e-6) && near(end.y, 0, 1e-6)).toBe(true);
+    // the moved part slides 2 along X: the strip's far end follows it (an axial stretch; a straight strip stays straight)
+    const pulled = at(2);
+    const tip = pulled[0].points[pulled[0].points.length - 1];
+    expect(near(tip.x, 22, 1e-3)).toBe(true);
+    expect(translation({ x: 0, y: 0, z: 0 })).toBeTruthy();
+  });
+});
+
+describe("drawn elements in an export", async () => {
+  const { drawnElementMeshes } = await import("../src/core/features");
+  const { realSession } = await import("./helpers");
+  const { resolveParameters } = await import("../src/core/parameters");
+
+  it("lists each drawn beam at the document's pose, with the component it prints with", async () => {
+    const s = realSession();
+    await s.dispatch("material.create", { name: "PP", kind: "plastic", youngsModulus: 1200, allowableStrain: 0.1 });
+    await s.dispatch("material.assign", { material: Object.keys(s.doc.materials)[0] });
+    const cmp = (await s.dispatch("component.create", { name: "slider" })).createdIds[0];
+    await s.dispatch("parameter.add", { name: "pull", expression: "0", min: 0, max: 3 });
+    await s.dispatch("joint.create", { kind: "slider", moved: cmp, baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 1, y: 0, z: 0 }, value: "pull" });
+    await s.dispatch("joint.create", { kind: "beam", moved: cmp, baseOrigin: { x: 0, y: 0, z: 3 }, movedOrigin: { x: 20, y: 0, z: 3 }, beam: { width: 6, thickness: 1, draw: true }, name: "spring" });
+    const drawn = drawnElementMeshes(s.doc, resolveParameters(s.doc.parameters).scope);
+    expect(drawn.map((d) => d.name)).toEqual(["spring"]);
+    expect(drawn[0].componentId).toBe(s.doc.rootComponentId);
+    const zs: number[] = [];
+    for (let i = 2; i < drawn[0].mesh.positions.length; i += 3) zs.push(drawn[0].mesh.positions[i]);
+    expect(near(Math.min(...zs), 0) && near(Math.max(...zs), 6)).toBe(true); // 6 wide along Z about z = 3
+  });
+});

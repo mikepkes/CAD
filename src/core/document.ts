@@ -867,6 +867,10 @@ export interface BeamSection {
   /** The strip is there only while this expression is non-zero (an optional
    *  spring behind a checkbox or a count): switched off, it carries nothing. */
   when?: string;
+  /** Draw the strip from its solve: `thickness` thick in the base's XY plane,
+   *  `width` along its Z, through the deformed strip's nodes at every pose
+   *  (src/sim/hingeStrip.ts), instead of sketching it. */
+  draw?: boolean;
 }
 
 /** A named attachment frame on a component, in that component's LOCAL coordinates.
