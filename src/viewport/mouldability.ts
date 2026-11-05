@@ -21,6 +21,10 @@ export interface MouldMesh { positions: Float32Array; indices: Uint32Array; norm
 /** Per-triangle verdicts, as the shader reads them off a vertex attribute. */
 export const MOULD = { ok: 0, steep: 1, undercut: 2 } as const;
 
+/** The check's result: a verdict per vertex (the shader's attribute) and, per triangle, which half forms it:
+ *  +1 the cavity (it looks along the pull), −1 the core (against it), 0 a wall or an undercut. */
+export interface MouldCheck { flags: Float32Array[]; sides: Int8Array[] }
+
 const GRID = 96;
 const EPS = 1e-4;
 // A blocker is a face with real extent across the pull. A display mesh triangulates a shallow cone or a
@@ -31,6 +35,11 @@ const BLOCK_MIN = Math.sin((5 * Math.PI) / 180);
 /** Per mesh, one flag per vertex (MOULD.*): the verdict of the triangle that wrote it last. Meshes over
  *  `maxTriangles` in all are given up on (every flag `ok`), so a huge model doesn't stall the view. */
 export function mouldFlags(meshes: MouldMesh[], pull: Vec3, draftDeg: number, maxTriangles = 400_000): Float32Array[] {
+  return mouldCheck(meshes, pull, draftDeg, maxTriangles).flags;
+}
+
+/** The check itself: the flags, and each triangle's half. */
+export function mouldCheck(meshes: MouldMesh[], pull: Vec3, draftDeg: number, maxTriangles = 400_000): MouldCheck {
   const pl = Math.hypot(pull.x, pull.y, pull.z) || 1;
   const p = { x: pull.x / pl, y: pull.y / pl, z: pull.z / pl };
   // a frame across the pull: u, v span the projection plane
@@ -38,7 +47,8 @@ export function mouldFlags(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
   const u = norm(cross(a, p)), v = cross(p, u);
   const total = meshes.reduce((s, m) => s + m.indices.length / 3, 0);
   const out = meshes.map((m) => new Float32Array(m.positions.length / 3));
-  if (total === 0) return out;
+  const sides = meshes.map((m) => new Int8Array(m.indices.length / 3));
+  if (total === 0) return { flags: out, sides };
   const sinDraft = Math.sin((draftDeg * Math.PI) / 180);
 
   // every triangle projected: (u, v) of its corners, its height along the pull at each corner, its normal's pull component
@@ -71,7 +81,7 @@ export function mouldFlags(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
       minV = Math.min(minV, tr.av, tr.bv, tr.cv); maxV = Math.max(maxV, tr.av, tr.bv, tr.cv);
     }
   });
-  if (total > maxTriangles) return out;
+  if (total > maxTriangles) return { flags: out, sides };
 
   // bucket the triangles that can block a ray (the ones with some extent across the pull)
   const su = (maxU - minU) || 1, sv = (maxV - minV) || 1;
@@ -105,14 +115,43 @@ export function mouldFlags(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
 
   for (const tr of tris) {
     const qu = (tr.au + tr.bu + tr.cu) / 3, qv = (tr.av + tr.bv + tr.cv) / 3, h = (tr.ah + tr.bh + tr.ch) / 3;
-    let flag: number;
-    if (tr.d >= sinDraft) flag = blocked(qu, qv, h, 1, tr) ? MOULD.undercut : MOULD.ok;           // the cavity's face
-    else if (tr.d <= -sinDraft) flag = blocked(qu, qv, h, -1, tr) ? MOULD.undercut : MOULD.ok;    // the core's face
+    let flag: number, side = 0;
+    if (tr.d >= sinDraft) { flag = blocked(qu, qv, h, 1, tr) ? MOULD.undercut : MOULD.ok; side = flag === MOULD.ok ? 1 : 0; }           // the cavity's face
+    else if (tr.d <= -sinDraft) { flag = blocked(qu, qv, h, -1, tr) ? MOULD.undercut : MOULD.ok; side = flag === MOULD.ok ? -1 : 0; }   // the core's face
     else flag = blocked(qu, qv, h, 1, tr) && blocked(qu, qv, h, -1, tr) ? MOULD.undercut : MOULD.steep; // a wall: steep, or boxed in
     const I = meshes[tr.mesh].indices, f = out[tr.mesh];
     f[I[tr.tri]] = flag; f[I[tr.tri + 1]] = flag; f[I[tr.tri + 2]] = flag;
+    sides[tr.mesh][tr.tri / 3] = side;
   }
-  return out;
+  return { flags: out, sides };
+}
+
+/** The parting line: every mesh edge where a cavity-formed triangle meets a core-formed one, as line segments
+ *  (flat xyz pairs). Where the two halves meet across a wall there is no such edge: the wall shows as steep,
+ *  and the line stops at it. Edges are matched by position, so a seam's doubled vertices still pair up. */
+export function partingSegments(meshes: MouldMesh[], sides: Int8Array[]): Float32Array {
+  const out: number[] = [];
+  meshes.forEach((m, mi) => {
+    const P = m.positions, I = m.indices, S = sides[mi];
+    if (!S) return;
+    const key = (i: number) => `${Math.round(P[3 * i] * 1e4)},${Math.round(P[3 * i + 1] * 1e4)},${Math.round(P[3 * i + 2] * 1e4)}`;
+    // each edge, by its two corners' positions: the halves of the triangles on it
+    const edges = new Map<string, { a: number; b: number; cavity: boolean; core: boolean }>();
+    for (let t = 0; t < I.length; t += 3) {
+      const side = S[t / 3];
+      if (!side) continue;
+      for (let k = 0; k < 3; k++) {
+        const a = I[t + k], b = I[t + ((k + 1) % 3)];
+        const ka = key(a), kb = key(b);
+        const ek = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+        let e = edges.get(ek);
+        if (!e) { e = { a, b, cavity: false, core: false }; edges.set(ek, e); }
+        if (side > 0) e.cavity = true; else e.core = true;
+      }
+    }
+    for (const e of edges.values()) if (e.cavity && e.core) out.push(P[3 * e.a], P[3 * e.a + 1], P[3 * e.a + 2], P[3 * e.b], P[3 * e.b + 1], P[3 * e.b + 2]);
+  });
+  return Float32Array.from(out);
 }
 
 /** A summary for a readout: how much of the surface each verdict covers (triangle counts). */

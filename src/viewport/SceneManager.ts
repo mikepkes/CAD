@@ -43,7 +43,7 @@ import { prefersReducedMotion } from "./motion";
 import { LensPass, type LensSpec } from "./lensPass";
 import { onViewportTheme, viewportColors } from "./palette";
 import { WORLD_VERT, curvatureColors, draftFrag, zebraFrag } from "./analysisShaders";
-import { mouldFlags } from "./mouldability";
+import { mouldCheck, partingSegments } from "./mouldability";
 import { HATCH_ANGLES } from "../core/drawingAnnotations"; // the shop drawing's section hatching, part by part
 
 /** Options for an offscreen still (render_view). A free camera — `azimuthDeg` /
@@ -213,6 +213,8 @@ export class SceneManager {
   private datumMeshes = new Map<string, THREE.Mesh>();
   private datumGroup = new THREE.Group();
   private ghostGroup = new THREE.Group();
+  /** The parting line of the two-plate mould check, while the draft display is on. */
+  private mouldLineGroup = new THREE.Group();
   /** The motion study's ghosts (setMotionGhosts): the moving parts sweeping round, see-through. */
   private motionGroup = new THREE.Group();
   /** Their geometry, one per body, shared by every pose and kept while a study runs. */
@@ -319,6 +321,7 @@ export class SceneManager {
     this.buildAxes();
     this.buildPlanes();
     this.scene.add(this.ghostGroup);
+    this.scene.add(this.mouldLineGroup);
     this.scene.add(this.motionGroup);
     this.scene.add(this.regionGroup);
     this.scene.add(this.previewSolidGroup);
@@ -1417,13 +1420,25 @@ export class SceneManager {
   /** Run (or reuse) the mould check for the bodies shown, when the draft display is on. */
   private refreshMould(data: ViewData) {
     const a = data.analysis;
-    if (a?.mode !== "draft" || !data.solids?.length) { if (this.mouldVerdicts.size) { this.mouldVerdicts.clear(); this.mouldKey = ""; } return; }
+    if (a?.mode !== "draft" || !data.solids?.length) { if (this.mouldVerdicts.size) { this.mouldVerdicts.clear(); this.mouldKey = ""; this.clearGroup(this.mouldLineGroup); } return; }
     const list = data.solids.filter((s) => !s.variant && !s.reference);
     const key = `${a.pull.x},${a.pull.y},${a.pull.z}|${a.draftDeg}|${list.map((s) => s.id ?? "").join(",")}`;
     if (key === this.mouldKey && list.every((s) => this.mouldVerdicts.has(s.positions))) return;
-    const flags = mouldFlags(list.map((s) => ({ positions: s.positions, indices: s.indices, normals: s.normals })), a.pull, a.draftDeg);
+    const meshes = list.map((s) => ({ positions: s.positions, indices: s.indices, normals: s.normals }));
+    const { flags, sides } = mouldCheck(meshes, a.pull, a.draftDeg);
     this.mouldVerdicts = new Map(list.map((s, i) => [s.positions, flags[i]]));
     this.mouldKey = key;
+    // the parting line: where the cavity's faces meet the core's, drawn over the model
+    this.clearGroup(this.mouldLineGroup);
+    const seg = partingSegments(meshes, sides);
+    if (seg.length) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(seg, 3));
+      const mat = new THREE.LineBasicMaterial({ color: 0x1a1a1a, depthTest: true, transparent: true, opacity: 0.95 });
+      const lines = new THREE.LineSegments(geo, mat);
+      lines.renderOrder = 2;
+      this.mouldLineGroup.add(lines);
+    }
   }
 
   update(data: ViewData) {

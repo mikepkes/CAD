@@ -25,6 +25,7 @@
   --k-an-zebra: repeating-linear-gradient(90deg, #0d0d0d 0 8px, #fff 8px 16px);
   --k-an-curvature: linear-gradient(90deg, #0000ff, #ffffff, #ff0000);
   --k-an-draft-ok: rgb(69, 199, 97);
+  --k-an-draft-core: rgb(77, 143, 219);
   --k-an-draft-steep: rgb(237, 199, 64);
   --k-an-undercut: rgb(219, 69, 64);
   --k-an-glass: rgba(140, 173, 230, 0.5);

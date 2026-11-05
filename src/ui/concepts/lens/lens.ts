@@ -221,7 +221,7 @@ export function legendFor(mode: LensMode): LegendSpec {
   switch (mode) {
     // the --k-an-* tokens in kit.css mirror the shader colours (SceneManager.analysisMaterial / lensPass.ts)
     case "zebra": return { ramp: { css: "var(--k-an-zebra)", min: "break = crease", mid: "kink = tangent", max: "smooth = G2" } };
-    case "draft": return { rows: [{ color: "var(--k-an-draft-ok)", label: "Cavity or core forms it" }, { color: "var(--k-an-draft-steep)", label: "Wall steeper than the draft angle" }, { color: "var(--k-an-undercut)", label: "Undercut: no mould half reaches it" }] };
+    case "draft": return { rows: [{ color: "var(--k-an-draft-ok)", label: "The cavity forms it (looking along the pull)" }, { color: "var(--k-an-draft-core)", label: "The core forms it; the dark line between is the parting line" }, { color: "var(--k-an-draft-steep)", label: "Wall steeper than the draft angle" }, { color: "var(--k-an-undercut)", label: "Undercut: no mould half reaches it" }] };
     case "curvature": return { ramp: { css: "var(--k-an-curvature)", min: "concave", mid: "flat", max: "convex" } };
     case "xray": return { rows: [{ color: "var(--k-an-glass)", label: "Body as glass" }, { color: "var(--k-an-edge)", label: "Every edge, hidden ones too" }] };
     case "overhang": return { rows: [

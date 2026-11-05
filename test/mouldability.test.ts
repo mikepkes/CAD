@@ -1,7 +1,7 @@
 // The two-plate mould check (src/viewport/mouldability.ts): which faces each half forms, walls that need
 // draft, and true undercuts — faces with material in the way of the half that would form them.
 import { describe, it, expect } from "vitest";
-import { mouldFlags, mouldSummary, MOULD } from "../src/viewport/mouldability";
+import { mouldFlags, mouldCheck, partingSegments, mouldSummary, MOULD } from "../src/viewport/mouldability";
 
 /** An axis-aligned box as a 12-triangle mesh with outward winding. */
 function box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) {
@@ -107,5 +107,31 @@ describe("mouldFlags with smooth normals", () => {
     expect(s.steep).toBe(0);
     expect(s.undercut).toBe(0);
     expect(s.ok).toBe(2 * N);
+  });
+});
+
+describe("the parting line", () => {
+  it("runs round a barrel where its upper cone meets its lower one, and a plain block has none", () => {
+    // a barrel: r 14 at mid-height, 1° in to each face, as two cones sharing their vertices at the ridge
+    const N = 32, h = 4, r1 = 14 - (h / 2) * Math.tan(Math.PI / 180), r0 = 14;
+    const P: number[] = [], I: number[] = [];
+    for (let i = 0; i < N; i++) { const a = (i / N) * 2 * Math.PI, c = Math.cos(a), s = Math.sin(a); P.push(r1 * c, r1 * s, 0, r0 * c, r0 * s, h / 2, r1 * c, r1 * s, h); }
+    P.push(0, 0, 0, 0, 0, h);
+    const bc = 3 * N, tc = 3 * N + 1;
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N;
+      I.push(3 * i, 3 * j, 3 * j + 1, 3 * i, 3 * j + 1, 3 * i + 1);             // lower cone, outward
+      I.push(3 * i + 1, 3 * j + 1, 3 * j + 2, 3 * i + 1, 3 * j + 2, 3 * i + 2); // upper cone
+      I.push(bc, 3 * j, 3 * i);                                                 // bottom
+      I.push(tc, 3 * i + 2, 3 * j + 2);                                         // top
+    }
+    const m = { positions: new Float32Array(P), indices: new Uint32Array(I) };
+    const { sides } = mouldCheck([m], Z, 0.5);
+    const seg = partingSegments([m], sides);
+    expect(seg.length / 6).toBe(N); // one segment per ridge edge
+    for (let k = 0; k < seg.length; k += 3) expect(seg[k + 2]).toBeCloseTo(h / 2, 6); // all at the ridge
+    const block = box(0, 0, 0, 10, 10, 4);
+    const b = mouldCheck([block], Z, 1);
+    expect(partingSegments([block], b.sides).length).toBe(0); // its walls are steep: no cavity/core edge
   });
 });

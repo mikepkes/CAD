@@ -425,7 +425,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
   if (host.setAnalysis) {
     tools.push({
       name: "set_analysis",
-      description: "Switch the viewport's surface-quality display (then render_view to see it): `mode` none / zebra (reflected stripes — broken at a crease, kinked at a tangent-only seam, flowing at G2) / curvature (colour map: blue concave, white flat, red convex; `quantity` mean / gaussian / max / min) / draft (a two-plate mould opening along `pull`: green = the cavity or the core forms the face, yellow = a wall steeper than `draftDeg` that needs draft, red = a true undercut — a face with material in the way of the half that would form it, checked by ray against every body); `stripes` for zebra; `combs` draws curvature combs on curved edges and sketch curves.",
+      description: "Switch the viewport's surface-quality display (then render_view to see it): `mode` none / zebra (reflected stripes — broken at a crease, kinked at a tangent-only seam, flowing at G2) / curvature (colour map: blue concave, white flat, red convex; `quantity` mean / gaussian / max / min) / draft (a two-plate mould opening along `pull`: green = the cavity forms the face, blue = the core does, a dark line between them = the parting line, yellow = a wall steeper than `draftDeg` that needs draft, red = a true undercut — a face with material in the way of the half that would form it, checked by ray against every body); `stripes` for zebra; `combs` draws curvature combs on curved edges and sketch curves.",
       inputSchema: {
         type: "object",
         properties: {
