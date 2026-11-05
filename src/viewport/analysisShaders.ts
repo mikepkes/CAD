@@ -15,11 +15,12 @@ export const NO_MASK: ShaderMask = { pars: "", call: "" };
 
 /** World position and normal; gl_Position computed as three's built-in materials do, so a second pass lands on the same depth. */
 export const WORLD_VERT = `
-  varying vec3 vN; varying vec3 vW;
+  attribute float mould;
+  varying vec3 vN; varying vec3 vW; varying float vMould;
   #include <clipping_planes_pars_vertex>
   void main() {
     vec4 w = modelMatrix * vec4(position, 1.0);
-    vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
+    vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); vMould = mould;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     #include <clipping_planes_vertex>
@@ -27,7 +28,7 @@ export const WORLD_VERT = `
 
 /** As WORLD_VERT, plus the vertex colour (curvature). */
 export const COLOR_VERT = `
-  varying vec3 vN; varying vec3 vW; varying vec3 vC;
+  varying vec3 vN; varying vec3 vW; varying vec3 vC; varying float vMould;
   #include <clipping_planes_pars_vertex>
   void main() {
     vec4 w = modelMatrix * vec4(position, 1.0);
@@ -57,9 +58,12 @@ export const zebraFrag = (m: ShaderMask = NO_MASK) => `
 /** Draft colours (--k-an-draft-ok / --k-an-draft-steep / --k-an-undercut), as the shader's vec3 literals. */
 export const DRAFT_RGB = { ok: "vec3(0.27, 0.78, 0.38)", undercut: "vec3(0.86, 0.27, 0.25)", steep: "vec3(0.93, 0.78, 0.25)" };
 
-/** Faces that draft out of the mould along the pull direction are green, undercuts red, walls steeper than the draft angle yellow. */
+/** A two-plate mould opening along the pull: faces the cavity (looking along the pull) or the core (looking
+ *  against it) can form are green; walls steeper than the draft angle yellow; a face no half reaches — the
+ *  `mould` vertex attribute, from viewport/mouldability.ts — red. Without the attribute (a lens pass before the
+ *  check ran) the verdict is by normal alone. */
 export const draftFrag = (m: ShaderMask = NO_MASK) => `
-  uniform vec3 pull; uniform float draft; varying vec3 vN; varying vec3 vW;
+  uniform vec3 pull; uniform float draft; varying vec3 vN; varying vec3 vW; varying float vMould;
   #include <clipping_planes_pars_fragment>
   ${m.pars}
   void main() {
@@ -67,7 +71,7 @@ export const draftFrag = (m: ShaderMask = NO_MASK) => `
     ${m.call}
     vec3 N = normalize(vN); if (!gl_FrontFacing) N = -N;
     float d = dot(N, pull);
-    vec3 c = d >= draft ? ${DRAFT_RGB.ok} : d <= -draft ? ${DRAFT_RGB.undercut} : ${DRAFT_RGB.steep};
+    vec3 c = vMould > 1.5 ? ${DRAFT_RGB.undercut} : abs(d) >= draft ? ${DRAFT_RGB.ok} : ${DRAFT_RGB.steep};
     float shade = 0.45 + 0.55 * abs(dot(N, normalize(cameraPosition - vW)));
     gl_FragColor = vec4(c * shade, 1.0);
   }`;

@@ -42,7 +42,7 @@ export interface LensFrame {
 
 export const MODES: { key: LensMode; label: string; title: string }[] = [
   { key: "zebra", label: "Zebra", title: "Reflected stripes: breaks and kinks show surface continuity" },
-  { key: "draft", label: "Draft", title: "Faces that draft out of the mould along the pull direction" },
+  { key: "draft", label: "Draft", title: "A two-plate mould opening along the pull: what each half forms, walls that need draft, and undercuts" },
   { key: "curvature", label: "Curvature", title: "Blue concave, white flat, red convex" },
   { key: "xray", label: "X-ray", title: "Bodies as glass with every edge, so holes read through" },
   { key: "overhang", label: "Overhang", title: "Faces that need support when printed" },
@@ -221,7 +221,7 @@ export function legendFor(mode: LensMode): LegendSpec {
   switch (mode) {
     // the --k-an-* tokens in kit.css mirror the shader colours (SceneManager.analysisMaterial / lensPass.ts)
     case "zebra": return { ramp: { css: "var(--k-an-zebra)", min: "break = crease", mid: "kink = tangent", max: "smooth = G2" } };
-    case "draft": return { rows: [{ color: "var(--k-an-draft-ok)", label: "Drafts out along the pull" }, { color: "var(--k-an-draft-steep)", label: "Steeper than the draft angle" }, { color: "var(--k-an-undercut)", label: "Undercut" }] };
+    case "draft": return { rows: [{ color: "var(--k-an-draft-ok)", label: "Cavity or core forms it" }, { color: "var(--k-an-draft-steep)", label: "Wall steeper than the draft angle" }, { color: "var(--k-an-undercut)", label: "Undercut: no mould half reaches it" }] };
     case "curvature": return { ramp: { css: "var(--k-an-curvature)", min: "concave", mid: "flat", max: "convex" } };
     case "xray": return { rows: [{ color: "var(--k-an-glass)", label: "Body as glass" }, { color: "var(--k-an-edge)", label: "Every edge, hidden ones too" }] };
     case "overhang": return { rows: [

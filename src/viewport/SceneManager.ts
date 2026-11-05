@@ -43,6 +43,7 @@ import { prefersReducedMotion } from "./motion";
 import { LensPass, type LensSpec } from "./lensPass";
 import { onViewportTheme, viewportColors } from "./palette";
 import { WORLD_VERT, curvatureColors, draftFrag, zebraFrag } from "./analysisShaders";
+import { mouldFlags } from "./mouldability";
 import { HATCH_ANGLES } from "../core/drawingAnnotations"; // the shop drawing's section hatching, part by part
 
 /** Options for an offscreen still (render_view). A free camera — `azimuthDeg` /
@@ -1409,8 +1410,25 @@ export class SceneManager {
 
   // ---- rendering the sketch ----
 
+  /** The two-plate mould check's verdicts per body (by its position array), while the draft display is on. */
+  private mouldVerdicts = new Map<Float32Array, Float32Array>();
+  private mouldKey = "";
+
+  /** Run (or reuse) the mould check for the bodies shown, when the draft display is on. */
+  private refreshMould(data: ViewData) {
+    const a = data.analysis;
+    if (a?.mode !== "draft" || !data.solids?.length) { if (this.mouldVerdicts.size) { this.mouldVerdicts.clear(); this.mouldKey = ""; } return; }
+    const list = data.solids.filter((s) => !s.variant && !s.reference);
+    const key = `${a.pull.x},${a.pull.y},${a.pull.z}|${a.draftDeg}|${list.map((s) => s.id ?? "").join(",")}`;
+    if (key === this.mouldKey && list.every((s) => this.mouldVerdicts.has(s.positions))) return;
+    const flags = mouldFlags(list.map((s) => ({ positions: s.positions, indices: s.indices })), a.pull, a.draftDeg);
+    this.mouldVerdicts = new Map(list.map((s, i) => [s.positions, flags[i]]));
+    this.mouldKey = key;
+  }
+
   update(data: ViewData) {
     this.lastData = data;
+    this.refreshMould(data);
     this.planeGroup.visible = data.showPlanes && data.mode === "model";
     this.datumGroup.visible = data.showPlanes && data.mode === "model";
     if (data.gridSize) this.applyGrid(data.gridSize);
@@ -1468,6 +1486,8 @@ export class SceneManager {
     }
     if (a.mode === "draft") {
       const p = new THREE.Vector3(a.pull.x, a.pull.y, a.pull.z).normalize();
+      const verdict = this.mouldVerdicts.get(s.positions);
+      if (verdict) geo.setAttribute("mould", new THREE.BufferAttribute(verdict, 1)); else if (geo.getAttribute("mould")) geo.deleteAttribute("mould");
       return new THREE.ShaderMaterial({
         uniforms: { pull: { value: p }, draft: { value: Math.sin((a.draftDeg * Math.PI) / 180) } },
         vertexShader: WORLD_VERT,
@@ -1541,6 +1561,7 @@ export class SceneManager {
   private renderSolid(s: SolidView, faded: boolean, index: number) {
     const geo = this.solidGeometry(s);
     if (geo.getAttribute("color")) geo.deleteAttribute("color"); // a curvature display's colours, from an earlier update
+    if (this.lastData?.analysis?.mode !== "draft" && geo.getAttribute("mould")) geo.deleteAttribute("mould"); // a mould check's verdicts, likewise
     // a texture wrapped round the part needs its wrap coordinates (cached per mesh); another material, none
     if (wrapsTexture(s.material)) { if (!geo.getAttribute("aWrap")) addWrapCoords(geo, s.positions, s.normals, s.material); }
     else if (geo.getAttribute("aWrap")) geo.deleteAttribute("aWrap");
