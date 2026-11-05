@@ -2,7 +2,7 @@
 // these. Each is documented with a JSON Schema + examples so it can be exposed
 // directly as an MCP tool.
 
-import { CadDocument, Material, RoleRef, MemberFeature, SurfaceFeature, SheetFoldDef, FlangeFeature, GearDim, GearFeature, GearKind, findConfiguration, JointKind, JointDof, JointLimit, JOINT_DOFS, isAngularDof } from "../document";
+import { CadDocument, Material, RoleRef, MemberFeature, SurfaceFeature, SheetFoldDef, FlangeFeature, GearDim, GearFeature, GearKind, findConfiguration, JointKind, JointDof, JointLimit, JOINT_DOFS, isAngularDof, FlexureSection } from "../document";
 import {
   DimensionConstraint,
   GeometricConstraint,
@@ -796,7 +796,11 @@ export const BUILTINS: CommandDef<any>[] = [
           required: ["length", "width", "thickness"],
           additionalProperties: false,
           description: "flexure only: the hinge strip (mm). length along the strip, thickness in the bending direction, width along the hinge axis. Each may be a number or an expression in the parameters, e.g. \"hingeT\".",
-          properties: { length: { type: ["number", "string"] }, width: { type: ["number", "string"] }, thickness: { type: ["number", "string"] }, material: { type: "string", description: "Hinge material id (default: the moved component's)." } },
+          properties: {
+            length: { type: ["number", "string"] }, width: { type: ["number", "string"] }, thickness: { type: ["number", "string"] }, material: { type: "string", description: "Hinge material id (default: the moved component's)." },
+            from: { type: "object", description: "Draw the strip bent: where it leaves the base part (base-local, as modelled; each coordinate a number or an expression). Needs `to`.", properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, z: { type: ["number", "string"] } }, required: ["x", "y", "z"] },
+            to: { type: "object", description: "Where the strip arrives on the moved part (moved-local, as modelled). With `from`, the strip is drawn `width` wide along `axis` and `thickness` thick, curved in one arc between the two as the parts move: straight at rest, a half-round when folded flat.", properties: { x: { type: ["number", "string"] }, y: { type: ["number", "string"] }, z: { type: ["number", "string"] } }, required: ["x", "y", "z"] },
+          },
         },
         base: { type: "string", description: "Base component id. Defaults to the root (ground)." },
         moved: { type: "string", description: "Component to position." },
@@ -817,7 +821,7 @@ export const BUILTINS: CommandDef<any>[] = [
       { note: "A shaft that turns and slides in its bearing, 0–40 mm of travel", params: { kind: "cylindrical", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, value: "spin", slide: "travel", limits: { slide: { min: 0, max: 40 } } } },
       { note: "A ball joint leaning 20° toward +Y, in a 30° cone", params: { kind: "ball", moved: "cmp3", baseOrigin: { x: 0, y: 0, z: 50 }, movedOrigin: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 1 }, ball: { tilt: 20, heading: 90 }, limits: { tilt: { max: 30 } } } },
     ],
-    apply(draft, p: { kind?: JointKind; slide?: number | string; ball?: Partial<Record<"tilt" | "heading" | "spin", number | string>>; limits?: Partial<Record<JointDof, JointLimit>>; planar?: Partial<Record<"x" | "y" | "angle", number | string>>; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string; via?: { x: number | string; y: number | string }[]; when?: string }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string }; name?: string }, ctx) {
+    apply(draft, p: { kind?: JointKind; slide?: number | string; ball?: Partial<Record<"tilt" | "heading" | "spin", number | string>>; limits?: Partial<Record<JointDof, JointLimit>>; planar?: Partial<Record<"x" | "y" | "angle", number | string>>; beam?: { width: number | string; thickness: number | string; profile?: "straight" | "cosine"; material?: string; via?: { x: number | string; y: number | string }[]; when?: string }; base?: string; moved: string; baseOrigin: ExprVec3; movedOrigin: ExprVec3; axis?: Vec3; value?: string; pin?: Vec3; slotBase?: string; slotPoint?: Vec3; slotDir?: Vec3; solve?: boolean; closes?: boolean; flexure?: { length: number | string; width: number | string; thickness: number | string; material?: string; from?: ExprVec3; to?: ExprVec3 }; name?: string }, ctx) {
       const base = p.base ?? draft.rootComponentId;
       if (!draft.components[base]) throw new Error(`No base component "${base}"`);
       if (!draft.components[p.moved]) throw new Error(`No component "${p.moved}"`);
@@ -845,6 +849,14 @@ export const BUILTINS: CommandDef<any>[] = [
       // a flexure dimension may be an expression: evaluate it now (and reject it before allocating)
       const scope = resolveParameters(draft.parameters).scope;
       const section = kind === "flexure" ? flexureSection(p.flexure!, scope) : undefined;
+      // ...and the strip's attachment points, when it is to be drawn
+      let strip: NonNullable<FlexureSection["strip"]> | undefined;
+      if (kind === "flexure" && (p.flexure!.from || p.flexure!.to)) {
+        if (!p.flexure!.from || !p.flexure!.to) throw new Error("a drawn flexure strip needs both `from` (on the base part) and `to` (on the moved part)");
+        const from = exprPoint(p.flexure!.from, scope, "flexure.from"), to = exprPoint(p.flexure!.to, scope, "flexure.to");
+        if (Math.hypot(to.value.x - from.value.x, to.value.y - from.value.y, to.value.z - from.value.z) < 1e-6) throw new Error("a flexure strip needs two distinct ends");
+        strip = { from: from.value, to: to.value, ...(from.exprs || to.exprs ? { exprs: { ...(from.exprs ? { from: from.exprs } : {}), ...(to.exprs ? { to: to.exprs } : {}) } } : {}) };
+      }
       // so may a connector point
       const baseO = exprPoint(p.baseOrigin, scope, "baseOrigin"), movedO = exprPoint(p.movedOrigin, scope, "movedOrigin");
       let beam: { width: number; thickness: number; profile: "straight" | "cosine"; material?: string; exprs?: Partial<Record<"width" | "thickness", string>>; via?: { x: number; y: number }[]; viaExprs?: { x: string; y: string }[]; when?: string } | undefined;
@@ -891,7 +903,7 @@ export const BUILTINS: CommandDef<any>[] = [
         ...(kind === "pin-slot" ? { pin: v3(p.pin!), slotBase: p.slotBase ?? base, slotPoint: v3(p.slotPoint!), slotDir: v3(p.slotDir!) } : {}),
         ...(p.solve ? { solve: true } : {}),
         ...(p.closes ? { closes: true } : {}),
-        ...(section ? { flexure: { ...section, ...(p.flexure!.material ? { material: p.flexure!.material } : {}) } } : {}),
+        ...(section ? { flexure: { ...section, ...(p.flexure!.material ? { material: p.flexure!.material } : {}), ...(strip ? { strip } : {}) } } : {}),
         ...(beam ? { beam } : {}),
         ...(planar ? { planar, planarValue: { x: 0, y: 0, angle: 0 } } : {}),
         ...(slideExpr !== undefined ? { slideExpr, slideValue: 0 } : {}),

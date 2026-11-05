@@ -21,6 +21,8 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
   { group: "Metal", name: "Black anodised", params: { kind: "metal", finish: "satin", color: "#34363b", roughness: 0.36 } },
   { group: "Plastic", name: "Gloss ABS", params: { kind: "plastic", finish: "gloss", color: "#f2f1ee" } },
   { group: "Plastic", name: "Matte black", params: { kind: "plastic", finish: "matte", color: "#202124" } },
+  // injection-moulded polypropylene impact copolymer: the living-hinge plastic (E and the strain the hinge may see, for the strain studies)
+  { group: "Plastic", name: "PP, moulded (living hinge)", params: { kind: "plastic", finish: "matte", color: "#e4e0d6", roughness: 0.6, youngsModulus: 1200, allowableStrain: 0.1 } },
   { group: "3D print", name: "PLA", params: { kind: "printed", finish: "satin", color: "#e8e4dc", layerHeight: 0.2, printAxis: "z", youngsModulus: 3500, allowableStrain: 0.02, layerFactor: 0.5 } },
   { group: "3D print", name: "PETG", params: { kind: "printed", finish: "silk", color: "#3a78c9", layerHeight: 0.2, printAxis: "z", youngsModulus: 2100, allowableStrain: 0.035, layerFactor: 0.6 } },
   { group: "3D print", name: "Silk PLA", params: { kind: "printed", finish: "silk", color: "#d8b25a", layerHeight: 0.16, printAxis: "z", youngsModulus: 3000, allowableStrain: 0.02, layerFactor: 0.5 } },

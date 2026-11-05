@@ -27,6 +27,7 @@ import type { Shape3D } from "replicad";
 import { Vec3 } from "../math/vec";
 import { Rigid, IDENTITY, axisAngle, compose, invert, applyPoint, applyVec } from "../math/transform";
 import { resolveComponentWorld } from "./recompute";
+import { flexureStripMeshes } from "../sim/hingeStrip";
 import { SheetState, SheetFold, SheetRow, blankEdges, contourBlank, addFlange, jogFolds, flatPointOf, chordAcross, isSequenced } from "./sheet";
 import { sequenceAngles, sequenceUVs, sequencePaper } from "./sheetSequence";
 import { buildSheet, SheetBuild } from "./sheetBuild";
@@ -60,6 +61,10 @@ export interface SolidEval {
   member?: { profile: string; length: number; angles: [number, number] };
   /** A sheet-metal (or paper) body: its rules, fold angles and flat pattern. `stale` once another feature has changed it while folded (the flat pattern no longer matches). */
   sheet?: SheetRow;
+  /** The component this row belongs to when no sketch says (a drawn hinge strip: the moved part's). */
+  componentId?: string;
+  /** A drawn element, not a built body: a flexure joint's strip, bent with the pose (src/sim/hingeStrip.ts). */
+  drawn?: "hinge";
 }
 
 /** Evaluate a parametric expression, writing the value back onto `holder[key]Value`. */
@@ -2009,6 +2014,11 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
         if (!keep) body.shape.delete();
       }
       out[body.id] = row;
+    }
+    // the living hinges, drawn bent between the parts they join
+    for (const s of flexureStripMeshes(doc, resolveComponentWorld(doc, scope), IDENTITY)) {
+      const id = `${s.joint.id}:strip`;
+      out[id] = { featureId: id, name: `${s.joint.name} strip`, sketchId: "", distance: 0, mesh: s.mesh, bounds: s.bounds, componentId: s.joint.moved, drawn: "hinge" };
     }
     done.solids = out;
   } finally {

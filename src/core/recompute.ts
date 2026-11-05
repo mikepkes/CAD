@@ -308,6 +308,13 @@ function placeComponents(doc: CadDocument, scope: Scope): Map<string, Rigid> {
     if (j.flexure?.exprs) for (const [k, e] of Object.entries(j.flexure.exprs) as ["length" | "width" | "thickness", string][]) {
       try { const v = compileExpr(e).eval(scope); if (Number.isFinite(v) && v > 0) j.flexure[k] = v; } catch { /* keep last */ }
     }
+    const strip = j.flexure?.strip;
+    if (strip?.exprs) for (const side of ["from", "to"] as const) {
+      const ex = strip.exprs[side];
+      if (ex) for (const [k, e] of Object.entries(ex) as ["x" | "y" | "z", string][]) {
+        try { const v = compileExpr(e).eval(scope); if (Number.isFinite(v)) strip[side][k] = v; } catch { /* keep last */ }
+      }
+    }
     if (j.beam?.exprs) for (const [k, e] of Object.entries(j.beam.exprs) as ["width" | "thickness", string][]) {
       try { const v = compileExpr(e).eval(scope); if (Number.isFinite(v) && v > 0) j.beam[k] = v; } catch { /* keep last */ }
     }

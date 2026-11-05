@@ -92,7 +92,7 @@ function buildView(s: AppState): ViewData {
     .map((sol) => {
       // Resolve the body's material from its owning component (bodies inherit;
       // instance bodies keep their source sketch id, so this resolves for them too).
-      const comp = sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined;
+      const comp = sol.componentId ?? (sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined);
       const mat = materialForComponent(doc, comp);
       const material = mat ? materialSpec(mat) : undefined;
       const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;

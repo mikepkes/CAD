@@ -11,6 +11,7 @@ export interface SolidEvalLike {
   mesh?: { positions: Float32Array; normals: Float32Array; indices: Uint32Array; edges: Float32Array; uvs?: Float32Array; paper?: PaperOverlay };
   bounds?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
   threadDecals?: SolidView["threadDecals"];
+  componentId?: string;
 }
 
 /** Resolve the store's raw solids into renderable bodies (material + wood frame +
@@ -22,7 +23,7 @@ export function buildBodies(doc: CadDocument, solidsMap: Record<string, SolidEva
     if (!sol.mesh || !bodyVisible(doc, sol, hidden)) continue; // a hidden body stays out of the video
     // Sketch-less bodies (primitives, …) have no sketch to name a component; they
     // live in the root component, so they'd otherwise drop out of the recording.
-    const componentId = (sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
+    const componentId = sol.componentId ?? (sol.sketchId ? doc.sketches[sol.sketchId]?.componentId : undefined) ?? doc.rootComponentId;
     const mat = materialForComponent(doc, componentId);
     const material = mat ? materialSpec(mat) : undefined;
     const woodFrame = material?.kind === "wood" && sol.bounds ? woodFrameFromBounds(sol.bounds, sol.featureId) : undefined;

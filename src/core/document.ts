@@ -841,6 +841,12 @@ export interface FlexureSection {
   /** Dimensions given as expressions in the parameters (e.g. one per print
    *  material); the numbers above are their last evaluation. */
   exprs?: Partial<Record<"length" | "width" | "thickness", string>>;
+  /** The strip itself, to be drawn bent: where it leaves the base part (`from`,
+   *  base-local) and arrives on the moved part (`to`, moved-local), as modelled
+   *  (the parts drawn in place). It is drawn `width` wide along the joint axis
+   *  and `thickness` thick, curved in one arc between the two as the parts move
+   *  (src/sim/hingeStrip.ts). */
+  strip?: { from: { x: number; y: number; z: number }; to: { x: number; y: number; z: number }; exprs?: { from?: Partial<Record<"x" | "y" | "z", string>>; to?: Partial<Record<"x" | "y" | "z", string>> } };
 }
 
 /** A beam element's strip: `width` (out of plane), `thickness` (in the bending
