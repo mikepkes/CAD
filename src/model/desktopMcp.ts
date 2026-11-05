@@ -21,6 +21,13 @@ export interface DesktopMcpStatus {
 }
 
 /** True when the page is hosted by the Tauri desktop shell. */
+/** The desktop app launched with `VIBECAD_FRESH` set: start with an empty document, not the autosaved
+ *  one (the way out when a saved document wedges the kernel on every launch). */
+export async function freshStart(): Promise<boolean> {
+  if (!isTauri()) return false;
+  try { const { invoke } = await import("@tauri-apps/api/core"); return !!(await invoke<boolean>("fresh_start")); } catch { return false; }
+}
+
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }

@@ -158,12 +158,19 @@ fn render_file_name(name: &str) -> Result<&str, String> {
     Ok(name)
 }
 
+/// Whether the app was launched with `VIBECAD_FRESH` set: the webview then starts with an empty
+/// document instead of the autosaved one — the way out when a saved document wedges the kernel.
+#[tauri::command]
+fn fresh_start() -> bool {
+    std::env::var_os("VIBECAD_FRESH").is_some()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState { bridge: Arc::new(Bridge::default()), server: Mutex::new(None) })
         .manage(spacemouse::SpaceMouse::default())
-        .invoke_handler(tauri::generate_handler![mcp_start, mcp_stop, mcp_status, mcp_respond, mcp_notify, save_render, spacemouse_status])
+        .invoke_handler(tauri::generate_handler![mcp_start, mcp_stop, mcp_status, mcp_respond, mcp_notify, save_render, spacemouse_status, fresh_start])
         .setup(|app| {
             // a 3D mouse: through 3Dconnexion's driver when it's installed (it
             // holds the device), else read directly, for the life of the app

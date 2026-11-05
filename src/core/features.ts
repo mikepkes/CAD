@@ -1325,7 +1325,18 @@ function applyDraft(scope: Scope, f: DraftFeature, bodies: Body[], out: Record<s
     if (!Number.isFinite(a) || a === 0) throw new Error("draft angle must be a non-zero number of degrees");
     if (Math.abs(a) >= 45) throw new Error("draft angle must be under 45°");
     const before = volumeOfShape(target.shape);
-    const drafted = draftFaces(target.shape, a, f.plane, f.offset, f.faces, f.faces.names?.length ? target.faceNames : undefined);
+    // A moved component's body is built where its joints put it, but the draft is defined as modelled: its
+    // parting plane and face box in the component's own frame. So the body is drafted in that frame and put
+    // back — the same faces, the same tilt, at every pose (a motion study's, a folded lid's).
+    const frame = target.frame ?? IDENTITY;
+    const posed = !samePose(frame, IDENTITY);
+    const local = posed ? transformShape(target.shape, invert(frame)) : target.shape;
+    let drafted: Shape3D;
+    try {
+      const d = draftFaces(local, a, f.plane, f.offset, f.faces, f.faces.names?.length ? target.faceNames : undefined);
+      if (!posed) drafted = d;
+      else { try { drafted = transformShape(d, frame); } finally { d.delete(); } }
+    } finally { if (posed) local.delete(); }
     const after = volumeOfShape(drafted);
     if (Number.isFinite(before) && !Number.isFinite(after)) {
       drafted.delete();

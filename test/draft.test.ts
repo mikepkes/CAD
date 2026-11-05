@@ -83,3 +83,31 @@ describe("feature.draft near curved faces", () => {
     expect(solids[d.createdIds[0]].error).toMatch(/changed nothing/);
   });
 });
+
+describe("feature.draft on a moved component", () => {
+  beforeAll(async () => { await initKernel({ wasmBinary: wasm }); }, 60000);
+
+  it("selects its faces as modelled, so a posed lid drafts the same walls", async () => {
+    const { InlineGeometryBackend } = await import("../src/core/geometry/backend");
+    const s = realSession();
+    await s.dispatch("parameter.add", { name: "turn", expression: "0", min: 0, max: 180 });
+    const cmp = (await s.dispatch("component.create", { name: "lid" })).createdIds[0];
+    const sk = (await s.dispatch("sketch.create", { plane: "XY", component: cmp })).createdIds[0];
+    await s.dispatch("sketch.addRectangle", { sketch: sk, corner: { x: 10, y: -10 }, opposite: { x: 30, y: 10 } });
+    const ext = (await s.dispatch("feature.extrude", { sketch: sk, distance: "4" })).createdIds[0];
+    const hole = (await s.dispatch("sketch.create", { plane: "XY", component: cmp })).createdIds[0];
+    await s.dispatch("sketch.addRectangle", { sketch: hole, corner: { x: 17, y: -3 }, opposite: { x: 23, y: 3 } });
+    await s.dispatch("feature.extrude", { sketch: hole, distance: "4", operation: "cut" });
+    const d = (await s.dispatch("feature.draft", { angle: "-2", faces: { inBox: { min: { x: 16, y: -4, z: -1 }, max: { x: 24, y: 4, z: 5 } } }, requireEffect: true })).createdIds[0];
+    await s.dispatch("joint.create", { kind: "revolute", moved: cmp, baseOrigin: { x: 0, y: 0, z: 4 }, movedOrigin: { x: 0, y: 0, z: 4 }, axis: { x: 0, y: 1, z: 0 }, value: "-turn" });
+    const backend = new InlineGeometryBackend();
+    const rest = await backend.evaluate(s.doc);
+    expect(rest.solids[d].error).toBeUndefined();
+    const restVolume = rest.solids[ext].volume!;
+    await s.dispatch("parameter.set", { name: "turn", expression: "135" });
+    const posed = await backend.evaluate(s.doc);
+    expect(posed.solids[d].error).toBeUndefined();         // the box is read as modelled, not in the world
+    expect(Math.abs(posed.solids[ext].volume! - restVolume)).toBeLessThan(1e-3); // the same body, turned
+    expect(posed.solids[ext].bounds!.max.z).toBeGreaterThan(10); // and it really is posed
+  });
+});

@@ -12,7 +12,7 @@ import { resolveParameters } from "../core/parameters";
 import { availableOps } from "./selectionOps";
 import { ChatEntry, describeDocument } from "./agent";
 import { createAgentController, AGENT_KEY_LS, AGENT_MODEL_LS } from "./agentController";
-import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus } from "./desktopMcp";
+import { DEFAULT_DESKTOP_MCP_PORT, DesktopMcpStatus, freshStart } from "./desktopMcp";
 import { createMcpController, WEBMCP_LS, DESKTOP_MCP_LS, DESKTOP_MCP_PORT_LS } from "./mcpController";
 import { getActiveScene } from "../viewport/sceneRef";
 import type { RenderViewOpts } from "../viewport/SceneManager";
@@ -1705,6 +1705,8 @@ export const useStore = create<AppState>((set, get) => {
       // a link to an example (?example=roubo) opens it; otherwise the autosaved document comes back
       const example = typeof location !== "undefined" ? new URLSearchParams(location.search).get("example") : null;
       if (example) { await get().openExample(example); return; }
+      // the desktop app launched to start fresh (VIBECAD_FRESH): the saved document stays saved, unopened
+      if (await freshStart()) { set({ lastMessage: "Started fresh: the saved document was not opened (VIBECAD_FRESH)." }); return; }
       let saved: string | null = null;
       try {
         saved = localStorage.getItem(AUTOSAVE_KEY);
