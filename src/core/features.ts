@@ -1286,9 +1286,11 @@ const bodyEdgeNames = (b: Body): string[] => edgeNamesOf(edgeGeoms(b.shape), b.f
 
 /** Fillet or chamfer the selected edges of the most recent body. */
 /** The pose a body's component stands in (identity for the root, or a part placed by no joint): a step whose
- *  selector is in as-modelled coordinates works in this frame, so it picks the same faces at every pose. */
-function componentPose(doc: CadDocument, scope: Scope, target: Body): Rigid {
-  const componentId = doc.sketches[target.sketchId]?.componentId;
+ *  selector is in as-modelled coordinates works in this frame, so it picks the same faces at every pose.
+ *  A patterned instance's step runs with its body moved to the template's pose (applyInTemplateFrame), so
+ *  the template's pose is the one to take off, not the instance's. */
+function componentPose(doc: CadDocument, scope: Scope, target: Body, f: FeatureDef): Rigid {
+  const componentId = f.instanceFrame ? f.instanceFrame.template : doc.sketches[target.sketchId]?.componentId;
   return (componentId && resolveComponentWorld(doc, scope).get(componentId)) || IDENTITY;
 }
 
@@ -1311,7 +1313,7 @@ function applyEdgeBlend(doc: CadDocument, scope: Scope, f: EdgeBlendFeature, bod
     if (!(size > 0)) throw new Error(`${f.kind} size must be positive`);
     const before = volumeOfShape(target.shape);
     // a selector in world terms (a plane, a point, a box, an axis) is read as modelled: in the component's frame
-    const frame = byNameOnly(f.edges) ? IDENTITY : componentPose(doc, scope, target);
+    const frame = byNameOnly(f.edges) ? IDENTITY : componentPose(doc, scope, target, f);
     const blended = inModelFrame(target.shape, frame, (local) => blendEdges(local, f.kind, size, f.edges, f.edges.names?.length ? bodyEdgeNames(target) : undefined));
     const after = volumeOfShape(blended);
     const dim = f.kind === "fillet" ? "radius" : "setback";
@@ -1347,7 +1349,7 @@ function applyDraft(doc: CadDocument, scope: Scope, f: DraftFeature, bodies: Bod
     // A moved component's body is built where its joints put it, but the draft is defined as modelled: its
     // parting plane and face box in the component's own frame. So the body is drafted in that frame and put
     // back — the same faces, the same tilt, at every pose (a motion study's, a folded lid's).
-    const drafted = inModelFrame(target.shape, componentPose(doc, scope, target), (local) => draftFaces(local, a, f.plane, f.offset, f.faces, f.faces.names?.length ? target.faceNames : undefined));
+    const drafted = inModelFrame(target.shape, componentPose(doc, scope, target, f), (local) => draftFaces(local, a, f.plane, f.offset, f.faces, f.faces.names?.length ? target.faceNames : undefined));
     const after = volumeOfShape(drafted);
     if (Number.isFinite(before) && !Number.isFinite(after)) {
       drafted.delete();
