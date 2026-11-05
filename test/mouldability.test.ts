@@ -131,3 +131,14 @@ describe("the parting line", () => {
     expect(partingSegments([block], b.sides).length).toBe(0); // its walls are steep: no cavity/core edge
   });
 });
+
+describe("windOutward", () => {
+  it("flips the triangles wound against their normals and leaves the others", async () => {
+    const { windOutward } = await import("../src/core/occ/kernel");
+    const V = [0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 3, 0, 0, 2, 1, 0];
+    const N = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]; // every corner looks +z
+    const I = new Uint32Array([0, 1, 2, 3, 5, 4]); // the first winds +z, the second −z
+    expect(windOutward(V, N, I)).toBe(1);
+    expect([...I]).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+});

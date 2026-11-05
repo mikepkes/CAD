@@ -542,6 +542,19 @@ export function edgeLines(solid: Shape3D): Float32Array {
 }
 
 /** Tessellate a solid into a display mesh. Does NOT free the shape. */
+/** Flip every triangle whose winding disagrees with its corners' normals (in place). */
+export function windOutward(V: ArrayLike<number>, N: ArrayLike<number>, I: number[] | Uint32Array): number {
+  let flipped = 0;
+  for (let t = 0; t + 2 < I.length; t += 3) {
+    const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+    const ux = V[b] - V[a], uy = V[b + 1] - V[a + 1], uz = V[b + 2] - V[a + 2], vx = V[c] - V[a], vy = V[c + 1] - V[a + 1], vz = V[c + 2] - V[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const d = nx * (N[a] + N[b] + N[c]) + ny * (N[a + 1] + N[b + 1] + N[c + 1]) + nz * (N[a + 2] + N[b + 2] + N[c + 2]);
+    if (d < 0) { const k = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = k; flipped++; }
+  }
+  return flipped;
+}
+
 /** How long the last display mesh took, by stage (ms): a readout for the worker status. */
 let lastMeshTiming = "";
 export function lastMeshTimingText(): string { return lastMeshTiming; }
@@ -550,6 +563,9 @@ export function meshShape(solid: Shape3D): SolidMesh {
   const t0 = performance.now();
   const m = solid.mesh({ tolerance: 0.05, angularTolerance: 0.25 }) as ReturnType<Shape3D["mesh"]> & { faceGroups?: { start: number; count: number }[] };
   const t1 = performance.now();
+  // the mesher winds a reversed face's triangles inside out (its vertex normals, from the surface, still point out
+  // of the solid): wound to agree with them, so a facet's normal always says which way the face looks
+  windOutward(m.vertices, m.normals, m.triangles);
   const e = solid.meshEdges(EDGE_MESH) as { lines: number[]; edgeGroups?: { start: number; count: number }[] };
   const t2 = performance.now();
   const normals = smoothSeamNormals(m.vertices, m.normals);
