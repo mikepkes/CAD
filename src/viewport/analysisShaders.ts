@@ -63,7 +63,7 @@ export const DRAFT_RGB = { ok: "vec3(0.27, 0.78, 0.38)", core: "vec3(0.30, 0.56,
  *  `mould` vertex attribute, from viewport/mouldability.ts — red. Without the attribute (a lens pass before the
  *  check ran) the verdict is by normal alone. */
 export const draftFrag = (m: ShaderMask = NO_MASK) => `
-  uniform vec3 pull; uniform float draft; varying vec3 vN; varying vec3 vW; varying float vMould;
+  uniform vec3 pull; uniform float draft; uniform float hasMould; varying vec3 vN; varying vec3 vW; varying float vMould;
   #include <clipping_planes_pars_fragment>
   ${m.pars}
   void main() {
@@ -71,7 +71,10 @@ export const draftFrag = (m: ShaderMask = NO_MASK) => `
     ${m.call}
     vec3 N = normalize(vN); if (!gl_FrontFacing) N = -N;
     float d = dot(N, pull);
-    vec3 c = vMould > 1.5 ? ${DRAFT_RGB.undercut} : d >= draft ? ${DRAFT_RGB.ok} : d <= -draft ? ${DRAFT_RGB.core} : ${DRAFT_RGB.steep};
+    // the check's verdict when it ran (a face read as a whole, no facet or seam jitter); by the normal before it has
+    vec3 c = hasMould > 0.5
+      ? (vMould > 2.5 ? ${DRAFT_RGB.core} : vMould > 1.5 ? ${DRAFT_RGB.undercut} : vMould > 0.5 ? ${DRAFT_RGB.steep} : ${DRAFT_RGB.ok})
+      : (d >= draft ? ${DRAFT_RGB.ok} : d <= -draft ? ${DRAFT_RGB.core} : ${DRAFT_RGB.steep});
     float shade = 0.45 + 0.55 * abs(dot(N, normalize(cameraPosition - vW)));
     gl_FragColor = vec4(c * shade, 1.0);
   }`;

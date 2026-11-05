@@ -1506,7 +1506,7 @@ export class SceneManager {
       const verdict = this.mouldVerdicts.get(s.positions);
       if (verdict) geo.setAttribute("mould", new THREE.BufferAttribute(verdict, 1)); else if (geo.getAttribute("mould")) geo.deleteAttribute("mould");
       return new THREE.ShaderMaterial({
-        uniforms: { pull: { value: p }, draft: { value: Math.sin((a.draftDeg * Math.PI) / 180) } },
+        uniforms: { pull: { value: p }, draft: { value: Math.sin((a.draftDeg * Math.PI) / 180) }, hasMould: { value: verdict ? 1 : 0 } },
         vertexShader: WORLD_VERT,
         fragmentShader: draftFrag(),
         side: THREE.DoubleSide,

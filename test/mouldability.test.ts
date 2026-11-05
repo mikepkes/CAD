@@ -30,7 +30,7 @@ describe("mouldFlags", () => {
     const m = box(0, 0, 0, 10, 10, 4);
     const [f] = mouldFlags([m], Z, 1);
     expect(at(m, f, 0, 0, 4)).toBe(MOULD.ok);    // top: the cavity
-    expect(at(m, f, 0, 10, 0)).toBe(MOULD.ok);   // bottom: the core
+    expect(at(m, f, 0, 10, 0)).toBe(MOULD.core); // bottom: the core
     expect(at(m, f, 0, 0, 0)).toBe(MOULD.steep); // a vertical wall
     expect(mouldSummary([m], [f])).toEqual({ ok: 4, steep: 8, undercut: 0 });
   });
@@ -41,7 +41,7 @@ describe("mouldFlags", () => {
     const lipOut = box(23, 4, 6, 26, 6, 8);        // its lip hangs over air (x 23–26)
     const lipIn = box(10, 4, 6, 13, 6, 8);         // a lip over the plate's top at x 10–13, z 6: material (the plate) below
     const flags = mouldFlags([plate, post, lipOut, lipIn], Z, 1);
-    expect(at(lipOut, flags[2], 23, 6, 6)).toBe(MOULD.ok);       // underside over air: the core reaches it
+    expect(at(lipOut, flags[2], 23, 6, 6)).toBe(MOULD.core);     // underside over air: the core reaches it
     expect(at(lipIn, flags[3], 10, 6, 6)).toBe(MOULD.undercut);  // underside over the plate: nothing reaches it
     expect(at(plate, flags[0], 0, 0, 4)).toBe(MOULD.ok);         // the plate top where nothing is above
   });

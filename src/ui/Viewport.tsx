@@ -102,6 +102,7 @@ function buildView(s: AppState): ViewData {
         normals: sol.mesh!.normals,
         indices: sol.mesh!.indices,
         edges: sol.mesh!.edges,
+        ...(sol.mesh!.faceRanges ? { faceRanges: sol.mesh!.faceRanges } : {}),
         ...(sol.mesh!.uvs ? { uvs: sol.mesh!.uvs } : {}),
         threadDecals: sol.threadDecals,
         material,

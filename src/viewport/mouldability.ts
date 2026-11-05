@@ -19,15 +19,18 @@ import type { Vec3 } from "../math/vec";
  *  not. A face whose lean varies (a round) keeps its facets. The facet always decides what a triangle blocks. */
 export interface MouldMesh { positions: Float32Array; indices: Uint32Array; faceRanges?: number[] }
 
-/** Per-triangle verdicts, as the shader reads them off a vertex attribute. */
-export const MOULD = { ok: 0, steep: 1, undercut: 2 } as const;
+/** Per-triangle verdicts, as the shader reads them off a vertex attribute: `ok` the cavity forms it, `core` the core
+ *  does (both formed: a summary counts them together), `steep` a wall, `undercut` a face no half reaches. */
+export const MOULD = { ok: 0, steep: 1, undercut: 2, core: 3 } as const;
 
 /** The check's result: a verdict per vertex (the shader's attribute) and, per triangle, which half forms it:
  *  +1 the cavity (it looks along the pull), −1 the core (against it), 0 a wall or an undercut. */
 export interface MouldCheck { flags: Float32Array[]; sides: Int8Array[] }
 
 const GRID = 96;
-const EPS = 1e-4;
+// A blocker stands at least this far off the face (mm): a facet's centre on a curved face sits a hair inside the
+// solid, and the first thing its ray meets is the neighbouring surface a sliver away, not material over it.
+const EPS = 0.05;
 // A blocker is a face with real extent across the pull. A display mesh triangulates a shallow cone or a
 // drafted wall with facets whose normals jitter a few degrees either side of the true one, so a facet
 // that looks slightly down must not count as material over its neighbour that looks slightly up.
@@ -138,7 +141,7 @@ export function mouldCheck(meshes: MouldMesh[], pull: Vec3, draftDeg: number, ma
     const qu = (tr.au + tr.bu + tr.cu) / 3, qv = (tr.av + tr.bv + tr.cv) / 3, h = (tr.ah + tr.bh + tr.ch) / 3;
     let flag: number, side = 0;
     if (tr.d >= sinDraft) { flag = blocked(qu, qv, h, 1, tr) ? MOULD.undercut : MOULD.ok; side = flag === MOULD.ok ? 1 : 0; }           // the cavity's face
-    else if (tr.d <= -sinDraft) { flag = blocked(qu, qv, h, -1, tr) ? MOULD.undercut : MOULD.ok; side = flag === MOULD.ok ? -1 : 0; }   // the core's face
+    else if (tr.d <= -sinDraft) { flag = blocked(qu, qv, h, -1, tr) ? MOULD.undercut : MOULD.core; side = flag === MOULD.core ? -1 : 0; } // the core's face
     else flag = blocked(qu, qv, h, 1, tr) && blocked(qu, qv, h, -1, tr) ? MOULD.undercut : MOULD.steep; // a wall: steep, or boxed in
     const I = meshes[tr.mesh].indices, f = out[tr.mesh];
     f[I[tr.tri]] = flag; f[I[tr.tri + 1]] = flag; f[I[tr.tri + 2]] = flag;
@@ -181,7 +184,7 @@ export function mouldSummary(meshes: MouldMesh[], flags: Float32Array[]): { ok: 
   meshes.forEach((m, i) => {
     for (let t = 0; t < m.indices.length; t += 3) {
       const f = flags[i][m.indices[t]];
-      if (f === MOULD.undercut) s.undercut++; else if (f === MOULD.steep) s.steep++; else s.ok++;
+      if (f === MOULD.undercut) s.undercut++; else if (f === MOULD.steep) s.steep++; else s.ok++; // ok: formed by either half
     }
   });
   return s;
