@@ -22,7 +22,18 @@ import type { ShopDrawing, SheetOptions } from "../core/drawings";
 export interface WorkerLike {
   postMessage(msg: unknown, transfer?: ArrayBuffer[]): void;
   onmessage: ((e: { data: unknown }) => void) | null;
+  /** The worker died on an uncaught error (a wasm abort, out of memory): nothing it was asked will answer. */
+  onerror?: ((e: { message?: string }) => void) | null;
   terminate(): void;
+}
+
+/** What the pool is waiting on, for a status readout (`geometryWorkerStatus`). */
+export interface PendingRequest { id: number; kind: string; worker: number; ms: number }
+
+let current: WorkerGeometryBackend | null = null;
+/** The live pool's pending requests and how long each has waited — what to look at when the model stops updating. */
+export function geometryWorkerStatus(): { workers: number; pending: PendingRequest[]; restarts: number } | null {
+  return current?.status() ?? null;
 }
 
 export interface WorkerBackendOptions {
@@ -32,6 +43,8 @@ export interface WorkerBackendOptions {
   spawn?: () => WorkerLike;
   /** Compiles the kernel's wasm once for every worker (default: compileKernel). */
   compile?: (wasmUrl: string) => Promise<WebAssembly.Module>;
+  /** A worker quiet this long with a request outstanding is restarted and its requests failed (default 120 s; 0 never). */
+  silenceMs?: number;
 }
 
 const spawnWebWorker = (): WorkerLike => new Worker(new URL("./geometry.worker.ts", import.meta.url), { type: "module" }) as unknown as WorkerLike;
@@ -65,29 +78,84 @@ export class WorkerGeometryBackend implements GeometryBackend {
   private readyResolvers: (() => void)[] = [];
   /** Which worker each chain of features was given (see planEvaluation): it stays there, where its cache is. */
   private placed = new Map<string, number>();
+  /** Per pending request: which worker has it, what it is, and when it was sent. */
+  private sent = new Map<number, { worker: number; kind: string; at: number }>();
+  /** When each worker last said anything (an answer or a progress tick). */
+  private heard: number[];
+  private initOpts: KernelInitOptions | null = null;
+  private restarts = 0;
+  private readonly spawn: () => WorkerLike;
+  private readonly silenceMs: number;
+  private watchdog: ReturnType<typeof setInterval> | null = null;
 
   private compile: (wasmUrl: string) => Promise<WebAssembly.Module>;
 
   constructor(opts: WorkerBackendOptions = {}) {
-    const spawn = opts.spawn ?? spawnWebWorker;
+    this.spawn = opts.spawn ?? spawnWebWorker;
     this.compile = opts.compile ?? compileKernel;
-    this.workers = Array.from({ length: Math.max(1, opts.size ?? 1) }, () => spawn());
-    for (const w of this.workers) {
-      w.onmessage = (e) => {
-        const msg = e.data as { kind: "ready" } | GeometryResponse;
-        if (msg.kind === "ready") { this.readyResolvers.shift()?.(); return; }
-        if (msg.kind === "progress") { this.progress.get(msg.id)?.(msg.fraction, msg.step); return; }
-        // a request's handler hears every answer to it and says when it is done (a staged evaluate has two)
-        const handle = this.pending.get(msg.id);
-        if (handle && handle(msg)) { this.pending.delete(msg.id); this.progress.delete(msg.id); }
-      };
+    this.silenceMs = opts.silenceMs ?? 120_000;
+    this.workers = Array.from({ length: Math.max(1, opts.size ?? 1) }, () => this.spawn());
+    this.heard = this.workers.map(() => Date.now());
+    this.workers.forEach((w, i) => this.listen(w, i));
+    current = this;
+    // A worker that has gone quiet for too long with a request outstanding is taken as hung (the kernel never
+    // returns from some operations): its requests are failed and it is restarted, so the app stays usable.
+    if (this.silenceMs > 0 && typeof setInterval === "function") {
+      this.watchdog = setInterval(() => this.checkHung(), Math.max(250, Math.min(5000, this.silenceMs / 4)));
     }
+  }
+
+  private listen(w: WorkerLike, i: number) {
+    w.onmessage = (e) => {
+      this.heard[i] = Date.now();
+      const msg = e.data as { kind: "ready" } | GeometryResponse;
+      if (msg.kind === "ready") { this.readyResolvers.shift()?.(); return; }
+      if (msg.kind === "progress") { this.progress.get(msg.id)?.(msg.fraction, msg.step); return; }
+      // a request's handler hears every answer to it and says when it is done (a staged evaluate has two)
+      const handle = this.pending.get(msg.id);
+      if (handle && handle(msg)) { this.pending.delete(msg.id); this.progress.delete(msg.id); this.sent.delete(msg.id); }
+    };
+    w.onerror = (e) => this.workerDied(i, `the geometry worker crashed${e?.message ? `: ${e.message}` : ""}`);
+  }
+
+  /** Fail every request a worker holds and replace it with a fresh one (its kernel loaded again). */
+  private workerDied(i: number, why: string) {
+    this.restarts++;
+    const held = [...this.sent.entries()].filter(([, s]) => s.worker === i);
+    for (const [id] of held) {
+      const handle = this.pending.get(id);
+      this.pending.delete(id); this.progress.delete(id); this.sent.delete(id);
+      handle?.({ id, kind: "error", message: why });
+    }
+    try { this.workers[i].terminate(); } catch { /* already gone */ }
+    const w = this.spawn();
+    this.workers[i] = w;
+    this.heard[i] = Date.now();
+    this.listen(w, i);
+    // the chains it was building go to whoever is asked next
+    for (const [chain, at] of [...this.placed]) if (at === i) this.placed.delete(chain);
+    if (this.initOpts && this.isReady) w.postMessage({ kind: "init", wasmUrl: this.initOpts.wasmUrl });
+  }
+
+  private checkHung() {
+    const now = Date.now();
+    for (let i = 0; i < this.workers.length; i++) {
+      const waiting = [...this.sent.values()].some((s) => s.worker === i);
+      if (waiting && now - this.heard[i] > this.silenceMs) this.workerDied(i, `the geometry worker did not answer for ${Math.round(this.silenceMs / 1000)} s and was restarted`);
+    }
+  }
+
+  /** What the pool is waiting on. */
+  status(): { workers: number; pending: PendingRequest[]; restarts: number } {
+    const now = Date.now();
+    return { workers: this.workers.length, restarts: this.restarts, pending: [...this.sent.entries()].map(([id, s]) => ({ id, kind: s.kind, worker: s.worker, ms: now - s.at })) };
   }
 
   /** Workers in the pool. */
   get size(): number { return this.workers.length; }
 
   init(opts: KernelInitOptions): Promise<void> {
+    this.initOpts = opts;
     if (!this.readyPromise) {
       // the wasm compiled once and handed to every worker (each loads it itself if that fails);
       // ready when the last worker's kernel is
@@ -111,6 +179,8 @@ export class WorkerGeometryBackend implements GeometryBackend {
         resolve(r);
         return true;
       });
+      this.sent.set(id, { worker, kind: req.kind, at: Date.now() });
+      this.heard[worker] = Math.max(this.heard[worker], Date.now());
       this.workers[worker].postMessage({ ...req, id } as GeometryRequest);
     });
   }
@@ -200,7 +270,9 @@ export class WorkerGeometryBackend implements GeometryBackend {
     if (r.kind === "distance") return r.distance;
     throw new Error(r.kind === "error" ? r.message : "distance failed");
   }
-  dispose(): void { for (const w of this.workers) w.terminate(); this.pending.clear(); }
+  dispose(): void {
+    if (this.watchdog) { clearInterval(this.watchdog); this.watchdog = null; }
+    if (current === this) current = null; for (const w of this.workers) w.terminate(); this.pending.clear(); }
 }
 
 /** One progress sink per part, reporting the pool's progress as a whole: the parts' fractions

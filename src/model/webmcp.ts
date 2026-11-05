@@ -1,3 +1,4 @@
+import { geometryWorkerStatus } from "./worker-backend";
 // WebMCP: expose the app's commands as Model Context Protocol tools to agents
 // running in the browser (an AI browser, an extension, Claude-in-Chrome, …).
 //
@@ -264,6 +265,13 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
     execute: async () => { host.redo!(); return ok({ ok: true, state: host.describe() }); },
     });
   }
+  tools.push({
+    name: "backend_status",
+    description: "What the geometry workers are doing: the requests still pending (kind, worker, how long), and how many workers were restarted after going quiet. Call it when the model stops updating or a geometry tool does not answer.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: READ_ONLY,
+    execute: async () => ok({ ok: true, ...(geometryWorkerStatus() ?? { workers: 0, pending: [], restarts: 0, note: "no worker pool (the inline kernel)" }) }),
+  });
   if (host.deleteOperation) {
     tools.push({
       name: "delete_operation",

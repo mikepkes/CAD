@@ -1316,7 +1316,7 @@ function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: 
 }
 
 /** Hollow the most recent body. */
-function applyDraft(scope: Scope, f: DraftFeature, bodies: Body[], out: Record<string, SolidEval>) {
+function applyDraft(doc: CadDocument, scope: Scope, f: DraftFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
     const target = pickBody(bodies, f.body, "draft");
@@ -1328,7 +1328,8 @@ function applyDraft(scope: Scope, f: DraftFeature, bodies: Body[], out: Record<s
     // A moved component's body is built where its joints put it, but the draft is defined as modelled: its
     // parting plane and face box in the component's own frame. So the body is drafted in that frame and put
     // back — the same faces, the same tilt, at every pose (a motion study's, a folded lid's).
-    const frame = target.frame ?? IDENTITY;
+    const componentId = doc.sketches[target.sketchId]?.componentId;
+    const frame = (componentId && resolveComponentWorld(doc, scope).get(componentId)) || IDENTITY;
     const posed = !samePose(frame, IDENTITY);
     const local = posed ? transformShape(target.shape, invert(frame)) : target.shape;
     let drafted: Shape3D;
@@ -1826,7 +1827,7 @@ function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Bod
     case "fillet":
     case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;
     case "shell": applyShell(scope, f, bodies, out); break;
-    case "draft": applyDraft(scope, f, bodies, out); break;
+    case "draft": applyDraft(doc, scope, f, bodies, out); break;
     case "pattern": applyPattern(scope, f, bodies, out); break;
     case "voronoi": applyVoronoi(scope, f, bodies, out); break;
   }
