@@ -29,11 +29,14 @@ export interface WorkerLike {
 
 /** What the pool is waiting on, for a status readout (`geometryWorkerStatus`). */
 export interface PendingRequest { id: number; kind: string; worker: number; ms: number }
+/** One line of a worker's recent history: what it said (or was sent) and when, for a status readout. */
+export interface TraceLine { at: number; text: string }
+const TRACE_LINES = 24;
 
 const pools = new Set<WorkerGeometryBackend>();
 /** Every live pool's pending requests and how long each has waited (the render pool, the motion study's) —
  *  what to look at when the model stops updating. */
-export function geometryWorkerStatus(): { pools: { workers: number; pending: PendingRequest[]; restarts: number }[] } | null {
+export function geometryWorkerStatus(): { pools: { workers: number; pending: PendingRequest[]; restarts: number; trace: string[][] }[] } | null {
   return pools.size ? { pools: [...pools].map((p) => p.status()) } : null;
 }
 
@@ -83,6 +86,8 @@ export class WorkerGeometryBackend implements GeometryBackend {
   private sent = new Map<number, { worker: number; kind: string; at: number }>();
   /** When each worker last said anything (an answer or a progress tick). */
   private heard: number[];
+  /** Each worker's recent history: jobs sent, progress heard, answers; the status readout shows it. */
+  private trace: TraceLine[][];
   private initOpts: KernelInitOptions | null = null;
   private restarts = 0;
   private readonly spawn: () => WorkerLike;
@@ -97,6 +102,7 @@ export class WorkerGeometryBackend implements GeometryBackend {
     this.silenceMs = opts.silenceMs ?? 90_000;
     this.workers = Array.from({ length: Math.max(1, opts.size ?? 1) }, () => this.spawn());
     this.heard = this.workers.map(() => Date.now());
+    this.trace = this.workers.map(() => []);
     this.workers.forEach((w, i) => this.listen(w, i));
     pools.add(this);
     // A worker that has gone quiet for too long with a request outstanding is taken as hung (the kernel never
@@ -111,7 +117,8 @@ export class WorkerGeometryBackend implements GeometryBackend {
       this.heard[i] = Date.now();
       const msg = e.data as { kind: "ready" } | GeometryResponse;
       if (msg.kind === "ready") { this.readyResolvers.shift()?.(); return; }
-      if (msg.kind === "progress") { this.progress.get(msg.id)?.(msg.fraction, msg.step); return; }
+      if (msg.kind === "progress") { this.note(i, `#${msg.id} ${msg.step ? `${msg.step.phase} ${msg.step.done}/${msg.step.total} ${msg.step.id ?? ""}` : `${Math.round(msg.fraction * 100)}%`}${msg.heapMb ? ` heap ${msg.heapMb}MB` : ""}`); this.progress.get(msg.id)?.(msg.fraction, msg.step); return; }
+      this.note(i, `#${msg.id} answered: ${msg.kind}${msg.kind === "error" ? ` ${msg.message}` : ""}`);
       // a request's handler hears every answer to it and says when it is done (a staged evaluate has two)
       const handle = this.pending.get(msg.id);
       if (handle && handle(msg)) { this.pending.delete(msg.id); this.progress.delete(msg.id); this.sent.delete(msg.id); }
@@ -119,9 +126,16 @@ export class WorkerGeometryBackend implements GeometryBackend {
     w.onerror = (e) => this.workerDied(i, `the geometry worker crashed${e?.message ? `: ${e.message}` : ""}`);
   }
 
+  private note(i: number, text: string) {
+    const t = this.trace[i];
+    t.push({ at: Date.now(), text });
+    if (t.length > TRACE_LINES) t.splice(0, t.length - TRACE_LINES);
+  }
+
   /** Fail every request a worker holds and replace it with a fresh one (its kernel loaded again). */
   private workerDied(i: number, why: string) {
     this.restarts++;
+    this.note(i, `restarted: ${why}`);
     const held = [...this.sent.entries()].filter(([, s]) => s.worker === i);
     for (const [id] of held) {
       const handle = this.pending.get(id);
@@ -147,9 +161,11 @@ export class WorkerGeometryBackend implements GeometryBackend {
   }
 
   /** What the pool is waiting on. */
-  status(): { workers: number; pending: PendingRequest[]; restarts: number } {
+  status(): { workers: number; pending: PendingRequest[]; restarts: number; trace: string[][] } {
     const now = Date.now();
-    return { workers: this.workers.length, restarts: this.restarts, pending: [...this.sent.entries()].map(([id, s]) => ({ id, kind: s.kind, worker: s.worker, ms: now - s.at })) };
+    // each worker's history as "-1234ms text": how long ago
+    const trace = this.trace.map((t) => t.map((l) => `-${now - l.at}ms ${l.text}`));
+    return { workers: this.workers.length, restarts: this.restarts, pending: [...this.sent.entries()].map(([id, s]) => ({ id, kind: s.kind, worker: s.worker, ms: now - s.at })), trace };
   }
 
   /** Workers in the pool. */
@@ -189,6 +205,7 @@ export class WorkerGeometryBackend implements GeometryBackend {
         return true;
       });
       this.sent.set(id, { worker, kind: req.kind, at: Date.now() });
+      this.note(worker, `#${id} sent: ${req.kind}${"only" in req && req.only ? ` (${req.only.length} features)` : ""}`);
       this.heard[worker] = Math.max(this.heard[worker], Date.now());
       this.workers[worker].postMessage({ ...req, id } as GeometryRequest);
     });

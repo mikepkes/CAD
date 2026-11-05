@@ -1892,7 +1892,7 @@ function applyInComponentFrame(apply: () => void, f: ThreadFeature, bodies: Body
  *  With a cache, unchanged steps replay instead of running the kernel. */
 /** Which phase a build is in, and how far through it: building the features, then meshing the bodies.
  *  The meshing is a tenth of the bar but can take seconds (a clock's gear teeth), so it is named. */
-export interface BuildStep { phase: "features" | "meshing"; done: number; total: number }
+export interface BuildStep { phase: "features" | "meshing"; done: number; total: number; /** The feature (or body) the step is on. */ id?: string }
 /** Hears a running build's progress: the fraction (0…1) and the step it is on. */
 export type BuildProgressSink = (fraction: number, step?: BuildStep) => void;
 /** Where a build reports how far it has got (0…1): set around one evaluation by its caller. */
@@ -1913,7 +1913,7 @@ export function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryC
   const active = activeFeatures(doc, scope, only);
   let done = 0;
   for (const f of active) {
-    buildProgress?.((FEATURE_SHARE * done) / active.length, { phase: "features", done, total: active.length });
+    buildProgress?.((FEATURE_SHARE * done) / active.length, { phase: "features", done, total: active.length, id: f.id });
     done++;
     let T: Rigid | undefined, own: Rigid | undefined;
     if (f.instanceFrame) {
@@ -1930,6 +1930,18 @@ export function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryC
     else run();
   }
   return { bodies, out };
+}
+
+/** The bodies for a reading of the model (an export, the topology, a distance, a surface analysis): through
+ *  `cache` when there is one, so unchanged steps replay and the cache keeps the shapes; built fresh, and
+ *  freed by `release`, otherwise. */
+function readBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): { bodies: Body[]; out: Record<string, SolidEval>; release: () => void } {
+  if (!cache) {
+    const r = evaluateBodies(doc, scope);
+    return { ...r, release: () => { for (const b of r.bodies) b.shape.delete(); } };
+  }
+  cache.begin();
+  try { return { ...evaluateBodies(doc, scope, cache), release: () => {} }; } finally { cache.end(); }
 }
 
 /** Whether a feature is switched on: not suppressed by the active
@@ -2000,7 +2012,7 @@ export function evaluateFeaturesStaged(doc: CadDocument, scope: Scope, cache?: G
     done.applied = Object.keys(out);
     let meshed = 0;
     for (const body of bodies) {
-      buildProgress?.(FEATURE_SHARE + ((1 - FEATURE_SHARE) * meshed) / bodies.length, { phase: "meshing", done: meshed, total: bodies.length });
+      buildProgress?.(FEATURE_SHARE + ((1 - FEATURE_SHARE) * meshed) / bodies.length, { phase: "meshing", done: meshed, total: bodies.length, id: body.id });
       meshed++;
       const row: SolidEval = { ...(out[body.id] ?? {}), featureId: body.id, name: body.name, sketchId: body.sketchId, distance: body.distance };
       if (body.decals?.length) row.threadDecals = body.decals;
@@ -2138,9 +2150,9 @@ export interface BodyTopology {
   edges: (EdgeGeom & { name: string; faceNames: string[] })[];
 }
 
-export function bodyTopology(doc: CadDocument, scope: Scope, opts: { bodyId?: string; faces?: boolean; edges?: boolean } = {}): BodyTopology[] {
+export function bodyTopology(doc: CadDocument, scope: Scope, opts: { bodyId?: string; faces?: boolean; edges?: boolean } = {}, cache?: GeometryCache): BodyTopology[] {
   if (!isKernelReady()) return [];
-  const { bodies } = evaluateBodies(doc, scope);
+  const { bodies, release } = readBodies(doc, scope, cache);
   try {
     return bodies.filter((b) => !opts.bodyId || b.id === opts.bodyId).map((b) => {
       const mass = massPropsOfShape(b.shape);
@@ -2154,7 +2166,7 @@ export function bodyTopology(doc: CadDocument, scope: Scope, opts: { bodyId?: st
       return { id: b.id, name: b.name, volume: hasSolid(b.shape) ? mass.volume : 0, area: mass.area, centroid: mass.centroid, bounds: safeBounds(b.shape), faces, edges };
     });
   } finally {
-    for (const b of bodies) b.shape.delete();
+    release();
   }
 }
 
@@ -2174,9 +2186,9 @@ export interface BodyAnalysisResult {
 }
 
 /** Curvature, edge continuity and curvature combs for each body (or one). */
-export function analyzeBodies(doc: CadDocument, scope: Scope, opts: { bodyId?: string; combs?: boolean } = {}): BodyAnalysisResult[] {
+export function analyzeBodies(doc: CadDocument, scope: Scope, opts: { bodyId?: string; combs?: boolean } = {}, cache?: GeometryCache): BodyAnalysisResult[] {
   if (!isKernelReady()) return [];
-  const { bodies } = evaluateBodies(doc, scope);
+  const { bodies, release } = readBodies(doc, scope, cache);
   try {
     return bodies.filter((b) => !opts.bodyId || b.id === opts.bodyId).map((b) => {
       const mesh = meshShape(b.shape);
@@ -2189,19 +2201,19 @@ export function analyzeBodies(doc: CadDocument, scope: Scope, opts: { bodyId?: s
       };
     });
   } finally {
-    for (const b of bodies) b.shape.delete();
+    release();
   }
 }
 
 /** Minimum distance between two bodies (by creating-feature id); 0 when they touch or overlap. */
-export function bodyDistance(doc: CadDocument, scope: Scope, a: string, b: string): number {
+export function bodyDistance(doc: CadDocument, scope: Scope, a: string, b: string, cache?: GeometryCache): number {
   if (!isKernelReady()) throw new Error("kernel not ready");
-  const { bodies } = evaluateBodies(doc, scope);
+  const { bodies, release } = readBodies(doc, scope, cache);
   try {
     const find = (id: string) => { const x = bodies.find((y) => y.id === id); if (!x) throw new Error(`no body "${id}" (bodies: ${bodies.map((y) => y.id).join(", ") || "none"})`); return x; };
     return distanceBetween(find(a).shape, find(b).shape);
   } finally {
-    for (const x of bodies) x.shape.delete();
+    release();
   }
 }
 
@@ -2315,17 +2327,17 @@ export function featureEdges(doc: CadDocument, scope: Scope, featureId: string):
  * Export the finished BODY that `featureId` starts (its joins, cuts, fillets,
  * shells and patterns included) — not just that feature's own solid.
  */
-export function exportFeatureBlob(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step"): Blob | null {
+export function exportFeatureBlob(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step", cache?: GeometryCache): Blob | null {
   const f = doc.features[featureId];
   if (!f || !isKernelReady()) return null;
-  const { bodies } = evaluateBodies(doc, scope);
+  const { bodies, release } = readBodies(doc, scope, cache);
   try {
     const body = bodies.find((b) => b.id === featureId) ?? bodies[bodies.length - 1];
     return body ? blobOfShape(body.shape, format) : null;
   } catch {
     return null;
   } finally {
-    for (const b of bodies) b.shape.delete();
+    release();
   }
 }
 
@@ -2335,9 +2347,9 @@ export function exportFeatureBlob(doc: CadDocument, scope: Scope, featureId: str
  * components (a compliant mechanism: links joined by flexures print as one).
  * A reference part's bodies (Component.reference) are left out: they are not made.
  */
-export function exportFusedBlob(doc: CadDocument, scope: Scope, format: "stl" | "step"): Blob | null {
+export function exportFusedBlob(doc: CadDocument, scope: Scope, format: "stl" | "step", cache?: GeometryCache): Blob | null {
   if (!isKernelReady()) return null;
-  const { bodies } = evaluateBodies(doc, scope);
+  const { bodies, release } = readBodies(doc, scope, cache);
   const partials: Shape3D[] = []; // fuse results (the operands stay owned by their bodies)
   try {
     let fused: Shape3D | null = null;
@@ -2351,28 +2363,32 @@ export function exportFusedBlob(doc: CadDocument, scope: Scope, format: "stl" | 
     return null;
   } finally {
     for (const s of partials) s.delete();
-    for (const b of bodies) b.shape.delete();
+    release();
   }
 }
 
 /** The whole model fused, as a display mesh (every body but the reference parts). */
-export function exportFusedMesh(doc: CadDocument, scope: Scope): SolidMesh | null {
+export function exportFusedMesh(doc: CadDocument, scope: Scope, cache?: GeometryCache): SolidMesh | null {
   if (!isKernelReady()) return null;
-  const { bodies } = evaluateBodies(doc, scope);
+  const { bodies, release } = readBodies(doc, scope, cache);
   const partials: Shape3D[] = [];
   try {
     let fused: Shape3D | null = null;
+    let n = 0;
     for (const b of bodies) {
       if (isReferenceBody(doc, b)) continue;
+      // the fusing and the meshing are reported too (a pool's watchdog takes silence for a hang)
+      buildProgress?.(FEATURE_SHARE, { phase: "meshing", done: n++, total: bodies.length + 1, id: `fuse ${b.id}` });
       fused = fused ? fuseShapes(fused, b.shape) : b.shape;
       if (fused !== b.shape) partials.push(fused);
     }
+    buildProgress?.(FEATURE_SHARE, { phase: "meshing", done: n, total: bodies.length + 1, id: "mesh fused" });
     return fused ? meshShape(fused) : null;
   } catch {
     return null;
   } finally {
     for (const s of partials) s.delete();
-    for (const b of bodies) b.shape.delete();
+    release();
   }
 }
 
@@ -2392,9 +2408,9 @@ export function drawnElementMeshes(doc: CadDocument, scope: Scope): { name: stri
  * single-material model; a TPU frame with an embedded PLA skeleton gives two.
  * A reference part's bodies are left out.
  */
-export function printPartsByMaterial(doc: CadDocument, scope: Scope): { name: string; color?: string; mesh: SolidMesh }[] {
+export function printPartsByMaterial(doc: CadDocument, scope: Scope, cache?: GeometryCache): { name: string; color?: string; mesh: SolidMesh }[] {
   if (!isKernelReady()) return [];
-  const { bodies } = evaluateBodies(doc, scope);
+  const { bodies, release } = readBodies(doc, scope, cache);
   const groups = new Map<string, { name: string; color?: string; shapes: Shape3D[] }>();
   for (const b of bodies) {
     if (isReferenceBody(doc, b)) continue; // context, not a part to print
@@ -2412,13 +2428,13 @@ export function printPartsByMaterial(doc: CadDocument, scope: Scope): { name: st
     });
   } finally {
     for (const sh of partials) sh.delete();
-    for (const b of bodies) b.shape.delete();
+    release();
   }
 }
 
 /** Export bytes (transferable) — the worker-safe form of exportFeatureBlob. */
-export async function exportFeatureBytes(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step"): Promise<Uint8Array | null> {
-  const blob = exportFeatureBlob(doc, scope, featureId, format);
+export async function exportFeatureBytes(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step", cache?: GeometryCache): Promise<Uint8Array | null> {
+  const blob = exportFeatureBlob(doc, scope, featureId, format, cache);
   if (!blob) return null;
   return new Uint8Array(await blob.arrayBuffer());
 }

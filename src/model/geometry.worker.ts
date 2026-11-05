@@ -6,7 +6,7 @@
 
 import { runGeometryJob, GeometryRequest } from "../core/geometry/backend";
 import { GeometryCache, type BuildStep } from "../core/features";
-import { initKernel } from "../core/occ/kernel";
+import { initKernel, kernelHeapBytes } from "../core/occ/kernel";
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 let initPromise: Promise<void> | null = null;
@@ -33,7 +33,7 @@ ctx.onmessage = async (e: MessageEvent) => {
   const progress = (fraction: number, step?: BuildStep) => {
     // a new phase always gets through (the bar's label changes with it)
     const t = performance.now();
-    if (t - last > 50 || (step && step.phase !== phase)) { last = t; phase = step?.phase ?? phase; ctx.postMessage({ id: msg.id, kind: "progress", fraction, step }); }
+    if (t - last > 50 || (step && step.phase !== phase)) { last = t; phase = step?.phase ?? phase; ctx.postMessage({ id: msg.id, kind: "progress", fraction, step, heapMb: Math.round(kernelHeapBytes() / 1048576) }); }
   };
   const { res, transfer } = await runGeometryJob(msg, cache, progress, {
     emit: (r, buffers) => ctx.postMessage(r, buffers),

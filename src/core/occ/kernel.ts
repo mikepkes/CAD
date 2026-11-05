@@ -64,6 +64,11 @@ export function kernelErrorMessage(e: unknown): string {
 let readyPromise: Promise<void> | null = null;
 let ready = false;
 
+/** The kernel's wasm heap size in bytes (0 before it is loaded): a readout for the worker status. */
+export function kernelHeapBytes(): number {
+  try { return ((getOC() as unknown as { HEAPU8?: Uint8Array }).HEAPU8?.buffer.byteLength) ?? 0; } catch { return 0; }
+}
+
 export function initKernel(opts: KernelInitOptions): Promise<void> {
   if (!readyPromise) {
     readyPromise = (async () => {

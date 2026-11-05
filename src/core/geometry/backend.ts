@@ -161,7 +161,7 @@ function poseDoc(doc: CadDocument, overrides?: Record<string, string>): CadDocum
  *  its as-modelled (unbent) pose — joints dropped, so every link sits where it
  *  was drawn — with its links fused through their flexure strips; anything else
  *  prints as it stands. */
-async function exportModelBytes(doc: CadDocument, format: ExportFormat): Promise<Uint8Array | null> {
+async function exportModelBytes(doc: CadDocument, format: ExportFormat, cache?: GeometryCache): Promise<Uint8Array | null> {
   let printed = doc;
   // the drawn elements (hinge strips, beams drawn from their solve) at rest, in the world: they are part of the
   // print, but not kernel bodies, so an STL or 3MF carries their meshes (a STEP cannot)
@@ -181,28 +181,28 @@ async function exportModelBytes(doc: CadDocument, format: ExportFormat): Promise
   const scope = scopeOf(printed);
   const geo = geometryDoc(printed, scope);
   if (format === "3mf") {
-    const parts = printPartsByMaterial(geo, scopeOf(geo));
+    const parts = printPartsByMaterial(geo, scopeOf(geo), cache);
     const extra = drawn.map((d) => ({ name: d.name, color: materialForComponent(doc, d.componentId)?.color, positions: d.mesh.positions, indices: d.mesh.indices }));
     return parts.length || extra.length ? meshesTo3mf([...parts.map((p) => ({ name: p.name, color: p.color, positions: p.mesh.positions, indices: p.mesh.indices })), ...extra], "model") : null;
   }
   if (format === "stl" && drawn.length) {
-    const fused = exportFusedMesh(geo, scopeOf(geo));
+    const fused = exportFusedMesh(geo, scopeOf(geo), cache);
     return new Uint8Array(meshesToStlBinary([...(fused ? [fused] : []), ...drawn.map((d) => d.mesh)]));
   }
-  const blob = exportFusedBlob(geo, scopeOf(geo), format);
+  const blob = exportFusedBlob(geo, scopeOf(geo), format, cache);
   return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
 }
 
 /** Named topology + mass properties of the bodies as built (component patterns expanded). */
-function topologyOf(doc: CadDocument, opts?: TopologyOpts): BodyTopology[] {
+function topologyOf(doc: CadDocument, opts?: TopologyOpts, cache?: GeometryCache): BodyTopology[] {
   const geo = geometryDoc(doc, scopeOf(doc));
-  return bodyTopology(geo, scopeOf(geo), opts);
+  return bodyTopology(geo, scopeOf(geo), opts, cache);
 }
 
 /** Surface analysis of the bodies as built (component patterns expanded). */
-function analyzeOf(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): BodyAnalysisResult[] {
+function analyzeOf(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }, cache?: GeometryCache): BodyAnalysisResult[] {
   const geo = geometryDoc(doc, scopeOf(doc));
-  return analyzeBodies(geo, scopeOf(geo), opts);
+  return analyzeBodies(geo, scopeOf(geo), opts, cache);
 }
 
 // ---- shared job protocol (used by both worker adapters) --------------------
@@ -234,7 +234,7 @@ export type GeometryResponse =
   | ({ id: number; kind: "drawing" } & ShopDrawing)
   | { id: number; kind: "error"; message: string }
   /** Not an answer: how far a running job has got (0…1), sent while it works. */
-  | { id: number; kind: "progress"; fraction: number; step?: BuildStep };
+  | { id: number; kind: "progress"; fraction: number; step?: BuildStep; /** The kernel's wasm heap, MB. */ heapMb?: number };
 
 /** GeometryRequest without the id field, distributing over the union. */
 export type GeometryRequestInit = GeometryRequest extends infer T ? (T extends { id: number } ? Omit<T, "id"> : never) : never;
@@ -313,16 +313,16 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       return { res: { id: req.id, kind: "edges", edges }, transfer: [] };
     }
     if (req.kind === "topology") {
-      return { res: { id: req.id, kind: "topology", bodies: withBuildProgress(onProgress, () => topologyOf(req.doc, req.opts)) }, transfer: [] };
+      return { res: { id: req.id, kind: "topology", bodies: withBuildProgress(onProgress, () => topologyOf(req.doc, req.opts, cache)) }, transfer: [] };
     }
     if (req.kind === "analyze") {
-      const bodies = withBuildProgress(onProgress, () => analyzeOf(req.doc, req.opts));
+      const bodies = withBuildProgress(onProgress, () => analyzeOf(req.doc, req.opts, cache));
       return { res: { id: req.id, kind: "analyze", bodies }, transfer: bodies.flatMap((b) => [b.curvature.buffer as ArrayBuffer, b.combs.buffer as ArrayBuffer]) };
     }
     if (req.kind === "drawing") return { res: { id: req.id, kind: "drawing", ...withBuildProgress(onProgress, () => drawingOf(req.doc, req.opts, cache)) }, transfer: [] };
     if (req.kind === "distance") {
       const doc = geometryDoc(req.doc, scope);
-      return { res: { id: req.id, kind: "distance", distance: withBuildProgress(onProgress, () => bodyDistance(doc, scopeOf(doc), req.a, req.b)) }, transfer: [] };
+      return { res: { id: req.id, kind: "distance", distance: withBuildProgress(onProgress, () => bodyDistance(doc, scopeOf(doc), req.a, req.b, cache)) }, transfer: [] };
     }
     if (req.kind === "collide") {
       const result = withBuildProgress(onProgress, () => collidePose(req.doc, req.overrides, (workerStudyCache ??= studyCache())));
@@ -330,8 +330,8 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
     }
     // the kernel work of an export is synchronous (only the blob's bytes are awaited), so the sink is set for it
     const bytes = await withBuildProgress(onProgress, () => req.featureId === null || req.format === "3mf" // a 3MF is always the whole model
-      ? exportModelBytes(req.doc, req.format)
-      : exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format));
+      ? exportModelBytes(req.doc, req.format, cache)
+      : exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format, cache));
     return { res: { id: req.id, kind: "export", bytes }, transfer: bytes ? [bytes.buffer as ArrayBuffer] : [] };
   } catch (e) {
     return { res: { id: req.id, kind: "error", message: kernelErrorMessage(e) }, transfer: [] };
@@ -366,25 +366,25 @@ export class InlineGeometryBackend implements GeometryBackend {
     return featureEdges(geometryDoc(doc, scope), scope, featureId);
   }
   async exportBytes(doc: CadDocument, featureId: string | null, format: ExportFormat): Promise<Uint8Array | null> {
-    if (featureId === null || format === "3mf") return exportModelBytes(doc, format); // a 3MF is always the whole model
+    if (featureId === null || format === "3mf") return exportModelBytes(doc, format, this.cache); // a 3MF is always the whole model
     const scope = scopeOf(doc);
-    return exportFeatureBytes(geometryDoc(doc, scope), scope, featureId, format);
+    return exportFeatureBytes(geometryDoc(doc, scope), scope, featureId, format, this.cache);
   }
   async collide(doc: CadDocument, overrides?: Record<string, string>): Promise<CollisionResult> {
     return collidePose(doc, overrides, (this.studyCache ??= studyCache()));
   }
   async topology(doc: CadDocument, opts?: TopologyOpts): Promise<BodyTopology[]> {
-    return topologyOf(doc, opts);
+    return topologyOf(doc, opts, this.cache);
   }
   async analyze(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): Promise<BodyAnalysisResult[]> {
-    return analyzeOf(doc, opts);
+    return analyzeOf(doc, opts, this.cache);
   }
   async drawing(doc: CadDocument, opts?: SheetOptions): Promise<ShopDrawing> {
     return drawingOf(doc, opts, this.cache);
   }
   async distance(doc: CadDocument, a: string, b: string): Promise<number> {
     const d = geometryDoc(doc, scopeOf(doc));
-    return bodyDistance(d, scopeOf(d), a, b);
+    return bodyDistance(d, scopeOf(d), a, b, this.cache);
   }
   dispose(): void {}
 }
