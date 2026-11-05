@@ -17,6 +17,7 @@ import { useLens } from "../ui/concepts/lens/lens";
 import { getActiveScene } from "../viewport/sceneRef";
 import { buildBodies } from "../viewport/turntableRecorder";
 import { resolveComponentWorld } from "../core/recompute";
+import { poseHingeStrips } from "../viewport/posedStrips";
 import { expandAssembly, hasAssemblyPatterns, instanceComponentOf } from "../core/assembly";
 import type { CadDocument } from "../core/document";
 import { resolveParameters } from "../core/parameters";
@@ -142,7 +143,11 @@ function posed() {
 }
 /** Place the posed parts at the pose's parameter values, exploded as far as it is. */
 function placePosed(p: NonNullable<typeof pose>) {
-  getActiveScene()?.setAnimationPose(exploded(worldOf(useStore.getState().session.doc, p.scope), p.explode.by, p.explode.k));
+  const scene = getActiveScene();
+  if (!scene) return;
+  const doc = useStore.getState().session.doc, worlds = worldOf(doc, p.scope);
+  scene.setAnimationPose(exploded(worlds, p.explode.by, p.explode.k));
+  poseHingeStrips(scene, doc, worlds); // a living hinge bends with the pose
 }
 
 /** What fading `ids` draws see-through: a component's bodies and sketches, and its sub-components'; a body or sketch id

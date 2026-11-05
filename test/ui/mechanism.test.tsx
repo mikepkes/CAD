@@ -10,6 +10,7 @@ import { useStore } from "../../src/model/store";
 import { useUi } from "../../src/model/concepts/uiState";
 import type { MechanismCurve } from "../../src/model/concepts/mechanism";
 import { realSession } from "../helpers";
+import { setActiveScene } from "../../src/viewport/sceneRef";
 
 const travel = (value: number) => ({ id: "p1", name: "travel", expr: String(value), value, min: 0, max: 10, step: 0.1 });
 const compliantDoc = (value = 0) => ({
@@ -18,8 +19,8 @@ const compliantDoc = (value = 0) => ({
   parameters: [travel(value)],
   joints: {
     j1: { id: "j1", name: "Shuttle", kind: "planar", planar: { y: "-travel" }, valueExpr: "0" },
-    j2: { id: "j2", name: "Beam lower left", kind: "beam", beam: { width: 6, thickness: 1, profile: "cosine" }, valueExpr: "0" },
-    j3: { id: "j3", name: "Beam upper left", kind: "beam", beam: { width: 6, thickness: 1, profile: "cosine" }, valueExpr: "0" },
+    j2: { id: "j2", name: "Beam lower left", kind: "beam", beam: { width: 6, thickness: 1, profile: "cosine" }, valueExpr: "0", baseOrigin: { x: 0, y: 0, z: 0 }, movedOrigin: { x: 20, y: 2, z: 0 }, axis: { x: 0, y: 0, z: 1 } },
+    j3: { id: "j3", name: "Beam upper left", kind: "beam", beam: { width: 6, thickness: 1, profile: "cosine" }, valueExpr: "0", baseOrigin: { x: 0, y: 4, z: 0 }, movedOrigin: { x: 20, y: 6, z: 0 }, axis: { x: 0, y: 0, z: 1 } },
   },
 });
 const plainDoc = () => ({ ...useStore.getState().session.doc, parameters: [], joints: {} });
@@ -161,6 +162,46 @@ describe("Sweep", () => {
     expect(sent).toEqual(["2.5", "5", "0"]);
     expect(useMechanism.getState().sweeping).toBeNull();
     useStore.setState(keep);
+  });
+
+  it("with a live viewport, poses the parts by transform and never touches the document", async () => {
+    setDoc(compliantDoc(2));
+    const setParameterExpr = vi.fn(async () => {});
+    const keep = { setParameterExpr: useStore.getState().setParameterExpr };
+    useStore.setState({ setParameterExpr });
+    const poses: number[] = [];
+    const scene = { begun: 0, ended: 0, strips: 0, beginAnimation() { this.begun++; }, setAnimationPose() { poses.push(useMechanism.getState().sweepValue ?? NaN); }, setAnimationMesh() { this.strips++; }, endAnimation() { this.ended++; } };
+    setActiveScene(scene as never);
+    const run = useMechanism.getState().sweep("travel", { ms: 60 });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(useMechanism.getState().sweeping).toBe("travel");
+    await run;
+    setActiveScene(null);
+    expect(setParameterExpr).not.toHaveBeenCalled();
+    expect(scene.begun).toBe(1);
+    expect(scene.ended).toBe(1);
+    expect(poses.length).toBeGreaterThan(3);
+    // up to the top, down to the bottom, back to where it was
+    expect(Math.max(...poses.filter(Number.isFinite))).toBeCloseTo(10, 3);
+    expect(Math.min(...poses.filter(Number.isFinite))).toBeCloseTo(0, 3);
+    expect(useMechanism.getState().sweeping).toBeNull();
+    expect(useMechanism.getState().sweepValue).toBeNull();
+    expect(useStore.getState().session.doc.parameters[0].value).toBe(2);
+    useStore.setState(keep);
+  });
+
+  it("stopping a posed sweep puts the parts back at once", async () => {
+    setDoc(compliantDoc(0));
+    const scene = { ended: 0, beginAnimation() {}, setAnimationPose() {}, setAnimationMesh() {}, endAnimation() { this.ended++; } };
+    setActiveScene(scene as never);
+    const run = useMechanism.getState().sweep("travel", { ms: 10000 });
+    await new Promise((r) => setTimeout(r, 30));
+    useMechanism.getState().stopSweep();
+    expect(scene.ended).toBe(1);
+    expect(useMechanism.getState().sweeping).toBeNull();
+    await run;
+    setActiveScene(null);
+    expect(scene.ended).toBe(1);
   });
 
   it("leaves the undo history as it was: a sweep commits nothing", async () => {

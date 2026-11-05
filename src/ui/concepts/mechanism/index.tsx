@@ -25,6 +25,7 @@ export function MechanismPanel() {
   const curves = useMechanism((s) => s.curves);
   const studying = useMechanism((s) => s.studying);
   const sweeping = useMechanism((s) => s.sweeping);
+  const sweepValue = useMechanism((s) => s.sweepValue);
   const m = useMechanism.getState();
 
   if (!hasFlexures(doc)) {
@@ -37,6 +38,8 @@ export function MechanismPanel() {
 
   const drives = drivesOf(doc);
   const drive = activeDrive(chosen);
+  // where the drive is: a posed sweep moves it without touching the document
+  const shown = sweepValue ?? drive?.value ?? NaN;
   const angular = drive ? isAngularDrive(doc, drive.name) : false;
   const curve = drive ? curves[drive.name]?.curve : undefined;
   const live = pose && drive && pose.drive === drive.name ? pose : null;
@@ -57,7 +60,7 @@ export function MechanismPanel() {
       {drive ? (
         <>
           {curve
-            ? <ForceChart curve={curve} value={drive.value} />
+            ? <ForceChart curve={curve} value={shown} />
             : <div className="mech-chart-wait k-dim" data-testid="curve-pending">{studying ? "Sweeping the range…" : "Reading the mechanism…"}</div>}
           <div className="mech-key k-dim" aria-hidden="true">
             <span><i className="mech-key-stable" />rest</span>
@@ -68,7 +71,7 @@ export function MechanismPanel() {
           </div>
           {curve && <p className="mech-sentence" data-testid="rest-sentence">{restSentence(curve)}</p>}
           <div className="mech-readouts">
-            <Readout label={drive.name} value={fmtDrive(drive.value, angular)} />
+            <Readout label={drive.name} value={fmtDrive(shown, angular)} />
             <Readout label={angular ? "Torque" : "Force"} value={live ? fmtEffort(live.effort, angular) : "–"}
               title={`dU/d${drive.name}: what it takes to hold it here (positive pushes ${drive.name} up). From the flexure model, an estimate.`} />
           </div>

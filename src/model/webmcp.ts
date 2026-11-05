@@ -173,7 +173,7 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
   if (host.recordTurntable && host.saveOutput) {
     tools.push({
       name: "record_turntable",
-      description: "Record a 360° turntable video of the current bodies with WebCodecs and save it as an MP4 (H.264 when the platform can encode it, else VP9) — in the desktop app into ~/Downloads/VibeCAD/. The camera orbits Z around the bodies, framed automatically. Defaults: 1280×720, 60 fps, 4 s, one revolution, elevationDeg 25, startAzDeg -60 (front-right), fovDeg 30. Width/height ≤ 1920, fps ≤ 60, seconds ≤ 30. Returns the saved path, codec and frame count. Takes a few seconds; it briefly borrows the viewport and restores it.",
+      description: "Record a 360° turntable video of the current bodies with WebCodecs and save it as an MP4 (H.264 when the platform can encode it, else VP9) — in the desktop app into ~/Downloads/VibeCAD/. The camera orbits Z around the bodies, framed automatically. Defaults: 1280×720, 60 fps, 4 s, one revolution, elevationDeg 25, startAzDeg -60 (front-right), fovDeg 30. Width/height ≤ 1920, fps ≤ 60, seconds ≤ 30. `drive` moves a parameter while it records (a joint's drive, e.g. a fold angle): from `from` up to `to` and back over the clip, the parts posed by transform with every drawn living hinge bending along; `revolutions: 0` holds the camera still for a plain motion clip. Returns the saved path, codec and frame count. Takes a few seconds; it briefly borrows the viewport and restores it.",
       inputSchema: {
         type: "object",
         properties: {
@@ -185,13 +185,14 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
           elevationDeg: { type: "number" },
           startAzDeg: { type: "number" },
           fovDeg: { type: "number" },
+          drive: { type: "object", required: ["param", "from", "to"], description: "A parameter to run from `from` to `to` and back across the clip (a triangle wave) while recording.", properties: { param: { type: "string" }, from: { type: "number" }, to: { type: "number" } } },
           filename: { type: "string", description: "Filename (no directories); default vibecad-turntable-<timestamp>.mp4." },
         },
       },
       annotations: EDIT,
     execute: async (args) => {
         try {
-          const a = args as { seconds?: number; fps?: number; width?: number; height?: number; revolutions?: number; elevationDeg?: number; startAzDeg?: number; fovDeg?: number; filename?: string };
+          const a = args as { seconds?: number; fps?: number; width?: number; height?: number; revolutions?: number; elevationDeg?: number; startAzDeg?: number; fovDeg?: number; filename?: string; drive?: { param: string; from: number; to: number } };
           const clamp = (v: number | undefined, d: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Number.isFinite(v) ? Number(v) : d));
           const opts: TurntableOpts = {
             seconds: clamp(a.seconds, 4, 0.5, 30),
@@ -203,6 +204,11 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
             startAzDeg: Number.isFinite(a.startAzDeg) ? Number(a.startAzDeg) : -60,
             fovDeg: clamp(a.fovDeg, 30, 1, 120),
           };
+          if (a.drive) {
+            if (!Number.isFinite(a.drive.from) || !Number.isFinite(a.drive.to)) throw new Error("drive needs numeric from and to");
+            opts.param = a.drive.param;
+            opts.openClose = { start: 0, end: opts.seconds!, from: a.drive.from, to: a.drive.to };
+          }
           const r = await host.recordTurntable!(opts);
           const name = sanitizeOutputName(a.filename, "mp4", timestampedStem("vibecad-turntable"));
           const saved = await host.saveOutput!(name, r.bytes, "video/mp4");

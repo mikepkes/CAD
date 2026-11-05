@@ -7,15 +7,27 @@
 // curve — a sweep of the whole range, the slow part, in a Web Worker — only after the other
 // parameters have been still for a moment, never while just the drive moves.
 //
-// Sweep steps the drive across its range through the store's command path
-// (`setParameterExpr`), a step every 150 ms, so the model moves and the
-// panel's marker runs along the curve. It is a preview: stopped or finished,
-// the drive goes back to where it was and the undo history is as before.
+// Sweep runs the drive across its range and back. With a live viewport it
+// poses the built parts by transform, a frame at a time (as the turntable
+// recorder and the demo's pose sweeps do), re-bending each drawn living hinge
+// for the pose, so a mechanism moves smoothly at real speed and nothing
+// rebuilds; the panel's marker runs along the curve at `sweepValue`. Without a
+// scene (tests) it steps the drive through the store's command path
+// (`setParameterExpr`), a step every 150 ms. Either way it is a preview:
+// stopped or finished, the drive is where it was and the undo history is as
+// before.
 
 import { create } from "zustand";
 import { useStore } from "../store";
 import { flexureEquilibria, flexureState, flexureSweep, hasFlexures, isAngularDrive, strainField, type FlexureState, type StrainSegment } from "../../sim/flexure";
 import { buildCurve, drivesOf, fmt, sweepPlan, type MechanismCurve } from "./mechanism";
+import { getActiveScene } from "../../viewport/sceneRef";
+import { buildBodies } from "../../viewport/buildBodies";
+import { poseHingeStrips } from "../../viewport/posedStrips";
+import { resolveParameters } from "../../core/parameters";
+import { resolveComponentWorld } from "../../core/recompute";
+import { expandAssembly, hasAssemblyPatterns } from "../../core/assembly";
+import type { CadDocument, Parameter } from "../../core/document";
 
 export interface MechanismPose {
   /** The store revision it was read at. */
@@ -39,6 +51,8 @@ export interface MechanismState {
   studying: boolean;
   /** The drive a Sweep is moving, or null. */
   sweeping: string | null;
+  /** Where a posed Sweep has the drive right now (null: not sweeping, or sweeping by rebuilds, where the drive's own value says). */
+  sweepValue: number | null;
   /** How many Mechanism panels are showing (a sweep with none shows a Stop chip over the viewport). */
   watchers: number;
   /** A Mechanism panel is showing; returns its release, which stops a running sweep (switching away ends the preview). */
@@ -48,14 +62,16 @@ export interface MechanismState {
   follow: () => () => void;
   /** Read the pose and (re)compute the curve now, if due. */
   refresh: () => void;
-  /** Step `drive` (default: the shown one) across its range and back. */
-  sweep: (drive?: string, opts?: { perLeg?: number; stepMs?: number }) => Promise<void>;
+  /** Run `drive` (default: the shown one) across its range and back: posed by transform over `ms` with a live
+   *  viewport, else stepped through the command path (`perLeg` steps a leg, `stepMs` apart). */
+  sweep: (drive?: string, opts?: { perLeg?: number; stepMs?: number; ms?: number }) => Promise<void>;
   stopSweep: () => void;
 }
 
 const POSE_MS = 30;     // re-read the pose this long after a change
 const CURVE_MS = 600;   // recompute a curve once the other parameters are still this long
-const STEP_MS = 150;    // a Sweep step: the drive and the marker move this often; the model follows as fast as it rebuilds
+const STEP_MS = 150;    // a stepped Sweep: the drive and the marker move this often; the model follows as fast as it rebuilds
+const SWEEP_MS = 4000;  // a posed Sweep: up, down and back in this long
 const SAMPLES = 40;     // curve samples across a drive's range
 
 const doc = () => useStore.getState().session.doc;
@@ -77,6 +93,27 @@ let unsub: (() => void) | null = null;
 let poseTimer: ReturnType<typeof setTimeout> | undefined;
 let curveTimer: ReturnType<typeof setTimeout> | undefined;
 let sweepToken = 0;
+/** The scene a posed sweep has the parts in, until it ends. */
+let posedIn: { endAnimation(): void } | null = null;
+
+/** Every component's world frame for a scope, a pattern's instances included. */
+const worldOf = (d: CadDocument, scope: Record<string, number>) =>
+  resolveComponentWorld(hasAssemblyPatterns(d) ? expandAssembly(d, scope, { framesOnly: true }) : d, scope);
+
+const frame = (): Promise<number> => new Promise((r) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(r) : setTimeout(() => r(performance.now()), 16)));
+
+/** Ease `set` from `from` to `to` over `ms`, a frame at a time; `live` false ends it early. */
+async function tween(from: number, to: number, ms: number, set: (v: number) => void, live: () => boolean): Promise<void> {
+  set(from);
+  const t0 = performance.now();
+  for (;;) {
+    await frame();
+    if (!live()) return;
+    const k = Math.min(1, (performance.now() - t0) / Math.max(1, ms)), e = k * k * (3 - 2 * k);
+    set(from + (to - from) * e);
+    if (k >= 1) return;
+  }
+}
 
 // The curve's worker (mechanism.worker.ts), started on first use; without
 // Worker (Node, jsdom) or if it cannot start, the curve is computed inline.
@@ -169,6 +206,7 @@ export const useMechanism = create<MechanismState>((set, get) => {
     curves: {},
     studying: false,
     sweeping: null,
+    sweepValue: null,
     watchers: 0,
     watch: () => {
       set({ watchers: get().watchers + 1 });
@@ -204,6 +242,11 @@ export const useMechanism = create<MechanismState>((set, get) => {
       if (get().sweeping) return;
       const drive = activeDrive(name ?? get().drive);
       if (!drive || drive.min == null || drive.max == null) return;
+      const scene = getActiveScene();
+      if (scene) {
+        try { return await posedSweep(scene, drive, opts.ms ?? SWEEP_MS); }
+        catch { endPosed(); set({ sweeping: null, sweepValue: null }); /* a pose that can't be placed: step instead */ }
+      }
       const plan = sweepPlan(drive.value, drive.min, drive.max, opts.perLeg ?? 20, drive.step);
       const token = ++sweepToken;
       set({ sweeping: drive.name });
@@ -233,6 +276,44 @@ export const useMechanism = create<MechanismState>((set, get) => {
         }
       }
     },
-    stopSweep: () => { sweepToken++; set({ sweeping: null }); },
+    stopSweep: () => { sweepToken++; endPosed(); set({ sweeping: null, sweepValue: null }); },
   };
+
+  /** The posed parts back to the built model. */
+  function endPosed() {
+    if (!posedIn) return;
+    const s = posedIn; posedIn = null;
+    s.endAnimation();
+  }
+
+  /** Pose the built parts along the drive, up to its max, down to its min and back to where it is, over `ms`. */
+  async function posedSweep(scene: NonNullable<ReturnType<typeof getActiveScene>>, drive: Parameter, ms: number): Promise<void> {
+    const min = drive.min!, max = drive.max!;
+    const token = ++sweepToken;
+    const st = useStore.getState(), d = st.session.doc;
+    const base = resolveParameters(d.parameters).scope;
+    scene.beginAnimation(buildBodies(d, st.solids as never), worldOf(d, base), true);
+    posedIn = scene;
+    set({ sweeping: drive.name, sweepValue: drive.value });
+    const start = Math.min(max, Math.max(min, drive.value));
+    const legs: [number, number][] = [[start, max], [max, min], [min, start]];
+    const span = legs.reduce((s, [a, b]) => s + Math.abs(b - a), 0);
+    // the drive re-solved each frame, so parameters that follow it follow
+    const at = (v: number) => {
+      const scope = resolveParameters(d.parameters.map((q) => (q.name === drive.name ? { ...q, expr: fmt(v, 6) } : q))).scope;
+      const worlds = worldOf(d, scope);
+      scene.setAnimationPose(worlds);
+      poseHingeStrips(scene, d, worlds);
+      set({ sweepValue: v });
+    };
+    const live = () => token === sweepToken && posedIn === scene;
+    try {
+      for (const [from, to] of legs) {
+        if (!live()) break;
+        await tween(from, to, (ms * Math.abs(to - from)) / Math.max(1e-9, span), (v) => { if (live()) at(v); }, live);
+      }
+    } finally {
+      if (live()) { endPosed(); set({ sweeping: null, sweepValue: null }); }
+    }
+  }
 });
