@@ -21,6 +21,8 @@ import {
   GET_ASSIST_INBOX_DESCRIPTION, GET_ASSIST_INBOX_SCHEMA, RESOLVE_ASSIST_DESCRIPTION, RESOLVE_ASSIST_SCHEMA,
 } from "./assist";
 import { runActionTool, setPanel, RUN_ACTION_DESCRIPTION, RUN_ACTION_SCHEMA, SET_PANEL_DESCRIPTION, SET_PANEL_SCHEMA } from "./uiControl";
+import type { Note } from "../core/document";
+import { dataUrlParts, noteDetail, noteSummary, NOTE_SPACE } from "../core/notes";
 
 export interface WebMcpResult {
   content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
@@ -95,7 +97,29 @@ export interface WebMcpHost {
   undo?: () => void;
   redo?: () => void;
   deleteOperation?: (opId: string) => Promise<void>;
+  /** The document's notes (notes_list / notes_get). */
+  notes?: () => Note[];
+  /** A note's drawing over its background, as PNG base64 `size` px square (notes_render; needs a canvas). */
+  renderNote?: (id: string, size: number) => Promise<string>;
 }
+
+// ---- notes: what an agent reads back (note.add / note.update / note.stroke.* write them) ----
+
+export const NOTES_LIST_DESCRIPTION =
+  "List the notes on this design — written by people in the Notes panel or by agents — newest first: id, title, author (\"human\", \"agent\" or a name), " +
+  "created/updated times (epoch ms), a one-line excerpt, the anchor (what it is pinned to: feature / sketch / point; `view: true` when it saves a camera), " +
+  "how many strokes its drawing has and whether the drawing sits on a captured image. Read one in full with notes_get; write with note.add / note.update / note.stroke.add.";
+export const NOTES_GET_DESCRIPTION =
+  `Read one note in full: its markdown body, anchor (feature / sketch / point in world mm, and the saved camera) and its drawing — every stroke as SVG path data in a ${NOTE_SPACE}×${NOTE_SPACE} canvas ` +
+  "(origin top-left, y down; `width` in the same units), with its colour. When the drawing is over a captured view of the model, that image comes back too " +
+  "(set `background: false` to skip it). To see the strokes and the image together as the person does, call notes_render. To add to the drawing, use note.stroke.add with strokes in the same space.";
+export const NOTES_RENDER_DESCRIPTION =
+  "Look at a note's drawing: the strokes composited over its background (the captured model view, or white) as a PNG image, `size` px square (default 768, max 1600). " +
+  "Use it to read a person's sketch — arrows, circled areas, hand-drawn shapes — before answering or changing the model.";
+export const NOTES_ID_SCHEMA = { type: "object", required: ["id"], properties: { id: { type: "string", description: "The note id (from notes_list)." } } } as const;
+
+/** The newest change first, so the list reads like a conversation's latest end. */
+export const notesNewestFirst = (notes: Note[]): Note[] => [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
 
 export const WEBMCP_INFO = {
   name: "VibeCAD",
@@ -131,6 +155,55 @@ export function buildTools(host: WebMcpHost): WebMcpTool[] {
     annotations: READ_ONLY,
     execute: async () => ok(host.describe()),
   });
+  if (host.notes) {
+    const notes = host.notes;
+    const find = (id: unknown) => {
+      const n = notes().find((x) => x.id === id);
+      if (!n) throw new Error(`No note "${String(id)}" — notes_list gives the ids`);
+      return n;
+    };
+    tools.push({
+      name: "notes_list",
+      description: NOTES_LIST_DESCRIPTION,
+      inputSchema: { type: "object", properties: {} },
+      annotations: READ_ONLY,
+      execute: async () => ok({ notes: notesNewestFirst(notes()).map(noteSummary) }),
+    });
+    tools.push({
+      name: "notes_get",
+      description: NOTES_GET_DESCRIPTION,
+      inputSchema: { type: "object", required: ["id"], properties: { ...NOTES_ID_SCHEMA.properties, background: { type: "boolean", description: "Return the background image too (default true)." } } },
+      annotations: READ_ONLY,
+      execute: async (args) => {
+        try {
+          const n = find(args.id);
+          const content: WebMcpResult["content"] = [{ type: "text", text: JSON.stringify(noteDetail(n)) }];
+          const img = args.background !== false && n.drawing?.background ? dataUrlParts(n.drawing.background) : null;
+          if (img) content.push({ type: "image", data: img.data, mimeType: img.mimeType });
+          return { content };
+        } catch (e) {
+          return { ...ok({ ok: false, error: errorText(e) }), isError: true };
+        }
+      },
+    });
+    if (host.renderNote) {
+      tools.push({
+        name: "notes_render",
+        description: NOTES_RENDER_DESCRIPTION,
+        inputSchema: { type: "object", required: ["id"], properties: { ...NOTES_ID_SCHEMA.properties, size: { type: "number", description: "Pixel side (64–1600, default 768)." } } },
+        annotations: READ_ONLY,
+        execute: async (args) => {
+          try {
+            const n = find(args.id);
+            const size = Math.max(64, Math.min(1600, Number.isFinite(args.size) ? Number(args.size) : 768));
+            return { content: [{ type: "image", data: await host.renderNote!(n.id, size), mimeType: "image/png" }] };
+          } catch (e) {
+            return { ...ok({ ok: false, error: errorText(e) }), isError: true };
+          }
+        },
+      });
+    }
+  }
   tools.push({
     name: "render_view",
     description: "Render the current model and return a PNG image. `view` is one of iso (default), front, back, top, bottom, left, right. Or aim a free camera with `azimuthDeg` (around Z from +X toward +Y; -90 = looking at the front from -Y) and `elevationDeg` (up from the XY plane), which override `view`; `fovDeg` sets the vertical field of view (default 45 — narrow it, e.g. 10, to match a zoomed photo) and `rollDeg` rotates about the view axis. The model is framed automatically. Optional `width`/`height` in pixels (max 1920). `hideSketches` hides sketch curves/points/constraint glyphs; `clean` also hides the grid and axes for a product shot. `saveAs` (a filename) also writes the PNG to disk — in the desktop app into ~/Downloads/VibeCAD/ — and reports the path. Use it to see what you've built.",

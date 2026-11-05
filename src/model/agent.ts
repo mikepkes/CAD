@@ -14,6 +14,7 @@ import { hotkeys } from "./hotkeys";
 import { CONTEXTS } from "./contexts";
 import { applyRingSlot, describeRing, GET_RING_DESCRIPTION, SET_RING_SLOT_DESCRIPTION } from "./ringConfig";
 import { describeIntent, evaluateIntents } from "./concepts/intents";
+import { noteSummary } from "../core/notes";
 import { assistInboxTool, resolveAssistTool, GET_ASSIST_INBOX_DESCRIPTION, GET_ASSIST_INBOX_SCHEMA, RESOLVE_ASSIST_DESCRIPTION, RESOLVE_ASSIST_SCHEMA } from "./assist";
 import { runActionTool, setPanel, RUN_ACTION_DESCRIPTION, RUN_ACTION_SCHEMA, SET_PANEL_DESCRIPTION, SET_PANEL_SCHEMA } from "./uiControl";
 
@@ -209,6 +210,8 @@ export function describeDocument(doc: CadDocument, mode: string, activeSketchId:
     // Intents: the checks the design must keep passing, each pass/fail against the current parameters and bodies
     // (metrics such as mass need built solids: when the host passes none, a metric intent is "unchecked", not a pass at 0).
     ...(doc.intents?.length ? { intents: evaluateIntents(doc, solids).results.map(describeIntent) } : {}),
+    // Notes people and agents left on the design (notes_list / notes_get read them in full).
+    ...(doc.notes?.length ? { notes: doc.notes.map(noteSummary) } : {}),
     // Evaluation results per feature (when the host has them): bodies with bounds/volume, modifier status, warnings.
     ...(solids ? {
       bodies: Object.values(solids).filter((s) => s.mesh).map((s) => ({

@@ -43,6 +43,7 @@ import { pickItems, sketchPickItems, type PickItem } from "./pickMenu";
 import { exampleTitle, exampleUrl } from "./examples";
 import { expressionProblem, parameterAssignment } from "../core/expressionCheck";
 import { NOT_EXPRESSIONS as PROSE_KEYS } from "../core/parameterRename";
+import { withAgentAuthor } from "../core/notes";
 import { renameViaEdit } from "./assist";
 import { sketchIsEmpty } from "../ui/sketchStatus";
 import { FeatureTool, FeatureToolKind, defaultRevolveAxis, hasClosedRegion, profileChoices, toggled, toolCommand, toolExpressions } from "./featureTools";
@@ -590,7 +591,7 @@ export const useStore = create<AppState>((set, get) => {
   const commandHost = () => ({
     describe: () => describeDocument(get().session.doc, get().mode, get().activeSketchId, get().solids),
     runCommand: async (type: string, params: Record<string, unknown>) => {
-      const r = await runDispatch(type, params);
+      const r = await runDispatch(type, withAgentAuthor(type, params));
       if (r.ok && type === "sketch.create") set({ mode: "sketch", activeSketchId: r.createdIds[0], tool: "select" });
       // a new solid (members, primitives, imports…) is seen in model mode, with no sketch left open (as finishing one does)
       if (r.ok && type.startsWith("feature.")) set({ mode: "model", activeSketchId: null, tool: "select", selection: [] });
@@ -702,6 +703,11 @@ export const useStore = create<AppState>((set, get) => {
     undo: () => get().undo(),
     redo: () => get().redo(),
     deleteOperation: (opId: string) => get().deleteOperation(opId),
+    notes: () => get().session.doc.notes ?? [],
+    renderNote: async (id: string, size: number) => {
+      const { rasterizeNote } = await import("../viewport/notePaint");
+      return rasterizeNote((get().session.doc.notes ?? []).find((n) => n.id === id)?.drawing, size);
+    },
     render: async (opts: RenderViewOpts) => {
       // Make sure solids are current before capturing (agents call this right
       // after editing, and the worker-backed rebuild is asynchronous): always
