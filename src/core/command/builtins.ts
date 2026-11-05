@@ -88,6 +88,7 @@ const FACE_SELECTOR_SCHEMA: JSONSchema = {
     inPlane: { ...IN_PLANE_SCHEMA, description: "Faces lying in an origin plane offset along its normal." },
     nearPoint: { ...V3_SCHEMA, description: "The face containing this world point." },
     names: { type: "array", items: { type: "string" }, description: "Faces by topological name (see body_topology), e.g. [\"ext3:end\"]; stable across upstream edits." },
+    inBox: { type: "object", required: ["min", "max"], properties: { min: V3_SCHEMA, max: V3_SCHEMA }, description: "Faces entirely inside this world box." },
   },
 };
 
@@ -3169,6 +3170,43 @@ export const BUILTINS: CommandDef<any>[] = [
       const id = ctx.alloc("shl");
       draft.features[id] = { id, kind: "shell", name: p.name ?? "Shell", thicknessExpr: String(p.thickness), thicknessValue: 0, openFaces: p.openFaces ?? {}, ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}) };
       return { createdIds: [id], message: "Shell" };
+    },
+  },
+  {
+    type: "feature.draft",
+    title: "Draft",
+    summary: "Tilt the most recent body's walls by a draft angle about a parting plane, so it draws from a two-plate mould.",
+    description:
+      "Tilts the body's walls — its planar faces along the pull, the normal of `plane` (XY/XZ/YZ, offset along its normal by `offset`: the parting plane) — by `angle` degrees (expression) about that plane. " +
+      "A positive angle narrows the body away from the plane: an outer wall, a boss, a rib, formed by the cavity. A negative angle widens it: the wall of a hole or slot, formed by a core pin that pulls back the way it came in, so the hole narrows away from the plane. " +
+      "`faces` (a FaceSelector: parallelTo, inPlane, nearPoint, inBox, names) narrows which walls are tilted — draft the outer walls and the holes in two steps with opposite signs; the angle is a wall's final tilt from the pull, so a wall drafted twice ends at the last angle. Apply it after the walls are made and before fillets and chamfers. " +
+      "The kernel drafts planar walls only: a cylindrical rim is left as it is (revolve a tapered profile for a drafted round), and a planar wall that shares an edge with a curved face is skipped too (draft such a groove before it reaches the rim, or accept the toolmaker adding it). Returns the feature id.",
+    paramsSchema: {
+      type: "object",
+      required: ["angle"],
+      additionalProperties: false,
+      properties: {
+        angle: { type: ["number", "string"], description: "Draft angle in degrees (expression); negative for a hole's walls." },
+        plane: { type: "string", enum: PLANE_ENUM, description: "The parting plane's origin plane (default XY); its normal is the pull." },
+        offset: { type: "number", description: "The parting plane's offset along its normal (default 0)." },
+        faces: FACE_SELECTOR_SCHEMA,
+        body: { type: "string", description: "Target body (feature id); default the most recent." },
+        requireEffect: { type: "boolean", description: "Make a draft that tilts no wall an error." },
+        name: { type: "string" },
+      },
+    },
+    examples: [
+      { note: "1° on every outer wall of a part moulded with its bottom on the parting line", params: { angle: "1" } },
+      { note: "A slot's walls, narrowing away from the parting line for the core pin", params: { angle: "-1", faces: { inBox: { min: { x: -10, y: -4, z: -1 }, max: { x: 0, y: 4, z: 5 } } } } },
+    ],
+    apply(draft, p: { angle: string | number; plane?: "XY" | "XZ" | "YZ"; offset?: number; faces?: FaceSelectorParams; body?: string; requireEffect?: boolean; name?: string }, ctx) {
+      const scope = resolveParameters(draft.parameters).scope;
+      const a = typeof p.angle === "number" ? p.angle : compileExpr(String(p.angle)).eval(scope);
+      if (!Number.isFinite(a) || a === 0) throw new Error(`draft angle does not evaluate to a non-zero number (${p.angle})`);
+      if (Math.abs(a) >= 45) throw new Error("draft angle must be under 45°");
+      const id = ctx.alloc("drf");
+      draft.features[id] = { id, kind: "draft", name: p.name ?? "Draft", angleExpr: String(p.angle), angleValue: a, plane: p.plane ?? "XY", offset: p.offset ?? 0, faces: p.faces ?? {}, ...(p.body ? { body: p.body } : {}), ...(p.requireEffect ? { requireEffect: true } : {}) };
+      return { createdIds: [id], message: `Draft ${a}°` };
     },
   },
   {

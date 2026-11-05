@@ -100,6 +100,7 @@ const COMMANDS: Record<string, IconName> = {
   "feature.fillet": "fillet",
   "feature.chamfer": "chamfer",
   "feature.shell": "shell",
+  "feature.draft": "chamfer",
   "feature.pattern": "pattern-linear",
   "feature.voronoi": "voronoi",
   "feature.mirror": "mirror",

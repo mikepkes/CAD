@@ -102,6 +102,7 @@ function ModelInspector() {
               f.kind === "mirror" ? `⟷ ${f.plane}` :
               f.kind === "revolve" ? `↻ ${f.angleExpr}°` :
               f.kind === "shell" ? `t=${f.thicknessExpr}` :
+              f.kind === "draft" ? `∠${f.angleExpr}°` :
               f.kind === "pattern" ? `×${f.count}` :
               f.kind === "loft" ? `⤳ ${f.sketchIds.length}` :
               f.kind === "sweep" ? "⟿ path" :

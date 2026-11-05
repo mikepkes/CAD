@@ -688,7 +688,48 @@ function applyFaceSelector(f: FaceFinder, sel: FaceSelector): FaceFinder {
   if (sel.parallelTo) f = f.parallelTo(selectorPlane(sel.parallelTo));
   if (sel.inPlane) f = f.inPlane(selectorPlane(sel.inPlane.plane, sel.inPlane.offset ?? 0));
   if (sel.nearPoint) f = f.atDistance(0, p3(sel.nearPoint), 1e-3);
+  if (sel.inBox) f = f.inBox(p3(sel.inBox.min), p3(sel.inBox.max));
   return f;
+}
+
+/** Tilt the body's walls — its planar faces along the pull (the parting plane's normal) — by `angleDeg`
+ *  about the parting plane (`plane` offset along its normal), so the part draws from a mould opening that
+ *  way. A positive angle narrows the body away from the plane (an outer wall, formed by the cavity); a
+ *  negative one widens it (a hole's wall, formed by a core pin that pulls back the way it came in). `sel`
+ *  narrows which walls are taken. The kernel drafts planar faces only: a cylinder is left as it is. */
+export function draftFaces(shape: Shape3D, angleDeg: number, plane: "XY" | "XZ" | "YZ", offset: number, sel: FaceSelector, faceNames?: string[]): Shape3D {
+  const named = sel.names?.length ? facesOf(shape) : [];
+  try {
+    let byName: ((f: OcFace) => boolean) | undefined;
+    if (sel.names?.length) {
+      const find = indexer(named);
+      const want = new Set(sel.names);
+      byName = (f) => { const i = find(f.wrapped, f.hashCode); return i >= 0 && want.has(faceNames?.[i] ?? ""); };
+    }
+    const neutral = selectorPlane(plane, offset);
+    const pull = { x: neutral.zDir.x, y: neutral.zDir.y, z: neutral.zDir.z };
+    // OCC's draft never returns from a planar face that shares an edge with a curved one (a groove wall
+    // ending on a round rim), so those walls are left alone: the edges of every curved face, by hash
+    type FaceLike = { geomType: string; edges: { hashCode: number }[]; normalAt: () => { x: number; y: number; z: number } };
+    const curvedEdges = new Set<number>();
+    for (const face of (shape as unknown as { faces: FaceLike[] }).faces) {
+      if (face.geomType !== "PLANE") for (const e of face.edges) curvedEdges.add(e.hashCode);
+    }
+    const touchesCurve = (face: FaceLike) => face.edges.some((e) => curvedEdges.has(e.hashCode));
+    // a wall: a planar face within 45° of running along the pull (one drafted already still counts: the angle
+    // is the wall's final tilt, so a second draft re-sets it; the caps, square to the pull, never count)
+    const isWall = (face: FaceLike) => {
+      const n = face.normalAt();
+      return Math.abs(n.x * pull.x + n.y * pull.y + n.z * pull.z) < Math.SQRT1_2 && !touchesCurve(face);
+    };
+    const clone = (shape as unknown as { clone: () => Shape3D }).clone();
+    return (clone as unknown as { draft: (a: number, f: (f: FaceFinder) => FaceFinder, n: unknown) => Shape3D })
+      .draft(angleDeg, (f) => {
+        let g = applyFaceSelector(f.ofSurfaceType("PLANE").when(({ element }) => isWall(element as unknown as FaceLike)), sel);
+        if (byName) g = g.when(({ element }) => byName!(element as unknown as OcFace));
+        return g;
+      }, neutral);
+  } finally { freeAll(named); }
 }
 
 const isEmptySelector = (sel: object) => Object.values(sel).every((v) => v === undefined);

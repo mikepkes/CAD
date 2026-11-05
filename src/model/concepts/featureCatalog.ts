@@ -97,6 +97,8 @@ const SPECS: FeatureSpec[] = [
     sentence: () => [T("Chamfer the edges by "), P("distance"), T(".")] },
   { kind: "shell", op: "feature.shell", label: "Shell", params: [mm("thickness", "Wall", 0.2, 50, 0.1)], pushParam: "thickness",
     sentence: () => [T("Hollow it to a "), P("thickness"), T(" wall.")] },
+  { kind: "draft", op: "feature.draft", label: "Draft", params: [{ key: "angle", label: "Angle", unit: "deg", min: -30, max: 30, step: 0.5 }], pushParam: "angle",
+    sentence: () => [T("Draft the walls by "), P("angle"), T(" for the mould.")] },
   { kind: "pattern", op: "feature.pattern", label: "Pattern", params: [count("count", "Count")], pushParam: "count",
     sentence: (op) => [T(`Repeat it ${op.params.mode === "circular" ? "around" : "along a line"}, `), P("count"), T(" times.")] },
   { kind: "voronoi", op: "feature.voronoi", label: "Voronoi", params: [count("cells", "Cells", 400), mm("web", "Web", 0.4, 20, 0.1), mm("round", "Corner radius", 0, 10, 0.1)], pushParam: "web",

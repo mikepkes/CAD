@@ -431,6 +431,26 @@ export interface FaceSelector {
   nearPoint?: { x: number; y: number; z: number };
   /** Faces by topological name (as picked in the viewport): stable across upstream edits. */
   names?: string[];
+  /** Faces entirely inside this world box. */
+  inBox?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+}
+
+/** Tilt a body's walls (its planar faces along the mould's pull) by a draft angle about a parting
+ *  plane, so the part draws from a two-plate mould. A positive angle narrows the body away from the
+ *  plane (an outer wall, formed by the cavity); a negative one widens it (a hole's wall, formed by a
+ *  core pin that pulls back the way it came in). `faces` narrows which walls. */
+export interface DraftFeature {
+  id: string;
+  kind: "draft";
+  name: string;
+  angleExpr: string;
+  angleValue: number;
+  /** The parting plane: an origin plane offset along its normal; its normal is the pull. */
+  plane: "XY" | "XZ" | "YZ";
+  offset: number;
+  faces: FaceSelector;
+  body?: string;
+  requireEffect?: boolean;
 }
 
 /** Round or bevel selected edges of the most recent body. */
@@ -675,7 +695,7 @@ export interface InstanceFrame {
   template: string;  // the source (template) component it was cloned from
 }
 
-export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | GearFeature | ImportFeature | MemberFeature | SheetFeature | FlangeFeature | FoldFeature | UnfoldFeature | SurfaceFeature | StitchFeature | ThickenFeature | TrimFeature | UntrimFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | PatternFeature | VoronoiFeature | MirrorFeature) & {
+export type FeatureDef = (ExtrudeFeature | RevolveFeature | PrimitiveFeature | GearFeature | ImportFeature | MemberFeature | SheetFeature | FlangeFeature | FoldFeature | UnfoldFeature | SurfaceFeature | StitchFeature | ThickenFeature | TrimFeature | UntrimFeature | HoleFeature | ThreadFeature | LoftFeature | SweepFeature | EdgeBlendFeature | ShellFeature | DraftFeature | PatternFeature | VoronoiFeature | MirrorFeature) & {
   instanceFrame?: InstanceFrame;
   /** Switched off by the active configuration (derived; set by rebuild). */
   configSuppressed?: boolean;

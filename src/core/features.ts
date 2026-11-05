@@ -7,14 +7,14 @@
 
 import { compileExpr, Scope } from "../math/expr";
 import {
-  CadDocument, ExtrudeFeature, FeatureDef, GearFeature, GearDim, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, PatternFeature, VoronoiFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent, isReferenceBody,
+  CadDocument, ExtrudeFeature, FeatureDef, GearFeature, GearDim, ImportFeature, MemberFeature, SheetFeature, FlangeFeature, FoldFeature, UnfoldFeature, SurfaceFeature, StitchFeature, ThickenFeature, TrimFeature, UntrimFeature, MirrorFeature, EdgeBlendFeature, ShellFeature, DraftFeature, PatternFeature, VoronoiFeature, LoftFeature, SweepFeature, SketchFeature, PrimitiveFeature, HoleFeature, ThreadFeature, ThreadSpec, ThreadDecal, BooleanOp, materialForComponent, isReferenceBody,
 } from "./document";
 import { offsetPlane, resolveSketchPlane, planeById, makePlaneFromNormal, to3d, WorkPlane } from "../geometry/plane";
 import { extractRegions, extractOpenPath, extractChains, regionAt, loopPolygon, Region, Profile, Loop } from "./geometry/profile";
 import { FaceRef } from "../sketch/types";
 import {
   Edge3D, buildRegionsSolid, buildRegionsRevolved, buildLoftSolid, buildSweepSolid, fuseShapes, cutShapes, intersectShapes, mirrorShape, meshShape, edgesOfShape, blobOfShape,
-  planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, translateShape, rotateShape,
+  planarFacesOfShape, PlanarFace, isKernelReady, SolidMesh, blendEdges, shellShape, draftFaces, translateShape, rotateShape,
   boundsOfShape, volumeOfShape, massPropsOfShape, MassProps, Bounds3, buildPrimitive, buildHoleCutter, HoleCutterSpec, threadRod,
   faceGeoms, faceKinds, edgeGeoms, kernelErrorMessage, FaceGeom, EdgeGeom, booleanWithHistory, BooleanKind, surfaceParents, distanceBetween, readStep, readBrep, readStl, analyzeShape, keepHalfSpace,
   readNurbsBrep, chainWire, surfaceExtrude, surfaceRevolve, surfaceLoft, surfaceSweep, planarPatch, sewShapes, thickenShape, offsetSurface, untrimFaces, hasSolid, buildSpineSweep, SpineSweepSpec,
@@ -1316,6 +1316,33 @@ function applyEdgeBlend(scope: Scope, f: EdgeBlendFeature, bodies: Body[], out: 
 }
 
 /** Hollow the most recent body. */
+function applyDraft(scope: Scope, f: DraftFeature, bodies: Body[], out: Record<string, SolidEval>) {
+  out[f.id] = modifierRow(f);
+  try {
+    const target = pickBody(bodies, f.body, "draft");
+    const a = resolveExpr(f.angleExpr, f.angleValue, scope);
+    f.angleValue = a;
+    if (!Number.isFinite(a) || a === 0) throw new Error("draft angle must be a non-zero number of degrees");
+    if (Math.abs(a) >= 45) throw new Error("draft angle must be under 45°");
+    const before = volumeOfShape(target.shape);
+    const drafted = draftFaces(target.shape, a, f.plane, f.offset, f.faces, f.faces.names?.length ? target.faceNames : undefined);
+    const after = volumeOfShape(drafted);
+    if (Number.isFinite(before) && !Number.isFinite(after)) {
+      drafted.delete();
+      throw new Error("draft failed: the tilted walls no longer close the body (an angle too steep for a thin wall, or a wall the kernel cannot draft)");
+    }
+    const names = inheritNames(target.faceNames, surfaceParents(target.shape, drafted), drafted, f.id, "draft");
+    replaceShape(target, drafted);
+    target.faceNames = names;
+    if (Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) <= 1e-6 * Math.max(1, Math.abs(before))) {
+      const msg = "draft changed nothing: no planar wall along the pull matched `faces` (a wall that meets a curved face is never drafted: the kernel cannot)";
+      if (f.requireEffect) out[f.id].error = msg; else out[f.id].warning = msg;
+    }
+  } catch (e) {
+    out[f.id].error = kernelErrorMessage(e);
+  }
+}
+
 function applyShell(scope: Scope, f: ShellFeature, bodies: Body[], out: Record<string, SolidEval>) {
   out[f.id] = modifierRow(f);
   try {
@@ -1788,6 +1815,7 @@ function applyFeature(doc: CadDocument, scope: Scope, f: FeatureDef, bodies: Bod
     case "fillet":
     case "chamfer": applyEdgeBlend(scope, f, bodies, out); break;
     case "shell": applyShell(scope, f, bodies, out); break;
+    case "draft": applyDraft(scope, f, bodies, out); break;
     case "pattern": applyPattern(scope, f, bodies, out); break;
     case "voronoi": applyVoronoi(scope, f, bodies, out); break;
   }

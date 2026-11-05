@@ -136,6 +136,7 @@ export function describeFeature(f: FeatureDef): Record<string, unknown> {
     case "fillet":
     case "chamfer": return { id: f.id, kind: f.kind, name: f.name, size: f.sizeExpr, edges: f.edges };
     case "shell": return { id: f.id, kind: f.kind, name: f.name, thickness: f.thicknessExpr, openFaces: f.openFaces };
+    case "draft": return { id: f.id, kind: f.kind, name: f.name, angle: f.angleExpr, plane: f.plane, offset: f.offset, faces: f.faces };
     case "pattern": return { id: f.id, kind: f.kind, name: f.name, mode: f.mode, count: f.count, step: f.step, axis: f.axis, angle: f.angle };
     case "voronoi": return { id: f.id, kind: f.kind, name: f.name, cells: f.cellsExpr, seed: f.seed, web: f.webExpr, ...(f.roundExpr ? { round: f.roundExpr } : {}), ...(f.fromExpr ? { from: f.fromExpr } : {}), ...(f.toExpr ? { to: f.toExpr } : {}), ...(f.twistExpr ? { twist: f.twistExpr } : {}), ...(f.relax != null ? { relax: f.relax } : {}), ...(f.axis ? { axis: f.axis } : {}), ...(f.openingsValue != null ? { openings: f.openingsValue } : {}) };
     case "mirror": return { id: f.id, kind: f.kind, name: f.name, plane: f.plane, bodies: f.bodies ?? "all" };
