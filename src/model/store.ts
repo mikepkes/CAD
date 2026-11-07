@@ -171,6 +171,8 @@ export interface AppState {
   /** The body face picked by a click in model mode (the "verbs on a face" anchor). */
   faceSelection: FaceSelection | null;
   showPlanes: boolean;
+  /** The datum (offset) planes, separately from the origin planes. */
+  showDatums: boolean;
   showGrid: boolean;
   /** The origin axes (off in the customize viewer: a product, not a modelling view). */
   showAxes: boolean;
@@ -263,6 +265,7 @@ export interface AppState {
   selectFace: (point: Vec3 | null, normal?: Vec3, screen?: { x: number; y: number }, bodyId?: string) => void;
   setHover: (id: string | null) => void;
   toggleShowPlanes: () => void;
+  toggleShowDatums: () => void;
   toggleShowGrid: () => void;
   toggleShowHiddenGhosts: () => void;
   /** Change the surface-quality display; curvature/combs are computed in the geometry backend. */
@@ -758,6 +761,7 @@ export const useStore = create<AppState>((set, get) => {
     selection: [],
     hover: null,
     showPlanes: true,
+    showDatums: true,
     showGrid: true,
     showAxes: true,
     showHiddenGhosts: false,
@@ -860,6 +864,7 @@ export const useStore = create<AppState>((set, get) => {
     },
     setHover: (id) => set({ hover: id }),
     toggleShowPlanes: () => set((s) => ({ showPlanes: !s.showPlanes })),
+    toggleShowDatums: () => set((s) => ({ showDatums: !s.showDatums })),
     toggleShowGrid: () => set((s) => ({ showGrid: !s.showGrid })),
     toggleShowHiddenGhosts: () => set((s) => ({ showHiddenGhosts: !s.showHiddenGhosts })),
     setAnalysis: async (patch) => {

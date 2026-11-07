@@ -125,6 +125,7 @@ function buildView(s: AppState): ViewData {
     hover: s.hover,
     preview: null,
     showPlanes: s.showPlanes,
+    showDatums: s.showDatums,
     showGrid: s.showGrid,
     showAxes: s.showAxes,
     gridSize: s.gridSize,

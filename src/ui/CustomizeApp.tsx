@@ -85,7 +85,7 @@ export function CustomizeApp() {
   useEffect(() => {
     void (async () => {
       try {
-        useStore.setState({ showPlanes: false, showGrid: false, showAxes: false }); // clean product view
+        useStore.setState({ showPlanes: false, showDatums: false, showGrid: false, showAxes: false }); // clean product view
         const r = req.current;
         if (!r) { setFailure({ kind: "none" }); setState("error"); return; }
         // the kernel (a big download) and the model load side by side

@@ -129,6 +129,8 @@ export interface ViewData {
   hover: string | null;
   preview: PreviewGeom | null;
   showPlanes: boolean;
+  /** Datum planes (default shown). */
+  showDatums?: boolean;
   showGrid: boolean;
   /** The origin axes (default shown). */
   showAxes?: boolean;
@@ -1481,7 +1483,7 @@ export class SceneManager {
     this.lastData = data;
     this.refreshMould(data);
     this.planeGroup.visible = data.showPlanes && data.mode === "model";
-    this.datumGroup.visible = data.showPlanes && data.mode === "model";
+    this.datumGroup.visible = data.showDatums !== false && data.mode === "model";
     if (data.gridSize) this.applyGrid(data.gridSize);
     this.grid.visible = data.showGrid;
     this.axes.visible = data.showAxes !== false;

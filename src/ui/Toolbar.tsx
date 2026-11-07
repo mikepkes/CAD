@@ -260,6 +260,8 @@ export function Toolbar() {
   const startSketch = useStore((s) => s.startSketch);
   const showPlanes = useStore((s) => s.showPlanes);
   const toggleShowPlanes = useStore((s) => s.toggleShowPlanes);
+  const showDatums = useStore((s) => s.showDatums);
+  const toggleShowDatums = useStore((s) => s.toggleShowDatums);
   const showConstraints = useStore((s) => s.showConstraints);
   const toggleShowConstraints = useStore((s) => s.toggleShowConstraints);
   const constructionMode = useStore((s) => s.constructionMode);
@@ -396,7 +398,8 @@ export function Toolbar() {
     ) }] : []),
     { key: "motion", priority: 4, node: <MotionButton /> },
     { key: "spacer", spacer: true, node: null },
-    { key: "planesToggle", priority: 2, node: <label className="toggle" title="Show the origin and datum planes"><input type="checkbox" checked={showPlanes} onChange={toggleShowPlanes} /> Planes</label> },
+    { key: "planesToggle", priority: 2, node: <label className="toggle" title="Show the origin planes"><input type="checkbox" checked={showPlanes} onChange={toggleShowPlanes} /> Planes</label> },
+    ...(datumPlanes.length ? [{ key: "datumsToggle", priority: 2, node: <label className="toggle" title="Show the datum planes"><input type="checkbox" checked={showDatums} onChange={toggleShowDatums} /> Datums</label> }] : []),
     { key: "grid", priority: 1, node: <GridControls /> },
     { key: "section", priority: 5, node: <SectionControls /> },
   ];
