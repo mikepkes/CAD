@@ -1941,13 +1941,15 @@ export function evaluateBodies(doc: CadDocument, scope: Scope, cache?: GeometryC
 /** The bodies for a reading of the model (an export, the topology, a distance, a surface analysis): through
  *  `cache` when there is one, so unchanged steps replay and the cache keeps the shapes; built fresh, and
  *  freed by `release`, otherwise. */
-function readBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache): { bodies: Body[]; out: Record<string, SolidEval>; release: () => void } {
+/** The bodies as built — or, with `only` (one chain of features, geometry/chains.ts), just that chain's: a job about
+ *  one body need not build the rest of the model on a worker whose cache holds only that body's chain. */
+function readBodies(doc: CadDocument, scope: Scope, cache?: GeometryCache, only?: ReadonlySet<string>): { bodies: Body[]; out: Record<string, SolidEval>; release: () => void } {
   if (!cache) {
-    const r = evaluateBodies(doc, scope);
+    const r = evaluateBodies(doc, scope, undefined, only);
     return { ...r, release: () => { for (const b of r.bodies) b.shape.delete(); } };
   }
   cache.begin();
-  try { return { ...evaluateBodies(doc, scope, cache), release: () => {} }; } finally { cache.end(); }
+  try { return { ...evaluateBodies(doc, scope, cache, only), release: () => {} }; } finally { cache.end(); }
 }
 
 /** Whether a feature is switched on: not suppressed by the active
@@ -2157,9 +2159,9 @@ export interface BodyTopology {
   edges: (EdgeGeom & { name: string; faceNames: string[] })[];
 }
 
-export function bodyTopology(doc: CadDocument, scope: Scope, opts: { bodyId?: string; faces?: boolean; edges?: boolean } = {}, cache?: GeometryCache): BodyTopology[] {
+export function bodyTopology(doc: CadDocument, scope: Scope, opts: { bodyId?: string; faces?: boolean; edges?: boolean } = {}, cache?: GeometryCache, only?: ReadonlySet<string>): BodyTopology[] {
   if (!isKernelReady()) return [];
-  const { bodies, release } = readBodies(doc, scope, cache);
+  const { bodies, release } = readBodies(doc, scope, cache, only);
   try {
     return bodies.filter((b) => !opts.bodyId || b.id === opts.bodyId).map((b) => {
       const mass = massPropsOfShape(b.shape);
@@ -2193,9 +2195,9 @@ export interface BodyAnalysisResult {
 }
 
 /** Curvature, edge continuity and curvature combs for each body (or one). */
-export function analyzeBodies(doc: CadDocument, scope: Scope, opts: { bodyId?: string; combs?: boolean } = {}, cache?: GeometryCache): BodyAnalysisResult[] {
+export function analyzeBodies(doc: CadDocument, scope: Scope, opts: { bodyId?: string; combs?: boolean } = {}, cache?: GeometryCache, only?: ReadonlySet<string>): BodyAnalysisResult[] {
   if (!isKernelReady()) return [];
-  const { bodies, release } = readBodies(doc, scope, cache);
+  const { bodies, release } = readBodies(doc, scope, cache, only);
   try {
     return bodies.filter((b) => !opts.bodyId || b.id === opts.bodyId).map((b) => {
       const mesh = meshShape(b.shape);
@@ -2334,10 +2336,10 @@ export function featureEdges(doc: CadDocument, scope: Scope, featureId: string):
  * Export the finished BODY that `featureId` starts (its joins, cuts, fillets,
  * shells and patterns included) — not just that feature's own solid.
  */
-export function exportFeatureBlob(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step", cache?: GeometryCache): Blob | null {
+export function exportFeatureBlob(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step", cache?: GeometryCache, only?: ReadonlySet<string>): Blob | null {
   const f = doc.features[featureId];
   if (!f || !isKernelReady()) return null;
-  const { bodies, release } = readBodies(doc, scope, cache);
+  const { bodies, release } = readBodies(doc, scope, cache, only);
   try {
     const body = bodies.find((b) => b.id === featureId) ?? bodies[bodies.length - 1];
     return body ? blobOfShape(body.shape, format) : null;
@@ -2440,8 +2442,8 @@ export function printPartsByMaterial(doc: CadDocument, scope: Scope, cache?: Geo
 }
 
 /** Export bytes (transferable) — the worker-safe form of exportFeatureBlob. */
-export async function exportFeatureBytes(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step", cache?: GeometryCache): Promise<Uint8Array | null> {
-  const blob = exportFeatureBlob(doc, scope, featureId, format, cache);
+export async function exportFeatureBytes(doc: CadDocument, scope: Scope, featureId: string, format: "stl" | "step", cache?: GeometryCache, only?: ReadonlySet<string>): Promise<Uint8Array | null> {
+  const blob = exportFeatureBlob(doc, scope, featureId, format, cache, only);
   if (!blob) return null;
   return new Uint8Array(await blob.arrayBuffer());
 }

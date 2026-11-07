@@ -194,15 +194,15 @@ async function exportModelBytes(doc: CadDocument, format: ExportFormat, cache?: 
 }
 
 /** Named topology + mass properties of the bodies as built (component patterns expanded). */
-function topologyOf(doc: CadDocument, opts?: TopologyOpts, cache?: GeometryCache): BodyTopology[] {
+function topologyOf(doc: CadDocument, opts?: TopologyOpts, cache?: GeometryCache, only?: ReadonlySet<string>): BodyTopology[] {
   const geo = geometryDoc(doc, scopeOf(doc));
-  return bodyTopology(geo, scopeOf(geo), opts, cache);
+  return bodyTopology(geo, scopeOf(geo), opts, cache, only);
 }
 
 /** Surface analysis of the bodies as built (component patterns expanded). */
-function analyzeOf(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }, cache?: GeometryCache): BodyAnalysisResult[] {
+function analyzeOf(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }, cache?: GeometryCache, only?: ReadonlySet<string>): BodyAnalysisResult[] {
   const geo = geometryDoc(doc, scopeOf(doc));
-  return analyzeBodies(geo, scopeOf(geo), opts, cache);
+  return analyzeBodies(geo, scopeOf(geo), opts, cache, only);
 }
 
 // ---- shared job protocol (used by both worker adapters) --------------------
@@ -212,11 +212,12 @@ export type GeometryRequest =
    *  `only`: build just these features — one chain of a split evaluation (geometry/chains.ts). */
   | { id: number; kind: "evaluate"; doc: CadDocument; staged?: boolean; only?: string[] }
   | { id: number; kind: "edges"; doc: CadDocument; featureId: string }
-  | { id: number; kind: "export"; doc: CadDocument; featureId: string | null; format: ExportFormat }
+  /** `only` on a job about one body: that body's chain of features, all the job needs built (the pool sends it with the job to the worker holding the chain). */
+  | { id: number; kind: "export"; doc: CadDocument; featureId: string | null; format: ExportFormat; only?: string[] }
   | { id: number; kind: "collide"; doc: CadDocument; overrides?: Record<string, string> }
-  | { id: number; kind: "topology"; doc: CadDocument; opts?: TopologyOpts }
+  | { id: number; kind: "topology"; doc: CadDocument; opts?: TopologyOpts; only?: string[] }
   | { id: number; kind: "distance"; doc: CadDocument; a: string; b: string }
-  | { id: number; kind: "analyze"; doc: CadDocument; opts?: { bodyId?: string; combs?: boolean } }
+  | { id: number; kind: "analyze"; doc: CadDocument; opts?: { bodyId?: string; combs?: boolean }; only?: string[] }
   | { id: number; kind: "drawing"; doc: CadDocument; opts?: SheetOptions };
 
 export type GeometryResponse =
@@ -313,10 +314,10 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
       return { res: { id: req.id, kind: "edges", edges }, transfer: [] };
     }
     if (req.kind === "topology") {
-      return { res: { id: req.id, kind: "topology", bodies: withBuildProgress(onProgress, () => topologyOf(req.doc, req.opts, cache)) }, transfer: [] };
+      return { res: { id: req.id, kind: "topology", bodies: withBuildProgress(onProgress, () => topologyOf(req.doc, req.opts, cache, req.only ? new Set(req.only) : undefined)) }, transfer: [] };
     }
     if (req.kind === "analyze") {
-      const bodies = withBuildProgress(onProgress, () => analyzeOf(req.doc, req.opts, cache));
+      const bodies = withBuildProgress(onProgress, () => analyzeOf(req.doc, req.opts, cache, req.only ? new Set(req.only) : undefined));
       return { res: { id: req.id, kind: "analyze", bodies }, transfer: bodies.flatMap((b) => [b.curvature.buffer as ArrayBuffer, b.combs.buffer as ArrayBuffer]) };
     }
     if (req.kind === "drawing") return { res: { id: req.id, kind: "drawing", ...withBuildProgress(onProgress, () => drawingOf(req.doc, req.opts, cache)) }, transfer: [] };
@@ -331,7 +332,7 @@ export async function runGeometryJob(req: GeometryRequest, cache?: GeometryCache
     // the kernel work of an export is synchronous (only the blob's bytes are awaited), so the sink is set for it
     const bytes = await withBuildProgress(onProgress, () => req.featureId === null || req.format === "3mf" // a 3MF is always the whole model
       ? exportModelBytes(req.doc, req.format, cache)
-      : exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format, cache));
+      : exportFeatureBytes(geometryDoc(req.doc, scope), scope, req.featureId, req.format, cache, req.only ? new Set(req.only) : undefined));
     return { res: { id: req.id, kind: "export", bytes }, transfer: bytes ? [bytes.buffer as ArrayBuffer] : [] };
   } catch (e) {
     return { res: { id: req.id, kind: "error", message: kernelErrorMessage(e) }, transfer: [] };

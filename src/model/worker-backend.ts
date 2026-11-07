@@ -12,6 +12,7 @@
 
 import { GeometryBackend, GeometryRequest, GeometryRequestInit, GeometryResponse, ExportFormat, EvaluateResult, TopologyOpts } from "../core/geometry/backend";
 import { planEvaluation, mergeParts, needsWholeRebuild, type EvaluationPart, type PartResult } from "../core/geometry/pool";
+import { featureChains } from "../core/geometry/chains";
 import { CadDocument } from "../core/document";
 import { resolveParameters } from "../core/parameters";
 import { CollisionResult, BodyTopology, BodyAnalysisResult, type BuildProgressSink, type BuildStep } from "../core/features";
@@ -197,6 +198,17 @@ export class WorkerGeometryBackend implements GeometryBackend {
     return load.indexOf(Math.max(...load));
   }
 
+  /** The worker for a job about one body: the one whose cache holds that body's chain (it replays the chain
+   *  and builds nothing else), else the home worker. A cold worker given the job would build the model
+   *  again from scratch: on a heavy model that is a second kernel's worth of memory and minutes of work. */
+  private placeFor(doc: CadDocument, featureId: string | null | undefined): { worker: number; only?: string[] } {
+    if (!featureId || this.workers.length < 2 || !this.placed.size) return { worker: this.homeWorker() };
+    const chain = featureChains(doc, resolveParameters(doc.parameters).scope)?.find((c) => c.features.includes(featureId));
+    const w = chain ? this.placed.get(chain.id) : undefined;
+    // the job is told the chain too, so the worker builds only that (the rest of the model is not in its cache)
+    return w !== undefined && w < this.workers.length ? { worker: w, only: chain!.features } : { worker: this.homeWorker() };
+  }
+
   private send(req: GeometryRequestInit, onProgress?: BuildProgressSink, onEarly?: (r: GeometryResponse) => void, worker = this.homeWorker()): Promise<GeometryResponse> {
     const id = this.seq++;
     if (onProgress) this.progress.set(id, onProgress);
@@ -265,12 +277,13 @@ export class WorkerGeometryBackend implements GeometryBackend {
   }
 
   async edges(doc: CadDocument, featureId: string): Promise<Edge3D[]> {
-    const r = await this.send({ kind: "edges", doc, featureId });
+    const r = await this.send({ kind: "edges", doc, featureId }, undefined, undefined, this.placeFor(doc, featureId).worker);
     if (r.kind === "edges") return r.edges;
     throw new Error(r.kind === "error" ? r.message : "edges failed");
   }
   async exportBytes(doc: CadDocument, featureId: string | null, format: ExportFormat): Promise<Uint8Array | null> {
-    const r = await this.send({ kind: "export", doc, featureId, format });
+    const at = this.placeFor(doc, featureId);
+    const r = await this.send({ kind: "export", doc, featureId, format, only: at.only }, undefined, undefined, at.worker);
     if (r.kind === "export") return r.bytes;
     throw new Error(r.kind === "error" ? r.message : "export failed");
   }
@@ -280,12 +293,14 @@ export class WorkerGeometryBackend implements GeometryBackend {
     throw new Error(r.kind === "error" ? r.message : "collide failed");
   }
   async topology(doc: CadDocument, opts?: TopologyOpts): Promise<BodyTopology[]> {
-    const r = await this.send({ kind: "topology", doc, opts });
+    const at = this.placeFor(doc, opts?.bodyId);
+    const r = await this.send({ kind: "topology", doc, opts, only: at.only }, undefined, undefined, at.worker);
     if (r.kind === "topology") return r.bodies;
     throw new Error(r.kind === "error" ? r.message : "topology failed");
   }
   async analyze(doc: CadDocument, opts?: { bodyId?: string; combs?: boolean }): Promise<BodyAnalysisResult[]> {
-    const r = await this.send({ kind: "analyze", doc, opts });
+    const at = this.placeFor(doc, opts?.bodyId);
+    const r = await this.send({ kind: "analyze", doc, opts, only: at.only }, undefined, undefined, at.worker);
     if (r.kind === "analyze") return r.bodies;
     throw new Error(r.kind === "error" ? r.message : "analyze failed");
   }

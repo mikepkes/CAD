@@ -3,6 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { WorkerGeometryBackend, geometryWorkerStatus, type WorkerLike } from "../src/model/worker-backend";
 import { createDocument } from "../src/core/document";
+import { echoSession } from "./helpers";
 
 /** A worker that answers `ready`, then never answers a job (or crashes on it). */
 function stuckWorker(mode: "silent" | "crash"): WorkerLike & { killed: boolean } {
@@ -49,13 +50,14 @@ describe("worker pool resilience", () => {
 
 describe("worker pool routing", () => {
   /** A worker that answers every job at once, noting which worker got it. */
-  function countingWorker(log: number[], index: number): WorkerLike {
+  function countingWorker(log: number[], index: number, jobs?: { kind: string; only?: string[] }[]): WorkerLike {
     const w: WorkerLike = {
       onmessage: null, onerror: null,
       postMessage(msg: unknown) {
         const m = msg as { kind: string; id: number; only?: string[] };
         if (m.kind === "init") { setTimeout(() => w.onmessage?.({ data: { kind: "ready" } }), 0); return; }
         log.push(index);
+        jobs?.push({ kind: m.kind, only: m.only });
         const res = m.kind === "evaluate" ? { id: m.id, kind: "evaluate", solids: {}, facePlanes: {}, applied: m.only ?? [] } : { id: m.id, kind: "distance", distance: 1 };
         setTimeout(() => w.onmessage?.({ data: res }), 0);
       },
@@ -75,6 +77,37 @@ describe("worker pool routing", () => {
     (b as unknown as { placed: Map<string, number> }).placed = new Map([["c1", 1], ["c2", 1], ["c3", 1], ["c4", 0]]);
     await b.distance(createDocument(), "a", "b");
     expect(log).toEqual([0, 1]);
+    b.dispose();
+  });
+
+  it("a job about one body goes to the worker whose cache holds that body's chain", async () => {
+    const s = echoSession();
+    const box = async (x: number) => {
+      const sid = (await s.dispatch("sketch.create", { plane: "XY" })).createdIds[0];
+      await s.dispatch("sketch.addRectangle", { sketch: sid, corner: { x: x - 5, y: -5 }, opposite: { x: x + 5, y: 5 } });
+      return (await s.dispatch("feature.extrude", { sketch: sid, distance: "10" })).createdIds[0];
+    };
+    const a = await box(0), c = await box(30);
+    const log: number[] = [];
+    const jobs: { kind: string; only?: string[] }[] = [];
+    let n = 0;
+    const b = new WorkerGeometryBackend({ size: 2, spawn: () => countingWorker(log, n++, jobs), compile: () => Promise.reject(new Error("none")), silenceMs: 0 });
+    await b.init({ wasmUrl: "x.wasm" });
+    await b.evaluate(s.doc); // two chains, one per worker
+    const placed = (b as unknown as { placed: Map<string, number> }).placed;
+    expect(new Set(placed.values())).toEqual(new Set([0, 1]));
+    log.length = 0;
+    const quiet = (p: Promise<unknown>) => p.catch(() => undefined); // the counting worker answers with the wrong kind
+    await quiet(b.exportBytes(s.doc, a, "stl"));
+    await quiet(b.exportBytes(s.doc, c, "stl"));
+    await quiet(b.topology(s.doc, { bodyId: c }));
+    await quiet(b.edges(s.doc, a));
+    expect(log).toEqual([placed.get(a), placed.get(c), placed.get(c), placed.get(a)]);
+    // and each job is told its body's chain, all the worker needs to build
+    expect(jobs.slice(2).map((j) => [j.kind, j.only])).toEqual([["export", [a]], ["export", [c]], ["topology", [c]], ["edges", undefined]]);
+    // the whole model: the home worker, whichever that is
+    await quiet(b.exportBytes(s.doc, null, "stl"));
+    expect(log.length).toBe(5);
     b.dispose();
   });
 });
